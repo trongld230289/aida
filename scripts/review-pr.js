@@ -5,6 +5,15 @@ const { execSync } = require('child_process');
 const { getUnifiedModel, executeAIReview, shouldUseApiKey } = require('./review-common');
 const { detectFromPRFiles, getReviewTemplateWithDetection, displayDetectionInfo } = require('./language-detection');
 
+// Import functions from extension.js
+let checkAndInitializeTemplates;
+try {
+    const extensionModule = require('../extension');
+    checkAndInitializeTemplates = extensionModule.checkAndInitializeTemplates;
+} catch (error) {
+    console.log('⚠️ Could not import functions from extension.js');
+}
+
 /**
  * Get review template for PR with cross-platform detection
  * @param {string} templateType - Template type (review-pr.md, review-changes.md, etc.)
@@ -354,14 +363,20 @@ function countDiffLines(diffContent) {
 /**
  * Initialize PR review functionality
  */
-function initializePrReview(context) {
-    // Create new chat participant for PR review
-    const reviewPrParticipant = vscode.chat.createChatParticipant('review-pr', handleReviewPr);
+function initializePrReview(extensionContext) {
+    // Create new chat participant for PR review with context
+    const reviewPrParticipant = vscode.chat.createChatParticipant('review-pr', async (request, context, stream, token) => {
+        // Lazy load templates on first usage
+        if (checkAndInitializeTemplates) {
+            await checkAndInitializeTemplates(extensionContext);
+        }
+        return handleReviewPr(request, context, stream, token);
+    });
 
     // Set theme-appropriate PR review icon
     reviewPrParticipant.iconPath = {
-        light: vscode.Uri.file(path.join(context.extensionPath, 'icons', 'pr-review-light.svg')),
-        dark: vscode.Uri.file(path.join(context.extensionPath, 'icons', 'pr-review-dark.svg'))
+        light: vscode.Uri.file(path.join(extensionContext.extensionPath, 'icons', 'pr-review-light.svg')),
+        dark: vscode.Uri.file(path.join(extensionContext.extensionPath, 'icons', 'pr-review-dark.svg'))
     };
 
     // Register review PR command

@@ -5,13 +5,15 @@ const { execSync } = require('child_process');
 const { executeAIReview, getUnifiedModel, getChecklistStatusIcon, shouldUseApiKey, displayReviewHeader } = require('./review-common');
 const { autoDetectWorkspace, getReviewTemplateWithDetection, displayDetectionInfo } = require('./language-detection');
 
-// Import handleEnterTwiceLogic from extension.js
+// Import functions from extension.js
 let handleEnterTwiceLogic;
+let checkAndInitializeTemplates;
 try {
     const extensionModule = require('../extension');
     handleEnterTwiceLogic = extensionModule.handleEnterTwiceLogic;
+    checkAndInitializeTemplates = extensionModule.checkAndInitializeTemplates;
 } catch (error) {
-    console.log('⚠️ Could not import handleEnterTwiceLogic from extension.js');
+    console.log('⚠️ Could not import functions from extension.js');
 }
 
 /**
@@ -21,8 +23,21 @@ try {
  */
 function initializeReviewChanges(context) {
     // Create chat participant for review-changes
-    const reviewChangesParticipant = vscode.chat.createChatParticipant('review-changes', async (request, context, stream, token) => {
+    const reviewChangesParticipant = vscode.chat.createChatParticipant('review-changes', async (request, chatContext, stream, token) => {
         try {
+            // First time check - create AIDA structure if not exists
+            if (checkAndInitializeTemplates) {
+                const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+                if (workspaceFolder) {
+                    const aidaPath = path.join(workspaceFolder.uri.fsPath, 'AIDA');
+                    if (!require('fs').existsSync(aidaPath)) {
+                        console.log('🔄 First @review usage - creating AIDA templates...');
+                        await checkAndInitializeTemplates(context);
+                        console.log('✅ AIDA templates created. Use @sync-review-templates for updates.');
+                    }
+                }
+            }
+            
             console.log('🎯 review-changes participant called');
             console.log('📥 Request object:', request);
             console.log('📥 Request.model:', request.model);
@@ -32,7 +47,7 @@ function initializeReviewChanges(context) {
             const input = request.prompt.trim();
             
             // Improved loop prevention - only prevent if this is a recursive call from the same participant
-            if (context.participant && context.participant.id === 'review-changes' && request.prompt.includes('@review-changes')) {
+            if (chatContext.participant && chatContext.participant.id === 'review-changes' && request.prompt.includes('@review-changes')) {
                 stream.markdown('⚠️ **Loop Prevention**: Recursive call detected\n');
                 stream.markdown('💡 **Use direct commands instead**: Review your git changes or files\n');
                 return;
