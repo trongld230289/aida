@@ -34,7 +34,8 @@ const VS_ID_MAP = {
   'html': 'html',
   'css': 'css',
   'scss': 'scss',
-  'json': 'json'
+  'json': 'json',
+  'php': 'php'
 };
 
 // Simple Extension Mapping (Fallback)
@@ -52,7 +53,8 @@ const SIMPLE_EXT_MAP = {
   '.json': 'json',
   '.jsx': 'react',
   '.tsx': 'react',
-  '.vue': 'vue'
+  '.vue': 'vue',
+  '.php': 'php'
 };
 
 // Framework Detection Patterns
@@ -97,6 +99,13 @@ const FRAMEWORK_PATTERNS = {
     files: ['package.json', 'server.js', 'index.js'],
     dependencies: ['express', 'fastify', 'koa', 'hapi'],
     patterns: ['require(', 'module.exports', 'process.env', '__dirname', '__filename']
+  },
+
+  // PHP Detection
+  php: {
+    files: ['composer.json', 'index.php', 'config.php'],
+    dependencies: ['laravel/framework', 'symfony/symfony', 'codeigniter/framework'],
+    patterns: ['<?php', 'namespace', 'use ', 'class ', 'function ', '$_GET', '$_POST', 'echo ', 'require_once']
   }
 };
 
@@ -297,7 +306,8 @@ function isCompatibleLanguage(framework, language) {
     vue: ['typescript', 'javascript'], 
     express: ['typescript', 'javascript'],
     nestjs: ['typescript'],
-    nodejs: ['typescript', 'javascript']
+    nodejs: ['typescript', 'javascript'],
+    php: ['php']
   };
 
   return compatibility[framework]?.includes(language) ?? false;
