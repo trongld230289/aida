@@ -1,0 +1,204 @@
+{
+  "name": "aida",
+  "displayName": "AIDA - AI Development Assistant",
+  "description": "Advanced AI Development Assistant with intelligent code review, PR analysis, project scanning, and comprehensive development workflows. Your smart coding companion for TypeScript, JavaScript, Python, C#, and more.",
+  "version": "1.0.0",
+  "publisher": "trongld232",
+  "icon": "icons/extension-icon.png",
+  "author": {
+    "name": "Trong Le",
+    "email": "trongld232@gmail.com"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/trongld230289/aida.git"
+  },
+  "bugs": {
+    "url": "https://github.com/trongld230289/aida/issues"
+  },
+  "homepage": "https://github.com/trongld230289/aida#readme",
+  "keywords": [
+    "aida",
+    "ai assistant",
+    "development assistant",
+    "code review",
+    "copilot",
+    "chat participant",
+    "intelligent analysis",
+    "typescript",
+    "javascript",
+    "python",
+    "csharp",
+    "git",
+    "diff",
+    "project scanner",
+    "pull request",
+    "azure devops",
+    "github",
+    "gitlab",
+    "claude",
+    "gpt",
+    "github",
+    "gitlab",
+    "azure devops"
+  ],
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other",
+    "Machine Learning",
+    "Linters"
+  ],
+  "galleryBanner": {
+    "color": "#1e1e1e",
+    "theme": "dark"
+  },
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "aida.reviewFile",
+        "title": "Review File",
+        "category": "AIDA"
+      },
+      {
+        "command": "aida.reviewChanges",
+        "title": "Review Changes",
+        "category": "AIDA"
+      },
+      {
+        "command": "aida.reviewPullRequest",
+        "title": "Review Azure DevOps PR",
+        "category": "AIDA"
+      },
+      {
+        "command": "aida.setupAzureDevOps",
+        "title": "Setup Azure DevOps Token",
+        "category": "AIDA"
+      },
+      {
+        "command": "aida.showAvailableModels",
+        "title": "Show Available Language Models",
+        "category": "AIDA"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "aida.reviewFile",
+          "group": "navigation@1",
+          "when": "editorTextFocus"
+        },
+        {
+          "command": "aida.reviewChanges",
+          "group": "navigation@2",
+          "when": "editorTextFocus"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "aida.reviewFile",
+          "group": "navigation@1",
+          "when": "resourceExtname =~ /\\.(ts|js|tsx|jsx|html|htm|css|scss|less|py|java|cs|cpp|c|php|rb|go|rs|kt|swift)$/"
+        },
+        {
+          "command": "aida.reviewChanges",
+          "group": "navigation@2",
+          "when": "resourceExtname =~ /\\.(ts|js|tsx|jsx|html|htm|css|scss|less|py|java|cs|cpp|c|php|rb|go|rs|kt|swift)$/"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "AIDA",
+      "properties": {
+        "aida.azureDevOps.personalAccessToken": {
+          "type": "string",
+          "default": "",
+          "description": "Azure DevOps Personal Access Token for PR review (requires Code:Read and Pull Request:Read permissions)",
+          "scope": "application"
+        },
+        "aida.azureDevOps.organization": {
+          "type": "string",
+          "default": "",
+          "description": "Default Azure DevOps organization name",
+          "scope": "application"
+        },
+        "aida.azureDevOps.defaultProject": {
+          "type": "string",
+          "default": "",
+          "description": "Default Azure DevOps project name",
+          "scope": "application"
+        },
+        "aida.ai.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "AI API Key for AI-powered code analysis (OpenAI, Claude, or custom AI service)",
+          "scope": "application"
+        },
+        "aida.ai.apiHost": {
+          "type": "string",
+          "default": "https://api.openai.com",
+          "description": "AI API Host URL (OpenAI: https://api.openai.com, Claude: https://api.anthropic.com, or custom host)",
+          "scope": "application"
+        },
+        "aida.ai.model": {
+          "type": "string",
+          "default": "GPT-5",
+          "description": "AI Model to use for code analysis (gpt-4, gpt-5, claude-3-sonnet, or custom model)",
+          "scope": "application"
+        },
+        "aida.useApiKeyInsteadOfCopilot": {
+          "type": "boolean",
+          "default": false,
+          "description": "Use your own AI API key instead of GitHub Copilot for code review (useful for users without Copilot license)",
+          "scope": "application"
+        },
+        "aida.github.personalAccessToken": {
+          "type": "string",
+          "default": "",
+          "description": "GitHub Personal Access Token for PR review (requires repo or public_repo permissions)",
+          "scope": "application"
+        },
+        "aida.gitlab.personalAccessToken": {
+          "type": "string",
+          "default": "",
+          "description": "GitLab Personal Access Token for MR review (requires read_api or api permissions)",
+          "scope": "application"
+        }
+      }
+    },
+    "chatParticipants": [
+      {
+        "id": "review-file",
+        "name": "review-file",
+        "description": "📄 Review current opening file  or 🔗 specify file path",
+        "isSticky": true
+      },
+      {
+        "id": "review-changes",
+        "name": "review-changes",
+        "description": "🔄 Review changes for current opening file  or 🔗 specify file path",
+        "isSticky": true
+      },
+      {
+        "id": "review-pr",
+        "name": "review-pr",
+        "description": "🔍 Review Azure DevOps Pull Request by PR ID or URL",
+        "isSticky": true
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "echo 'Extension ready for packaging'",
+    "test": "echo 'Extension test placeholder'"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.80.0",
+    "@vscode/vsce": "^2.19.0"
+  }
+}
