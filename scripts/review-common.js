@@ -2041,20 +2041,20 @@ async function getReviewTemplateWithDetection(templateType, context = null, targ
     // Build template path based on detection
     let templatePath, templateSource;
     
-    // Try VIDA structure first (newest)
-    const vidaTemplatePath = path.join(
+    // Try AIDA structure first (newest)
+    const aidaTemplatePath = path.join(
         workspaceFolder.uri.fsPath, 
-        'VIDA', 
+        'AIDA', 
         'templates', 
         'review-code',
         detection.templatePath,
         templateType
     );
     
-    if (fs.existsSync(vidaTemplatePath)) {
-        templatePath = vidaTemplatePath;
-        templateSource = 'VIDA workspace';
-        console.log(`✅ Using VIDA template: ${templatePath}`);
+    if (fs.existsSync(aidaTemplatePath)) {
+        templatePath = aidaTemplatePath;
+        templateSource = 'AIDA workspace';
+        console.log(`✅ Using AIDA template: ${templatePath}`);
     } else {
         // Fallback to extension templates
         if (context) {

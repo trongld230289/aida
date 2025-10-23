@@ -130,9 +130,12 @@ function activate(context) {
     
     // Store extension path globally for diff module access
     global.extensionPath = context.extensionPath;
+    
+    // Track if templates have been initialized (lazy loading)
+    global.templatesInitialized = false;
 
-    // Auto-generate templates on first run
-    ensureTemplatesExist(context);
+    // Templates will be created lazily when first @review command is used
+    // ensureTemplatesExist(context); // Removed auto-creation
 
     // Register Azure DevOps setup command
     let setupAzureDevOps = vscode.commands.registerCommand('aida.setupAzureDevOps', async () => {
@@ -245,6 +248,8 @@ function activate(context) {
         }
     });
 
+    console.log('🔄 About to initialize review modules...');
+    
     // Initialize review modules from external scripts
     const reviewChanges = require('./scripts/review-changes');
     const { reviewChangesParticipant } = reviewChanges.initializeReviewChanges(context);
@@ -252,9 +257,28 @@ function activate(context) {
     const reviewFile = require('./scripts/review-file');
     const { reviewFileParticipant } = reviewFile.initializeReviewFile(context);
 
+    console.log('🔄 About to initialize PR review...');
     // Initialize PR review functionality from external script
-    const prReview = require('./scripts/review-pr');
-    const { reviewPrParticipant, reviewPullRequest } = prReview.initializePrReview(context);
+    let reviewPrParticipant, reviewPullRequest;
+    try {
+        const prReview = require('./scripts/review-pr');
+        const result = prReview.initializePrReview(context);
+        reviewPrParticipant = result.reviewPrParticipant;
+        reviewPullRequest = result.reviewPullRequest;
+        console.log('✅ PR review initialized successfully');
+    } catch (error) {
+        console.error('❌ Error initializing PR review:', error);
+        reviewPrParticipant = null;
+        reviewPullRequest = null;
+    }
+
+    console.log('🔄 About to initialize sync review templates...');
+    // Initialize sync review templates functionality
+    console.log('🚀 Initializing Sync Review Templates participant...');
+    const syncTemplates = require('./scripts/sync-review-templates');
+    console.log(' --- IGNORE --- ');
+    const { syncTemplatesParticipant } = syncTemplates.initializeSyncTemplates(context);
+    console.log('✅ Sync Review Templates participant initialized.');
 
     // Register command to view PR diff in webview
     const viewPrDiffCommand = vscode.commands.registerCommand('aida.viewPrDiff', async (diffId) => {
@@ -409,9 +433,7 @@ function activate(context) {
         reviewFileParticipant,
         reviewPrParticipant,
         reviewPullRequest,
-        scanAppParticipant,
-        createAppParticipant,
-        dailyReportParticipant,
+        syncTemplatesParticipant,
         showModelsCommand,
         showDailyReportCommand,
         showDailyReportTemplateCommand,
@@ -422,11 +444,26 @@ function activate(context) {
 }
 
 /**
- * Ensures VIDA template structure exists in workspace
- * Creates comprehensive template system for all languages and frameworks
+ * Check and lazy-load templates if not already initialized
+ * Called by review functions before template usage
  * @param {vscode.ExtensionContext} context
  */
-async function ensureTemplatesExist(context) {
+async function checkAndInitializeTemplates(context) {
+    if (!global.templatesInitialized) {
+        console.log('🔄 First @review usage - initializing AIDA templates...');
+        await ensureTemplatesExistLazy(context);
+        global.templatesInitialized = true;
+        console.log('✅ AIDA templates ready for use');
+    }
+}
+
+/**
+ * Lazy-load AIDA template structure when needed
+ * Creates comprehensive template system for all languages and frameworks  
+ * Only called when @review commands are first used
+ * @param {vscode.ExtensionContext} context
+ */
+async function ensureTemplatesExistLazy(context) {
     try {
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
         if (!workspaceFolder) {
@@ -435,59 +472,59 @@ async function ensureTemplatesExist(context) {
         }
 
         const extensionTemplatesPath = path.join(context.extensionPath, 'templates');
-        const workspaceVidaPath = path.join(workspaceFolder.uri.fsPath, 'VIDA', 'templates');
+        const workspaceAidaPath = path.join(workspaceFolder.uri.fsPath, 'AIDA', 'templates');
         
-        // Check if VIDA folder exists, if not create it with all available templates
-        if (!fs.existsSync(workspaceVidaPath)) {
-            console.log('Creating VIDA template structure in workspace...');
-            await createVidaTemplateStructure(extensionTemplatesPath, workspaceVidaPath);
+        // Check if AIDA folder exists, if not create it with all available templates
+        if (!fs.existsSync(workspaceAidaPath)) {
+            console.log('Creating AIDA template structure in workspace...');
+            await createAidaTemplateStructure(extensionTemplatesPath, workspaceAidaPath);
         } else {
             // Check for new languages and auto-sync
-            await syncNewLanguageTemplates(extensionTemplatesPath, workspaceVidaPath);
+            await syncNewLanguageTemplates(extensionTemplatesPath, workspaceAidaPath);
         }
         
-        console.log('Template management completed - VIDA structure up to date');
+        console.log('Template management completed - AIDA structure up to date');
     } catch (error) {
         console.error('Error managing templates:', error);
     }
 }
 
 /**
- * Creates complete VIDA template structure in workspace
+ * Creates complete AIDA template structure in workspace
  * @param {string} sourceTemplatePath - Extension template path
- * @param {string} targetVidaPath - Target VIDA path in workspace
+ * @param {string} targetAidaPath - Target AIDA path in workspace
  */
-async function createVidaTemplateStructure(sourceTemplatePath, targetVidaPath) {
+async function createAidaTemplateStructure(sourceTemplatePath, targetAidaPath) {
     const fs = require('fs').promises;
     
     try {
-        // Create VIDA directory structure
-        await fs.mkdir(targetVidaPath, { recursive: true });
+        // Create AIDA directory structure
+        await fs.mkdir(targetAidaPath, { recursive: true });
         
         // Copy all language templates
         const reviewCodePath = path.join(sourceTemplatePath, 'review-code');
-        const targetReviewCodePath = path.join(targetVidaPath, 'review-code');
+        const targetReviewCodePath = path.join(targetAidaPath, 'review-code');
         
         if (require('fs').existsSync(reviewCodePath)) {
             await copyDirectory(reviewCodePath, targetReviewCodePath);
-            console.log('✅ VIDA templates created with all available languages');
+            console.log('✅ AIDA templates created with all available languages');
         }
     } catch (error) {
-        console.error('Error creating VIDA structure:', error);
+        console.error('Error creating AIDA structure:', error);
     }
 }
 
 /**
- * Syncs new language templates from extension to workspace VIDA
+ * Syncs new language templates from extension to workspace AIDA
  * @param {string} sourceTemplatePath - Extension template path  
- * @param {string} targetVidaPath - Target VIDA path in workspace
+ * @param {string} targetAidaPath - Target AIDA path in workspace
  */
-async function syncNewLanguageTemplates(sourceTemplatePath, targetVidaPath) {
+async function syncNewLanguageTemplates(sourceTemplatePath, targetAidaPath) {
     const fs = require('fs').promises;
     
     try {
         const sourceLanguagesPath = path.join(sourceTemplatePath, 'review-code', 'languages');
-        const targetLanguagesPath = path.join(targetVidaPath, 'review-code', 'languages');
+        const targetLanguagesPath = path.join(targetAidaPath, 'review-code', 'languages');
         
         if (require('fs').existsSync(sourceLanguagesPath)) {
             const sourceLanguages = await fs.readdir(sourceLanguagesPath);
@@ -507,7 +544,7 @@ async function syncNewLanguageTemplates(sourceTemplatePath, targetVidaPath) {
                     await copyDirectory(sourceLangPath, targetLangPath);
                 }
                 
-                console.log('✅ New language templates synced to VIDA');
+                console.log('✅ New language templates synced to AIDA');
             }
         }
     } catch (error) {
@@ -2174,5 +2211,8 @@ function deactivate() { }
 module.exports = {
     activate,
     deactivate,
-    handleEnterTwiceLogic  // Export for use in review-changes.js and review-file.js
+    handleEnterTwiceLogic,  // Export for use in review-changes.js and review-file.js
+    checkAndInitializeTemplates,  // Export for lazy template loading
+    createAidaTemplateStructure,  // Export for sync-review-templates
+    syncNewLanguageTemplates  // Export for sync-review-templates
 };

@@ -4,13 +4,15 @@ const path = require('path');
 const { executeAIReview, getUnifiedModel, shouldUseApiKey, displayReviewHeader } = require('./review-common');
 const { autoDetectWorkspace, displayDetectionInfo, getLanguageFromExtension } = require('./language-detection');
 
-// Import handleEnterTwiceLogic from extension.js
+// Import functions from extension.js
 let handleEnterTwiceLogic;
+let checkAndInitializeTemplates;
 try {
     const extensionModule = require('../extension');
     handleEnterTwiceLogic = extensionModule.handleEnterTwiceLogic;
+    checkAndInitializeTemplates = extensionModule.checkAndInitializeTemplates;
 } catch (error) {
-    console.log('⚠️ Could not import handleEnterTwiceLogic from extension.js');
+    console.log('⚠️ Could not import functions from extension.js');
 }
 
 /**
@@ -20,8 +22,21 @@ try {
  */
 function initializeReviewFile(context) {
     // Create chat participant for review-file
-    const reviewFileParticipant = vscode.chat.createChatParticipant('review-file', async (request, context, stream, token) => {
+    const reviewFileParticipant = vscode.chat.createChatParticipant('review-file', async (request, chatContext, stream, token) => {
         try {
+            // First time check - create AIDA structure if not exists
+            if (checkAndInitializeTemplates) {
+                const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+                if (workspaceFolder) {
+                    const aidaPath = path.join(workspaceFolder.uri.fsPath, 'AIDA');
+                    if (!require('fs').existsSync(aidaPath)) {
+                        console.log('🔄 First @review usage - creating AIDA templates...');
+                        await checkAndInitializeTemplates(context);
+                        console.log('✅ AIDA templates created. Use @sync-review-templates for updates.');
+                    }
+                }
+            }
+            
             console.log('🎯 review-file participant called');
             console.log('📥 Request object:', request);
             console.log('📥 Context object:', context);
@@ -31,7 +46,7 @@ function initializeReviewFile(context) {
             const input = request.prompt.trim();
             
             // Improved loop prevention - only prevent if this is a recursive call from the same participant
-            if (context.participant && context.participant.id === 'review-file' && request.prompt.includes('@review-file')) {
+            if (chatContext.participant && chatContext.participant.id === 'review-file' && request.prompt.includes('@review-file')) {
                 stream.markdown('⚠️ **Loop Prevention**: Recursive call detected\n');
                 stream.markdown('💡 **Use direct commands instead**: Review your active file or specify a file path\n');
                 return;

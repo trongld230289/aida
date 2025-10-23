@@ -17,3 +17,9 @@
         "description": "📊 Generate and view daily project report",
         "isSticky": true
       }
+
+
+add trong extension
+        scanAppParticipant,
+        createAppParticipant,
+        dailyReportParticipant,
