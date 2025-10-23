@@ -137,6 +137,27 @@ function activate(context) {
     // Templates will be created lazily when first @review command is used
     // ensureTemplatesExist(context); // Removed auto-creation
 
+    // Initialize Copilot-Style Chat Panel EARLY (before command registration)
+    let copilotStyleChat = null;
+    try {
+        console.log('🔄 Initializing Copilot-Style Chat Panel...');
+        const copilotChatModule = require('./scripts/copilot-style-chat.js');
+        copilotStyleChat = copilotChatModule.initializeCopilotStyleChat(context);
+        console.log('✅ Copilot-Style Chat Panel initialized successfully');
+    } catch (error) {
+        console.error('❌ Failed to initialize Copilot-Style Chat Panel:', error);
+        console.error('❌ Error details:', error.stack);
+    }
+
+    // Register command to open AIDA chat directly
+    let openAidaChat = vscode.commands.registerCommand('aida.openChat', async () => {
+        if (copilotStyleChat) {
+            copilotStyleChat.show();
+        } else {
+            vscode.window.showErrorMessage('AIDA Chat is not initialized. Please check the logs for errors.');
+        }
+    });
+
     // Register Azure DevOps setup command
     let setupAzureDevOps = vscode.commands.registerCommand('aida.setupAzureDevOps', async () => {
         await setupAzureDevOpsSettings();
@@ -201,21 +222,30 @@ function activate(context) {
     let reviewFileCommand = vscode.commands.registerCommand('aida.reviewFile', async (uri) => {
         console.log('🎯 Review File command called', uri);
         try {
-            await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
-            if (uri && uri.fsPath) {
-                // Get relative path from workspace
-                const workspaceFolder = vscode.workspace.getWorkspaceFolder(uri);
-                let filePath = uri.fsPath;
-                if (workspaceFolder) {
-                    filePath = path.relative(workspaceFolder.uri.fsPath, uri.fsPath);
-                }
-                await vscode.commands.executeCommand('workbench.action.chat.open', {
-                    query: `@review-file ${filePath}`
-                });
+            // Check if AIDA chat should be used
+            const config = vscode.workspace.getConfiguration('aida');
+            const hasNoGithubCopilot = config.get('hasNoGithubCopilot', false);
+            
+            if (hasNoGithubCopilot || !vscode.extensions.getExtension('GitHub.copilot')?.isActive) {
+                // Use AIDA Copilot-style chat
+                await vscode.commands.executeCommand('aida.reviewFileContext', uri);
             } else {
-                await vscode.commands.executeCommand('workbench.action.chat.open', {
-                    query: '@review-file'
-                });
+                // Use GitHub Copilot
+                await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
+                if (uri && uri.fsPath) {
+                    const workspaceFolder = vscode.workspace.getWorkspaceFolder(uri);
+                    let filePath = uri.fsPath;
+                    if (workspaceFolder) {
+                        filePath = path.relative(workspaceFolder.uri.fsPath, uri.fsPath);
+                    }
+                    await vscode.commands.executeCommand('workbench.action.chat.open', {
+                        query: `@review-file ${filePath}`
+                    });
+                } else {
+                    await vscode.commands.executeCommand('workbench.action.chat.open', {
+                        query: '@review-file'
+                    });
+                }
             }
         } catch (error) {
             console.error('Error in reviewFile command:', error);
@@ -226,25 +256,91 @@ function activate(context) {
     let reviewChangesCommand = vscode.commands.registerCommand('aida.reviewChanges', async (uri) => {
         console.log('🎯 Review Changes command called', uri);
         try {
-            await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
+            // Check if AIDA chat should be used
+            const config = vscode.workspace.getConfiguration('aida');
+            const hasNoGithubCopilot = config.get('hasNoGithubCopilot', false);
+            
+            if (hasNoGithubCopilot || !vscode.extensions.getExtension('GitHub.copilot')?.isActive) {
+                // Use AIDA Copilot-style chat
+                await vscode.commands.executeCommand('aida.reviewChangesContext', uri);
+            } else {
+                // Use GitHub Copilot
+                await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
+                if (uri && uri.fsPath) {
+                    const workspaceFolder = vscode.workspace.getWorkspaceFolder(uri);
+                    let filePath = uri.fsPath;
+                    if (workspaceFolder) {
+                        filePath = path.relative(workspaceFolder.uri.fsPath, uri.fsPath);
+                    }
+                    await vscode.commands.executeCommand('workbench.action.chat.open', {
+                        query: `@review-changes ${filePath}`
+                    });
+                } else {
+                    await vscode.commands.executeCommand('workbench.action.chat.open', {
+                        query: '@review-changes'
+                    });
+                }
+            }
+        } catch (error) {
+            console.error('Error in reviewChanges command:', error);
+            vscode.window.showErrorMessage(`Failed to review changes: ${error.message}`);
+        }
+    });
+
+    // Register AIDA-specific context commands for Copilot-style chat
+    let reviewFileContextCommand = vscode.commands.registerCommand('aida.reviewFileContext', async (uri) => {
+        console.log('🎯 AIDA Review File Context command called', uri);
+        try {
+            if (!copilotStyleChat) {
+                vscode.window.showErrorMessage('AIDA Copilot-style chat is not initialized');
+                return;
+            }
+            
+            // Show the panel
+            copilotStyleChat.show();
+            
+            // Send review file message
             if (uri && uri.fsPath) {
-                // Get relative path from workspace
                 const workspaceFolder = vscode.workspace.getWorkspaceFolder(uri);
                 let filePath = uri.fsPath;
                 if (workspaceFolder) {
                     filePath = path.relative(workspaceFolder.uri.fsPath, uri.fsPath);
                 }
-                await vscode.commands.executeCommand('workbench.action.chat.open', {
-                    query: `@review-changes ${filePath}`
-                });
+                await copilotStyleChat.sendMessage('@review-file ' + filePath);
             } else {
-                await vscode.commands.executeCommand('workbench.action.chat.open', {
-                    query: '@review-changes'
-                });
+                await copilotStyleChat.sendMessage('@review-file');
             }
         } catch (error) {
-            console.error('Error in reviewChanges command:', error);
-            vscode.window.showErrorMessage(`Failed to review changes: ${error.message}`);
+            console.error('Error in reviewFileContext command:', error);
+            vscode.window.showErrorMessage('Failed to review file: ' + error.message);
+        }
+    });
+
+    let reviewChangesContextCommand = vscode.commands.registerCommand('aida.reviewChangesContext', async (uri) => {
+        console.log('🎯 AIDA Review Changes Context command called', uri);
+        try {
+            if (!copilotStyleChat) {
+                vscode.window.showErrorMessage('AIDA Copilot-style chat is not initialized');
+                return;
+            }
+            
+            // Show the panel
+            copilotStyleChat.show();
+            
+            // Send review changes message
+            if (uri && uri.fsPath) {
+                const workspaceFolder = vscode.workspace.getWorkspaceFolder(uri);
+                let filePath = uri.fsPath;
+                if (workspaceFolder) {
+                    filePath = path.relative(workspaceFolder.uri.fsPath, uri.fsPath);
+                }
+                await copilotStyleChat.sendMessage('@review-changes ' + filePath);
+            } else {
+                await copilotStyleChat.sendMessage('@review-changes');
+            }
+        } catch (error) {
+            console.error('Error in reviewChangesContext command:', error);
+            vscode.window.showErrorMessage('Failed to review changes: ' + error.message);
         }
     });
 
@@ -420,8 +516,11 @@ function activate(context) {
         }
     });
 
+    // Copilot-Style Chat Panel already initialized above
+
     // Add all subscriptions, filtering out null values
     const subscriptions = [
+        openAidaChat,
         setupAzureDevOps,
         confirmChangesReview,
         confirmFileReview,
@@ -429,6 +528,8 @@ function activate(context) {
         showFileHelp,
         reviewFileCommand,
         reviewChangesCommand,
+        reviewFileContextCommand,
+        reviewChangesContextCommand,
         reviewChangesParticipant,
         reviewFileParticipant,
         reviewPrParticipant,
@@ -437,7 +538,8 @@ function activate(context) {
         showModelsCommand,
         showDailyReportCommand,
         showDailyReportTemplateCommand,
-        viewPrDiffCommand
+        viewPrDiffCommand,
+        copilotStyleChat
     ].filter(item => item !== null && item !== undefined);
 
     context.subscriptions.push(...subscriptions);

@@ -85,6 +85,11 @@
         "command": "aida.showAvailableModels",
         "title": "Show Available Language Models",
         "category": "AIDA"
+      },
+      {
+        "command": "aida.openChat",
+        "title": "Open AIDA Chat",
+        "category": "AIDA"
       }
     ],
     "menus": {
@@ -168,6 +173,12 @@
           "type": "string",
           "default": "",
           "description": "GitLab Personal Access Token for MR review (requires read_api or api permissions)",
+          "scope": "application"
+        },
+        "aida.hasNoGithubCopilot": {
+          "type": "boolean",
+          "default": false,
+          "description": "Use AIDA Copilot-style chat interface when GitHub Copilot is unavailable or disabled",
           "scope": "application"
         }
       }
