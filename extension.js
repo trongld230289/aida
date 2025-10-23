@@ -124,7 +124,7 @@ async function setupAzureDevOpsSettings() {
  * @param {vscode.ExtensionContext} context
  */
 function activate(context) {
-    console.log('Reload 1');
+    console.log('Reload 2');
     console.log('🤖 AIDA v1.0.0 - AI Development Assistant');
     console.log('🚀 AIDA extension is now active!');
     
@@ -435,13 +435,110 @@ async function ensureTemplatesExist(context) {
         }
 
         const extensionTemplatesPath = path.join(context.extensionPath, 'templates');
+        const workspaceVidaPath = path.join(workspaceFolder.uri.fsPath, 'VIDA', 'templates');
         
-        // Templates are now managed internally by the extension
-        console.log('Templates loaded from extension directory:', extensionTemplatesPath);
-
-        console.log('Template generation completed');
+        // Check if VIDA folder exists, if not create it with all available templates
+        if (!fs.existsSync(workspaceVidaPath)) {
+            console.log('Creating VIDA template structure in workspace...');
+            await createVidaTemplateStructure(extensionTemplatesPath, workspaceVidaPath);
+        } else {
+            // Check for new languages and auto-sync
+            await syncNewLanguageTemplates(extensionTemplatesPath, workspaceVidaPath);
+        }
+        
+        console.log('Template management completed - VIDA structure up to date');
     } catch (error) {
-        console.error('Error generating templates:', error);
+        console.error('Error managing templates:', error);
+    }
+}
+
+/**
+ * Creates complete VIDA template structure in workspace
+ * @param {string} sourceTemplatePath - Extension template path
+ * @param {string} targetVidaPath - Target VIDA path in workspace
+ */
+async function createVidaTemplateStructure(sourceTemplatePath, targetVidaPath) {
+    const fs = require('fs').promises;
+    
+    try {
+        // Create VIDA directory structure
+        await fs.mkdir(targetVidaPath, { recursive: true });
+        
+        // Copy all language templates
+        const reviewCodePath = path.join(sourceTemplatePath, 'review-code');
+        const targetReviewCodePath = path.join(targetVidaPath, 'review-code');
+        
+        if (require('fs').existsSync(reviewCodePath)) {
+            await copyDirectory(reviewCodePath, targetReviewCodePath);
+            console.log('✅ VIDA templates created with all available languages');
+        }
+    } catch (error) {
+        console.error('Error creating VIDA structure:', error);
+    }
+}
+
+/**
+ * Syncs new language templates from extension to workspace VIDA
+ * @param {string} sourceTemplatePath - Extension template path  
+ * @param {string} targetVidaPath - Target VIDA path in workspace
+ */
+async function syncNewLanguageTemplates(sourceTemplatePath, targetVidaPath) {
+    const fs = require('fs').promises;
+    
+    try {
+        const sourceLanguagesPath = path.join(sourceTemplatePath, 'review-code', 'languages');
+        const targetLanguagesPath = path.join(targetVidaPath, 'review-code', 'languages');
+        
+        if (require('fs').existsSync(sourceLanguagesPath)) {
+            const sourceLanguages = await fs.readdir(sourceLanguagesPath);
+            const targetLanguages = require('fs').existsSync(targetLanguagesPath) 
+                ? await fs.readdir(targetLanguagesPath) 
+                : [];
+            
+            // Find new languages to sync
+            const newLanguages = sourceLanguages.filter(lang => !targetLanguages.includes(lang));
+            
+            if (newLanguages.length > 0) {
+                console.log(`🔄 Syncing ${newLanguages.length} new language(s): ${newLanguages.join(', ')}`);
+                
+                for (const newLang of newLanguages) {
+                    const sourceLangPath = path.join(sourceLanguagesPath, newLang);
+                    const targetLangPath = path.join(targetLanguagesPath, newLang);
+                    await copyDirectory(sourceLangPath, targetLangPath);
+                }
+                
+                console.log('✅ New language templates synced to VIDA');
+            }
+        }
+    } catch (error) {
+        console.error('Error syncing language templates:', error);
+    }
+}
+
+/**
+ * Recursively copy directory
+ * @param {string} source - Source directory
+ * @param {string} target - Target directory
+ */
+async function copyDirectory(source, target) {
+    const fs = require('fs').promises;
+    
+    try {
+        await fs.mkdir(target, { recursive: true });
+        const entries = await fs.readdir(source, { withFileTypes: true });
+        
+        for (const entry of entries) {
+            const sourcePath = path.join(source, entry.name);
+            const targetPath = path.join(target, entry.name);
+            
+            if (entry.isDirectory()) {
+                await copyDirectory(sourcePath, targetPath);
+            } else {
+                await fs.copyFile(sourcePath, targetPath);
+            }
+        }
+    } catch (error) {
+        console.error(`Error copying directory ${source} to ${target}:`, error);
     }
 }
 
