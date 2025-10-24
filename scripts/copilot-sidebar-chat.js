@@ -411,23 +411,24 @@ class AidaChatViewProvider {
             position: relative;
         }
 
-        /* GitHub Copilot style separator - subtle */
+        /* GitHub Copilot style separator - very subtle */
         .message:not(:last-child)::after {
             content: '';
             position: absolute;
             bottom: 0;
-            left: 0;
-            right: 0;
+            left: 12px;
+            right: 12px;
             height: 1px;
-            background: var(--vscode-panel-border);
-            opacity: 0.2;
+            background: var(--vscode-widget-border);
+            opacity: 0.1;
         }
 
-        /* GitHub Copilot separator - simple line with flag */
+        /* GitHub Copilot separator - very light line with flag */
         .conversation-starter {
             margin-top: 16px;
             padding-top: 12px;
-            border-top: 1px solid var(--vscode-panel-border);
+            border-top: 1px solid var(--vscode-widget-border);
+            border-top-color: rgba(128, 128, 128, 0.15);
             position: relative;
         }
 
@@ -491,21 +492,29 @@ class AidaChatViewProvider {
         .message-body {
             margin-left: 0;
             padding: 0;
-            font-size: 13px;
-            line-height: 1.5;
+            font-size: 12px;
+            line-height: 1.4;
             word-wrap: break-word;
             word-break: break-word;
             color: var(--vscode-foreground);
         }
+        
+        .message-body hr {
+            border-color: #ffffff2e;
+            margin: 2px 0;
+        }
 
         .message.user .message-body {
-            padding: 2px 12px;
+            padding: 0px 12px;
             margin-left: 28px;
-            background-color: var(--vscode-input-background);
-            border: 1px solid var(--vscode-panel-border);
+            background-color: var(--vscode-chat-requestBubbleBackground);
             border-radius: 6px;
             color: var(--vscode-foreground);
             opacity: 0.95;
+        }
+
+        .message.user .message-body:hover {
+            background-color: var(--vscode-chat-requestBubbleHoverBackground);
         }
 
         .message.assistant .message-body {
@@ -516,13 +525,13 @@ class AidaChatViewProvider {
         .message-body pre {
             background-color: var(--vscode-editor-background);
             border: 1px solid var(--vscode-panel-border);
-            border-radius: 6px;
-            padding: 12px;
-            margin: 8px 0;
+            border-radius: 4px;
+            padding: 8px 10px;
+            margin: 6px 0;
             overflow-x: auto;
             font-family: var(--vscode-editor-font-family);
-            font-size: 12px;
-            line-height: 1.4;
+            font-size: 11px;
+            line-height: 1.3;
             position: relative;
         }
 
@@ -531,16 +540,16 @@ class AidaChatViewProvider {
             padding: 0 !important;
             border-radius: 0 !important;
             font-family: var(--vscode-editor-font-family);
-            font-size: 12px;
+            font-size: 11px;
             color: var(--vscode-editor-foreground);
         }
 
         .message-body code:not(pre code) {
             background-color: var(--vscode-textCodeBlock-background);
-            padding: 2px 6px;
-            border-radius: 4px;
+            padding: 1px 4px;
+            border-radius: 3px;
             font-family: var(--vscode-editor-font-family);
-            font-size: 12px;
+            font-size: 11px;
             color: var(--vscode-textPreformat-foreground);
         }
 
@@ -550,16 +559,20 @@ class AidaChatViewProvider {
             color: var(--vscode-editor-foreground) !important;
         }
 
-        /* Markdown elements styling */
-        .message-body h1, .message-body h2, .message-body h3 {
-            margin: 12px 0 8px 0;
+        /* Markdown elements styling - GitHub Copilot size */
+        .message-body h1, .message-body h2, .message-body h3, .message-body h4 {
+            margin: 8px 0 6px 0;
             font-weight: 600;
             color: var(--vscode-foreground);
         }
 
-        .message-body h1 { font-size: 16px; }
-        .message-body h2 { font-size: 15px; }
-        .message-body h3 { font-size: 14px; }
+        .message-body h1 { font-size: 1.538em; }
+        .message-body h2 { font-size: 1.384em; }
+        .message-body h3 { font-size: 1.157em; }
+        .message-body h4 { 
+            font-size: 1em; 
+            padding: 4px 0;
+        }
 
         .message-body p {
             margin: 8px 0;
@@ -705,7 +718,7 @@ class AidaChatViewProvider {
             background-color: var(--vscode-button-secondaryHoverBackground);
         }
 
-        /* Typing indicator */
+        /* Typing indicator - old bottom style (keeping for compatibility) */
         .typing {
             display: none;
             margin-left: 18px;
@@ -713,6 +726,17 @@ class AidaChatViewProvider {
             color: var(--vscode-descriptionForeground);
             font-size: 10px;
             font-style: italic;
+        }
+
+        /* Inline typing indicator like GitHub Copilot */
+        .inline-typing {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--vscode-descriptionForeground);
+            font-size: 11px;
+            font-style: italic;
+            padding: 4px 0;
         }
 
         .typing.show { display: block; }
@@ -953,12 +977,49 @@ class AidaChatViewProvider {
         }
         
         function showTyping() {
-            typingIndicator.classList.add('show');
+            // Remove any existing typing message
+            const existingTyping = chatContainer.querySelector('.typing-message');
+            if (existingTyping) {
+                existingTyping.remove();
+            }
+            
+            // Remove empty state if exists
+            const emptyState = chatContainer.querySelector('.empty-state');
+            if (emptyState) emptyState.remove();
+            
+            // Create temporary typing message like GitHub Copilot
+            const typingDiv = document.createElement('div');
+            typingDiv.className = 'message assistant typing-message';
+            
+            const timestamp = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            
+            typingDiv.innerHTML = 
+                '<div class="message-meta">' +
+                    '<div class="msg-avatar">🤖</div>' +
+                    '<span>AIDA</span>' +
+                    '<span>' + timestamp + '</span>' +
+                '</div>' +
+                '<div class="message-body">' +
+                    '<div class="inline-typing">' +
+                        '<span>AIDA is thinking</span>' +
+                        '<div class="typing-dots">' +
+                            '<div class="typing-dot"></div>' +
+                            '<div class="typing-dot"></div>' +
+                            '<div class="typing-dot"></div>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>';
+            
+            chatContainer.appendChild(typingDiv);
             chatContainer.scrollTop = chatContainer.scrollHeight;
         }
         
         function hideTyping() {
-            typingIndicator.classList.remove('show');
+            // Remove typing message instead of hiding indicator
+            const typingMessage = chatContainer.querySelector('.typing-message');
+            if (typingMessage) {
+                typingMessage.remove();
+            }
         }
         
         function parseMarkdown(text) {
