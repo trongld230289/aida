@@ -115,6 +115,14 @@
         "icon": "$(close)"
       }
     ],
+    "keybindings": [
+      {
+        "command": "aida.openChat",
+        "key": "ctrl+shift+a",
+        "mac": "cmd+shift+a",
+        "when": "editorTextFocus || explorerViewletVisible"
+      }
+    ],
     "menus": {
       "editor/context": [
         {
@@ -239,7 +247,8 @@
         {
           "id": "aidaChatContainer",
           "title": "AIDA Chat",
-          "icon": "$(comment-discussion)"
+          "icon": "$(comment-discussion)",
+          "when": "false"
         }
       ]
     },
