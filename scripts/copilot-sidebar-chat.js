@@ -183,19 +183,39 @@ class CopilotSidebarChat {
 
             switch (participant) {
                 case 'review-file':
-                    const reviewFileModule = require('./review-file.js');
-                    await reviewFileModule.aiReviewFile(messageWithoutParticipant, mockStream, null, this.context);
-                    return result || '✅ **File Review Complete**\n\nCode analysis completed.';
+                    try {
+                        console.log('📁 AIDA Chat: Calling review-file with mockStream');
+                        const reviewFileModule = require('./review-file.js');
+                        await reviewFileModule.aiReviewFile(messageWithoutParticipant, mockStream, null, this.context);
+                        return result || '✅ **File Review Complete**\n\nCode analysis completed.';
+                    } catch (error) {
+                        console.error('❌ AIDA Chat review-file error:', error);
+                        return '❌ **Error**: ' + error.message + '\n\nPlease check the console for details.';
+                    }
 
                 case 'review-changes':  
-                    const reviewChangesModule = require('./review-changes.js');
-                    await reviewChangesModule.aiReviewChanges(messageWithoutParticipant, mockStream, null, this.context);
-                    return result || '✅ **Changes Review Complete**\n\nGit changes analysis completed.';
+                    try {
+                        console.log('📝 AIDA Chat: Calling review-changes with mockStream');
+                        console.log('📝 MockStream methods:', Object.keys(mockStream));
+                        const reviewChangesModule = require('./review-changes.js');
+                        await reviewChangesModule.aiReviewChanges(messageWithoutParticipant, mockStream, null, this.context);
+                        return result || '✅ **Changes Review Complete**\n\nGit changes analysis completed.';
+                    } catch (error) {
+                        console.error('❌ AIDA Chat review-changes error:', error);
+                        return '❌ **Error**: ' + error.message + '\n\nPlease check the console for details.';
+                    }
 
                 case 'review-pr':
-                    const reviewPRModule = require('./review-pr.js');
-                    await reviewPRModule.handleReviewPr(mockContext, mockStream, this.context);
-                    return result || '✅ **PR Review Complete**\n\nPull request analysis completed.';
+                    try {
+                        console.log('🔄 AIDA Chat: Calling review-pr with correct parameter order');
+                        const reviewPRModule = require('./review-pr.js');
+                        // handleReviewPr expects: (request, context, stream, token)
+                        await reviewPRModule.handleReviewPr(mockContext, this.context, mockStream, null);
+                        return result || '✅ **PR Review Complete**\n\nPull request analysis completed.';
+                    } catch (error) {
+                        console.error('❌ AIDA Chat review-pr error:', error);
+                        return '❌ **Error**: ' + error.message + '\n\nPlease check the console for details.';
+                    }
 
                 case 'sync-review-templates':
                     try {
