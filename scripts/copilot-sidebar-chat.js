@@ -279,6 +279,11 @@ class AidaChatViewProvider {
                 case 'openSettings':
                     vscode.commands.executeCommand('workbench.action.openSettings', 'aida');
                     break;
+                    
+                case 'closeChat':
+                    // Hide the sidebar view
+                    vscode.commands.executeCommand('workbench.action.closeSidebar');
+                    break;
             }
         });
 
@@ -311,63 +316,6 @@ class AidaChatViewProvider {
             display: flex;
             flex-direction: column;
             overflow: hidden;
-        }
-
-        /* Sidebar optimized header */
-        .sidebar-header {
-            padding: 8px 12px;
-            border-bottom: 1px solid var(--vscode-sideBar-border);
-            background-color: var(--vscode-sideBarSectionHeader-background);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            flex-shrink: 0;
-            min-height: 35px;
-        }
-
-        .header-title {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 11px;
-            font-weight: 600;
-            color: var(--vscode-sideBarSectionHeader-foreground);
-        }
-
-        .aida-icon {
-            width: 14px;
-            height: 14px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #7c3aed 0%, #3b82f6 100%);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 8px;
-            font-weight: bold;
-        }
-
-        .header-actions {
-            display: flex;
-            gap: 2px;
-        }
-
-        .header-btn {
-            width: 16px;
-            height: 16px;
-            border: none;
-            background: transparent;
-            color: var(--vscode-icon-foreground);
-            cursor: pointer;
-            border-radius: 2px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 10px;
-        }
-
-        .header-btn:hover {
-            background-color: var(--vscode-toolbar-hoverBackground);
         }
 
         /* Chat messages - optimized for sidebar */
@@ -592,28 +540,29 @@ class AidaChatViewProvider {
         }
 
         .empty-icon {
-            width: 32px;
-            height: 32px;
+            width: 48px;
+            height: 48px;
             border-radius: 50%;
             background: linear-gradient(135deg, #7c3aed 0%, #3b82f6 100%);
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
-            font-size: 14px;
-            margin-bottom: 8px;
+            font-size: 24px;
+            margin-bottom: 12px;
+            box-shadow: 0 4px 16px rgba(124, 58, 237, 0.3);
         }
 
         .empty-state h3 {
-            font-size: 13px;
+            font-size: 14px;
             font-weight: 600;
-            margin-bottom: 4px;
+            margin-bottom: 6px;
             color: var(--vscode-foreground);
         }
 
         .empty-state p {
-            font-size: 10px;
-            line-height: 1.3;
+            font-size: 11px;
+            line-height: 1.4;
         }
 
         /* Scrollbar - thin for sidebar */
@@ -636,17 +585,6 @@ class AidaChatViewProvider {
     </style>
 </head>
 <body>
-    <div class="sidebar-header">
-        <div class="header-title">
-            <div class="aida-icon">A</div>
-            <span>AIDA</span>
-        </div>
-        <div class="header-actions">
-            <button class="header-btn" onclick="clearChat()" title="Clear">🗑️</button>
-            <button class="header-btn" onclick="openSettings()" title="Settings">⚙️</button>
-        </div>
-    </div>
-
     <div class="chat-container" id="chatContainer">
         <div class="empty-state">
             <div class="empty-icon">🤖</div>
@@ -771,14 +709,6 @@ class AidaChatViewProvider {
             text = text.replace(/\\*([^\\*]+)\\*/g, '<em>$1</em>');
             text = text.replace(/\\n/g, '<br>');
             return text;
-        }
-        
-        function clearChat() {
-            vscode.postMessage({ type: 'clearChat' });
-        }
-        
-        function openSettings() {
-            vscode.postMessage({ type: 'openSettings' });
         }
         
         // Handle messages from extension
