@@ -388,15 +388,7 @@ function activate(context) {
         reviewPullRequest = null;
     }
 
-    console.log('🔄 About to initialize sync review templates...');
-    // Initialize sync review templates functionality
-    console.log('🚀 Initializing Sync Review Templates participant...');
-    const syncTemplates = require('./scripts/sync-review-templates');
-    console.log(' --- IGNORE --- ');
-    const { syncTemplatesParticipant } = syncTemplates.initializeSyncTemplates(context);
-    console.log('✅ Sync Review Templates participant initialized.');
-
-    // Register command to view PR diff in webview
+    // Register command to view PR diff in webview FIRST
     const viewPrDiffCommand = vscode.commands.registerCommand('aida.viewPrDiff', async (diffId) => {
         try {
             console.log(`📄 Opening diff webview for: ${diffId}`);
@@ -424,12 +416,12 @@ function activate(context) {
 
             // Add message handler for file switching
             panel.webview.onDidReceiveMessage(async (message) => {
-                console.log('📨 Received message from webview:', message);
+                console.log('� Received message from webview:', message);
                 
                 if (message.type === 'openFileInMonaco') {
                     try {
                         const filePath = message.filePath;
-                        console.log('🔄 Loading new file for Monaco:', filePath);
+                        console.log('�🔄 Loading new file for Monaco:', filePath);
                         
                         // Find file in cache using the same PR context as current diffData
                         const cache = global.prDiffCache;
@@ -485,6 +477,16 @@ function activate(context) {
             vscode.window.showErrorMessage(`Failed to open diff: ${error.message}`);
         }
     });
+
+    console.log('🔄 About to initialize sync review templates...');
+    // Initialize sync review templates functionality
+    console.log('🚀 Initializing Sync Review Templates participant...');
+    const syncTemplates = require('./scripts/sync-review-templates');
+    console.log(' --- IGNORE --- ');
+    const { syncTemplatesParticipant } = syncTemplates.initializeSyncTemplates(context);
+    console.log('✅ Sync Review Templates participant initialized.');
+
+    // Command already registered above
 
     // Register command to show available models
     const showModelsCommand = vscode.commands.registerCommand('aida.showAvailableModels', showAvailableModels);

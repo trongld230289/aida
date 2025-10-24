@@ -146,7 +146,10 @@ class CopilotSidebarChat {
                 },
                 button: (button) => {
                     if (button && button.title) {
-                        result += '\n\n**' + button.title + '**\n\n';
+                        // Use simple placeholder with encoded data
+                        const buttonId = 'AIDA_BTN_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                        // Store button data in a global object that webview can access
+                        result += `<span data-button-id="${buttonId}" data-title="${button.title}" data-command="${button.command || ''}" data-args='${JSON.stringify(button.arguments || [])}' data-tooltip="${button.tooltip || button.title}" class="button-placeholder">[${button.title}]</span> `;
                     }
                     return mockStream;
                 },
@@ -303,6 +306,50 @@ class AidaChatViewProvider {
                 case 'closeChat':
                     // Hide the sidebar view
                     vscode.commands.executeCommand('workbench.action.closeSidebar');
+                    break;
+
+                case 'runDiffCommand':
+                    // Simply execute the command - it already works!
+                    if (message.command && Array.isArray(message.arguments)) {
+                        await vscode.commands.executeCommand(message.command, ...message.arguments);
+                    }
+                    break;
+                    // Open diff view for file button
+                    console.log('🔍 Received runDiffCommand:', message);
+                    if (message.command && Array.isArray(message.arguments)) {
+                        console.log('🚀 Executing command:', message.command, 'with args:', message.arguments);
+                        try {
+                            if (message.command === 'aida.viewPrDiff') {
+                                const diffId = message.arguments[0];
+                                console.log('📄 Opening Monaco diff for diffId:', diffId);
+                                
+                                // Extract file path from diffId (format: github_id_filepath)
+                                const pathPart = diffId.split('_').slice(2).join('_').replace(/_/g, '/');
+                                console.log('� Extracted path:', pathPart);
+                                
+                                // Try to find the file in workspace
+                                const workspaceFolders = vscode.workspace.workspaceFolders;
+                                if (workspaceFolders && workspaceFolders.length > 0) {
+                                    const filePath = vscode.Uri.joinPath(workspaceFolders[0].uri, pathPart);
+                                    console.log('🔍 Opening file:', filePath.toString());
+                                    
+                                    // Open the file
+                                    await vscode.commands.executeCommand('vscode.open', filePath);
+                                    vscode.window.showInformationMessage(`Opened file: ${pathPart}`);
+                                } else {
+                                    vscode.window.showErrorMessage('No workspace folder found');
+                                }
+                            } else {
+                                await vscode.commands.executeCommand(message.command, ...message.arguments);
+                            }
+                            console.log('✅ Command executed successfully');
+                        } catch (error) {
+                            console.error('❌ Command execution failed:', error);
+                            vscode.window.showErrorMessage(`Failed to open file: ${error.message}`);
+                        }
+                    } else {
+                        console.error('❌ Invalid command or arguments:', message);
+                    }
                     break;
             }
         });
@@ -496,7 +543,37 @@ class AidaChatViewProvider {
             line-height: 1.5;
         }
 
-        .message-body ul, .message-body ol {
+            /* File diff buttons like GitHub Copilot */
+            .file-diff-btn {
+                background-color: var(--vscode-button-background);
+                color: var(--vscode-button-foreground);
+                border: 1px solid var(--vscode-button-border);
+                border-radius: 3px;
+                padding: 4px 8px;
+                font-size: 12px;
+                cursor: pointer;
+                margin: 2px 4px 2px 0;
+                display: inline-block;
+                vertical-align: middle;
+                transition: background-color 0.1s;
+            }
+
+            .file-diff-btn:hover {
+                background-color: var(--vscode-button-hoverBackground);
+                border-color: var(--vscode-button-hoverBorder);
+            }
+
+        .file-diff-btn:active {
+            background-color: var(--vscode-button-background);
+            transform: translateY(1px);
+        }
+
+        .button-placeholder {
+            font-weight: bold;
+            color: var(--vscode-textLink-foreground);
+            text-decoration: underline;
+            cursor: pointer;
+        }        .message-body ul, .message-body ol {
             margin: 8px 0;
             padding-left: 20px;
         }
@@ -808,16 +885,47 @@ class AidaChatViewProvider {
             const displayName = role === 'user' ? 'You' : 'AIDA';
             const avatar = role === 'user' ? '👤' : '🤖';
             
+            // Parse markdown content
+            const parsedContent = parseMarkdown(content);
+            
             messageDiv.innerHTML = \`
                 <div class="message-meta">
                     <div class="msg-avatar">\${avatar}</div>
                     <span>\${displayName}</span>
                     <span>\${timestamp}</span>
                 </div>
-                <div class="message-body">\${parseMarkdown(content)}</div>
+                <div class="message-body">\${parsedContent}</div>
             \`;
             
             chatContainer.appendChild(messageDiv);
+            
+            // Convert button placeholders to actual buttons
+            const messageBody = messageDiv.querySelector('.message-body');
+            if (messageBody) {
+                const buttonPlaceholders = messageBody.querySelectorAll('.button-placeholder');
+                buttonPlaceholders.forEach(placeholder => {
+                    const title = placeholder.getAttribute('data-title');
+                    const command = placeholder.getAttribute('data-command');
+                    const args = placeholder.getAttribute('data-args');
+                    const tooltip = placeholder.getAttribute('data-tooltip');
+                    
+                    const button = document.createElement('button');
+                    button.className = 'file-diff-btn';
+                    button.textContent = title;
+                    button.title = tooltip;
+                    button.onclick = function() {
+                        try {
+                            const parsedArgs = JSON.parse(args);
+                            openDiffView(command, JSON.stringify(parsedArgs));
+                        } catch (e) {
+                            console.error('Failed to parse button args:', e);
+                        }
+                    };
+                    
+                    placeholder.parentNode.replaceChild(button, placeholder);
+                });
+            }
+            
             chatContainer.scrollTop = chatContainer.scrollHeight;
         }
         
@@ -832,22 +940,25 @@ class AidaChatViewProvider {
         
         function parseMarkdown(text) {
             try {
-                // Configure marked for GitHub Copilot style
+                // Configure marked for GitHub Copilot style with HTML enabled
                 if (typeof marked !== 'undefined') {
                     marked.setOptions({
                         breaks: true,
                         gfm: true,
                         headerIds: false,
-                        mangle: false
+                        mangle: false,
+                        sanitize: false,  // Allow HTML
+                        pedantic: false
                     });
                     return marked.parse(text);
                 } else {
-                    // Fallback to simple parsing
+                    // Fallback to simple parsing with HTML support
                     text = text.replace(/\`\`\`([\\s\\S]*?)\`\`\`/g, '<pre><code>$1</code></pre>');
                     text = text.replace(/\`([^\`]+)\`/g, '<code>$1</code>');
                     text = text.replace(/\\*\\*([^\\*]+)\\*\\*/g, '<strong>$1</strong>');
                     text = text.replace(/\\*([^\\*]+)\\*/g, '<em>$1</em>');
                     text = text.replace(/\\n/g, '<br>');
+                    // Keep HTML buttons as-is
                     return text;
                 }
             } catch (error) {
@@ -893,6 +1004,21 @@ class AidaChatViewProvider {
         
         // Focus input on load
         msgInput.focus();
+
+            // Handle file diff button clicks
+            window.openDiffView = function(command, argsJson) {
+                let args = [];
+                try {
+                    args = argsJson ? JSON.parse(argsJson) : [];
+                } catch (e) {
+                    args = [];
+                }
+                vscode.postMessage({
+                    type: 'runDiffCommand',
+                    command,
+                    arguments: args
+                });
+            };
     </script>
 </body>
 </html>`;
