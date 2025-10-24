@@ -11,6 +11,8 @@ class CopilotSidebarChat {
         this.webviewView = null;
         this.chatHistory = [];
         this.isProcessing = false;
+        this.messageHistory = []; // Store user message history for arrow navigation
+        this.historyIndex = -1;   // Current position in history (-1 = not navigating)
     }
 
     /**
@@ -71,6 +73,18 @@ class CopilotSidebarChat {
                     message: userMessage
                 });
             }
+
+            // Add to message history for arrow navigation (only if not empty and different from last)
+            const trimmedMessage = userMessage.trim();
+            if (trimmedMessage && (this.messageHistory.length === 0 || this.messageHistory[this.messageHistory.length - 1] !== trimmedMessage)) {
+                this.messageHistory.push(trimmedMessage);
+                // Keep only last 50 messages to prevent memory issues
+                if (this.messageHistory.length > 50) {
+                    this.messageHistory.shift();
+                }
+            }
+            // Reset history navigation index
+            this.historyIndex = -1;
 
             // Add to history
             this.chatHistory.push({
@@ -286,7 +300,17 @@ class AidaChatViewProvider {
                     
                 case 'clearChat':
                     this.chatInstance.chatHistory = [];
+                    this.chatInstance.messageHistory = []; // Clear message history too
+                    this.chatInstance.historyIndex = -1;
                     webviewView.webview.postMessage({ type: 'clearChat' });
+                    break;
+                    
+                case 'navigateHistory':
+                    this.handleHistoryNavigation(message.direction, webviewView);
+                    break;
+                    
+                case 'resetHistoryIndex':
+                    this.chatInstance.historyIndex = -1;
                     break;
                     
                 case 'openSettings':
@@ -421,6 +445,43 @@ class AidaChatViewProvider {
         });
 
         console.log('✅ AIDA Chat Sidebar WebView resolved');
+    }
+
+    handleHistoryNavigation(direction, webviewView) {
+        const messageHistory = this.chatInstance.messageHistory;
+        if (messageHistory.length === 0) return;
+
+        if (direction === 'up') {
+            // Navigate to older messages
+            if (this.chatInstance.historyIndex === -1) {
+                // Start navigating from the end
+                this.chatInstance.historyIndex = messageHistory.length - 1;
+            } else if (this.chatInstance.historyIndex > 0) {
+                this.chatInstance.historyIndex--;
+            }
+        } else if (direction === 'down') {
+            // Navigate to newer messages
+            if (this.chatInstance.historyIndex !== -1) {
+                this.chatInstance.historyIndex++;
+                if (this.chatInstance.historyIndex >= messageHistory.length) {
+                    // Reset to current input (clear field)
+                    this.chatInstance.historyIndex = -1;
+                    webviewView.webview.postMessage({ 
+                        type: 'setInputValue', 
+                        value: '' 
+                    });
+                    return;
+                }
+            }
+        }
+
+        // Send the message from history to webview
+        if (this.chatInstance.historyIndex >= 0 && this.chatInstance.historyIndex < messageHistory.length) {
+            webviewView.webview.postMessage({ 
+                type: 'setInputValue', 
+                value: messageHistory[this.chatInstance.historyIndex] 
+            });
+        }
     }
 
     /**
@@ -975,6 +1036,11 @@ class AidaChatViewProvider {
             this.style.height = 'auto';
             this.style.height = Math.min(this.scrollHeight, 80) + 'px';
             
+            // Reset history navigation when user starts typing
+            vscode.postMessage({
+                type: 'resetHistoryIndex'
+            });
+            
             // Handle @ participant suggestions
             handleParticipantSuggest(this.value, this.selectionStart);
         });
@@ -997,6 +1063,14 @@ class AidaChatViewProvider {
             } else if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 sendMessage();
+            } else if (e.key === 'ArrowUp' && !e.shiftKey && !e.ctrlKey) {
+                // Navigate message history up (older messages)
+                e.preventDefault();
+                navigateHistory('up');
+            } else if (e.key === 'ArrowDown' && !e.shiftKey && !e.ctrlKey) {
+                // Navigate message history down (newer messages)
+                e.preventDefault();
+                navigateHistory('down');
             }
         });
         
@@ -1084,6 +1158,15 @@ class AidaChatViewProvider {
                 }
             }
             hideSuggestions();
+        }
+        
+        // Message history navigation functions
+        function navigateHistory(direction) {
+            // Get messageHistory from the extension context via postMessage
+            vscode.postMessage({
+                type: 'navigateHistory',
+                direction: direction
+            });
         }
         
         function sendMessage() {
@@ -1312,6 +1395,16 @@ class AidaChatViewProvider {
                 case 'syncInfo':
                     hideTyping();
                     addMessage(message.syncResult, 'assistant');
+                    break;
+                    
+                case 'setInputValue':
+                    msgInput.value = message.value;
+                    msgInput.focus();
+                    // Auto-resize input
+                    msgInput.style.height = 'auto';
+                    msgInput.style.height = Math.min(msgInput.scrollHeight, 80) + 'px';
+                    // Position cursor at end
+                    msgInput.setSelectionRange(msgInput.value.length, msgInput.value.length);
                     break;
             }
         });
