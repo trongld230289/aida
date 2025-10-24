@@ -527,11 +527,11 @@ async function reviewDiffWithChecklist(diffContent, stream, changeType, filePath
     
     stream.markdown('- 🌐 **Test in development environment**\n');
 
-    // 5. Code Diff (as per instruction format)
-    stream.markdown('\n### 📝 Code Diff\n\n');
-    stream.markdown('<details><summary>🔍 Click to view detailed diff</summary>\n\n');
-    stream.markdown('```diff\n' + diffContent + '\n```\n\n');
-    stream.markdown('</details>\n\n');
+    // 5. Code Diff (as per instruction format) - REMOVED to match Copilot behavior
+    // stream.markdown('\n### 📝 Code Diff\n\n');
+    // stream.markdown('<details><summary>🔍 Click to view detailed diff</summary>\n\n');
+    // stream.markdown('```diff\n' + diffContent + '\n```\n\n');
+    // stream.markdown('</details>\n\n');
 
     // Success message
     stream.markdown('---\n\n');

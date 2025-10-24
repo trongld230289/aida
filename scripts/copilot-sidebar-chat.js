@@ -300,6 +300,7 @@ class AidaChatViewProvider {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AIDA Chat</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -318,38 +319,86 @@ class AidaChatViewProvider {
             overflow: hidden;
         }
 
-        /* Chat messages - optimized for sidebar */
+        /* GitHub Copilot Flat UI Design */
         .chat-container {
             flex: 1;
             overflow-y: auto;
-            padding: 8px;
+            padding: 16px 12px;
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 16px;
         }
 
         .message {
             display: flex;
             flex-direction: column;
-            gap: 4px;
+            gap: 8px;
+            padding-bottom: 16px;
+            position: relative;
+        }
+
+        /* GitHub Copilot style separator - subtle */
+        .message:not(:last-child)::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: var(--vscode-panel-border);
+            opacity: 0.2;
+        }
+
+        /* GitHub Copilot separator - simple line with flag */
+        .conversation-starter {
+            margin-top: 16px;
+            padding-top: 12px;
+            border-top: 1px solid var(--vscode-panel-border);
+            position: relative;
+        }
+
+        /* Simple flag for regular separators */
+        .conversation-starter::before {
+            content: '🏁';
+            position: absolute;
+            top: -8px;
+            left: 8px;
+            background: var(--vscode-sideBar-background);
+            padding: 0 4px;
+            font-size: 10px;
+            opacity: 0.6;
+        }
+
+        /* "New Conversation" text only for truly new conversations */
+        .conversation-starter.truly-new-conversation::before {
+            content: '💬 New Conversation';
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 0 8px;
+            font-size: 10px;
+            color: var(--vscode-descriptionForeground);
+            font-weight: 500;
+            opacity: 0.8;
         }
 
         .message-meta {
             display: flex;
             align-items: center;
-            gap: 4px;
-            font-size: 10px;
-            color: var(--vscode-descriptionForeground);
+            gap: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--vscode-foreground);
+            margin-bottom: 4px;
         }
 
         .msg-avatar {
-            width: 14px;
-            height: 14px;
+            width: 20px;
+            height: 20px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 8px;
+            font-size: 10px;
             font-weight: 600;
             flex-shrink: 0;
         }
@@ -364,52 +413,91 @@ class AidaChatViewProvider {
             color: white;
         }
 
+        /* Flat message design like GitHub Copilot */
         .message-body {
-            margin-left: 18px;
-            padding: 8px;
-            border-radius: 6px;
-            font-size: 11px;
-            line-height: 1.4;
+            margin-left: 0;
+            padding: 0;
+            font-size: 13px;
+            line-height: 1.5;
             word-wrap: break-word;
             word-break: break-word;
+            color: var(--vscode-foreground);
         }
 
         .message.user .message-body {
+            padding: 2px 12px;
+            margin-left: 28px;
             background-color: var(--vscode-input-background);
-            border: 1px solid var(--vscode-input-border);
-            color: var(--vscode-input-foreground);
+            border: 1px solid var(--vscode-panel-border);
+            border-radius: 6px;
+            color: var(--vscode-foreground);
+            opacity: 0.95;
         }
 
         .message.assistant .message-body {
-            background-color: var(--vscode-textCodeBlock-background);
-            border: 1px solid var(--vscode-panel-border);
-            color: var(--vscode-editor-foreground);
+            color: var(--vscode-foreground);
         }
 
-        /* Code in messages - sidebar optimized */
+        /* GitHub Copilot Code Styling - Flat Design */
         .message-body pre {
-            background-color: var(--vscode-textCodeBlock-background);
-            border: 1px solid var(--vscode-panel-border);
-            border-radius: 4px;
-            padding: 6px;
-            margin: 4px 0;
+            background-color: var(--vscode-editor-background);
+            border: none;
+            border-radius: 6px;
+            padding: 12px;
+            margin: 8px 0;
             overflow-x: auto;
             font-family: var(--vscode-editor-font-family);
-            font-size: 10px;
+            font-size: 12px;
+            line-height: 1.4;
         }
 
         .message-body code {
-            background-color: var(--vscode-textCodeBlock-background);
-            padding: 1px 3px;
-            border-radius: 2px;
+            background-color: var(--vscode-editor-background);
+            padding: 2px 6px;
+            border-radius: 4px;
             font-family: var(--vscode-editor-font-family);
-            font-size: 10px;
+            font-size: 12px;
+            color: var(--vscode-editor-foreground);
+        }
+
+        /* Markdown elements styling */
+        .message-body h1, .message-body h2, .message-body h3 {
+            margin: 12px 0 8px 0;
+            font-weight: 600;
+            color: var(--vscode-foreground);
+        }
+
+        .message-body h1 { font-size: 16px; }
+        .message-body h2 { font-size: 15px; }
+        .message-body h3 { font-size: 14px; }
+
+        .message-body p {
+            margin: 8px 0;
+            line-height: 1.5;
+        }
+
+        .message-body ul, .message-body ol {
+            margin: 8px 0;
+            padding-left: 20px;
+        }
+
+        .message-body li {
+            margin: 4px 0;
+        }
+
+        .message-body blockquote {
+            border-left: 3px solid var(--vscode-textLink-foreground);
+            padding-left: 12px;
+            margin: 8px 0;
+            font-style: italic;
+            opacity: 0.8;
         }
 
         /* Input area - sidebar optimized */
+        /* GitHub Copilot Input Area - Flat Design */
         .input-area {
-            padding: 8px;
-            border-top: 1px solid var(--vscode-sideBar-border);
+            padding: 12px;
+            border-top: 1px solid var(--vscode-panel-border);
             background-color: var(--vscode-sideBar-background);
             flex-shrink: 0;
         }
@@ -422,36 +510,40 @@ class AidaChatViewProvider {
 
         .msg-input {
             flex: 1;
-            min-height: 28px;
-            max-height: 80px;
-            padding: 4px 24px 4px 8px;
-            border: 1px solid var(--vscode-input-border);
-            border-radius: 12px;
+            min-height: 36px;
+            max-height: 120px;
+            padding: 8px 36px 8px 12px;
+            border: 2px solid var(--vscode-input-border);
+            border-radius: 8px;
             background-color: var(--vscode-input-background);
             color: var(--vscode-input-foreground);
-            font-size: 11px;
+            font-size: 13px;
             font-family: inherit;
             resize: none;
             outline: none;
             overflow-y: auto;
+            transition: border-color 0.2s ease;
         }
 
         .msg-input:focus {
-            border-color: var(--vscode-focusBorder);
+            border-color: var(--vscode-button-background);
+            box-shadow: 0 0 0 1px var(--vscode-button-background);
         }
 
         .msg-input::placeholder {
             color: var(--vscode-input-placeholderForeground);
+            opacity: 0.7;
         }
 
+        /* GitHub Copilot Send Button */
         .send-btn {
             position: absolute;
-            right: 4px;
-            bottom: 4px;
-            width: 20px;
-            height: 20px;
+            right: 8px;
+            bottom: 8px;
+            width: 24px;
+            height: 24px;
             border: none;
-            border-radius: 50%;
+            border-radius: 4px;
             background-color: var(--vscode-button-background);
             color: var(--vscode-button-foreground);
             cursor: pointer;
@@ -671,10 +763,26 @@ class AidaChatViewProvider {
         function addMessage(content, role) {
             // Remove empty state
             const emptyState = chatContainer.querySelector('.empty-state');
+            const isFirstMessage = emptyState !== null;
             if (emptyState) emptyState.remove();
+            
+            // GitHub Copilot behavior: Add separator for user messages when previous message wasn't from user
+            const existingMessages = chatContainer.querySelectorAll('.message');
+            const lastMessage = existingMessages[existingMessages.length - 1];
+            const shouldAddSeparator = role === 'user' && (!lastMessage || !lastMessage.classList.contains('user'));
             
             const messageDiv = document.createElement('div');
             messageDiv.className = \`message \${role}\`;
+            
+            // Add simple separator like GitHub Copilot (not "New Conversation" unless first message)
+            if (shouldAddSeparator) {
+                messageDiv.classList.add('conversation-starter');
+                
+                // Only show "New Conversation" for truly first message
+                if (isFirstMessage) {
+                    messageDiv.classList.add('truly-new-conversation');
+                }
+            }
             
             const timestamp = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
             const displayName = role === 'user' ? 'You' : 'AIDA';
@@ -703,12 +811,29 @@ class AidaChatViewProvider {
         }
         
         function parseMarkdown(text) {
-            text = text.replace(/\`\`\`([\\s\\S]*?)\`\`\`/g, '<pre><code>$1</code></pre>');
-            text = text.replace(/\`([^\`]+)\`/g, '<code>$1</code>');
-            text = text.replace(/\\*\\*([^\\*]+)\\*\\*/g, '<strong>$1</strong>');
-            text = text.replace(/\\*([^\\*]+)\\*/g, '<em>$1</em>');
-            text = text.replace(/\\n/g, '<br>');
-            return text;
+            try {
+                // Configure marked for GitHub Copilot style
+                if (typeof marked !== 'undefined') {
+                    marked.setOptions({
+                        breaks: true,
+                        gfm: true,
+                        headerIds: false,
+                        mangle: false
+                    });
+                    return marked.parse(text);
+                } else {
+                    // Fallback to simple parsing
+                    text = text.replace(/\`\`\`([\\s\\S]*?)\`\`\`/g, '<pre><code>$1</code></pre>');
+                    text = text.replace(/\`([^\`]+)\`/g, '<code>$1</code>');
+                    text = text.replace(/\\*\\*([^\\*]+)\\*\\*/g, '<strong>$1</strong>');
+                    text = text.replace(/\\*([^\\*]+)\\*/g, '<em>$1</em>');
+                    text = text.replace(/\\n/g, '<br>');
+                    return text;
+                }
+            } catch (error) {
+                console.error('Markdown parsing error:', error);
+                return text.replace(/\\n/g, '<br>');
+            }
         }
         
         // Handle messages from extension
