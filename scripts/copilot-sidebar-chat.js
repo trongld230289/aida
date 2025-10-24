@@ -1,5 +1,6 @@
 const vscode = require('vscode');
 const path = require('path');
+const { AidaChatbotService } = require('../chatbot/aida-chatbot-service.js');
 
 /**
  * GitHub Copilot-Style Sidebar Chat (True Right Sidebar like Copilot)
@@ -13,6 +14,20 @@ class CopilotSidebarChat {
         this.isProcessing = false;
         this.messageHistory = []; // Store user message history for arrow navigation
         this.historyIndex = -1;   // Current position in history (-1 = not navigating)
+        this.chatbotService = new AidaChatbotService(context); // AI chatbot service
+        this.initializeChatbot();
+    }
+
+    /**
+     * Initialize chatbot service
+     */
+    async initializeChatbot() {
+        try {
+            await this.chatbotService.initialize();
+            console.log('✅ AIDA Chatbot Service initialized');
+        } catch (error) {
+            console.error('❌ Failed to initialize chatbot service:', error);
+        }
     }
 
     /**
@@ -246,7 +261,7 @@ class CopilotSidebarChat {
                     }
 
                 default:
-                    return this.generateGeneralResponse(message);
+                    return await this.generateGeneralResponse(message);
             }
 
         } catch (error) {
@@ -256,17 +271,69 @@ class CopilotSidebarChat {
     }
 
     /**
-     * Generate general response
+     * Generate conversational response using AI chatbot service
      */
-    generateGeneralResponse(message) {
-        return '# 🤖 AIDA Assistant\n\n' +
-               'How can I help you?\n\n' +
-               '**Available Commands:**\n' +
-               '- `@review-file` - Review current file\n' +
-               '- `@review-changes` - Review git changes\n' +
-               '- `@review-pr` - Review pull request\n' +
-               '- `@sync-review-templates` - Sync templates\n\n' +
-               '*Powered by AIDA*';
+    async generateGeneralResponse(message) {
+        try {
+            console.log('💬 Generating conversational response for:', message);
+            
+            // Use AI chatbot service for intelligent conversation
+            const response = await this.chatbotService.generateResponse(message);
+            
+            console.log('✅ Generated response length:', response.length);
+            return response;
+            
+        } catch (error) {
+            console.error('❌ Error generating conversation response:', error);
+            
+            // Fallback to simple response
+            return this.getFallbackResponse(message);
+        }
+    }
+
+    /**
+     * Fallback response when chatbot service fails
+     */
+    getFallbackResponse(message) {
+        const isVietnamese = /[àáảãạăắằẳẵặâấầẩẫậđèéẻẽẹêếềểễệìíỉĩịòóỏõọôốồổỗộơớờởỡợùúủũụưứừửữựỳýỷỹỵ]/.test(message);
+        
+        if (isVietnamese) {
+            return `# 🤖 AIDA Assistant
+
+Xin chào! Tôi là AIDA, trợ lý AI chuyên về lập trình.
+
+**Tôi có thể giúp bạn:**
+- Trả lời câu hỏi về coding
+- Review và phân tích code  
+- Debug và troubleshooting
+- Giải thích concepts và patterns
+
+**Commands đặc biệt:**
+- \`@review-file\` - Review file hiện tại
+- \`@review-changes\` - Phân tích git changes
+- \`@review-pr\` - Review pull request  
+- \`@sync-review-templates\` - Sync templates
+
+Bạn đang làm gì thú vị vậy? 🚀`;
+        } else {
+            return `# 🤖 AIDA Assistant
+
+Hello! I'm AIDA, your AI coding assistant.
+
+**I can help you with:**
+- Programming questions and concepts
+- Code review and analysis
+- Debugging and troubleshooting
+- Best practices and patterns
+
+**Special Commands:**
+- \`@review-file\` - Review current file
+- \`@review-changes\` - Analyze git changes
+- \`@review-pr\` - Review pull request
+- \`@sync-review-templates\` - Sync templates
+
+What interesting project are you working on? 🚀`;
+        }
     }
 }
 
@@ -302,6 +369,7 @@ class AidaChatViewProvider {
                     this.chatInstance.chatHistory = [];
                     this.chatInstance.messageHistory = []; // Clear message history too
                     this.chatInstance.historyIndex = -1;
+                    this.chatInstance.chatbotService.clearHistory(); // Clear AI conversation history
                     webviewView.webview.postMessage({ type: 'clearChat' });
                     break;
                     
