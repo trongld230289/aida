@@ -222,23 +222,13 @@ class CopilotSidebarChat {
 
                 case 'sync-review-templates':
                     try {
-                        mockStream.progress('Syncing AIDA templates...');
-                        const extensionModule = require('../extension.js');
-                        
-                        if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
-                            await extensionModule.syncNewLanguageTemplates(
-                                path.join(this.context.extensionPath, 'AIDA', 'templates'),
-                                path.join(vscode.workspace.workspaceFolders[0].uri.fsPath, 'AIDA')
-                            );
-                            mockStream.markdown('\n✅ **Templates Synced Successfully**\n\nAIDA templates have been updated.\n');
-                        } else {
-                            mockStream.markdown('\n⚠️ **No Workspace Found**\n\nPlease open a workspace folder.\n');
-                        }
-                        
-                        return result || '✅ **Templates Synced**\n\nAIDA templates updated successfully.';
+                        console.log('🔄 AIDA Chat: Calling sync-review-templates with reusable logic');
+                        const syncModule = require('./sync-review-templates.js');
+                        await syncModule.aiSyncReviewTemplates(messageWithoutParticipant, mockStream, null, this.context);
+                        return result || '✅ **Template Sync Complete**\n\nTemplate synchronization completed.';
                     } catch (error) {
-                        mockStream.markdown('\n❌ **Template Sync Error**\n\nFailed: ' + error.message + '\n');
-                        return '❌ **Template Sync Error**\n\nFailed: ' + error.message;
+                        console.error('❌ AIDA Chat sync-review-templates error:', error);
+                        return '❌ **Error**: ' + error.message + '\n\nPlease check the console for details.';
                     }
 
                 default:
@@ -312,6 +302,82 @@ class AidaChatViewProvider {
                     // Simply execute the command - it already works!
                     if (message.command && Array.isArray(message.arguments)) {
                         await vscode.commands.executeCommand(message.command, ...message.arguments);
+                    }
+                    break;
+                    
+                case 'getSyncInfo':
+                    try {
+                        const fs = require('fs');
+                        const path = require('path');
+                        
+                        let syncResult = '📁 **Extension templates:** `' + path.join(this.context.extensionPath, 'AIDA', 'templates') + '`\n\n';
+                        
+                        if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
+                            const workspaceAidaPath = path.join(vscode.workspace.workspaceFolders[0].uri.fsPath, 'AIDA', 'templates');
+                            syncResult += '📁 **Workspace AIDA path:** `' + workspaceAidaPath + '`\n\n';
+                            syncResult += '📋 **Checking for new languages...**\n\n';
+                            
+                            // Check if workspace AIDA directory exists
+                            try {
+                                const extTemplatesPath = path.join(this.context.extensionPath, 'AIDA', 'templates');
+                                if (fs.existsSync(extTemplatesPath)) {
+                                    const extLanguages = fs.readdirSync(extTemplatesPath).filter(item => 
+                                        fs.statSync(path.join(extTemplatesPath, item)).isDirectory()
+                                    );
+                                    
+                                    syncResult += '✅ **All templates are up to date!**\n\n';
+                                    syncResult += '## 📋 Available Templates:\n\n';
+                                    
+                                    // Categorize languages
+                                    const webFrontend = ['angular', 'javascript', 'react', 'typescript', 'vue'];
+                                    const backend = ['csharp', 'go', 'nestjs', 'nodejs', 'php', 'python', 'rust'];
+                                    const other = ['express'];
+                                    
+                                    if (extLanguages.some(lang => webFrontend.includes(lang))) {
+                                        syncResult += '**🌐 Web & Frontend:**\n';
+                                        extLanguages.filter(lang => webFrontend.includes(lang)).forEach(lang => {
+                                            syncResult += '- 📝 ' + lang + '\n';
+                                        });
+                                        syncResult += '\n';
+                                    }
+                                    
+                                    if (extLanguages.some(lang => backend.includes(lang))) {
+                                        syncResult += '**⚙️ Backend & Server:**\n';
+                                        extLanguages.filter(lang => backend.includes(lang)).forEach(lang => {
+                                            syncResult += '- 📝 ' + lang + '\n';
+                                        });
+                                        syncResult += '\n';
+                                    }
+                                    
+                                    if (extLanguages.some(lang => other.includes(lang))) {
+                                        syncResult += '**🔧 Other Languages:**\n';
+                                        extLanguages.filter(lang => other.includes(lang)).forEach(lang => {
+                                            syncResult += '- 📝 ' + lang + '\n';
+                                        });
+                                        syncResult += '\n';
+                                    }
+                                    
+                                    syncResult += '**Total:** ' + extLanguages.length + ' language templates available\n\n';
+                                    syncResult += '---\n\n💡 **Tip:** Use `@review-file` or `@review-changes` to start reviewing with templates\n';
+                                } else {
+                                    syncResult += '⚠️ **Extension templates not found**\n';
+                                }
+                            } catch (err) {
+                                syncResult += '❌ **Error reading templates:** ' + err.message + '\n';
+                            }
+                        } else {
+                            syncResult += '⚠️ **No workspace found**\n\nPlease open a workspace folder.\n';
+                        }
+                        
+                        webviewView.webview.postMessage({
+                            type: 'syncInfo',
+                            syncResult: syncResult
+                        });
+                    } catch (error) {
+                        webviewView.webview.postMessage({
+                            type: 'syncInfo',
+                            syncResult: '❌ **Sync Error:** ' + error.message
+                        });
                     }
                     break;
                     // Open diff view for file button
@@ -1241,6 +1307,11 @@ class AidaChatViewProvider {
                             <p>I can help you review code, analyze changes, and more!</p>
                         </div>
                     \`;
+                    break;
+                    
+                case 'syncInfo':
+                    hideTyping();
+                    addMessage(message.syncResult, 'assistant');
                     break;
             }
         });
