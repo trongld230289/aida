@@ -159,6 +159,25 @@ function activate(context) {
         }
     });
 
+    // Register title bar commands for AIDA sidebar
+    let clearChatSidebarCommand = vscode.commands.registerCommand('aida.clearChatSidebar', async () => {
+        if (copilotSidebarChat) {
+            copilotSidebarChat.chatHistory = [];
+            // Send clear message to webview
+            if (copilotSidebarChat.webviewView) {
+                copilotSidebarChat.webviewView.webview.postMessage({ type: 'clearChat' });
+            }
+        }
+    });
+
+    let openSettingsSidebarCommand = vscode.commands.registerCommand('aida.openSettingsSidebar', async () => {
+        vscode.commands.executeCommand('workbench.action.openSettings', 'aida');
+    });
+
+    let closeChatSidebarCommand = vscode.commands.registerCommand('aida.closeChatSidebar', async () => {
+        vscode.commands.executeCommand('workbench.action.closeSidebar');
+    });
+
     // Register Azure DevOps setup command
     let setupAzureDevOps = vscode.commands.registerCommand('aida.setupAzureDevOps', async () => {
         await setupAzureDevOpsSettings();
@@ -522,6 +541,9 @@ function activate(context) {
     // Add all subscriptions, filtering out null values
     const subscriptions = [
         openAidaChat,
+        clearChatSidebarCommand,
+        openSettingsSidebarCommand,
+        closeChatSidebarCommand,
         setupAzureDevOps,
         confirmChangesReview,
         confirmFileReview,

@@ -95,6 +95,24 @@
         "command": "aida.openSidebarChat",
         "title": "Open AIDA Sidebar Chat",
         "category": "AIDA"
+      },
+      {
+        "command": "aida.clearChatSidebar",
+        "title": "Clear Chat",
+        "category": "AIDA",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "aida.openSettingsSidebar",
+        "title": "Settings",
+        "category": "AIDA",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "aida.closeChatSidebar",
+        "title": "Close Chat",
+        "category": "AIDA",
+        "icon": "$(close)"
       }
     ],
     "menus": {
@@ -120,6 +138,23 @@
           "command": "aida.reviewChanges",
           "group": "navigation@2",
           "when": "resourceExtname =~ /\\.(ts|js|tsx|jsx|html|htm|css|scss|less|py|java|cs|cpp|c|php|rb|go|rs|kt|swift)$/"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "aida.clearChatSidebar",
+          "when": "view == aidaChatSidebar",
+          "group": "navigation@1"
+        },
+        {
+          "command": "aida.openSettingsSidebar",
+          "when": "view == aidaChatSidebar",
+          "group": "navigation@2"
+        },
+        {
+          "command": "aida.closeChatSidebar",
+          "when": "view == aidaChatSidebar",
+          "group": "navigation@3"
         }
       ]
     },
