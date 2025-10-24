@@ -645,9 +645,9 @@ class AidaChatViewProvider {
             flex: 1;
             min-height: 36px;
             max-height: 120px;
-            padding: 8px 36px 8px 12px;
+            padding: 9px 36px 9px 12px;
             border: 2px solid var(--vscode-input-border);
-            border-radius: 8px;
+            border-radius: 3px;
             background-color: var(--vscode-input-background);
             color: var(--vscode-input-foreground);
             font-size: 13px;
@@ -660,7 +660,7 @@ class AidaChatViewProvider {
 
         .msg-input:focus {
             border-color: var(--vscode-button-background);
-            box-shadow: 0 0 0 1px var(--vscode-button-background);
+            box-shadow: 0 0 0 0 var(--vscode-button-background);
         }
 
         .msg-input::placeholder {
@@ -693,29 +693,6 @@ class AidaChatViewProvider {
         .send-btn:disabled {
             opacity: 0.5;
             cursor: not-allowed;
-        }
-
-        /* Quick actions - sidebar style */
-        .quick-actions {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 3px;
-            margin-top: 6px;
-        }
-
-        .quick-btn {
-            padding: 2px 6px;
-            border: 1px solid var(--vscode-button-border);
-            border-radius: 8px;
-            background-color: transparent;
-            color: var(--vscode-button-secondaryForeground);
-            font-size: 9px;
-            cursor: pointer;
-            white-space: nowrap;
-        }
-
-        .quick-btn:hover {
-            background-color: var(--vscode-button-secondaryHoverBackground);
         }
 
         /* Typing indicator - old bottom style (keeping for compatibility) */
@@ -818,6 +795,63 @@ class AidaChatViewProvider {
         .chat-container::-webkit-scrollbar-thumb:hover {
             background-color: var(--vscode-scrollbarSlider-hoverBackground);
         }
+
+        /* Auto-suggest dropdown for @ participants */
+        .participant-suggest {
+            position: absolute;
+            bottom: 100%;
+            left: 0;
+            right: 0;
+            background: var(--vscode-dropdown-background);
+            border: 1px solid var(--vscode-dropdown-border);
+            border-radius: 4px;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 1000;
+            display: none;
+        }
+
+        .participant-item {
+            padding: 8px 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            border-bottom: 1px solid var(--vscode-widget-border);
+        }
+
+        .participant-item:last-child {
+            border-bottom: none;
+        }
+
+        .participant-item:hover,
+        .participant-item.selected {
+            background-color: var(--vscode-list-hoverBackground);
+        }
+        
+        .participant-item.selected {
+            background-color: var(--vscode-list-activeSelectionBackground);
+        }
+        
+        .participant-item.selected .participant-name,
+        .participant-item.selected .participant-description {
+            color: var(--vscode-list-activeSelectionForeground);
+        }
+
+        .participant-icon {
+            font-size: 14px;
+        }
+
+        .participant-name {
+            font-weight: 600;
+            color: var(--vscode-foreground);
+        }
+
+        .participant-description {
+            color: var(--vscode-descriptionForeground);
+            font-size: 11px;
+        }
     </style>
 </head>
 <body>
@@ -840,6 +874,7 @@ class AidaChatViewProvider {
 
     <div class="input-area">
         <div class="input-container">
+            <div class="participant-suggest" id="participantSuggest"></div>
             <textarea 
                 id="msgInput" 
                 class="msg-input" 
@@ -847,13 +882,6 @@ class AidaChatViewProvider {
                 rows="1"
             ></textarea>
             <button id="sendBtn" class="send-btn">▶</button>
-        </div>
-        
-        <div class="quick-actions">
-            <button class="quick-btn" data-cmd="@review-file">📁 File</button>
-            <button class="quick-btn" data-cmd="@review-changes">🔍 Changes</button>
-            <button class="quick-btn" data-cmd="@review-pr">🔄 PR</button>
-            <button class="quick-btn" data-cmd="@sync-review-templates">⚙️ Sync</button>
         </div>
     </div>
 
@@ -864,16 +892,43 @@ class AidaChatViewProvider {
         const msgInput = document.getElementById('msgInput');
         const sendBtn = document.getElementById('sendBtn');
         const typingIndicator = document.getElementById('typingIndicator');
+        const participantSuggest = document.getElementById('participantSuggest');
         
+        // Available chat participants
+        const participants = [
+            { name: '@review-file', icon: '📁', description: 'Review current opening file or specify file path' },
+            { name: '@review-changes', icon: '🔍', description: 'Review changes for current opening file or specify file path' },
+            { name: '@review-pr', icon: '🔄', description: 'Review Azure DevOps Pull Request by PR ID or URL' },
+            { name: '@sync-review-templates', icon: '⚙️', description: 'Sync AIDA review templates to workspace' }
+        ];
+        
+        let selectedIndex = -1;
+
         // Auto-resize input
         msgInput.addEventListener('input', function() {
             this.style.height = 'auto';
             this.style.height = Math.min(this.scrollHeight, 80) + 'px';
+            
+            // Handle @ participant suggestions
+            handleParticipantSuggest(this.value, this.selectionStart);
         });
         
-        // Send on Enter
+        // Send on Enter and handle suggestions
         msgInput.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter' && !e.shiftKey) {
+            if (participantSuggest.style.display === 'block') {
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    navigateSuggestions(1);
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    navigateSuggestions(-1);
+                } else if (e.key === 'Enter' && selectedIndex >= 0) {
+                    e.preventDefault();
+                    selectParticipant(selectedIndex);
+                } else if (e.key === 'Escape') {
+                    hideSuggestions();
+                }
+            } else if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 sendMessage();
             }
@@ -881,15 +936,89 @@ class AidaChatViewProvider {
         
         sendBtn.addEventListener('click', sendMessage);
         
-        // Quick action buttons
-        document.querySelectorAll('.quick-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                const cmd = this.getAttribute('data-cmd');
-                msgInput.value = cmd + ' ';
-                msgInput.focus();
-                sendMessage();
+        // Participant suggestion functions
+        function handleParticipantSuggest(value, cursorPos) {
+            const beforeCursor = value.substring(0, cursorPos);
+            const atMatch = beforeCursor.match(/@([a-z-]*)$/);
+            
+            if (atMatch) {
+                const query = atMatch[1].toLowerCase();
+                const filtered = participants.filter(p => 
+                    p.name.toLowerCase().includes('@' + query)
+                );
+                
+                if (filtered.length > 0) {
+                    showSuggestions(filtered);
+                } else {
+                    hideSuggestions();
+                }
+            } else {
+                hideSuggestions();
+            }
+        }
+        
+        function showSuggestions(filtered) {
+            selectedIndex = -1;
+            participantSuggest.innerHTML = filtered.map((p, index) => 
+                '<div class="participant-item" data-index="' + index + '">' +
+                    '<span class="participant-icon">' + p.icon + '</span>' +
+                    '<div>' +
+                        '<div class="participant-name">' + p.name + '</div>' +
+                        '<div class="participant-description">' + p.description + '</div>' +
+                    '</div>' +
+                '</div>'
+            ).join('');
+            
+            participantSuggest.style.display = 'block';
+            
+            // Add click handlers
+            participantSuggest.querySelectorAll('.participant-item').forEach((item, index) => {
+                item.addEventListener('click', () => selectParticipant(index));
             });
-        });
+        }
+        
+        function hideSuggestions() {
+            participantSuggest.style.display = 'none';
+            selectedIndex = -1;
+        }
+        
+        function navigateSuggestions(direction) {
+            const items = participantSuggest.querySelectorAll('.participant-item');
+            if (items.length === 0) return;
+            
+            // Remove previous selection
+            items.forEach(item => item.classList.remove('selected'));
+            
+            // Update selected index
+            selectedIndex += direction;
+            if (selectedIndex < 0) selectedIndex = items.length - 1;
+            if (selectedIndex >= items.length) selectedIndex = 0;
+            
+            // Add selection to current item
+            items[selectedIndex].classList.add('selected');
+        }
+        
+        function selectParticipant(index) {
+            const items = participantSuggest.querySelectorAll('.participant-item');
+            if (index >= 0 && index < items.length) {
+                const participantName = items[index].querySelector('.participant-name').textContent;
+                
+                // Replace the @ query with selected participant
+                const value = msgInput.value;
+                const cursorPos = msgInput.selectionStart;
+                const beforeCursor = value.substring(0, cursorPos);
+                const afterCursor = value.substring(cursorPos);
+                const atMatch = beforeCursor.match(/@([a-z-]*)$/);
+                
+                if (atMatch) {
+                    const newValue = beforeCursor.replace(/@([a-z-]*)$/, participantName + ' ') + afterCursor;
+                    msgInput.value = newValue;
+                    msgInput.focus();
+                    msgInput.setSelectionRange(newValue.length - afterCursor.length, newValue.length - afterCursor.length);
+                }
+            }
+            hideSuggestions();
+        }
         
         function sendMessage() {
             const message = msgInput.value.trim();
