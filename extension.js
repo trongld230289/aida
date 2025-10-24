@@ -137,24 +137,25 @@ function activate(context) {
     // Templates will be created lazily when first @review command is used
     // ensureTemplatesExist(context); // Removed auto-creation
 
-    // Initialize Copilot-Style Chat Panel EARLY (before command registration)
-    let copilotStyleChat = null;
+    // Initialize Copilot-Style Sidebar Chat (True GitHub Copilot Experience)
+    let copilotSidebarChat = null;
     try {
-        console.log('🔄 Initializing Copilot-Style Chat Panel...');
-        const copilotChatModule = require('./scripts/copilot-style-chat.js');
-        copilotStyleChat = copilotChatModule.initializeCopilotStyleChat(context);
-        console.log('✅ Copilot-Style Chat Panel initialized successfully');
+        console.log('🔄 Initializing AIDA Copilot Sidebar Chat...');
+        const sidebarChatModule = require('./scripts/copilot-sidebar-chat.js');
+        const sidebarResult = sidebarChatModule.initializeCopilotSidebarChat(context);
+        copilotSidebarChat = sidebarResult?.sidebarChat;
+        console.log('✅ AIDA Copilot Sidebar Chat initialized successfully');
     } catch (error) {
-        console.error('❌ Failed to initialize Copilot-Style Chat Panel:', error);
+        console.error('❌ Failed to initialize AIDA Copilot Sidebar Chat:', error);
         console.error('❌ Error details:', error.stack);
     }
 
-    // Register command to open AIDA chat directly
+    // Register command to open AIDA sidebar chat directly
     let openAidaChat = vscode.commands.registerCommand('aida.openChat', async () => {
-        if (copilotStyleChat) {
-            copilotStyleChat.show();
+        if (copilotSidebarChat) {
+            copilotSidebarChat.show();
         } else {
-            vscode.window.showErrorMessage('AIDA Chat is not initialized. Please check the logs for errors.');
+            vscode.window.showErrorMessage('AIDA Sidebar Chat is not initialized. Please check the logs for errors.');
         }
     });
 
@@ -291,13 +292,13 @@ function activate(context) {
     let reviewFileContextCommand = vscode.commands.registerCommand('aida.reviewFileContext', async (uri) => {
         console.log('🎯 AIDA Review File Context command called', uri);
         try {
-            if (!copilotStyleChat) {
-                vscode.window.showErrorMessage('AIDA Copilot-style chat is not initialized');
+            if (!copilotSidebarChat) {
+                vscode.window.showErrorMessage('AIDA Sidebar Chat is not initialized');
                 return;
             }
             
-            // Show the panel
-            copilotStyleChat.show();
+            // Show the sidebar
+            copilotSidebarChat.show();
             
             // Send review file message
             if (uri && uri.fsPath) {
@@ -306,9 +307,9 @@ function activate(context) {
                 if (workspaceFolder) {
                     filePath = path.relative(workspaceFolder.uri.fsPath, uri.fsPath);
                 }
-                await copilotStyleChat.sendMessage('@review-file ' + filePath);
+                await copilotSidebarChat.sendMessage('@review-file ' + filePath);
             } else {
-                await copilotStyleChat.sendMessage('@review-file');
+                await copilotSidebarChat.sendMessage('@review-file');
             }
         } catch (error) {
             console.error('Error in reviewFileContext command:', error);
@@ -319,13 +320,13 @@ function activate(context) {
     let reviewChangesContextCommand = vscode.commands.registerCommand('aida.reviewChangesContext', async (uri) => {
         console.log('🎯 AIDA Review Changes Context command called', uri);
         try {
-            if (!copilotStyleChat) {
-                vscode.window.showErrorMessage('AIDA Copilot-style chat is not initialized');
+            if (!copilotSidebarChat) {
+                vscode.window.showErrorMessage('AIDA Sidebar Chat is not initialized');
                 return;
             }
             
-            // Show the panel
-            copilotStyleChat.show();
+            // Show the sidebar
+            copilotSidebarChat.show();
             
             // Send review changes message
             if (uri && uri.fsPath) {
@@ -334,9 +335,9 @@ function activate(context) {
                 if (workspaceFolder) {
                     filePath = path.relative(workspaceFolder.uri.fsPath, uri.fsPath);
                 }
-                await copilotStyleChat.sendMessage('@review-changes ' + filePath);
+                await copilotSidebarChat.sendMessage('@review-changes ' + filePath);
             } else {
-                await copilotStyleChat.sendMessage('@review-changes');
+                await copilotSidebarChat.sendMessage('@review-changes');
             }
         } catch (error) {
             console.error('Error in reviewChangesContext command:', error);
@@ -539,7 +540,7 @@ function activate(context) {
         showDailyReportCommand,
         showDailyReportTemplateCommand,
         viewPrDiffCommand,
-        copilotStyleChat
+        copilotSidebarChat
     ].filter(item => item !== null && item !== undefined);
 
     context.subscriptions.push(...subscriptions);

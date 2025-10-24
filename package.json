@@ -90,6 +90,11 @@
         "command": "aida.openChat",
         "title": "Open AIDA Chat",
         "category": "AIDA"
+      },
+      {
+        "command": "aida.openSidebarChat",
+        "title": "Open AIDA Sidebar Chat",
+        "category": "AIDA"
       }
     ],
     "menus": {
@@ -182,6 +187,26 @@
           "scope": "application"
         }
       }
+    },
+    "views": {
+      "aidaChatContainer": [
+        {
+          "type": "webview",
+          "id": "aidaChatSidebar",
+          "name": "AIDA Chat",
+          "when": "true",
+          "icon": "$(comment-discussion)"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "aidaChatContainer",
+          "title": "AIDA Chat",
+          "icon": "$(comment-discussion)"
+        }
+      ]
     },
     "chatParticipants": [
       {
