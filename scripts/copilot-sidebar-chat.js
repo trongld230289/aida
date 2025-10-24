@@ -368,6 +368,13 @@ class AidaChatViewProvider {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AIDA Chat</title>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/typescript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/csharp.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/vs2015.min.css">
     <style>
         * {
             margin: 0;
@@ -505,10 +512,10 @@ class AidaChatViewProvider {
             color: var(--vscode-foreground);
         }
 
-        /* GitHub Copilot Code Styling - Flat Design */
+        /* GitHub Copilot Code Styling with Syntax Highlighting */
         .message-body pre {
             background-color: var(--vscode-editor-background);
-            border: none;
+            border: 1px solid var(--vscode-panel-border);
             border-radius: 6px;
             padding: 12px;
             margin: 8px 0;
@@ -516,15 +523,31 @@ class AidaChatViewProvider {
             font-family: var(--vscode-editor-font-family);
             font-size: 12px;
             line-height: 1.4;
+            position: relative;
         }
 
-        .message-body code {
-            background-color: var(--vscode-editor-background);
+        .message-body pre code {
+            background: none !important;
+            padding: 0 !important;
+            border-radius: 0 !important;
+            font-family: var(--vscode-editor-font-family);
+            font-size: 12px;
+            color: var(--vscode-editor-foreground);
+        }
+
+        .message-body code:not(pre code) {
+            background-color: var(--vscode-textCodeBlock-background);
             padding: 2px 6px;
             border-radius: 4px;
             font-family: var(--vscode-editor-font-family);
             font-size: 12px;
-            color: var(--vscode-editor-foreground);
+            color: var(--vscode-textPreformat-foreground);
+        }
+
+        /* Highlight.js theme override for VS Code */
+        .hljs {
+            background: transparent !important;
+            color: var(--vscode-editor-foreground) !important;
         }
 
         /* Markdown elements styling */
@@ -940,14 +963,45 @@ class AidaChatViewProvider {
         
         function parseMarkdown(text) {
             try {
-                // Configure marked for GitHub Copilot style with HTML enabled
-                if (typeof marked !== 'undefined') {
+                // Configure marked for GitHub Copilot style with highlight.js
+                if (typeof marked !== 'undefined' && typeof hljs !== 'undefined') {
                     marked.setOptions({
                         breaks: true,
                         gfm: true,
                         headerIds: false,
                         mangle: false,
-                        sanitize: false,  // Allow HTML
+                        sanitize: false,  // Allow HTML for buttons
+                        pedantic: false,
+                        highlight: function(code, lang) {
+                            if (lang && hljs.getLanguage(lang)) {
+                                try {
+                                    return hljs.highlight(code, { language: lang }).value;
+                                } catch (err) {
+                                    console.warn('Highlight.js error:', err);
+                                }
+                            }
+                            return hljs.highlightAuto(code).value;
+                        }
+                    });
+                    
+                    const html = marked.parse(text);
+                    
+                    // Apply syntax highlighting to any remaining code blocks
+                    setTimeout(() => {
+                        document.querySelectorAll('pre code:not(.hljs)').forEach((block) => {
+                            hljs.highlightElement(block);
+                        });
+                    }, 100);
+                    
+                    return html;
+                } else if (typeof marked !== 'undefined') {
+                    // Fallback without highlight.js
+                    marked.setOptions({
+                        breaks: true,
+                        gfm: true,
+                        headerIds: false,
+                        mangle: false,
+                        sanitize: false,
                         pedantic: false
                     });
                     return marked.parse(text);
@@ -958,7 +1012,6 @@ class AidaChatViewProvider {
                     text = text.replace(/\\*\\*([^\\*]+)\\*\\*/g, '<strong>$1</strong>');
                     text = text.replace(/\\*([^\\*]+)\\*/g, '<em>$1</em>');
                     text = text.replace(/\\n/g, '<br>');
-                    // Keep HTML buttons as-is
                     return text;
                 }
             } catch (error) {
