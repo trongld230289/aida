@@ -322,17 +322,57 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
 
             // Determine participant and get response with images (Ask mode)
             const participant = this.determineParticipant(userMessage);
-            const response = await this.callParticipant(participant, userMessage, images);
+            
+            // Create streaming callback for real-time updates
+            let fullResponse = '';
+            let isFirstChunk = true;
+            
+            const streamCallback = (chunk) => {
+                if (isFirstChunk) {
+                    // Hide typing indicator and start streaming message
+                    if (this.webviewView) {
+                        this.webviewView.webview.postMessage({
+                            type: 'startStreamingMessage'
+                        });
+                    }
+                    isFirstChunk = false;
+                }
+                
+                fullResponse += chunk;
+                
+                // Send streaming chunk to webview
+                if (this.webviewView) {
+                    this.webviewView.webview.postMessage({
+                        type: 'addStreamingChunk',
+                        chunk: chunk
+                    });
+                }
+            };
+            
+            // For general responses, use streaming; for participants, use non-streaming
+            let response;
+            if (participant === 'general') {
+                response = await this.callParticipant(participant, userMessage, images, streamCallback);
+            } else {
+                response = await this.callParticipant(participant, userMessage, images);
+            }
+            
+            // Complete streaming if it was used
+            if (participant === 'general' && this.webviewView) {
+                this.webviewView.webview.postMessage({
+                    type: 'endStreamingMessage'
+                });
+            }
 
             // Add response to history
             this.chatHistory.push({
                 role: 'assistant',
-                content: response,
+                content: fullResponse || response,
                 timestamp: new Date()
             });
 
-            // Send response to sidebar
-            if (this.webviewView) {
+            // Send response to sidebar (only if not streaming)
+            if (participant !== 'general' && this.webviewView) {
                 this.webviewView.webview.postMessage({
                     type: 'addAssistantMessage', 
                     message: response
@@ -2196,7 +2236,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
     /**
      * Call AIDA participant with image support
      */
-    async callParticipant(participant, message, images = []) {
+    async callParticipant(participant, message, images = [], streamCallback = null) {
         try {
             let result = '';
             
@@ -2293,7 +2333,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
                     }
 
                 default:
-                    return await this.generateGeneralResponse(message, images);
+                    return await this.generateGeneralResponse(message, images, streamCallback);
             }
 
         } catch (error) {
@@ -2305,7 +2345,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
     /**
      * Generate conversational response using AI chatbot service with image support
      */
-    async generateGeneralResponse(message, images = []) {
+    async generateGeneralResponse(message, images = [], streamCallback = null) {
         try {
             console.log('💬 Generating conversational response for:', message);
             if (images && images.length > 0) {
@@ -2313,7 +2353,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
             }
             
             // Use AI chatbot service for intelligent conversation with images
-            const response = await this.chatbotService.generateResponse(message, images);
+            const response = await this.chatbotService.generateResponse(message, images, streamCallback);
             
             console.log('✅ Generated response length:', response.length);
             return response;
@@ -3252,6 +3292,23 @@ class AidaChatViewProvider {
 
         .typing.show { display: block; }
 
+        /* Streaming message styles */
+        .streaming-message .streaming-content {
+            position: relative;
+        }
+
+        .streaming-message .streaming-content::after {
+            content: '▋';
+            color: var(--vscode-button-background);
+            animation: blink 1s infinite;
+            margin-left: 1px;
+        }
+
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+
         .typing-dots {
             display: inline-flex;
             gap: 1px;
@@ -4099,6 +4156,81 @@ class AidaChatViewProvider {
             }
         }
         
+        // Streaming message handling
+        let currentStreamingMessage = null;
+        
+        function startStreamingMessage() {
+            // Remove empty state
+            const emptyState = chatContainer.querySelector('.empty-state');
+            if (emptyState) emptyState.remove();
+            
+            // Create streaming message container
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message assistant streaming-message';
+            
+            const timestamp = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            
+            messageDiv.innerHTML = 
+                '<div class="message-meta">' +
+                    '<div class="msg-avatar">🤖</div>' +
+                    '<span>AIDA</span>' +
+                    '<span>' + timestamp + '</span>' +
+                '</div>' +
+                '<div class="message-body">' +
+                    '<div class="streaming-content"></div>' +
+                '</div>';
+            
+            chatContainer.appendChild(messageDiv);
+            currentStreamingMessage = messageDiv;
+            
+            // Scroll to bottom
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+            
+            console.log('✅ Started streaming message');
+        }
+        
+        function appendStreamingChunk(chunk) {
+            if (!currentStreamingMessage) {
+                console.warn('⚠️ No streaming message active, starting new one');
+                startStreamingMessage();
+            }
+            
+            const contentDiv = currentStreamingMessage.querySelector('.streaming-content');
+            if (contentDiv) {
+                // Append chunk and parse as markdown
+                const currentContent = contentDiv.getAttribute('data-raw-content') || '';
+                const newContent = currentContent + chunk;
+                
+                // Store raw content for parsing
+                contentDiv.setAttribute('data-raw-content', newContent);
+                
+                // Parse and update display
+                contentDiv.innerHTML = parseMarkdown(newContent);
+                
+                // Scroll to bottom
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+            }
+        }
+        
+        function endStreamingMessage() {
+            if (currentStreamingMessage) {
+                // Remove streaming class
+                currentStreamingMessage.classList.remove('streaming-message');
+                
+                // Convert streaming content to final message body
+                const streamingContent = currentStreamingMessage.querySelector('.streaming-content');
+                const messageBody = currentStreamingMessage.querySelector('.message-body');
+                
+                if (streamingContent && messageBody) {
+                    const finalContent = streamingContent.getAttribute('data-raw-content') || '';
+                    messageBody.innerHTML = parseMarkdown(finalContent);
+                }
+                
+                currentStreamingMessage = null;
+                console.log('✅ Ended streaming message');
+            }
+        }
+        
         // Handle messages from extension
         window.addEventListener('message', event => {
             const message = event.data;
@@ -4111,6 +4243,19 @@ class AidaChatViewProvider {
                 case 'addAssistantMessage':
                     hideTyping();
                     addMessage(message.message, 'assistant');
+                    break;
+                    
+                case 'startStreamingMessage':
+                    hideTyping();
+                    startStreamingMessage();
+                    break;
+                    
+                case 'addStreamingChunk':
+                    appendStreamingChunk(message.chunk);
+                    break;
+                    
+                case 'endStreamingMessage':
+                    endStreamingMessage();
                     break;
                     
                 case 'showTyping':
