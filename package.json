@@ -276,12 +276,6 @@
         "name": "sync-review-templates",
         "description": "🔄 Sync AIDA review templates to workspace",
         "isSticky": true
-      },
-      {
-        "id": "claude-code",
-        "name": "claude-code",
-        "description": "🤖 Claude code assistant (temp fix)",
-        "isSticky": false
       }
     ]
   },

@@ -1,6 +1,7 @@
 const axios = require('axios');
 const fs = require('fs').promises;
 const path = require('path');
+const { detectProvider, callAI, mapProviderResponse } = require('../scripts/review-common');
 
 /**
  * AIDA Chatbot Service - Conversational AI for coding assistance
@@ -168,18 +169,64 @@ class AidaChatbotService {
         
         console.log('🔧 AI Config:', { provider: config.provider, hasApiKey: !!config.apiKey, apiHost: config.apiHost, model: config.model });
         
-        if (config.provider === 'openai' && config.apiKey) {
-            console.log('📡 Using OpenAI API');
-            return await this.callOpenAI(messages, config);
-        } else if (config.provider === 'anthropic' && config.apiKey) {
-            console.log('📡 Using Anthropic API');
-            return await this.callAnthropic(messages, config);
-        } else if ((config.provider === 'local' || config.provider === 'ollama' || config.provider === 'openai-compatible') && config.apiHost) {
-            console.log('📡 Using Local LLM API');
-            return await this.callLocalLLM(messages, config);
-        } else {
+        // If no API service configured, use smart rule-based responses
+        if (!config.apiKey || !config.apiHost) {
             console.log('📡 Using Smart Responses (no AI service configured)');
-            // No AI service configured, use smart rule-based responses
+            return this.generateSmartResponse(messages);
+        }
+        
+        try {
+            // Build system and user prompts from messages
+            const systemMessage = messages.find(m => m.role === 'system');
+            const conversationMessages = messages.filter(m => m.role !== 'system');
+            
+            // Extract images from conversation messages
+            const allImages = conversationMessages
+                .filter(msg => msg.images && msg.images.length > 0)
+                .flatMap(msg => msg.images);
+            
+            // Create conversation context for user prompt
+            const conversationText = conversationMessages.map(msg => {
+                let text = `${msg.role.toUpperCase()}: ${msg.content}`;
+                
+                // Add image info if present
+                if (msg.images && msg.images.length > 0) {
+                    text += ` [${msg.images.length} image(s) attached]`;
+                }
+                
+                return text;
+            }).join('\n\n');
+            
+            console.log('🔄 Using shared callAI function from review-common');
+            console.log(`🖼️ Found ${allImages.length} images in conversation`);
+            
+            // Use shared callAI function with chat-optimized options and images
+            const chatOptions = {
+                temperature: 0.7,
+                max_tokens: 4000,
+                stream: false,
+                response_format: undefined, // No JSON format for chat - need natural text
+            };
+            
+            const result = await callAI(
+                systemMessage?.content || this.systemPrompt || 'You are AIDA, a helpful coding assistant.',
+                conversationText,
+                chatOptions,
+                allImages // Pass images to shared callAI
+            );
+            
+            // Map the response based on provider
+            const provider = detectProvider(config.apiHost, config.model);
+            const mappedResponse = mapProviderResponse(result.rawResponse, provider);
+            
+            console.log('✅ AI response received via shared callAI');
+            return mappedResponse.content || 'Sorry, I couldn\'t generate a response.';
+            
+        } catch (error) {
+            console.error('❌ Shared callAI failed:', error);
+            
+            // Fall back to smart responses
+            console.log('🔄 Falling back to smart responses');
             return this.generateSmartResponse(messages);
         }
     }
@@ -196,64 +243,12 @@ class AidaChatbotService {
             const apiKey = config.get('ai.apiKey', '');
             const model = config.get('ai.model', 'gpt-3.5-turbo');
             
-            // Enhanced provider detection from apiHost
+            // Use detectProvider from review-common for consistency
             let provider = 'smart'; // Default to smart responses
-            let detectedModel = model;
             
             if (apiHost && apiKey) {
-                const host = apiHost.toLowerCase();
-                
-                // OpenAI and compatible providers
-                if (host.includes('openai.com') || host.includes('api.openai.com')) {
-                    provider = 'openai';
-                } 
-                // Azure OpenAI
-                else if (host.includes('openai.azure.com') || host.includes('.azure.com')) {
-                    provider = 'azure-openai';
-                }
-                // Anthropic (Claude)
-                else if (host.includes('anthropic.com') || host.includes('api.anthropic.com')) {
-                    provider = 'anthropic';
-                    detectedModel = model.includes('claude') ? model : 'claude-3-haiku-20240307';
-                }
-                // Google AI (Gemini)
-                else if (host.includes('googleapis.com') || host.includes('generativeai.googleapis.com')) {
-                    provider = 'google';
-                    detectedModel = model.includes('gemini') ? model : 'gemini-pro';
-                }
-                // Cohere
-                else if (host.includes('cohere.ai') || host.includes('api.cohere.ai')) {
-                    provider = 'cohere';
-                }
-                // Mistral AI
-                else if (host.includes('mistral.ai') || host.includes('api.mistral.ai')) {
-                    provider = 'mistral';
-                }
-                // Ollama (local)
-                else if (host.includes('localhost') || host.includes('127.0.0.1') || host.includes(':11434')) {
-                    provider = 'ollama';
-                    detectedModel = model || 'llama3';
-                }
-                // LMStudio (local)
-                else if (host.includes(':1234') || host.includes('lmstudio')) {
-                    provider = 'lmstudio';
-                }
-                // Together AI
-                else if (host.includes('together.ai') || host.includes('api.together.xyz')) {
-                    provider = 'together';
-                }
-                // Hugging Face
-                else if (host.includes('huggingface.co') || host.includes('api-inference.huggingface.co')) {
-                    provider = 'huggingface';
-                }
-                // OpenRouter (aggregator)
-                else if (host.includes('openrouter.ai')) {
-                    provider = 'openrouter';
-                }
-                // Generic local/custom endpoint
-                else {
-                    provider = 'local';
-                }
+                provider = detectProvider(apiHost, model);
+                console.log(`🔍 Provider detected: ${provider} (from ${apiHost} + ${model})`);
             }
             
             return {

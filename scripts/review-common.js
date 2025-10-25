@@ -1005,13 +1005,14 @@ function normalizeApiParameters(model, apiHost, options) {
 }
 
 /**
- * 🤖 Reusable AI API call function (moved from scan-app.js)
+ * 🤖 Reusable AI API call function with image support
  * @param {string} systemPrompt - System prompt
  * @param {string} userPrompt - User prompt  
  * @param {object} options - API call options
+ * @param {Array} images - Optional array of images for vision models
  * @returns {Promise<object>} - API response with token usage
  */
-async function callAI(systemPrompt, userPrompt, options = {}) {
+async function callAI(systemPrompt, userPrompt, options = {}, images = []) {
     const config = vscode.workspace.getConfiguration('aida');
     const apiKey = config.get('ai.apiKey');
     let apiHost = config.get('ai.apiHost') || 'https://api.openai.com';
@@ -1043,17 +1044,87 @@ async function callAI(systemPrompt, userPrompt, options = {}) {
     // Normalize API parameters based on provider/model
     const normalizedOptions = normalizeApiParameters(model, apiHost, defaultOptions);
     
+    // Build messages with optional image support
+    const messages = [
+        {
+            role: 'system',
+            content: systemPrompt
+        }
+    ];
+    
+    // Build user message with images if provided
+    const userMessage = {
+        role: 'user',
+        content: userPrompt
+    };
+    
+    // Add images for vision models if provided
+    if (images && images.length > 0) {
+        console.log(`�️ Adding ${images.length} images to API call`);
+        
+        // Detect provider for image format
+        const provider = detectProvider(apiHost, model);
+        
+        if (provider === 'anthropic') {
+            // Claude format: content array with text and images
+            userMessage.content = [
+                {
+                    type: 'text',
+                    text: userPrompt
+                }
+            ];
+            
+            // Add images in Claude format
+            for (const image of images) {
+                const imageData = prepareImageForProvider(image, 'anthropic');
+                if (imageData) {
+                    userMessage.content.push({
+                        type: 'image',
+                        source: {
+                            type: 'base64',
+                            media_type: imageData.mimeType,
+                            data: imageData.base64
+                        }
+                    });
+                }
+            }
+        } else {
+            // OpenAI format: content array with text and image_url
+            userMessage.content = [
+                {
+                    type: 'text',
+                    text: userPrompt
+                }
+            ];
+            
+            // Add images in OpenAI format
+            for (const image of images) {
+                const imageData = prepareImageForProvider(image, 'openai');
+                if (imageData) {
+                    userMessage.content.push({
+                        type: 'image_url',
+                        image_url: {
+                            url: `data:${imageData.mimeType};base64,${imageData.base64}`
+                        }
+                    });
+                }
+            }
+        }
+    }
+    
+    messages.push(userMessage);
+    
     console.log(`🔑 Making API call to: ${apiHost}`);
     console.log(`🤖 Using model: ${model}`);
     console.log(`📋 Request payload:`, JSON.stringify({
         model: model,
-        messages: [
-            { role: 'system', content: systemPrompt.substring(0, 100) + '...' },
-            { role: 'user', content: userPrompt.substring(0, 200) + '...' }
-        ],
+        messages: messages.map(m => ({
+            role: m.role,
+            content: typeof m.content === 'string' ? m.content.substring(0, 100) + '...' : '[content array]'
+        })),
         ...normalizedOptions
     }, null, 2));
-    
+
     const response = await fetch(apiHost, {
         method: 'POST',
         headers: {
@@ -1063,16 +1134,7 @@ async function callAI(systemPrompt, userPrompt, options = {}) {
         },
         body: JSON.stringify({
             model: model,
-            messages: [
-                {
-                    role: 'system',
-                    content: systemPrompt
-                },
-                {
-                    role: 'user',
-                    content: userPrompt
-                }
-            ],
+            messages: messages,
             ...normalizedOptions
         })
     });
@@ -1103,6 +1165,57 @@ async function callAI(systemPrompt, userPrompt, options = {}) {
             isStreaming: false
         };
     }
+}
+
+/**
+ * 🖼️ Prepare image for specific AI provider format
+ * @param {object|string} imageInput - Image data (base64 or data URL)
+ * @param {string} provider - Target provider ('anthropic', 'openai', etc.)
+ * @returns {object|null} - Prepared image data with base64 and mimeType
+ */
+function prepareImageForProvider(imageInput, provider = 'openai') {
+    let base64Data, mimeType;
+    
+    if (typeof imageInput === 'string') {
+        // If it's a data URL
+        if (imageInput.startsWith('data:')) {
+            const matches = imageInput.match(/^data:(image\/\w+);base64,(.+)$/);
+            if (matches) {
+                mimeType = matches[1];
+                base64Data = matches[2];
+            }
+        } else {
+            // Already clean base64
+            base64Data = imageInput;
+            mimeType = 'image/png';
+        }
+    } else if (imageInput && imageInput.data && imageInput.type) {
+        // From our image attachment format
+        if (imageInput.data.startsWith('data:')) {
+            const matches = imageInput.data.match(/^data:(image\/\w+);base64,(.+)$/);
+            if (matches) {
+                mimeType = matches[1];
+                base64Data = matches[2];
+            }
+        } else {
+            base64Data = imageInput.data;
+            mimeType = imageInput.type;
+        }
+    }
+    
+    // Validate mime type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(mimeType)) {
+        console.warn('Unsupported image type:', mimeType, 'defaulting to image/png');
+        mimeType = 'image/png';
+    }
+    
+    if (!base64Data) {
+        console.error('Failed to extract base64 data from image');
+        return null;
+    }
+    
+    return { base64: base64Data, mimeType };
 }
 
 // Legacy function names for backward compatibility
@@ -2403,6 +2516,7 @@ module.exports = {
     normalizeApiParameters,
     detectProvider,
     mapProviderResponse,
+    prepareImageForProvider,
     getModelPricing,
     normalizeApiParametersForReview,
     detectProviderForReview,
