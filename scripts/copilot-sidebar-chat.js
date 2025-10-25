@@ -945,6 +945,7 @@ class AidaChatViewProvider {
             flex: 1;
             min-height: 36px;
             max-height: 120px;
+            height: 36px; /* Default height */
             padding: 9px 36px 9px 12px;
             border: 2px solid var(--vscode-input-border);
             border-radius: 3px;
@@ -956,6 +957,12 @@ class AidaChatViewProvider {
             outline: none;
             overflow-y: auto;
             transition: border-color 0.2s ease;
+            scrollbar-width: none; /* Firefox */
+            -ms-overflow-style: none; /* IE and Edge */
+        }
+
+        .msg-input::-webkit-scrollbar {
+            display: none; /* Chrome, Safari, Opera */
         }
 
         .msg-input:focus {
@@ -972,7 +979,8 @@ class AidaChatViewProvider {
         .send-btn {
             position: absolute;
             right: 8px;
-            bottom: 8px;
+            top: 50%;
+            transform: translateY(-50%);
             width: 24px;
             height: 24px;
             border: none;
@@ -1233,7 +1241,8 @@ class AidaChatViewProvider {
         // Auto-resize input
         msgInput.addEventListener('input', function() {
             this.style.height = 'auto';
-            this.style.height = Math.min(this.scrollHeight, 80) + 'px';
+            const newHeight = Math.max(Math.min(this.scrollHeight, 120), 36); // Min 36px, max 120px
+            this.style.height = newHeight + 'px';
             
             // Reset history navigation when user starts typing
             vscode.postMessage({
@@ -1782,7 +1791,8 @@ class AidaChatViewProvider {
                     msgInput.focus();
                     // Auto-resize input
                     msgInput.style.height = 'auto';
-                    msgInput.style.height = Math.min(msgInput.scrollHeight, 80) + 'px';
+                    const newHeight = Math.max(Math.min(msgInput.scrollHeight, 120), 36); // Min 36px, max 120px
+                    msgInput.style.height = newHeight + 'px';
                     // Position cursor at end
                     msgInput.setSelectionRange(msgInput.value.length, msgInput.value.length);
                     break;
