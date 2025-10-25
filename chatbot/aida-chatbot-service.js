@@ -133,9 +133,9 @@ class AidaChatbotService {
     /**
      * Generate AI response using conversation context with image support
      */
-    async generateResponse(userMessage, images = []) {
+    async generateResponse(userMessage, images = [], streamCallback = null) {
         try {
-            console.log('💬 generateResponse called with:', { message: userMessage, imageCount: images?.length || 0 });
+            console.log('💬 generateResponse called with:', { message: userMessage, imageCount: images?.length || 0, streaming: !!streamCallback });
             
             // Add user message to history with images
             this.addMessage('user', userMessage, images);
@@ -146,10 +146,12 @@ class AidaChatbotService {
             console.log('📦 Built messages for API:', messages.length, 'messages');
 
             // Check if we have AI service configured
-            const aiResponse = await this.callAIService(messages);
+            const aiResponse = await this.callAIService(messages, streamCallback);
 
-            // Add AI response to history
-            this.addMessage('assistant', aiResponse);
+            // Add AI response to history (only if not streaming, streaming adds incrementally)
+            if (!streamCallback) {
+                this.addMessage('assistant', aiResponse);
+            }
 
             return aiResponse;
 
@@ -163,11 +165,11 @@ class AidaChatbotService {
     /**
      * Call AI service (OpenAI, Anthropic, or local LLM)
      */
-    async callAIService(messages) {
+    async callAIService(messages, streamCallback = null) {
         // Check for API key configuration
         const config = await this.getAIConfig();
         
-        console.log('🔧 AI Config:', { provider: config.provider, hasApiKey: !!config.apiKey, apiHost: config.apiHost, model: config.model });
+        console.log('🔧 AI Config:', { provider: config.provider, hasApiKey: !!config.apiKey, apiHost: config.apiHost, model: config.model, streaming: !!streamCallback });
         
         // If no API service configured, use smart rule-based responses
         if (!config.apiKey || !config.apiHost) {
@@ -204,8 +206,8 @@ class AidaChatbotService {
             const chatOptions = {
                 temperature: 0.7,
                 max_tokens: 4000,
-                stream: false,
-                response_format: undefined, // No JSON format for chat - need natural text
+                stream: !!streamCallback, // Enable streaming if callback provided
+                response_format: streamCallback ? undefined : undefined, // Always disable JSON for chat
             };
             
             const result = await callAI(
@@ -215,12 +217,18 @@ class AidaChatbotService {
                 allImages // Pass images to shared callAI
             );
             
-            // Map the response based on provider
-            const provider = detectProvider(config.apiHost, config.model);
-            const mappedResponse = mapProviderResponse(result.rawResponse, provider);
-            
-            console.log('✅ AI response received via shared callAI');
-            return mappedResponse.content || 'Sorry, I couldn\'t generate a response.';
+            // Handle streaming vs non-streaming responses
+            if (result.isStreaming && streamCallback) {
+                console.log('🔄 Processing streaming response...');
+                return await this.handleStreamingResponse(result, streamCallback);
+            } else {
+                // Map the response based on provider
+                const provider = detectProvider(config.apiHost, config.model);
+                const mappedResponse = mapProviderResponse(result.rawResponse, provider);
+                
+                console.log('✅ AI response received via shared callAI');
+                return mappedResponse.content || 'Sorry, I couldn\'t generate a response.';
+            }
             
         } catch (error) {
             console.error('❌ Shared callAI failed:', error);
@@ -856,6 +864,94 @@ Sorry, I encountered an issue processing your question.
 
 Please try asking again with more details! 🙏`;
         }
+    }
+
+    /**
+     * Handle streaming response from AI API
+     */
+    async handleStreamingResponse(result, streamCallback) {
+        try {
+            console.log('🔄 Starting streaming response processing...');
+            
+            const response = result.streamResponse;
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            
+            let buffer = '';
+            let fullContent = '';
+            
+            while (true) {
+                const { done, value } = await reader.read();
+                
+                if (done) {
+                    console.log('✅ Streaming complete');
+                    break;
+                }
+                
+                // Decode chunk and add to buffer
+                buffer += decoder.decode(value, { stream: true });
+                
+                // Process complete lines
+                const lines = buffer.split('\n');
+                buffer = lines.pop(); // Keep incomplete line in buffer
+                
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        const data = line.slice(6).trim();
+                        
+                        if (data === '[DONE]') {
+                            console.log('🏁 Received [DONE] signal');
+                            break;
+                        }
+                        
+                        try {
+                            const parsed = JSON.parse(data);
+                            const content = this.extractContentFromStreamChunk(parsed, result.apiHost);
+                            
+                            if (content) {
+                                fullContent += content;
+                                // Call streaming callback with chunk
+                                streamCallback(content);
+                            }
+                        } catch (parseError) {
+                            console.warn('⚠️ Failed to parse streaming chunk:', parseError);
+                        }
+                    }
+                }
+            }
+            
+            // Add complete response to history
+            this.addMessage('assistant', fullContent);
+            
+            console.log('✅ Streaming response processed, total length:', fullContent.length);
+            return fullContent;
+            
+        } catch (error) {
+            console.error('❌ Streaming response error:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Extract content from streaming chunk based on provider
+     */
+    extractContentFromStreamChunk(chunk, apiHost) {
+        const { detectProvider } = require('../scripts/review-common');
+        const provider = detectProvider(apiHost, '');
+        
+        if (provider === 'anthropic') {
+            // Claude streaming format
+            if (chunk.type === 'content_block_delta' && chunk.delta && chunk.delta.text) {
+                return chunk.delta.text;
+            }
+        } else {
+            // OpenAI/compatible streaming format
+            if (chunk.choices && chunk.choices[0] && chunk.choices[0].delta && chunk.choices[0].delta.content) {
+                return chunk.choices[0].delta.content;
+            }
+        }
+        
+        return null;
     }
 
     /**
