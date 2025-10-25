@@ -49,10 +49,10 @@ class CopilotStyleChatPanel {
             return;
         }
 
-        // Create AIDA chat panel in the right sidebar area
+        // Force recreate panel to apply changes
         if (this.currentPanel) {
-            this.currentPanel.reveal(vscode.ViewColumn.Beside);
-            return;
+            this.currentPanel.dispose();
+            this.currentPanel = null;
         }
 
         // Create webview panel that mimics GitHub Copilot position
@@ -65,7 +65,7 @@ class CopilotStyleChatPanel {
             },
             {
                 enableScripts: true,
-                retainContextWhenHidden: true,
+                retainContextWhenHidden: false, // Don't retain to force refresh
                 localResourceRoots: [
                     vscode.Uri.file(this.context.extensionPath)
                 ]
@@ -100,12 +100,13 @@ class CopilotStyleChatPanel {
      * Get HTML content that looks exactly like GitHub Copilot
      */
     getCopilotStyleHTML() {
+        const timestamp = Date.now(); // Force refresh
         return `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AIDA Chat</title>
+    <title>AIDA Chat - ${timestamp}</title>
     <style>
         * {
             margin: 0;
@@ -273,6 +274,88 @@ class CopilotStyleChatPanel {
             border-top: 1px solid var(--vscode-sideBar-border);
             background-color: var(--vscode-sideBar-background);
             flex-shrink: 0;
+        }
+
+        /* Mode and Model selectors */
+        .chat-controls {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            gap: 8px;
+        }
+
+        .mode-selector {
+            display: flex;
+            background-color: var(--vscode-input-background);
+            border: 1px solid var(--vscode-input-border);
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .mode-button {
+            padding: 4px 12px;
+            border: none;
+            background: transparent;
+            color: var(--vscode-input-foreground);
+            font-size: 11px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .mode-button:hover {
+            background-color: var(--vscode-list-hoverBackground);
+        }
+
+        .mode-button.active {
+            background-color: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
+        }
+
+        .model-selector {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 8px;
+            background-color: var(--vscode-input-background);
+            border: 1px solid var(--vscode-input-border);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 11px;
+            color: var(--vscode-input-foreground);
+            transition: all 0.2s;
+        }
+
+        .model-selector:hover {
+            background-color: var(--vscode-list-hoverBackground);
+        }
+
+        .model-icon {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #7c3aed 0%, #3b82f6 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 8px;
+            font-weight: bold;
+        }
+
+        .model-name {
+            font-weight: 500;
+        }
+
+        .model-status {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background-color: #22c55e;
         }
 
         .chat-input-container {
@@ -491,11 +574,30 @@ class CopilotStyleChatPanel {
     </div>
 
     <div class="chat-input-area">
+        <div class="chat-controls">
+            <div class="mode-selector">
+                <button class="mode-button active" data-mode="ask">
+                    <span>💬</span>
+                    <span>Ask</span>
+                </button>
+                <button class="mode-button" data-mode="agent">
+                    <span>🤖</span>
+                    <span>Agent</span>
+                </button>
+            </div>
+            
+            <div class="model-selector" onclick="openModelConfig()">
+                <div class="model-icon">C</div>
+                <span class="model-name">Claude Sonnet 4</span>
+                <div class="model-status" title="Model Active"></div>
+            </div>
+        </div>
+        
         <div class="chat-input-container">
             <textarea 
                 id="chatInput" 
                 class="chat-input" 
-                placeholder="Ask AIDA to review code, analyze changes, or help with development..."
+                placeholder="Ask AIDA to help with code, or let Agent automatically solve problems..."
                 rows="1"
             ></textarea>
             <button id="sendButton" class="send-button">
@@ -503,11 +605,8 @@ class CopilotStyleChatPanel {
             </button>
         </div>
         
-        <div class="suggestions">
-            <div class="suggestion-chip" data-command="@review-file">📁 Review current file</div>
-            <div class="suggestion-chip" data-command="@review-changes">🔍 Review my changes</div>
-            <div class="suggestion-chip" data-command="@review-pr">🔄 Review PR</div>
-            <div class="suggestion-chip" data-command="@sync-review-templates">⚙️ Sync templates</div>
+        <div class="suggestions" id="suggestions">
+            <!-- Dynamic suggestions based on mode -->
         </div>
     </div>
 
@@ -518,8 +617,73 @@ class CopilotStyleChatPanel {
         const chatInput = document.getElementById('chatInput');
         const sendButton = document.getElementById('sendButton');
         const typingIndicator = document.getElementById('typingIndicator');
+        const suggestionsContainer = document.getElementById('suggestions');
         
         let messageCount = 0;
+        let currentMode = 'ask'; // 'ask' or 'agent'
+        let currentModel = 'claude-sonnet-4';
+        
+        // Mode switching
+        document.querySelectorAll('.mode-button').forEach(button => {
+            button.addEventListener('click', function() {
+                // Remove active from all buttons
+                document.querySelectorAll('.mode-button').forEach(btn => btn.classList.remove('active'));
+                
+                // Add active to clicked button
+                this.classList.add('active');
+                
+                // Update current mode
+                currentMode = this.getAttribute('data-mode');
+                
+                // Update UI based on mode
+                updateUIForMode(currentMode);
+            });
+        });
+        
+        function updateUIForMode(mode) {
+            const placeholder = chatInput.getAttribute('placeholder');
+            
+            if (mode === 'ask') {
+                chatInput.placeholder = 'Ask AIDA to help with code, review files, or answer questions...';
+                updateSuggestions([
+                    { command: '@review-file', icon: '📁', text: 'Review current file' },
+                    { command: '@review-changes', icon: '🔍', text: 'Review my changes' },
+                    { command: '@review-pr', icon: '🔄', text: 'Review PR' },
+                    { command: '@sync-review-templates', icon: '⚙️', text: 'Sync templates' }
+                ]);
+            } else if (mode === 'agent') {
+                chatInput.placeholder = 'Describe what you want to build, and Agent will automatically create it...';
+                updateSuggestions([
+                    { command: '@create-component', icon: '🧩', text: 'Create component' },
+                    { command: '@refactor-code', icon: '🔧', text: 'Refactor code' },
+                    { command: '@fix-errors', icon: '🐛', text: 'Fix errors' },
+                    { command: '@generate-tests', icon: '🧪', text: 'Generate tests' }
+                ]);
+            }
+        }
+        
+        function updateSuggestions(suggestions) {
+            suggestionsContainer.innerHTML = '';
+            suggestions.forEach(suggestion => {
+                const chip = document.createElement('div');
+                chip.className = 'suggestion-chip';
+                chip.setAttribute('data-command', suggestion.command);
+                chip.innerHTML = suggestion.icon + ' ' + suggestion.text;
+                chip.addEventListener('click', function() {
+                    const command = this.getAttribute('data-command');
+                    chatInput.value = command + ' ';
+                    chatInput.focus();
+                    sendMessage();
+                });
+                suggestionsContainer.appendChild(chip);
+            });
+        }
+        
+        function openModelConfig() {
+            vscode.postMessage({
+                type: 'openModelConfig'
+            });
+        }
         
         // Auto-resize textarea
         chatInput.addEventListener('input', function() {
@@ -538,15 +702,8 @@ class CopilotStyleChatPanel {
         // Send button click
         sendButton.addEventListener('click', sendMessage);
         
-        // Suggestion chips
-        document.querySelectorAll('.suggestion-chip').forEach(chip => {
-            chip.addEventListener('click', function() {
-                const command = this.getAttribute('data-command');
-                chatInput.value = command + ' ';
-                chatInput.focus();
-                sendMessage();
-            });
-        });
+        // Initialize suggestions for default mode
+        updateUIForMode(currentMode);
         
         function sendMessage() {
             const message = chatInput.value.trim();
@@ -575,7 +732,9 @@ class CopilotStyleChatPanel {
             // Send to extension
             vscode.postMessage({
                 type: 'sendMessage',
-                message: message
+                message: message,
+                mode: currentMode,
+                model: currentModel
             });
         }
         
@@ -690,7 +849,7 @@ class CopilotStyleChatPanel {
         try {
             switch (message.type) {
                 case 'sendMessage':
-                    await this.processChatMessage(message.message);
+                    await this.processChatMessage(message.message, message.mode, message.model);
                     break;
                     
                 case 'clearChat':
@@ -699,6 +858,10 @@ class CopilotStyleChatPanel {
                     
                 case 'openSettings':
                     vscode.commands.executeCommand('workbench.action.openSettings', 'aida');
+                    break;
+                    
+                case 'openModelConfig':
+                    this.openModelConfigDialog();
                     break;
             }
         } catch (error) {
@@ -710,25 +873,36 @@ class CopilotStyleChatPanel {
     /**
      * Process chat message through AIDA participants
      */
-    async processChatMessage(userMessage) {
+    async processChatMessage(userMessage, mode = 'ask', model = 'claude-sonnet-4') {
         try {
             // Add to history
             this.chatHistory.push({
                 role: 'user',
                 content: userMessage,
+                mode: mode,
+                model: model,
                 timestamp: new Date()
             });
 
-            console.log('💬 Processing message:', userMessage);
+            console.log('💬 Processing message:', userMessage, 'Mode:', mode, 'Model:', model);
 
-            // Determine which participant to use
-            const participant = this.determineParticipant(userMessage);
-            const response = await this.callParticipant(participant, userMessage);
+            let response;
+            
+            if (mode === 'agent') {
+                // Agent mode - autonomous code generation and task execution
+                response = await this.handleAgentMode(userMessage, model);
+            } else {
+                // Ask mode - traditional Q&A
+                const participant = this.determineParticipant(userMessage);
+                response = await this.callParticipant(participant, userMessage);
+            }
 
             // Add response to history
             this.chatHistory.push({
                 role: 'assistant',
                 content: response,
+                mode: mode,
+                model: model,
                 timestamp: new Date()
             });
 
@@ -739,6 +913,145 @@ class CopilotStyleChatPanel {
             console.error('❌ Error processing message:', error);
             this.sendErrorToPanel(error.message);
         }
+    }
+
+    /**
+     * Handle Agent mode - autonomous task execution
+     */
+    async handleAgentMode(userMessage, model) {
+        try {
+            const lowerMessage = userMessage.toLowerCase();
+            
+            if (lowerMessage.includes('@create-component') || lowerMessage.includes('create component')) {
+                return await this.agentCreateComponent(userMessage);
+            }
+            
+            if (lowerMessage.includes('@refactor-code') || lowerMessage.includes('refactor')) {
+                return await this.agentRefactorCode(userMessage);
+            }
+            
+            if (lowerMessage.includes('@fix-errors') || lowerMessage.includes('fix error')) {
+                return await this.agentFixErrors(userMessage);
+            }
+            
+            if (lowerMessage.includes('@generate-tests') || lowerMessage.includes('generate test')) {
+                return await this.agentGenerateTests(userMessage);
+            }
+            
+            // General agent task
+            return await this.agentGeneralTask(userMessage, model);
+            
+        } catch (error) {
+            return '❌ **Agent Error**\n\nAgent encountered an error: ' + error.message;
+        }
+    }
+
+    /**
+     * Agent: Create Component
+     */
+    async agentCreateComponent(request) {
+        return '🤖 **Agent Mode: Create Component**\n\n' +
+               '**Request:** ' + request + '\n\n' +
+               '**Status:** 🚧 Under Development\n\n' +
+               'Agent will automatically:\n' +
+               '1. 📝 Analyze component requirements\n' +
+               '2. 🏗️ Generate component structure\n' +
+               '3. 💾 Create files automatically\n' +
+               '4. ✅ Add to module imports\n\n' +
+               '*This feature is coming soon!*';
+    }
+
+    /**
+     * Agent: Refactor Code
+     */
+    async agentRefactorCode(request) {
+        return '🤖 **Agent Mode: Refactor Code**\n\n' +
+               '**Request:** ' + request + '\n\n' +
+               '**Status:** 🚧 Under Development\n\n' +
+               'Agent will automatically:\n' +
+               '1. 🔍 Analyze code structure\n' +
+               '2. 🔧 Apply best practices\n' +
+               '3. 💾 Update files automatically\n' +
+               '4. ✅ Verify changes work\n\n' +
+               '*This feature is coming soon!*';
+    }
+
+    /**
+     * Agent: Fix Errors
+     */
+    async agentFixErrors(request) {
+        return '🤖 **Agent Mode: Fix Errors**\n\n' +
+               '**Request:** ' + request + '\n\n' +
+               '**Status:** 🚧 Under Development\n\n' +
+               'Agent will automatically:\n' +
+               '1. 🐛 Scan for errors\n' +
+               '2. 🔧 Propose fixes\n' +
+               '3. 💾 Apply fixes automatically\n' +
+               '4. ✅ Verify resolution\n\n' +
+               '*This feature is coming soon!*';
+    }
+
+    /**
+     * Agent: Generate Tests
+     */
+    async agentGenerateTests(request) {
+        return '🤖 **Agent Mode: Generate Tests**\n\n' +
+               '**Request:** ' + request + '\n\n' +
+               '**Status:** 🚧 Under Development\n\n' +
+               'Agent will automatically:\n' +
+               '1. 📝 Analyze code to test\n' +
+               '2. 🧪 Generate test cases\n' +
+               '3. 💾 Create test files\n' +
+               '4. ✅ Run tests to verify\n\n' +
+               '*This feature is coming soon!*';
+    }
+
+    /**
+     * Agent: General Task
+     */
+    async agentGeneralTask(request, model) {
+        return '🤖 **Agent Mode: General Task**\n\n' +
+               '**Request:** ' + request + '\n' +
+               '**Model:** ' + model + '\n\n' +
+               '**Status:** 🚧 Under Development\n\n' +
+               'Agent capabilities:\n' +
+               '- 🏗️ **Autonomous Code Generation**\n' +
+               '- 📁 **File Management**\n' +
+               '- 🔧 **Auto-refactoring**\n' +
+               '- 🐛 **Error Resolution**\n' +
+               '- 🧪 **Test Generation**\n\n' +
+               'The Agent will analyze your request and automatically execute the required tasks.\n\n' +
+               '*Full Agent capabilities coming soon!*';
+    }
+
+    /**
+     * Open Model Configuration Dialog
+     */
+    openModelConfigDialog() {
+        vscode.window.showQuickPick([
+            {
+                label: '$(check) Claude Sonnet 4',
+                description: 'Currently Active',
+                detail: 'Advanced reasoning and code generation'
+            },
+            {
+                label: '$(settings-gear) Configure Models',
+                description: 'Add more models',
+                detail: 'Set up additional AI models'
+            }
+        ], {
+            placeHolder: 'Select AI Model for AIDA',
+            title: 'AIDA Model Configuration'
+        }).then(selection => {
+            if (selection) {
+                if (selection.label.includes('Configure Models')) {
+                    vscode.commands.executeCommand('workbench.action.openSettings', 'aida.models');
+                } else {
+                    // Model selected, could update config here
+                    vscode.window.showInformationMessage('Model: ' + selection.label + ' is active');
+                }
+            }
+        });
     }
 
     /**

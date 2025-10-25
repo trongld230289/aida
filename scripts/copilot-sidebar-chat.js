@@ -15,7 +15,62 @@ class CopilotSidebarChat {
         this.messageHistory = []; // Store user message history for arrow navigation
         this.historyIndex = -1;   // Current position in history (-1 = not navigating)
         this.chatbotService = new AidaChatbotService(context); // AI chatbot service
+        this.currentFileName = null; // Track current file
         this.initializeChatbot();
+        this.setupFileWatcher();
+    }
+
+    /**
+     * Setup file watcher to detect active file changes
+     */
+    setupFileWatcher() {
+        // Listen for active editor changes
+        this.context.subscriptions.push(
+            vscode.window.onDidChangeActiveTextEditor(editor => {
+                this.updateCurrentFile(editor);
+            })
+        );
+        
+        // Set initial file if there's an active editor
+        this.updateCurrentFile(vscode.window.activeTextEditor);
+    }
+
+    /**
+     * Update current file and notify webview
+     */
+    updateCurrentFile(editor) {
+        if (editor && editor.document) {
+            const fileName = editor.document.fileName;
+            const displayName = fileName.split(/[\\/]/).pop(); // Get just filename
+            
+            if (this.currentFileName !== displayName) {
+                this.currentFileName = displayName;
+                
+                // Notify webview about file change
+                if (this.webviewView) {
+                    this.webviewView.webview.postMessage({
+                        type: 'updateCurrentFile',
+                        fileName: displayName,
+                        fullPath: fileName
+                    });
+                }
+                
+                console.log('📁 Current file updated:', displayName);
+            }
+        } else {
+            // No active editor
+            if (this.currentFileName !== null) {
+                this.currentFileName = null;
+                
+                if (this.webviewView) {
+                    this.webviewView.webview.postMessage({
+                        type: 'updateCurrentFile',
+                        fileName: null,
+                        fullPath: null
+                    });
+                }
+            }
+        }
     }
 
     /**
@@ -79,7 +134,7 @@ class CopilotSidebarChat {
     /**
      * Process chat message through AIDA participants with image support
      */
-    async processChatMessage(userMessage, images = []) {
+    async processChatMessage(userMessage, images = [], mode = 'ask', model = 'claude-sonnet-4') {
         try {
             // Add user message to chat
             if (this.webviewView) {
@@ -102,11 +157,13 @@ class CopilotSidebarChat {
             // Reset history navigation index
             this.historyIndex = -1;
 
-            // Add to history with images
+            // Add to history with images and mode/model info
             this.chatHistory.push({
                 role: 'user', 
                 content: userMessage,
                 images: images,
+                mode: mode,
+                model: model,
                 timestamp: new Date()
             });
 
@@ -367,8 +424,13 @@ class AidaChatViewProvider {
         webviewView.webview.onDidReceiveMessage(async (message) => {
             switch (message.type) {
                 case 'sendMessage':
-                    // Handle both text and image messages
-                    await this.chatInstance.processChatMessage(message.message, message.images);
+                    // Handle both text and image messages with mode and model
+                    await this.chatInstance.processChatMessage(
+                        message.message, 
+                        message.images,
+                        message.mode || 'ask',
+                        message.model || 'claude-sonnet-4'
+                    );
                     break;
                     
                 case 'clearChat':
@@ -836,34 +898,183 @@ class AidaChatViewProvider {
             flex-shrink: 0;
         }
 
-        /* Image attachments container */
+        /* Current File Indicator - GitHub Copilot Style */
+        .current-file-indicator {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 6px;
+            background-color: var(--vscode-badge-background);
+            border: none;
+            border-radius: 12px;
+            margin-bottom: 6px;
+            font-size: 10px;
+            color: var(--vscode-badge-foreground);
+            max-width: fit-content;
+        }
+
+        .file-icon {
+            font-size: 10px;
+            flex-shrink: 0;
+            opacity: 0.8;
+        }
+
+        .file-info {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .file-name {
+            font-weight: 400;
+            color: var(--vscode-badge-foreground);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 120px;
+        }
+
+        .file-label {
+            display: none; /* Hide label like Copilot */
+        }
+
+        .remove-file-btn {
+            width: 12px;
+            height: 12px;
+            border: none;
+            background: transparent;
+            color: var(--vscode-badge-foreground);
+            cursor: pointer;
+            border-radius: 2px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            flex-shrink: 0;
+            opacity: 0.7;
+            margin-left: 2px;
+        }
+
+        .remove-file-btn:hover {
+            opacity: 1;
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        /* Mode and Model selectors */
+        .chat-controls {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 8px;
+            gap: 8px;
+        }
+
+        .mode-selector {
+            display: flex;
+            background-color: var(--vscode-input-background);
+            border: 1px solid var(--vscode-input-border);
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .mode-button {
+            padding: 4px 12px;
+            border: none;
+            background: transparent;
+            color: var(--vscode-input-foreground);
+            font-size: 11px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .mode-button:hover {
+            background-color: var(--vscode-list-hoverBackground);
+        }
+
+        .mode-button.active {
+            background-color: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
+        }
+
+        .model-selector {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 8px;
+            background-color: var(--vscode-input-background);
+            border: 1px solid var(--vscode-input-border);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 11px;
+            color: var(--vscode-input-foreground);
+            transition: all 0.2s;
+        }
+
+        .model-selector:hover {
+            background-color: var(--vscode-list-hoverBackground);
+        }
+
+        .model-icon {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #7c3aed 0%, #3b82f6 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 8px;
+            font-weight: bold;
+        }
+
+        .model-name {
+            font-weight: 500;
+        }
+
+        .model-status {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background-color: #22c55e;
+        }
+
+        /* Image attachments container - GitHub Copilot Style */
         .attachments-container {
-            max-height: 100px;
+            max-height: 60px;
             overflow-y: auto;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
             display: none;
+            gap: 4px;
         }
 
         .attachments-container.has-attachments {
-            display: block;
+            display: flex;
+            flex-wrap: wrap;
         }
 
         .image-attachment {
             display: flex;
             align-items: center;
-            gap: 8px;
-            padding: 6px 8px;
-            background-color: var(--vscode-input-background);
-            border: 1px solid var(--vscode-input-border);
-            border-radius: 4px;
-            margin-bottom: 4px;
+            gap: 4px;
+            padding: 3px 6px;
+            background-color: var(--vscode-badge-background);
+            border: none;
+            border-radius: 12px;
+            font-size: 10px;
+            color: var(--vscode-badge-foreground);
             position: relative;
+            max-width: fit-content;
         }
 
         .image-preview {
-            width: 32px;
-            height: 32px;
-            border-radius: 4px;
+            width: 16px;
+            height: 16px;
+            border-radius: 2px;
             overflow: hidden;
             flex-shrink: 0;
             position: relative;
@@ -877,21 +1088,34 @@ class AidaChatViewProvider {
         }
 
         .image-filename {
-            flex: 1;
-            font-size: 11px;
-            color: var(--vscode-foreground);
+            font-size: 10px;
+            color: var(--vscode-badge-foreground);
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
+            max-width: 80px;
         }
 
         .remove-image {
-            width: 16px;
-            height: 16px;
+            width: 12px;
+            height: 12px;
             border: none;
             background: none;
-            color: var(--vscode-icon-foreground);
+            color: var(--vscode-badge-foreground);
             cursor: pointer;
+            border-radius: 2px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            opacity: 0.7;
+            margin-left: 2px;
+        }
+
+        .remove-image:hover {
+            opacity: 1;
+            background-color: rgba(255, 255, 255, 0.1);
+        }
             font-size: 12px;
             display: flex;
             align-items: center;
@@ -1202,16 +1426,44 @@ class AidaChatViewProvider {
     </div>
 
     <div class="input-area">
+        <div class="current-file-indicator" id="currentFileIndicator" style="display: none;">
+            <div class="file-icon">📁</div>
+            <div class="file-info">
+                <span class="file-name" id="currentFileName">No file selected</span>
+                <span class="file-label">Current file</span>
+            </div>
+            <button class="remove-file-btn" id="removeFileBtn" title="Clear file context">×</button>
+        </div>
+        
         <div class="attachments-container" id="attachmentsContainer"></div>
         <div class="input-container">
             <div class="participant-suggest" id="participantSuggest"></div>
             <textarea 
                 id="msgInput" 
                 class="msg-input" 
-                placeholder="Ask AIDA to help with code..."
+                placeholder="Ask AIDA to help with code, or let Agent automatically solve problems..."
                 rows="1"
             ></textarea>
             <button id="sendBtn" class="send-btn">▶</button>
+        </div>
+        
+        <div class="chat-controls">
+            <div class="mode-selector">
+                <button class="mode-button active" data-mode="ask">
+                    <span>💬</span>
+                    <span>Ask</span>
+                </button>
+                <button class="mode-button" data-mode="agent">
+                    <span>🤖</span>
+                    <span>Agent</span>
+                </button>
+            </div>
+            
+            <div class="model-selector" onclick="openModelConfig()">
+                <div class="model-icon">C</div>
+                <span class="model-name">Claude Sonnet 4</span>
+                <div class="model-status" title="Model Active"></div>
+            </div>
         </div>
     </div>
 
@@ -1224,9 +1476,86 @@ class AidaChatViewProvider {
         const typingIndicator = document.getElementById('typingIndicator');
         const participantSuggest = document.getElementById('participantSuggest');
         const attachmentsContainer = document.getElementById('attachmentsContainer');
+        const currentFileIndicator = document.getElementById('currentFileIndicator');
+        const currentFileName = document.getElementById('currentFileName');
+        const removeFileBtn = document.getElementById('removeFileBtn');
         
         // Image attachments array
         let imageAttachments = [];
+        
+        // Mode and model state
+        let currentMode = 'ask'; // 'ask' or 'agent'
+        let currentModel = 'claude-sonnet-4';
+        let currentFileContext = null; // Track current file context
+        
+        // Mode switching
+        document.querySelectorAll('.mode-button').forEach(button => {
+            button.addEventListener('click', function() {
+                // Remove active from all buttons
+                document.querySelectorAll('.mode-button').forEach(btn => btn.classList.remove('active'));
+                
+                // Add active to clicked button
+                this.classList.add('active');
+                
+                // Update current mode
+                currentMode = this.getAttribute('data-mode');
+                
+                // Update placeholder based on mode
+                updatePlaceholderForMode(currentMode);
+            });
+        });
+        
+        function updatePlaceholderForMode(mode) {
+            if (mode === 'ask') {
+                msgInput.placeholder = 'Ask AIDA to help with code, review files, or answer questions...';
+            } else if (mode === 'agent') {
+                msgInput.placeholder = 'Describe what you want to build, and Agent will automatically create it...';
+            }
+        }
+        
+        function openModelConfig() {
+            vscode.postMessage({
+                type: 'openModelConfig'
+            });
+        }
+        
+        // Initialize placeholder for default mode
+        updatePlaceholderForMode(currentMode);
+        
+        // Remove file button handler
+        removeFileBtn.addEventListener('click', function() {
+            clearCurrentFile();
+        });
+        
+        // Function to update current file display
+        function updateCurrentFileDisplay(fileName, fullPath) {
+            if (fileName) {
+                currentFileName.textContent = fileName;
+                currentFileIndicator.style.display = 'flex';
+                currentFileContext = { fileName, fullPath };
+                
+                // Update placeholder based on file context
+                updatePlaceholderWithFile(fileName);
+            } else {
+                clearCurrentFile();
+            }
+        }
+        
+        // Function to clear current file
+        function clearCurrentFile() {
+            currentFileIndicator.style.display = 'none';
+            currentFileContext = null;
+            updatePlaceholderForMode(currentMode);
+        }
+        
+        // Update placeholder with file context
+        function updatePlaceholderWithFile(fileName) {
+            if (currentMode === 'ask') {
+                msgInput.placeholder = 'Ask about ' + fileName + ' or any coding questions...';
+            } else if (currentMode === 'agent') {
+                msgInput.placeholder = 'What would you like Agent to do with ' + fileName + '?';
+            }
+        }
         
         // Available chat participants
         const participants = [
@@ -1551,7 +1880,10 @@ class AidaChatViewProvider {
             vscode.postMessage({
                 type: 'sendMessage',
                 message: message,
-                images: imagesToSend
+                images: imagesToSend,
+                mode: currentMode,
+                model: currentModel,
+                currentFile: currentFileContext
             });
             
             // Clear input and attachments
@@ -1784,6 +2116,10 @@ class AidaChatViewProvider {
                 case 'syncInfo':
                     hideTyping();
                     addMessage(message.syncResult, 'assistant');
+                    break;
+                    
+                case 'updateCurrentFile':
+                    updateCurrentFileDisplay(message.fileName, message.fullPath);
                     break;
                     
                 case 'setInputValue':
