@@ -33,8 +33,21 @@ class AidaChatbotService {
      */
     async loadSystemPrompt() {
         const systemPromptPath = path.join(this.context.extensionPath, 'chatbot', 'system_prompt.md');
-        const content = await fs.readFile(systemPromptPath, 'utf8');
-        return content;
+        const systemPromptWithVisionPath = path.join(this.context.extensionPath, 'chatbot', 'system_prompt_with_vision.md');
+        
+        try {
+            // Try to load vision-enhanced prompt first
+            const visionContent = await fs.readFile(systemPromptWithVisionPath, 'utf8');
+            return visionContent;
+        } catch (error) {
+            // Fallback to regular prompt
+            try {
+                const content = await fs.readFile(systemPromptPath, 'utf8');
+                return content;
+            } catch (fallbackError) {
+                throw fallbackError;
+            }
+        }
     }
 
     /**
@@ -64,12 +77,13 @@ class AidaChatbotService {
     }
 
     /**
-     * Add message to conversation history
+     * Add message to conversation history with image support
      */
-    addMessage(role, content) {
+    addMessage(role, content, images = []) {
         this.messages.push({
             role: role, // 'user', 'assistant', or 'system'
             content: content,
+            images: images, // Array of image data
             timestamp: Date.now()
         });
 
@@ -80,7 +94,7 @@ class AidaChatbotService {
     }
 
     /**
-     * Build messages array for AI API
+     * Build messages array for AI API with image support
      */
     buildMessagesForAPI() {
         const apiMessages = [];
@@ -93,13 +107,22 @@ class AidaChatbotService {
             });
         }
 
-        // Add conversation history (excluding system messages in history)
+        // Add conversation history with images
         const conversationMessages = this.messages
             .filter(msg => msg.role !== 'system')
-            .map(msg => ({
-                role: msg.role,
-                content: msg.content
-            }));
+            .map(msg => {
+                const message = {
+                    role: msg.role,
+                    content: msg.content
+                };
+                
+                // Add images for Claude format if available
+                if (msg.images && msg.images.length > 0) {
+                    message.images = msg.images;
+                }
+                
+                return message;
+            });
 
         apiMessages.push(...conversationMessages);
 
@@ -107,15 +130,19 @@ class AidaChatbotService {
     }
 
     /**
-     * Generate AI response using conversation context
+     * Generate AI response using conversation context with image support
      */
-    async generateResponse(userMessage) {
+    async generateResponse(userMessage, images = []) {
         try {
-            // Add user message to history
-            this.addMessage('user', userMessage);
+            console.log('💬 generateResponse called with:', { message: userMessage, imageCount: images?.length || 0 });
+            
+            // Add user message to history with images
+            this.addMessage('user', userMessage, images);
 
             // Build messages for API
             const messages = this.buildMessagesForAPI();
+            
+            console.log('📦 Built messages for API:', messages.length, 'messages');
 
             // Check if we have AI service configured
             const aiResponse = await this.callAIService(messages);
@@ -128,7 +155,7 @@ class AidaChatbotService {
         } catch (error) {
             console.error('❌ Error generating AI response:', error);
             // Fallback to rule-based response
-            return this.generateFallbackResponse(userMessage);
+            return this.generateFallbackResponse(userMessage, images);
         }
     }
 
@@ -139,13 +166,19 @@ class AidaChatbotService {
         // Check for API key configuration
         const config = await this.getAIConfig();
         
+        console.log('🔧 AI Config:', { provider: config.provider, hasApiKey: !!config.apiKey, apiHost: config.apiHost, model: config.model });
+        
         if (config.provider === 'openai' && config.apiKey) {
+            console.log('📡 Using OpenAI API');
             return await this.callOpenAI(messages, config);
         } else if (config.provider === 'anthropic' && config.apiKey) {
+            console.log('📡 Using Anthropic API');
             return await this.callAnthropic(messages, config);
         } else if ((config.provider === 'local' || config.provider === 'ollama' || config.provider === 'openai-compatible') && config.apiHost) {
+            console.log('📡 Using Local LLM API');
             return await this.callLocalLLM(messages, config);
         } else {
+            console.log('📡 Using Smart Responses (no AI service configured)');
             // No AI service configured, use smart rule-based responses
             return this.generateSmartResponse(messages);
         }
@@ -256,48 +289,170 @@ class AidaChatbotService {
     }
 
     /**
-     * Call Anthropic API
+     * Call Anthropic API with image support (Claude Vision)
      */
     async callAnthropic(messages, config) {
         const apiUrl = config.apiHost || 'https://api.anthropic.com/v1/messages';
+        
+        console.log('🔍 Debug callAnthropic - messages:', JSON.stringify(messages, null, 2));
         
         // Extract system message
         const systemMessage = messages.find(m => m.role === 'system')?.content || '';
         const conversationMessages = messages.filter(m => m.role !== 'system');
 
+        console.log('🔍 Debug conversationMessages:', JSON.stringify(conversationMessages, null, 2));
+
+        // Build content for Claude with images
+        const claudeMessages = conversationMessages.map(msg => {
+            const content = [];
+            
+            // Add text content
+            if (msg.content) {
+                content.push({
+                    type: 'text',
+                    text: msg.content
+                });
+            }
+            
+            // FIX: Check for images in the correct property
+            console.log('🔍 Debug msg.images:', msg.images?.length || 0);
+            if (msg.images && msg.images.length > 0) {
+                console.log('🖼️ Processing', msg.images.length, 'images');
+                for (const image of msg.images) {
+                    const imageData = this.prepareImageForClaude(image);
+                    if (imageData) {
+                        console.log('✅ Image prepared:', imageData.mimeType, 'base64 length:', imageData.base64.length);
+                        content.push({
+                            type: 'image',
+                            source: {
+                                type: 'base64',
+                                media_type: imageData.mimeType,
+                                data: imageData.base64
+                            }
+                        });
+                    } else {
+                        console.error('❌ Failed to prepare image:', image);
+                    }
+                }
+            }
+            
+            console.log('📝 Final content for message:', content.length, 'items');
+            return {
+                role: msg.role,
+                content: content
+            };
+        });
+
+        console.log('🚀 Sending to Claude:', { model: config.model, system: systemMessage?.length || 0, messages: claudeMessages.length });
+
         const response = await axios.post(apiUrl, {
-            model: config.model || 'claude-3-haiku-20240307',
-            max_tokens: 1000,
+            model: config.model || 'claude-3-5-sonnet-20241022',
+            max_tokens: 4000,
             system: systemMessage,
-            messages: conversationMessages
+            messages: claudeMessages
         }, {
             headers: {
                 'x-api-key': config.apiKey,
                 'Content-Type': 'application/json',
-                'anthropic-version': '2023-06-01'
+                // 'anthropic-version': '2023-06-01'
             }
         });
 
+        console.log('✅ Claude response received');
         return response.data.content[0].text;
     }
 
     /**
-     * Call local LLM endpoint
+     * Call local LLM endpoint with image support (for company-hosted Claude)
      */
     async callLocalLLM(messages, config) {
-        const response = await axios.post(config.apiHost, {
-            messages: messages,
-            max_tokens: 1000,
-            temperature: 0.7,
-            model: config.model
-        }, {
-            headers: {
-                'Authorization': config.apiKey ? `Bearer ${config.apiKey}` : undefined,
-                'Content-Type': 'application/json'
-            }
-        });
+        console.log('🔍 Debug callLocalLLM - messages:', JSON.stringify(messages, null, 2));
+        
+        // Check if this is Claude-based model that supports vision
+        const isClaudeModel = config.model?.toLowerCase().includes('claude');
+        
+        if (isClaudeModel) {
+            console.log('🎯 Detected Claude model, using OpenAI-compatible vision format for local endpoint');
+            
+            // Build OpenAI-compatible messages with images
+            const openAIMessages = messages.map(msg => {
+                if (msg.role === 'system') {
+                    return msg; // Keep system message as-is
+                }
+                
+                const content = [];
+                
+                // Add text content
+                if (msg.content) {
+                    content.push({
+                        type: 'text',
+                        text: msg.content
+                    });
+                }
+                
+                // Add images in OpenAI format
+                console.log('🔍 Debug msg.images:', msg.images?.length || 0);
+                if (msg.images && msg.images.length > 0) {
+                    console.log('🖼️ Processing', msg.images.length, 'images for local Claude in OpenAI format');
+                    for (const image of msg.images) {
+                        const imageData = this.prepareImageForClaude(image);
+                        if (imageData) {
+                            console.log('✅ Image prepared for local Claude:', imageData.mimeType, 'base64 length:', imageData.base64.length);
+                            content.push({
+                                type: 'image_url',
+                                image_url: {
+                                    url: `data:${imageData.mimeType};base64,${imageData.base64}`
+                                }
+                            });
+                        } else {
+                            console.error('❌ Failed to prepare image for local Claude:', image);
+                        }
+                    }
+                }
+                
+                console.log('📝 Final content for local Claude message:', content.length, 'items');
+                return {
+                    role: msg.role,
+                    content: content
+                };
+            });
 
-        return response.data.choices?.[0]?.message?.content || response.data.response;
+            console.log('🚀 Sending to Local Claude in OpenAI format:', { model: config.model, messages: openAIMessages.length });
+
+            // Use OpenAI format for local endpoint
+            const response = await axios.post(config.apiHost, {
+                model: config.model || 'claude-4-sonnet',
+                messages: openAIMessages,
+                max_tokens: 4000,
+                temperature: 0.7
+            }, {
+                headers: {
+                    'Authorization': config.apiKey ? `Bearer ${config.apiKey}` : undefined,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            console.log('✅ Local Claude response received');
+            return response.data.choices?.[0]?.message?.content || response.data.content?.[0]?.text || response.data.response;
+            
+        } else {
+            console.log('🔄 Using standard OpenAI-compatible format for non-Claude model');
+            
+            // Standard OpenAI format for non-Claude models
+            const response = await axios.post(config.apiHost, {
+                messages: messages,
+                max_tokens: 1000,
+                temperature: 0.7,
+                model: config.model
+            }, {
+                headers: {
+                    'Authorization': config.apiKey ? `Bearer ${config.apiKey}` : undefined,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            return response.data.choices?.[0]?.message?.content || response.data.response;
+        }
     }
 
     /**
@@ -591,10 +746,95 @@ What interesting project are you working on? 🚀`;
     }
 
     /**
-     * Generate fallback response when all else fails
+     * Prepare image for Claude API
      */
-    generateFallbackResponse(message) {
+    prepareImageForClaude(imageInput) {
+        let base64Data, mimeType;
+        
+        if (typeof imageInput === 'string') {
+            // If it's a data URL
+            if (imageInput.startsWith('data:')) {
+                const matches = imageInput.match(/^data:(image\/\w+);base64,(.+)$/);
+                if (matches) {
+                    mimeType = matches[1];
+                    base64Data = matches[2];
+                }
+            } else {
+                // Already clean base64
+                base64Data = imageInput;
+                mimeType = 'image/png';
+            }
+        } else if (imageInput.data && imageInput.type) {
+            // From our image attachment format
+            if (imageInput.data.startsWith('data:')) {
+                const matches = imageInput.data.match(/^data:(image\/\w+);base64,(.+)$/);
+                if (matches) {
+                    mimeType = matches[1];
+                    base64Data = matches[2];
+                }
+            } else {
+                base64Data = imageInput.data;
+                mimeType = imageInput.type;
+            }
+        }
+        
+        // Validate mime type
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+        if (!allowedTypes.includes(mimeType)) {
+            console.warn('Unsupported image type:', mimeType, 'defaulting to image/png');
+            mimeType = 'image/png';
+        }
+        
+        if (!base64Data) {
+            console.error('Failed to extract base64 data from image');
+            return null;
+        }
+        
+        return { base64: base64Data, mimeType };
+    }
+
+    /**
+     * Generate fallback response when all else fails with image support
+     */
+    generateFallbackResponse(message, images = []) {
         const isVietnamese = this.detectVietnamese(message);
+        
+        // If there are images, acknowledge them
+        if (images && images.length > 0) {
+            if (isVietnamese) {
+                return `# 🤖 AIDA Assistant
+
+Tôi thấy bạn đã gửi ${images.length} hình ảnh, nhưng hiện tại tôi gặp một chút vấn đề khi xử lý vision.
+
+**Để hỗ trợ tốt hơ, bạn có thể:**
+- Mô tả nội dung hình ảnh bằng text
+- Đặt câu hỏi cụ thể về code trong ảnh
+- Gửi lại ảnh kèm câu hỏi chi tiết
+
+**Hoặc thử cấu hình Claude API:**
+- Vào Settings → AIDA → AI API Host: \`https://api.anthropic.com\`
+- Thêm Claude API Key
+- Chọn model: \`claude-3-5-sonnet-20241022\`
+
+Xin lỗi vì sự bất tiện! 🙏`;
+            } else {
+                return `# 🤖 AIDA Assistant
+
+I can see you've shared ${images.length} image(s), but I'm having trouble processing vision right now.
+
+**For better assistance, you can:**
+- Describe the image content in text
+- Ask specific questions about code in the image
+- Resend with more detailed questions
+
+**Or try configuring Claude API:**
+- Go to Settings → AIDA → AI API Host: \`https://api.anthropic.com\`
+- Add your Claude API Key  
+- Select model: \`claude-3-5-sonnet-20241022\`
+
+Sorry for the inconvenience! 🙏`;
+            }
+        }
         
         if (isVietnamese) {
             return `# 🤖 AIDA Assistant
