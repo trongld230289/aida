@@ -124,7 +124,7 @@ async function setupAzureDevOpsSettings() {
  * @param {vscode.ExtensionContext} context
  */
 function activate(context) {
-    console.log('Reload 2');
+    console.log('Reload 3');
     console.log('🤖 AIDA v1.0.0 - AI Development Assistant');
     console.log('🚀 AIDA extension is now active!');
     
