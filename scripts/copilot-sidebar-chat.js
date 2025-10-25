@@ -77,15 +77,16 @@ class CopilotSidebarChat {
     }
 
     /**
-     * Process chat message through AIDA participants  
+     * Process chat message through AIDA participants with image support
      */
-    async processChatMessage(userMessage) {
+    async processChatMessage(userMessage, images = []) {
         try {
             // Add user message to chat
             if (this.webviewView) {
                 this.webviewView.webview.postMessage({
                     type: 'addUserMessage',
-                    message: userMessage
+                    message: userMessage,
+                    images: images
                 });
             }
 
@@ -101,10 +102,11 @@ class CopilotSidebarChat {
             // Reset history navigation index
             this.historyIndex = -1;
 
-            // Add to history
+            // Add to history with images
             this.chatHistory.push({
                 role: 'user', 
                 content: userMessage,
+                images: images,
                 timestamp: new Date()
             });
 
@@ -117,9 +119,9 @@ class CopilotSidebarChat {
                 });
             }
 
-            // Determine participant and get response
+            // Determine participant and get response with images
             const participant = this.determineParticipant(userMessage);
-            const response = await this.callParticipant(participant, userMessage);
+            const response = await this.callParticipant(participant, userMessage, images);
 
             // Add response to history
             this.chatHistory.push({
@@ -162,9 +164,9 @@ class CopilotSidebarChat {
     }
 
     /**
-     * Call AIDA participant (same stream mock as before)
+     * Call AIDA participant with image support
      */
-    async callParticipant(participant, message) {
+    async callParticipant(participant, message, images = []) {
         try {
             let result = '';
             
@@ -261,7 +263,7 @@ class CopilotSidebarChat {
                     }
 
                 default:
-                    return await this.generateGeneralResponse(message);
+                    return await this.generateGeneralResponse(message, images);
             }
 
         } catch (error) {
@@ -271,14 +273,17 @@ class CopilotSidebarChat {
     }
 
     /**
-     * Generate conversational response using AI chatbot service
+     * Generate conversational response using AI chatbot service with image support
      */
-    async generateGeneralResponse(message) {
+    async generateGeneralResponse(message, images = []) {
         try {
             console.log('💬 Generating conversational response for:', message);
+            if (images && images.length > 0) {
+                console.log('🖼️ Processing with', images.length, 'image(s)');
+            }
             
-            // Use AI chatbot service for intelligent conversation
-            const response = await this.chatbotService.generateResponse(message);
+            // Use AI chatbot service for intelligent conversation with images
+            const response = await this.chatbotService.generateResponse(message, images);
             
             console.log('✅ Generated response length:', response.length);
             return response;
@@ -362,7 +367,8 @@ class AidaChatViewProvider {
         webviewView.webview.onDidReceiveMessage(async (message) => {
             switch (message.type) {
                 case 'sendMessage':
-                    await this.chatInstance.processChatMessage(message.message);
+                    // Handle both text and image messages
+                    await this.chatInstance.processChatMessage(message.message, message.images);
                     break;
                     
                 case 'clearChat':
@@ -830,6 +836,105 @@ class AidaChatViewProvider {
             flex-shrink: 0;
         }
 
+        /* Image attachments container */
+        .attachments-container {
+            max-height: 100px;
+            overflow-y: auto;
+            margin-bottom: 8px;
+            display: none;
+        }
+
+        .attachments-container.has-attachments {
+            display: block;
+        }
+
+        .image-attachment {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 8px;
+            background-color: var(--vscode-input-background);
+            border: 1px solid var(--vscode-input-border);
+            border-radius: 4px;
+            margin-bottom: 4px;
+            position: relative;
+        }
+
+        .image-preview {
+            width: 32px;
+            height: 32px;
+            border-radius: 4px;
+            overflow: hidden;
+            flex-shrink: 0;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .image-preview img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .image-filename {
+            flex: 1;
+            font-size: 11px;
+            color: var(--vscode-foreground);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .remove-image {
+            width: 16px;
+            height: 16px;
+            border: none;
+            background: none;
+            color: var(--vscode-icon-foreground);
+            cursor: pointer;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0.7;
+            border-radius: 2px;
+        }
+
+        .remove-image:hover {
+            opacity: 1;
+            background-color: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
+        }
+
+        /* Image hover tooltip */
+        .image-tooltip {
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: var(--vscode-editorHoverWidget-background);
+            border: 1px solid var(--vscode-editorHoverWidget-border);
+            border-radius: 4px;
+            padding: 8px;
+            z-index: 1000;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+            max-width: 300px;
+            max-height: 200px;
+        }
+
+        .image-tooltip.show {
+            opacity: 1;
+        }
+
+        .image-tooltip img {
+            max-width: 280px;
+            max-height: 180px;
+            object-fit: contain;
+            border-radius: 2px;
+        }
+
         .input-container {
             position: relative;
             display: flex;
@@ -888,6 +993,27 @@ class AidaChatViewProvider {
         .send-btn:disabled {
             opacity: 0.5;
             cursor: not-allowed;
+        }
+
+        /* User message images display */
+        .message-images {
+            margin-top: 8px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .message-image {
+            max-width: 200px;
+            max-height: 150px;
+            border-radius: 4px;
+            border: 1px solid var(--vscode-widget-border);
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .message-image:hover {
+            transform: scale(1.05);
         }
 
         /* Typing indicator - old bottom style (keeping for compatibility) */
@@ -1068,6 +1194,7 @@ class AidaChatViewProvider {
     </div>
 
     <div class="input-area">
+        <div class="attachments-container" id="attachmentsContainer"></div>
         <div class="input-container">
             <div class="participant-suggest" id="participantSuggest"></div>
             <textarea 
@@ -1088,6 +1215,10 @@ class AidaChatViewProvider {
         const sendBtn = document.getElementById('sendBtn');
         const typingIndicator = document.getElementById('typingIndicator');
         const participantSuggest = document.getElementById('participantSuggest');
+        const attachmentsContainer = document.getElementById('attachmentsContainer');
+        
+        // Image attachments array
+        let imageAttachments = [];
         
         // Available chat participants
         const participants = [
@@ -1111,6 +1242,57 @@ class AidaChatViewProvider {
             
             // Handle @ participant suggestions
             handleParticipantSuggest(this.value, this.selectionStart);
+            
+            // Update send button state
+            updateSendButtonState();
+        });
+
+        // Image paste handling - exactly like GitHub Copilot
+        msgInput.addEventListener('paste', async function(event) {
+            const items = event.clipboardData.items;
+            let hasImage = false;
+            
+            for (let item of items) {
+                if (item.type.indexOf('image') !== -1) {
+                    event.preventDefault();
+                    hasImage = true;
+                    
+                    const file = item.getAsFile();
+                    if (file) {
+                        await addImageAttachment(file);
+                    }
+                    break;
+                }
+            }
+            
+            if (hasImage) {
+                updateSendButtonState();
+            }
+        });
+
+        // Drag and drop support
+        msgInput.addEventListener('dragover', function(event) {
+            event.preventDefault();
+            this.style.borderColor = 'var(--vscode-button-background)';
+        });
+
+        msgInput.addEventListener('dragleave', function(event) {
+            event.preventDefault();
+            this.style.borderColor = 'var(--vscode-input-border)';
+        });
+
+        msgInput.addEventListener('drop', async function(event) {
+            event.preventDefault();
+            this.style.borderColor = 'var(--vscode-input-border)';
+            
+            const files = Array.from(event.dataTransfer.files);
+            for (const file of files) {
+                if (file.type.startsWith('image/')) {
+                    await addImageAttachment(file);
+                }
+            }
+            
+            updateSendButtonState();
         });
         
         // Send on Enter and handle suggestions
@@ -1228,7 +1410,116 @@ class AidaChatViewProvider {
             hideSuggestions();
         }
         
-        // Message history navigation functions
+        // Image attachment functions
+        async function addImageAttachment(file) {
+            // Validate file size (5MB limit like Claude)
+            const maxSize = 5 * 1024 * 1024; // 5MB
+            if (file.size > maxSize) {
+                showError('Image too large. Please use images smaller than 5MB.');
+                return;
+            }
+            
+            // Validate file type
+            const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+            if (!allowedTypes.includes(file.type.toLowerCase())) {
+                showError('Unsupported image format. Please use JPEG, PNG, GIF, or WebP.');
+                return;
+            }
+            
+            try {
+                const reader = new FileReader();
+                
+                reader.onload = function(e) {
+                    const imageData = {
+                        id: Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+                        data: e.target.result,
+                        type: file.type,
+                        name: file.name || 'image',
+                        size: file.size
+                    };
+                    
+                    imageAttachments.push(imageData);
+                    displayImageAttachment(imageData);
+                    updateAttachmentsVisibility();
+                };
+                
+                reader.onerror = function() {
+                    showError('Failed to read image file.');
+                };
+                
+                reader.readAsDataURL(file);
+            } catch (error) {
+                showError('Error processing image: ' + error.message);
+            }
+        }
+        
+        function displayImageAttachment(imageData) {
+            const attachmentDiv = document.createElement('div');
+            attachmentDiv.className = 'image-attachment';
+            attachmentDiv.setAttribute('data-id', imageData.id);
+            
+            attachmentDiv.innerHTML = \`
+                <div class="image-preview" onclick="showImageTooltip(this)">
+                    <img src="\${imageData.data}" alt="\${imageData.name}">
+                    <div class="image-tooltip">
+                        <img src="\${imageData.data}" alt="\${imageData.name}">
+                    </div>
+                </div>
+                <div class="image-filename" title="\${imageData.name}">\${imageData.name}</div>
+                <button class="remove-image" onclick="removeImageAttachment('\${imageData.id}')" title="Remove image">×</button>
+            \`;
+            
+            attachmentsContainer.appendChild(attachmentDiv);
+        }
+        
+        function removeImageAttachment(imageId) {
+            imageAttachments = imageAttachments.filter(img => img.id !== imageId);
+            
+            const attachmentElement = document.querySelector(\`[data-id="\${imageId}"]\`);
+            if (attachmentElement) {
+                attachmentElement.remove();
+            }
+            
+            updateAttachmentsVisibility();
+            updateSendButtonState();
+        }
+        
+        function updateAttachmentsVisibility() {
+            if (imageAttachments.length > 0) {
+                attachmentsContainer.classList.add('has-attachments');
+            } else {
+                attachmentsContainer.classList.remove('has-attachments');
+            }
+        }
+        
+        function clearImageAttachments() {
+            imageAttachments = [];
+            attachmentsContainer.innerHTML = '';
+            updateAttachmentsVisibility();
+        }
+        
+        function updateSendButtonState() {
+            const hasText = msgInput.value.trim().length > 0;
+            const hasImages = imageAttachments.length > 0;
+            
+            // GitHub Copilot behavior: need text for send (can't send image-only)
+            sendBtn.disabled = !hasText;
+        }
+        
+        function showImageTooltip(element) {
+            const tooltip = element.querySelector('.image-tooltip');
+            tooltip.classList.add('show');
+            
+            setTimeout(() => {
+                tooltip.classList.remove('show');
+            }, 2000);
+        }
+        
+        function showError(message) {
+            // Could integrate with VS Code notifications or show inline error
+            console.error('Image Error:', message);
+            // For now, just log - could enhance with UI feedback later
+        }
         function navigateHistory(direction) {
             // Get messageHistory from the extension context via postMessage
             vscode.postMessage({
@@ -1241,16 +1532,27 @@ class AidaChatViewProvider {
             const message = msgInput.value.trim();
             if (!message) return;
             
+            // Prepare images for sending
+            const imagesToSend = imageAttachments.map(img => ({
+                data: img.data,
+                type: img.type,
+                name: img.name
+            }));
+            
             vscode.postMessage({
                 type: 'sendMessage',
-                message: message
+                message: message,
+                images: imagesToSend
             });
             
+            // Clear input and attachments
             msgInput.value = '';
             msgInput.style.height = 'auto';
+            clearImageAttachments();
+            updateSendButtonState();
         }
         
-        function addMessage(content, role) {
+        function addMessage(content, role, images = []) {
             // Remove empty state
             const emptyState = chatContainer.querySelector('.empty-state');
             const isFirstMessage = emptyState !== null;
@@ -1281,13 +1583,23 @@ class AidaChatViewProvider {
             // Parse markdown content
             const parsedContent = parseMarkdown(content);
             
+            // Build images HTML for user messages
+            let imagesHTML = '';
+            if (role === 'user' && images && images.length > 0) {
+                imagesHTML = '<div class="message-images">';
+                images.forEach(img => {
+                    imagesHTML += \`<img src="\${img.data}" alt="\${img.name || 'Image'}" class="message-image" onclick="expandImage(this)">\`;
+                });
+                imagesHTML += '</div>';
+            }
+            
             messageDiv.innerHTML = \`
                 <div class="message-meta">
                     <div class="msg-avatar">\${avatar}</div>
                     <span>\${displayName}</span>
                     <span>\${timestamp}</span>
                 </div>
-                <div class="message-body">\${parsedContent}</div>
+                <div class="message-body">\${parsedContent}\${imagesHTML}</div>
             \`;
             
             chatContainer.appendChild(messageDiv);
@@ -1433,7 +1745,7 @@ class AidaChatViewProvider {
             
             switch (message.type) {
                 case 'addUserMessage':
-                    addMessage(message.message, 'user');
+                    addMessage(message.message, 'user', message.images);
                     break;
                     
                 case 'addAssistantMessage':
@@ -1479,6 +1791,23 @@ class AidaChatViewProvider {
         
         // Focus input on load
         msgInput.focus();
+        
+        // Initialize send button state
+        updateSendButtonState();
+
+        // Image expand function
+        window.expandImage = function(img) {
+            // Simple image expansion - could enhance with modal
+            const newWindow = window.open('', '_blank');
+            newWindow.document.write(\`
+                <html>
+                    <head><title>Image Preview</title></head>
+                    <body style="margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #000;">
+                        <img src="\${img.src}" style="max-width: 100%; max-height: 100%; object-fit: contain;">
+                    </body>
+                </html>
+            \`);
+        };
 
             // Handle file diff button clicks
             window.openDiffView = function(command, argsJson) {
