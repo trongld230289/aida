@@ -350,16 +350,19 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
                 }
             };
             
-            // For general responses, use streaming; for participants, use non-streaming
+            // Determine if streaming should be used
+            const isReviewMode = ['review-file', 'review-changes', 'review-pr'].includes(participant);
+            const shouldStream = participant === 'general' || isReviewMode;
+            
             let response;
-            if (participant === 'general') {
+            if (shouldStream) {
                 response = await this.callParticipant(participant, userMessage, images, streamCallback);
             } else {
                 response = await this.callParticipant(participant, userMessage, images);
             }
             
             // Complete streaming if it was used
-            if (participant === 'general' && this.webviewView) {
+            if (shouldStream && this.webviewView) {
                 this.webviewView.webview.postMessage({
                     type: 'endStreamingMessage'
                 });
@@ -373,7 +376,7 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
             });
 
             // Send response to sidebar (only if not streaming)
-            if (participant !== 'general' && this.webviewView) {
+            if (!shouldStream && this.webviewView) {
                 this.webviewView.webview.postMessage({
                     type: 'addAssistantMessage', 
                     message: response
@@ -2240,40 +2243,68 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
     async callParticipant(participant, message, images = [], streamCallback = null) {
         try {
             let result = '';
+            const isStreaming = typeof streamCallback === 'function';
             
             const mockStream = {
                 markdown: (text) => {
-                    if (text) result += text;
+                    if (text) {
+                        result += text;
+                        // Stream the chunk if streaming is enabled
+                        if (isStreaming) {
+                            streamCallback(text);
+                        }
+                    }
                     return mockStream;
                 },
                 button: (button) => {
                     if (button && button.title) {
                         // Use simple placeholder with encoded data
                         const buttonId = 'AIDA_BTN_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-                        // Store button data in a global object that webview can access
-                        result += `<span data-button-id="${buttonId}" data-title="${button.title}" data-command="${button.command || ''}" data-args='${JSON.stringify(button.arguments || [])}' data-tooltip="${button.tooltip || button.title}" class="button-placeholder">[${button.title}]</span> `;
+                        const buttonHtml = `<span data-button-id="${buttonId}" data-title="${button.title}" data-command="${button.command || ''}" data-args='${JSON.stringify(button.arguments || [])}' data-tooltip="${button.tooltip || button.title}" class="button-placeholder">[${button.title}]</span> `;
+                        result += buttonHtml;
+                        if (isStreaming) {
+                            streamCallback(buttonHtml);
+                        }
                     }
                     return mockStream;
                 },
                 progress: (text) => {
-                    if (text) result += '🔄 ' + text + '\n';
+                    if (text) {
+                        const progressText = '🔄 ' + text + '\n';
+                        result += progressText;
+                        if (isStreaming) {
+                            streamCallback(progressText);
+                        }
+                    }
                     return mockStream;
                 },
                 filetree: (tree) => {
                     if (tree) {
-                        result += '\n**File Tree:**\n' + JSON.stringify(tree, null, 2) + '\n\n';
+                        const treeText = '\n**File Tree:**\n' + JSON.stringify(tree, null, 2) + '\n\n';
+                        result += treeText;
+                        if (isStreaming) {
+                            streamCallback(treeText);
+                        }
                     }
                     return mockStream;
                 },
                 anchor: (anchor) => {
                     if (anchor && anchor.value) {
-                        result += '[' + (anchor.title || anchor.value) + '](' + anchor.value + ')';
+                        const anchorText = '[' + (anchor.title || anchor.value) + '](' + anchor.value + ')';
+                        result += anchorText;
+                        if (isStreaming) {
+                            streamCallback(anchorText);
+                        }
                     }
                     return mockStream;
                 },
                 reference: (ref) => {
                     if (ref && ref.value) {
-                        result += '📎 Reference: ' + ref.value + '\n';
+                        const refText = '📎 Reference: ' + ref.value + '\n';
+                        result += refText;
+                        if (isStreaming) {
+                            streamCallback(refText);
+                        }
                     }
                     return mockStream;
                 }
@@ -2289,7 +2320,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
             switch (participant) {
                 case 'review-file':
                     try {
-                        console.log('📁 AIDA Chat: Calling review-file with mockStream');
+                        console.log('📁 AIDA Chat: Calling review-file with streaming');
                         const reviewFileModule = require('../review-file.js');
                         await reviewFileModule.aiReviewFile(messageWithoutParticipant, mockStream, null, this.context);
                         return result || '✅ **File Review Complete**\n\nCode analysis completed.';
@@ -2300,8 +2331,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
 
                 case 'review-changes':  
                     try {
-                        console.log('📝 AIDA Chat: Calling review-changes with mockStream');
-                        console.log('📝 MockStream methods:', Object.keys(mockStream));
+                        console.log('📝 AIDA Chat: Calling review-changes with streaming');
                         const reviewChangesModule = require('../review-changes.js');
                         await reviewChangesModule.aiReviewChanges(messageWithoutParticipant, mockStream, null, this.context);
                         return result || '✅ **Changes Review Complete**\n\nGit changes analysis completed.';
@@ -2312,7 +2342,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
 
                 case 'review-pr':
                     try {
-                        console.log('🔄 AIDA Chat: Calling review-pr with correct parameter order');
+                        console.log('🔄 AIDA Chat: Calling review-pr with streaming');
                         const reviewPRModule = require('../review-pr.js');
                         // handleReviewPr expects: (request, context, stream, token)
                         await reviewPRModule.handleReviewPr(mockContext, this.context, mockStream, null);
