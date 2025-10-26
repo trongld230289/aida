@@ -21,6 +21,7 @@ class CopilotSidebarChat {
         this.currentAbortController = null; // For canceling AI requests
         this.initializeChatbot();
         this.setupFileWatcher();
+        this.loadChatHistory(); // Load persisted chat history
     }
 
     /**
@@ -41,7 +42,9 @@ class CopilotSidebarChat {
     /**
      * Update current file and notify webview
      */
-    updateCurrentFile(editor) {
+    updateCurrentFile(editor = null) {
+        // Use provided editor or get current active editor
+        editor = editor || vscode.window.activeTextEditor;
         if (editor && editor.document) {
             const fileName = editor.document.fileName;
             const displayName = fileName.split(/[\\/]/).pop(); // Get just filename
@@ -120,6 +123,59 @@ class CopilotSidebarChat {
     }
 
     /**
+     * Load chat history from persistent storage
+     */
+    loadChatHistory() {
+        try {
+            const savedHistory = this.context.globalState.get('aida.chatHistory', []);
+            const savedMessageHistory = this.context.globalState.get('aida.messageHistory', []);
+            
+            // Limit history to last 50 messages to prevent memory issues
+            this.chatHistory = savedHistory.slice(-50);
+            this.messageHistory = savedMessageHistory.slice(-20);
+            
+            console.log(`📚 Loaded ${this.chatHistory.length} chat messages from storage`);
+        } catch (error) {
+            console.error('Failed to load chat history:', error);
+            this.chatHistory = [];
+            this.messageHistory = [];
+        }
+    }
+
+    /**
+     * Save chat history to persistent storage
+     */
+    saveChatHistory() {
+        try {
+            // Save only essential data to prevent storage bloat
+            const historyToSave = this.chatHistory.map(msg => ({
+                role: msg.role,
+                content: msg.content,
+                timestamp: msg.timestamp
+            }));
+            
+            this.context.globalState.update('aida.chatHistory', historyToSave);
+            this.context.globalState.update('aida.messageHistory', this.messageHistory);
+            
+            console.log(`💾 Saved ${historyToSave.length} chat messages to storage`);
+        } catch (error) {
+            console.error('Failed to save chat history:', error);
+        }
+    }
+
+    /**
+     * Clear chat history from storage
+     */
+    clearChatHistory() {
+        this.chatHistory = [];
+        this.messageHistory = [];
+        this.historyIndex = -1;
+        this.context.globalState.update('aida.chatHistory', []);
+        this.context.globalState.update('aida.messageHistory', []);
+        console.log('🗑️ Chat history cleared');
+    }
+
+    /**
      * Send message directly to sidebar
      */
     async sendMessage(message) {
@@ -139,6 +195,19 @@ class CopilotSidebarChat {
      */
     async processChatMessage(userMessage, images = [], mode = 'ask', model = 'claude-sonnet-4') {
         try {
+            // Check for /clear command
+            if (userMessage.trim() === '/clear') {
+                // Clear chat history
+                this.clearChatHistory();
+                this.chatbotService.clearHistory();
+                
+                // Send clear command to frontend
+                if (this.webviewView) {
+                    this.webviewView.webview.postMessage({ type: 'clearChat' });
+                }
+                return; // Don't process further
+            }
+            
             // Add user message to chat
             if (this.webviewView) {
                 this.webviewView.webview.postMessage({
@@ -160,6 +229,9 @@ class CopilotSidebarChat {
             // Reset history navigation index
             this.historyIndex = -1;
 
+            // Get current file context for smart suggestions
+            const currentFileContext = await this.getCurrentFileContext();
+
             // Add to history with images and mode/model info
             this.chatHistory.push({
                 role: 'user', 
@@ -167,8 +239,12 @@ class CopilotSidebarChat {
                 images: images,
                 mode: mode,
                 model: model,
+                fileContext: currentFileContext, // Add file context
                 timestamp: new Date()
             });
+            
+            // Save user message to persistent storage
+            this.saveChatHistory();
 
             console.log('💬 Processing sidebar message:', userMessage);
 
@@ -401,6 +477,9 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
                 content: fullResponse || response,
                 timestamp: new Date()
             });
+            
+            // Save chat history to persistent storage
+            this.saveChatHistory();
 
             // Send response to sidebar (only if not streaming)
             if (!shouldStream && this.webviewView) {
@@ -2527,6 +2606,11 @@ class AidaChatViewProvider {
 
         // Load HTML content asynchronously
         this.loadWebviewContent(webviewView);
+        
+        // Initialize webview with current state after load
+        setTimeout(() => {
+            this.initializeWebviewState(webviewView);
+        }, 100);
 
         // Handle messages from webview
         webviewView.webview.onDidReceiveMessage(async (message) => {
@@ -2542,9 +2626,7 @@ class AidaChatViewProvider {
                     break;
                     
                 case 'clearChat':
-                    this.chatInstance.chatHistory = [];
-                    this.chatInstance.messageHistory = []; // Clear message history too
-                    this.chatInstance.historyIndex = -1;
+                    this.chatInstance.clearChatHistory(); // Use our new method
                     this.chatInstance.chatbotService.clearHistory(); // Clear AI conversation history
                     webviewView.webview.postMessage({ type: 'clearChat' });
                     break;
@@ -2699,10 +2781,74 @@ class AidaChatViewProvider {
                         console.error('❌ Invalid command or arguments:', message);
                     }
                     break;
+                    
+                case 'savePartialContent':
+                    // Save partial streaming content when user cancels
+                    if (message.content && message.content.trim()) {
+                        this.chatInstance.chatHistory.push({
+                            role: 'assistant',
+                            content: message.content,
+                            timestamp: new Date(message.timestamp),
+                            partial: true // Mark as partial response
+                        });
+                        
+                        // Save to persistent storage
+                        this.chatInstance.saveChatHistory();
+                        console.log('💾 Saved partial content to chat history');
+                    }
+                    break;
             }
         });
 
         console.log('✅ AIDA Chat Sidebar WebView resolved');
+    }
+
+    /**
+     * Initialize webview with current state (chat history, current file)
+     */
+    initializeWebviewState(webviewView) {
+        try {
+            // Restore chat history
+            this.restoreChatHistory(webviewView);
+            
+            // Show current active file
+            // Use chatInstance.updateCurrentFile so we call the method on the CopilotSidebarChat instance
+            if (this.chatInstance && typeof this.chatInstance.updateCurrentFile === 'function') {
+                this.chatInstance.updateCurrentFile();
+            } else {
+                console.warn('updateCurrentFile not available on chatInstance');
+            }
+            
+            console.log('🔄 Webview state initialized');
+        } catch (error) {
+            console.error('Failed to initialize webview state:', error);
+        }
+    }
+
+    /**
+     * Restore chat history to webview
+     */
+    restoreChatHistory(webviewView) {
+        if (!this.chatInstance.chatHistory || this.chatInstance.chatHistory.length === 0) {
+            return;
+        }
+
+        console.log(`📚 Restoring ${this.chatInstance.chatHistory.length} chat messages`);
+        
+        for (const message of this.chatInstance.chatHistory) {
+            if (message.role === 'user') {
+                webviewView.webview.postMessage({
+                    type: 'addUserMessage',
+                    message: message.content,
+                    images: message.images || []
+                });
+            } else if (message.role === 'assistant') {
+                webviewView.webview.postMessage({
+                    type: 'addAssistantMessage',
+                    message: message.content
+                });
+            }
+        }
     }
 
     handleHistoryNavigation(direction, webviewView) {

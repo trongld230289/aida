@@ -33,6 +33,57 @@
         overflow: hidden;
       }
 
+      /* Chat Header */
+      .chat-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--vscode-widget-border);
+        background-color: var(--vscode-sideBar-background);
+        min-height: 40px;
+      }
+
+      .header-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 600;
+        font-size: 13px;
+        color: var(--vscode-sideBar-foreground);
+      }
+
+      .header-icon {
+        font-size: 16px;
+      }
+
+      .header-actions {
+        display: flex;
+        gap: 4px;
+      }
+
+      .header-btn {
+        background: none;
+        border: none;
+        color: var(--vscode-icon-foreground);
+        cursor: pointer;
+        padding: 4px 6px;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background-color 0.1s ease;
+        font-size: 14px;
+      }
+
+      .header-btn:hover {
+        background-color: var(--vscode-toolbar-hoverBackground);
+      }
+
+      .header-btn:active {
+        background-color: var(--vscode-toolbar-activeBackground);
+      }
+
       /* GitHub Copilot Flat UI Design */
       .chat-container {
         flex: 1;
@@ -879,6 +930,21 @@
   </head>
 
   <body>
+    <!-- Chat Header -->
+    <div class="chat-header">
+      <div class="header-title">
+        <span class="header-icon">🤖</span>
+        <span>AIDA Chat</span>
+      </div>
+      <div class="header-actions">
+        <button id="clearChatBtn"
+                class="header-btn"
+                title="Clear chat history">
+          <span class="clear-icon">🗑️</span>
+        </button>
+      </div>
+    </div>
+
     <div class="chat-container"
          id="chatContainer">
       <div class="empty-state">

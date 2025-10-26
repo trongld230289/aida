@@ -7,6 +7,7 @@ const chatContainer = document.getElementById('chatContainer');
 const msgInput = document.getElementById('msgInput');
 const sendBtn = document.getElementById('sendBtn');
 const cancelBtn = document.getElementById('cancelBtn');
+const clearChatBtn = document.getElementById('clearChatBtn');
 const typingIndicator = document.getElementById('typingIndicator');
 const participantSuggest = document.getElementById('participantSuggest');
 const attachmentsContainer = document.getElementById('attachmentsContainer');
@@ -201,6 +202,19 @@ sendBtn.addEventListener('click', sendMessage);
 // Cancel button click handler
 cancelBtn.addEventListener('click', cancelStreaming);
 
+// Clear chat button click handler
+clearChatBtn.addEventListener('click', function() {
+    // Simple confirmation before clearing
+    const confirmClear = confirm('Clear all chat history? This action cannot be undone.');
+    
+    if (confirmClear) {
+        // Send clear command to backend
+        vscode.postMessage({
+            type: 'clearChat'
+        });
+    }
+});
+
 // Update button states based on streaming status
 function updateButtonStates() {
     if (isStreaming) {
@@ -218,6 +232,24 @@ function cancelStreaming() {
     
     console.log('🛑 Canceling streaming...');
     
+    // First save the current partial content before ending
+    if (currentStreamingMessage) {
+        const streamingContent = currentStreamingMessage.querySelector('.streaming-content');
+        if (streamingContent) {
+            const partialContent = streamingContent.getAttribute('data-raw-content') || '';
+            
+            if (partialContent.trim()) {
+                // Send the partial content to backend for saving
+                vscode.postMessage({
+                    type: 'savePartialContent',
+                    content: partialContent,
+                    timestamp: new Date().toISOString()
+                });
+                console.log('💾 Saved partial content before cancel:', partialContent.substring(0, 100) + '...');
+            }
+        }
+    }
+    
     // Send cancel command to backend
     vscode.postMessage({
         type: 'cancelStreaming'
@@ -225,13 +257,6 @@ function cancelStreaming() {
     
     // End current streaming message
     if (currentStreamingMessage) {
-        const streamingContent = currentStreamingMessage.querySelector('.streaming-content');
-        if (streamingContent) {
-            // Add cancellation notice
-            const canceledText = streamingContent.getAttribute('data-raw-content') || '';
-            streamingContent.setAttribute('data-raw-content', canceledText + '\n\n*[Generation canceled by user]*');
-            updateStreamingDisplay(streamingContent, canceledText + '\n\n*[Generation canceled by user]*');
-        }
         endStreamingMessage();
     }
     
