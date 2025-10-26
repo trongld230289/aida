@@ -753,6 +753,30 @@ function updateStreamingDisplay(contentDiv, content) {
                 }
             });
         }
+        
+        // Convert button placeholders to actual buttons during streaming
+        const buttonPlaceholders = contentDiv.querySelectorAll('.button-placeholder');
+        buttonPlaceholders.forEach(placeholder => {
+            const title = placeholder.getAttribute('data-title');
+            const command = placeholder.getAttribute('data-command');
+            const args = placeholder.getAttribute('data-args');
+            const tooltip = placeholder.getAttribute('data-tooltip');
+            
+            const button = document.createElement('button');
+            button.className = 'file-diff-btn';
+            button.textContent = title;
+            button.title = tooltip;
+            button.onclick = function() {
+                try {
+                    const parsedArgs = JSON.parse(args);
+                    openDiffView(command, JSON.stringify(parsedArgs));
+                } catch (e) {
+                    console.error('Failed to parse button args:', e);
+                }
+            };
+            
+            placeholder.parentNode.replaceChild(button, placeholder);
+        });
     } catch (error) {
         console.warn('Streaming display error:', error);
         // Fallback to simple text
@@ -787,6 +811,30 @@ function endStreamingMessage() {
                     }
                 });
             }
+            
+            // Convert button placeholders to actual buttons (MISSING LOGIC!)
+            const buttonPlaceholders = messageBody.querySelectorAll('.button-placeholder');
+            buttonPlaceholders.forEach(placeholder => {
+                const title = placeholder.getAttribute('data-title');
+                const command = placeholder.getAttribute('data-command');
+                const args = placeholder.getAttribute('data-args');
+                const tooltip = placeholder.getAttribute('data-tooltip');
+                
+                const button = document.createElement('button');
+                button.className = 'file-diff-btn';
+                button.textContent = title;
+                button.title = tooltip;
+                button.onclick = function() {
+                    try {
+                        const parsedArgs = JSON.parse(args);
+                        openDiffView(command, JSON.stringify(parsedArgs));
+                    } catch (e) {
+                        console.error('Failed to parse button args:', e);
+                    }
+                };
+                
+                placeholder.parentNode.replaceChild(button, placeholder);
+            });
         }
         
         // Reset streaming state
