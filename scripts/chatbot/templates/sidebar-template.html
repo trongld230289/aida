@@ -660,6 +660,9 @@
       /* Streaming message styles */
       .streaming-message .streaming-content {
         position: relative;
+        /* Minimal optimization for smoother animation */
+        contain: layout;
+        will-change: auto;
       }
 
       .streaming-message .streaming-content::after {
@@ -667,6 +670,14 @@
         color: var(--vscode-button-background);
         animation: blink 1s infinite;
         margin-left: 1px;
+      }
+
+      /* Optimize chat container for smoother scrolling */
+      .chat-container {
+        /* Enable hardware acceleration for smooth scrolling */
+        transform: translateZ(0);
+        /* Better scroll performance */
+        scroll-behavior: smooth;
       }
 
       @keyframes blink {
