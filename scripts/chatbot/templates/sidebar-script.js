@@ -616,16 +616,7 @@ function parseMarkdown(text) {
                 }
             });
             
-            const html = marked.parse(text);
-            
-            // Apply syntax highlighting to any remaining code blocks
-            setTimeout(() => {
-                document.querySelectorAll('pre code:not(.hljs)').forEach((block) => {
-                    hljs.highlightElement(block);
-                });
-            }, 100);
-            
-            return html;
+            return marked.parse(text);
         } else if (typeof marked !== 'undefined') {
             // Fallback without highlight.js
             marked.setOptions({
@@ -652,8 +643,10 @@ function parseMarkdown(text) {
     }
 }
 
-// Streaming message handling
+// Streaming message handling with optimized parsing
 let currentStreamingMessage = null;
+let streamingParseTimeout = null;
+let lastParsedLength = 0;
 
 function startStreamingMessage() {
     // Remove empty state
@@ -678,6 +671,7 @@ function startStreamingMessage() {
     
     chatContainer.appendChild(messageDiv);
     currentStreamingMessage = messageDiv;
+    lastParsedLength = 0;
     
     // Scroll to bottom
     chatContainer.scrollTop = chatContainer.scrollHeight;
@@ -693,23 +687,82 @@ function appendStreamingChunk(chunk) {
     
     const contentDiv = currentStreamingMessage.querySelector('.streaming-content');
     if (contentDiv) {
-        // Append chunk and parse as markdown
+        // Get current raw content
         const currentContent = contentDiv.getAttribute('data-raw-content') || '';
         const newContent = currentContent + chunk;
         
-        // Store raw content for parsing
+        // Store raw content
         contentDiv.setAttribute('data-raw-content', newContent);
         
-        // Parse and update display
-        contentDiv.innerHTML = parseMarkdown(newContent);
+        // Optimized parsing strategy
+        const contentLength = newContent.length;
+        const isShortContent = contentLength < 500;
+        const hasNewlines = chunk.includes('\n');
+        const hasCodeBlock = chunk.includes('```') || chunk.includes('`');
         
-        // Scroll to bottom
+        if (isShortContent || hasNewlines || hasCodeBlock) {
+            // Parse immediately for short content or structure changes
+            updateStreamingDisplay(contentDiv, newContent);
+        } else {
+            // Debounce parsing for long streaming content
+            clearTimeout(streamingParseTimeout);
+            streamingParseTimeout = setTimeout(() => {
+                updateStreamingDisplay(contentDiv, newContent);
+            }, 100); // 100ms debounce
+        }
+        
+        // Always scroll to bottom
         chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+}
+
+function updateStreamingDisplay(contentDiv, content) {
+    try {
+        // Check if we need full re-parse or can append
+        const shouldIncremental = content.length - lastParsedLength < 200 && 
+                                 !content.includes('```') && 
+                                 !content.includes('\n## ') &&
+                                 !content.includes('\n### ');
+        
+        if (shouldIncremental && lastParsedLength > 0) {
+            // Try incremental update for simple text
+            const newPart = content.substring(lastParsedLength);
+            if (newPart && !newPart.includes('*') && !newPart.includes('`')) {
+                // Simple text append without re-parsing
+                const textNode = document.createTextNode(newPart);
+                contentDiv.appendChild(textNode);
+                lastParsedLength = content.length;
+                return;
+            }
+        }
+        
+        // Full parse when needed
+        contentDiv.innerHTML = parseMarkdown(content);
+        lastParsedLength = content.length;
+        
+        // Apply syntax highlighting only to new code blocks
+        const newCodeBlocks = contentDiv.querySelectorAll('pre code:not(.hljs)');
+        if (newCodeBlocks.length > 0 && typeof hljs !== 'undefined') {
+            newCodeBlocks.forEach((block) => {
+                try {
+                    hljs.highlightElement(block);
+                } catch (e) {
+                    console.warn('Highlight.js error:', e);
+                }
+            });
+        }
+    } catch (error) {
+        console.warn('Streaming display error:', error);
+        // Fallback to simple text
+        contentDiv.textContent = content;
     }
 }
 
 function endStreamingMessage() {
     if (currentStreamingMessage) {
+        // Clear any pending parse timeout
+        clearTimeout(streamingParseTimeout);
+        
         // Remove streaming class
         currentStreamingMessage.classList.remove('streaming-message');
         
@@ -720,9 +773,24 @@ function endStreamingMessage() {
         if (streamingContent && messageBody) {
             const finalContent = streamingContent.getAttribute('data-raw-content') || '';
             messageBody.innerHTML = parseMarkdown(finalContent);
+            
+            // Final syntax highlighting pass
+            if (typeof hljs !== 'undefined') {
+                const codeBlocks = messageBody.querySelectorAll('pre code:not(.hljs)');
+                codeBlocks.forEach((block) => {
+                    try {
+                        hljs.highlightElement(block);
+                    } catch (e) {
+                        console.warn('Final highlight error:', e);
+                    }
+                });
+            }
         }
         
+        // Reset streaming state
         currentStreamingMessage = null;
+        streamingParseTimeout = null;
+        lastParsedLength = 0;
         console.log('✅ Ended streaming message');
     }
 }
