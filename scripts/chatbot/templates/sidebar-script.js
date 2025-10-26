@@ -6,6 +6,7 @@ const vscode = acquireVsCodeApi();
 const chatContainer = document.getElementById('chatContainer');
 const msgInput = document.getElementById('msgInput');
 const sendBtn = document.getElementById('sendBtn');
+const cancelBtn = document.getElementById('cancelBtn');
 const typingIndicator = document.getElementById('typingIndicator');
 const participantSuggest = document.getElementById('participantSuggest');
 const attachmentsContainer = document.getElementById('attachmentsContainer');
@@ -196,6 +197,48 @@ msgInput.addEventListener('keydown', function(e) {
 });
 
 sendBtn.addEventListener('click', sendMessage);
+
+// Cancel button click handler
+cancelBtn.addEventListener('click', cancelStreaming);
+
+// Update button states based on streaming status
+function updateButtonStates() {
+    if (isStreaming) {
+        sendBtn.style.display = 'none';
+        cancelBtn.style.display = 'flex';
+    } else {
+        sendBtn.style.display = 'flex';
+        cancelBtn.style.display = 'none';
+    }
+}
+
+// Cancel streaming function
+function cancelStreaming() {
+    if (!isStreaming) return;
+    
+    console.log('🛑 Canceling streaming...');
+    
+    // Send cancel command to backend
+    vscode.postMessage({
+        type: 'cancelStreaming'
+    });
+    
+    // End current streaming message
+    if (currentStreamingMessage) {
+        const streamingContent = currentStreamingMessage.querySelector('.streaming-content');
+        if (streamingContent) {
+            // Add cancellation notice
+            const canceledText = streamingContent.getAttribute('data-raw-content') || '';
+            streamingContent.setAttribute('data-raw-content', canceledText + '\n\n*[Generation canceled by user]*');
+            updateStreamingDisplay(streamingContent, canceledText + '\n\n*[Generation canceled by user]*');
+        }
+        endStreamingMessage();
+    }
+    
+    // Reset state
+    isStreaming = false;
+    updateButtonStates();
+}
 
 // Participant suggestion functions
 function handleParticipantSuggest(value, cursorPos) {
@@ -401,6 +444,12 @@ function navigateHistory(direction) {
 }
 
 function sendMessage() {
+    // Don't send if already streaming
+    if (isStreaming) {
+        console.log('Cannot send message while streaming is active');
+        return;
+    }
+    
     const message = msgInput.value.trim();
     if (!message) return;
     
@@ -626,11 +675,16 @@ function parseMarkdown(text) {
 let currentStreamingMessage = null;
 let streamingParseTimeout = null;
 let lastParsedLength = 0;
+let isStreaming = false;
 
 function startStreamingMessage() {
     // Remove empty state
     const emptyState = chatContainer.querySelector('.empty-state');
     if (emptyState) emptyState.remove();
+    
+    // Set streaming state
+    isStreaming = true;
+    updateButtonStates();
     
     // Create streaming message container
     const messageDiv = document.createElement('div');
@@ -824,6 +878,8 @@ function endStreamingMessage() {
         currentStreamingMessage = null;
         streamingParseTimeout = null;
         lastParsedLength = 0;
+        isStreaming = false;
+        updateButtonStates();
         console.log('✅ Ended streaming message');
     }
 }
@@ -917,6 +973,9 @@ msgInput.focus();
 
 // Initialize send button state
 updateSendButtonState();
+
+// Initialize button states (ensure cancel is hidden initially)
+updateButtonStates();
 
 // Image expand function
 window.expandImage = function(img) {
