@@ -758,10 +758,6 @@ function updateStreamingDisplay(contentDiv, content) {
 function processButtonPlaceholders(container) {
     const buttonPlaceholders = container.querySelectorAll('.button-placeholder:not(.processed)');
     
-    if (buttonPlaceholders.length > 0) {
-        console.log(`🔘 Processing ${buttonPlaceholders.length} button placeholder(s) during streaming`);
-    }
-    
     buttonPlaceholders.forEach(placeholder => {
         const title = placeholder.getAttribute('data-title');
         const command = placeholder.getAttribute('data-command');
@@ -770,29 +766,13 @@ function processButtonPlaceholders(container) {
         
         if (!title) return; // Skip invalid placeholders
         
-        console.log(`🔘 Creating button: "${title}" with command: "${command}"`);
-        
         const button = document.createElement('button');
         button.className = 'file-diff-btn';
         button.textContent = title;
         button.title = tooltip;
         button.onclick = function() {
             try {
-                console.log(`🔘 Button clicked: "${title}"`);
-                // Check if this is a review command for AIDA
-                if (command && command.includes('review')) {
-                    const parsedArgs = JSON.parse(args);
-                    const filePath = parsedArgs[0] || '';
-                    const reviewCommand = `@review-file ${filePath}`;
-                    
-                    console.log(`🔘 Sending review command: ${reviewCommand}`);
-                    // Set the message in input and send it
-                    msgInput.value = reviewCommand;
-                    sendMessage();
-                    return;
-                }
-                
-                // For other commands, use the original diff view logic
+                // For AIDA-generated buttons, use openDiffView to pass to extension
                 const parsedArgs = JSON.parse(args);
                 openDiffView(command, JSON.stringify(parsedArgs));
             } catch (e) {
