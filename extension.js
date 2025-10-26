@@ -190,12 +190,35 @@ function activate(context) {
         chatSessions.set(sessionKey, true);
         console.log(`🔍 Confirmation button clicked - Session set: ${sessionKey} = true`);
 
-        // Open chat and trigger changes review for the specific file
-        await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
-        // Send the file path to @review-changes (will now proceed directly due to session flag)
-        await vscode.commands.executeCommand('workbench.action.chat.open', {
-            query: `@review-changes ${filePath}`
-        });
+        // Send message to AIDA chat instead of Copilot
+        try {
+            // Use the existing copilotSidebarChat instance
+            if (copilotSidebarChat && copilotSidebarChat.webviewView) {
+                // Send the review command to AIDA
+                copilotSidebarChat.webviewView.webview.postMessage({
+                    type: 'setMessage',
+                    message: `@review-changes ${filePath}`,
+                    autoSend: true
+                });
+                copilotSidebarChat.show();
+            } else {
+                // If not initialized, show chatbot first then send message
+                vscode.commands.executeCommand('aida.activateChat').then(() => {
+                    setTimeout(() => {
+                        if (copilotSidebarChat && copilotSidebarChat.webviewView) {
+                            copilotSidebarChat.webviewView.webview.postMessage({
+                                type: 'setMessage',
+                                message: `@review-changes ${filePath}`,
+                                autoSend: true
+                            });
+                        }
+                    }, 500); // Wait for panel to load
+                });
+            }
+        } catch (error) {
+            console.error('Failed to send review command to AIDA:', error);
+            vscode.window.showErrorMessage('Failed to open AIDA chat for review');
+        }
     });
 
     let confirmFileReview = vscode.commands.registerCommand('aida.confirmFileReview', async (filePath) => {
@@ -204,12 +227,35 @@ function activate(context) {
         chatSessions.set(sessionKey, true);
         console.log(`📁 Confirmation button clicked - Session set: ${sessionKey} = true`);
 
-        // Open chat and trigger file review for the specific file
-        await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
-        // Send the file path to @review-file (will now proceed directly due to session flag)
-        await vscode.commands.executeCommand('workbench.action.chat.open', {
-            query: `@review-file ${filePath}`
-        });
+        // Send message to AIDA chat instead of Copilot
+        try {
+            // Use the existing copilotSidebarChat instance
+            if (copilotSidebarChat && copilotSidebarChat.webviewView) {
+                // Send the review command to AIDA
+                copilotSidebarChat.webviewView.webview.postMessage({
+                    type: 'setMessage',
+                    message: `@review-file ${filePath}`,
+                    autoSend: true
+                });
+                copilotSidebarChat.show();
+            } else {
+                // If not initialized, show chatbot first then send message
+                vscode.commands.executeCommand('aida.activateChat').then(() => {
+                    setTimeout(() => {
+                        if (copilotSidebarChat && copilotSidebarChat.webviewView) {
+                            copilotSidebarChat.webviewView.webview.postMessage({
+                                type: 'setMessage',
+                                message: `@review-file ${filePath}`,
+                                autoSend: true
+                            });
+                        }
+                    }, 500); // Wait for panel to load
+                });
+            }
+        } catch (error) {
+            console.error('Failed to send review command to AIDA:', error);
+            vscode.window.showErrorMessage('Failed to open AIDA chat for review');
+        }
     });
 
     let showChangesHelp = vscode.commands.registerCommand('aida.showChangesHelp', async () => {

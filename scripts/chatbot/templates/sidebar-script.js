@@ -495,6 +495,19 @@ function addMessage(content, role, images = []) {
             button.title = tooltip;
             button.onclick = function() {
                 try {
+                    // Check if this is a review command for AIDA
+                    if (command && command.includes('review')) {
+                        const parsedArgs = JSON.parse(args);
+                        const filePath = parsedArgs[0] || '';
+                        const reviewCommand = `@review-file ${filePath}`;
+                        
+                        // Set the message in input and send it
+                        msgInput.value = reviewCommand;
+                        sendMessage();
+                        return;
+                    }
+                    
+                    // For other commands, use the original diff view logic
                     const parsedArgs = JSON.parse(args);
                     openDiffView(command, JSON.stringify(parsedArgs));
                 } catch (e) {
@@ -768,6 +781,19 @@ function updateStreamingDisplay(contentDiv, content) {
             button.title = tooltip;
             button.onclick = function() {
                 try {
+                    // Check if this is a review command for AIDA
+                    if (command && command.includes('review')) {
+                        const parsedArgs = JSON.parse(args);
+                        const filePath = parsedArgs[0] || '';
+                        const reviewCommand = `@review-file ${filePath}`;
+                        
+                        // Set the message in input and send it
+                        msgInput.value = reviewCommand;
+                        sendMessage();
+                        return;
+                    }
+                    
+                    // For other commands, use the original diff view logic
                     const parsedArgs = JSON.parse(args);
                     openDiffView(command, JSON.stringify(parsedArgs));
                 } catch (e) {
@@ -826,6 +852,19 @@ function endStreamingMessage() {
                 button.title = tooltip;
                 button.onclick = function() {
                     try {
+                        // Check if this is a review command for AIDA
+                        if (command && command.includes('review')) {
+                            const parsedArgs = JSON.parse(args);
+                            const filePath = parsedArgs[0] || '';
+                            const reviewCommand = `@review-file ${filePath}`;
+                            
+                            // Set the message in input and send it
+                            msgInput.value = reviewCommand;
+                            sendMessage();
+                            return;
+                        }
+                        
+                        // For other commands, use the original diff view logic
                         const parsedArgs = JSON.parse(args);
                         openDiffView(command, JSON.stringify(parsedArgs));
                     } catch (e) {
@@ -870,6 +909,16 @@ window.addEventListener('message', event => {
             
         case 'endStreamingMessage':
             endStreamingMessage();
+            break;
+            
+        case 'setMessage':
+            // Set message in input and optionally auto-send
+            msgInput.value = message.message;
+            if (message.autoSend) {
+                sendMessage();
+            } else {
+                msgInput.focus();
+            }
             break;
             
         case 'showTyping':
