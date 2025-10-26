@@ -2,6 +2,25 @@ const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
 
+// Global AbortController for cancellation
+let globalAbortSignal = null;
+
+/**
+ * Set global abort signal for review operations
+ * @param {AbortSignal} signal - The abort signal to use
+ */
+function setGlobalAbortSignal(signal) {
+    globalAbortSignal = signal;
+}
+
+/**
+ * Get global abort signal for review operations
+ * @returns {AbortSignal|null} - The current abort signal
+ */
+function getGlobalAbortSignal() {
+    return globalAbortSignal;
+}
+
 // Token counting utilities
 /**
  * Estimate token count from text using approximate ratios
@@ -640,7 +659,7 @@ function shouldUseApiKey() {
  * @param {number} attemptCount - Current attempt number
  * @returns {Promise<boolean>} - true if successful
  */
-async function executeAIReviewWithApiKey(userPrompt, stream, reviewType, attemptCount = 0) {
+async function executeAIReviewWithApiKey(userPrompt, stream, reviewType, attemptCount = 0, abortSignal = null) {
     try {
         const config = vscode.workspace.getConfiguration('aida');
         const apiKey = config.get('ai.apiKey');
@@ -688,7 +707,7 @@ async function executeAIReviewWithApiKey(userPrompt, stream, reviewType, attempt
             response_format: undefined // Remove JSON format for reviews
         };
         
-        const result = await callAI('You are an expert code reviewer and software architect. Provide detailed, actionable code review feedback.', userPrompt, defaultOptions);
+        const result = await callAI('You are an expert code reviewer and software architect. Provide detailed, actionable code review feedback.', userPrompt, defaultOptions, [], abortSignal);
         
         let mappedResponse;
         let outputText = '';
@@ -1012,11 +1031,14 @@ function normalizeApiParameters(model, apiHost, options) {
  * @param {Array} images - Optional array of images for vision models
  * @returns {Promise<object>} - API response with token usage
  */
-async function callAI(systemPrompt, userPrompt, options = {}, images = []) {
+async function callAI(systemPrompt, userPrompt, options = {}, images = [], abortSignal = null) {
     const config = vscode.workspace.getConfiguration('aida');
     const apiKey = config.get('ai.apiKey');
     let apiHost = config.get('ai.apiHost') || 'https://api.openai.com';
     const model = config.get('ai.model') || 'gpt-4o';
+    
+    // Use global abort signal if none provided
+    const signalToUse = abortSignal || getGlobalAbortSignal();
     
     if (!apiKey) {
         throw new Error('AI API key not configured. Please set aida.ai.apiKey in VS Code settings.');
@@ -1127,6 +1149,7 @@ async function callAI(systemPrompt, userPrompt, options = {}, images = []) {
 
     const response = await fetch(apiHost, {
         method: 'POST',
+        signal: signalToUse, // Use the signal (global or passed)
         headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${apiKey}`,
@@ -1232,7 +1255,7 @@ const detectProviderForReview = detectProvider;
  * @param {number} attemptCount - Current attempt number for recursion
  * @returns {Promise<boolean>} - true if successful, false if failed
  */
-async function executeAIReview(userPrompt, model, stream, reviewType = 'Analysis', attemptCount = 0, originalRequestedModel = null) {
+async function executeAIReview(userPrompt, model, stream, reviewType = 'Analysis', attemptCount = 0, originalRequestedModel = null, abortSignal = null) {
     const maxAttempts = 3;
     
     // Check if user wants to use API key instead of Copilot
@@ -1241,13 +1264,13 @@ async function executeAIReview(userPrompt, model, stream, reviewType = 'Analysis
         stream.markdown(`🔑 **API Key Mode Enabled** - Using your configured AI service\n\n`);
         
         try {
-            return await executeAIReviewWithApiKey(userPrompt, stream, reviewType, attemptCount);
+            return await executeAIReviewWithApiKey(userPrompt, stream, reviewType, attemptCount, abortSignal);
         } catch (apiError) {
             // If API key fails and we have attempts left, fall back to Copilot if available
             if (attemptCount < maxAttempts - 1 && model) {
                 stream.markdown(`🔄 **API key failed, falling back to Copilot...**\n\n`);
                 console.log('🔄 API key failed, attempting Copilot fallback');
-                return await executeAIReviewWithCopilot(userPrompt, model, stream, reviewType, attemptCount + 1, originalRequestedModel);
+                return await executeAIReviewWithCopilot(userPrompt, model, stream, reviewType, attemptCount + 1, originalRequestedModel, abortSignal);
             } else {
                 throw apiError;
             }
@@ -1255,7 +1278,7 @@ async function executeAIReview(userPrompt, model, stream, reviewType = 'Analysis
     }
     
     // Original Copilot mode
-    return await executeAIReviewWithCopilot(userPrompt, model, stream, reviewType, attemptCount, originalRequestedModel);
+    return await executeAIReviewWithCopilot(userPrompt, model, stream, reviewType, attemptCount, originalRequestedModel, abortSignal);
 }
 
 /**
@@ -1267,7 +1290,7 @@ async function executeAIReview(userPrompt, model, stream, reviewType = 'Analysis
  * @param {number} attemptCount - Current attempt number for recursion
  * @returns {Promise<boolean>} - true if successful, false if failed
  */
-async function executeAIReviewWithCopilot(userPrompt, model, stream, reviewType = 'Analysis', attemptCount = 0, originalRequestedModel = null) {
+async function executeAIReviewWithCopilot(userPrompt, model, stream, reviewType = 'Analysis', attemptCount = 0, originalRequestedModel = null, abortSignal = null) {
     const maxAttempts = 3;
     
     try {
@@ -2536,5 +2559,7 @@ module.exports = {
     showAvailableModels,
     getLanguageFromExtension,
     showTokenStatistics,
-    executeApiAnalysisCall
+    executeApiAnalysisCall,
+    setGlobalAbortSignal,
+    getGlobalAbortSignal
 };

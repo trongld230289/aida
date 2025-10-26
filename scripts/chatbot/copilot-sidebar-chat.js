@@ -2,6 +2,7 @@ const vscode = require('vscode');
 const path = require('path');
 const { AidaChatbotService } = require('./aida-chatbot-service.js');
 const TemplateLoader = require('./template-loader');
+const { setGlobalAbortSignal } = require('../review-common');
 
 /**
  * GitHub Copilot-Style Sidebar Chat (True Right Sidebar like Copilot)
@@ -17,6 +18,7 @@ class CopilotSidebarChat {
         this.historyIndex = -1;   // Current position in history (-1 = not navigating)
         this.chatbotService = new AidaChatbotService(context); // AI chatbot service
         this.currentFileName = null; // Track current file
+        this.currentAbortController = null; // For canceling AI requests
         this.initializeChatbot();
         this.setupFileWatcher();
     }
@@ -314,6 +316,15 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
                 }
             }
 
+            // Reset cancellation flag for new request
+            this.isCanceled = false;
+            
+            // Create new AbortController for this request
+            this.currentAbortController = new AbortController();
+            
+            // Set global abort signal for review functions
+            setGlobalAbortSignal(this.currentAbortController.signal);
+
             // Show typing indicator for Ask mode
             if (this.webviewView) {
                 this.webviewView.webview.postMessage({
@@ -329,6 +340,12 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
             let isFirstChunk = true;
             
             const streamCallback = (chunk) => {
+                // Check for cancellation
+                if (this.isCanceled) {
+                    console.log('🛑 Streaming canceled, stopping chunk processing');
+                    return;
+                }
+                
                 if (isFirstChunk) {
                     // Hide typing indicator and start streaming message
                     if (this.webviewView) {
@@ -342,7 +359,7 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
                 fullResponse += chunk;
                 
                 // Send streaming chunk to webview
-                if (this.webviewView) {
+                if (this.webviewView && !this.isCanceled) {
                     this.webviewView.webview.postMessage({
                         type: 'addStreamingChunk',
                         chunk: chunk
@@ -361,12 +378,22 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
                 response = await this.callParticipant(participant, userMessage, images);
             }
             
+            // Check for cancellation before completing
+            if (this.isCanceled) {
+                console.log('🛑 Operation was canceled, stopping processing');
+                return;
+            }
+            
             // Complete streaming if it was used
             if (shouldStream && this.webviewView) {
                 this.webviewView.webview.postMessage({
                     type: 'endStreamingMessage'
                 });
             }
+            
+            // Clean up abort controller
+            this.currentAbortController = null;
+            setGlobalAbortSignal(null);
 
             // Add response to history
             this.chatHistory.push({
@@ -2539,6 +2566,12 @@ class AidaChatViewProvider {
                     vscode.commands.executeCommand('workbench.action.closeSidebar');
                     break;
 
+                case 'cancelStreaming':
+                    // Cancel ongoing streaming operation
+                    console.log('🛑 Cancel streaming requested from frontend');
+                    this.cancelStreaming();
+                    break;
+
                 case 'runDiffCommand':
                     // Simply execute the command - it already works!
                     if (message.command && Array.isArray(message.arguments)) {
@@ -2707,6 +2740,35 @@ class AidaChatViewProvider {
                 value: messageHistory[this.chatInstance.historyIndex] 
             });
         }
+    }
+
+    /**
+     * Cancel ongoing streaming operation
+     */
+    cancelStreaming() {
+        console.log('🛑 Canceling streaming operation...');
+        
+        // Abort the actual AI HTTP request
+        if (this.currentAbortController) {
+            this.currentAbortController.abort();
+            console.log('🛑 HTTP request aborted');
+        }
+        
+        // Set a flag to indicate cancellation
+        if (this.chatInstance) {
+            this.chatInstance.isCanceled = true;
+        }
+        
+        // Send cancellation notification to webview
+        if (this.webviewView) {
+            this.webviewView.webview.postMessage({ 
+                type: 'endStreamingMessage'
+            });
+        }
+        
+        // Clean up
+        this.currentAbortController = null;
+        setGlobalAbortSignal(null); // Clear global signal
     }
 
     /**
