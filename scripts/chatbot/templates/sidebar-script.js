@@ -7,7 +7,6 @@ const chatContainer = document.getElementById('chatContainer');
 const msgInput = document.getElementById('msgInput');
 const sendBtn = document.getElementById('sendBtn');
 const cancelBtn = document.getElementById('cancelBtn');
-const clearChatBtn = document.getElementById('clearChatBtn');
 const typingIndicator = document.getElementById('typingIndicator');
 const participantSuggest = document.getElementById('participantSuggest');
 const attachmentsContainer = document.getElementById('attachmentsContainer');
@@ -74,6 +73,7 @@ removeFileBtn.addEventListener('click', function() {
 
 // Function to update current file display
 function updateCurrentFileDisplay(fileName, fullPath) {
+    console.log('📁 updateCurrentFileDisplay called:', fileName, fullPath);
     if (fileName) {
         currentFileName.textContent = fileName;
         currentFileIndicator.style.display = 'flex';
@@ -81,8 +81,10 @@ function updateCurrentFileDisplay(fileName, fullPath) {
         
         // Update placeholder based on file context
         updatePlaceholderWithFile(fileName);
+        console.log('📁 Current file display updated:', fileName);
     } else {
         clearCurrentFile();
+        console.log('📁 Current file display cleared');
     }
 }
 
@@ -201,19 +203,6 @@ sendBtn.addEventListener('click', sendMessage);
 
 // Cancel button click handler
 cancelBtn.addEventListener('click', cancelStreaming);
-
-// Clear chat button click handler
-clearChatBtn.addEventListener('click', function() {
-    // Simple confirmation before clearing
-    const confirmClear = confirm('Clear all chat history? This action cannot be undone.');
-    
-    if (confirmClear) {
-        // Send clear command to backend
-        vscode.postMessage({
-            type: 'clearChat'
-        });
-    }
-});
 
 // Update button states based on streaming status
 function updateButtonStates() {
@@ -975,6 +964,7 @@ window.addEventListener('message', event => {
             break;
             
         case 'updateCurrentFile':
+            console.log('📁 Frontend received updateCurrentFile:', message.fileName, message.fullPath);
             updateCurrentFileDisplay(message.fileName, message.fullPath);
             break;
             
@@ -1001,6 +991,14 @@ updateSendButtonState();
 
 // Initialize button states (ensure cancel is hidden initially)
 updateButtonStates();
+
+// Notify backend that frontend is ready and request current file
+setTimeout(() => {
+    console.log('📁 Frontend ready, requesting current file...');
+    vscode.postMessage({
+        type: 'frontendReady'
+    });
+}, 100);
 
 // Image expand function
 window.expandImage = function(img) {
