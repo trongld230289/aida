@@ -1,6 +1,6 @@
 const vscode = require('vscode');
 const path = require('path');
-const { AidaChatbotService } = require('../chatbot/aida-chatbot-service.js');
+const { AidaChatbotService } = require('./aida-chatbot-service.js');
 
 /**
  * GitHub Copilot-Style Sidebar Chat (True Right Sidebar like Copilot)
