@@ -25,13 +25,34 @@ class CopilotSidebarChat {
     }
 
     /**
-     * Setup file watcher to detect active file changes
+     * Setup file watcher to detect active file changes and workspace changes
      */
     setupFileWatcher() {
         // Listen for active editor changes
         this.context.subscriptions.push(
             vscode.window.onDidChangeActiveTextEditor(editor => {
                 this.updateCurrentFile(editor);
+            })
+        );
+        
+        // Listen for workspace folder changes
+        this.context.subscriptions.push(
+            vscode.workspace.onDidChangeWorkspaceFolders(() => {
+                console.log('📁 Workspace changed, reloading chat history...');
+                // Clear current chat and load new workspace chat history
+                this.chatHistory = [];
+                this.messageHistory = [];
+                this.historyIndex = -1;
+                this.loadChatHistory();
+                
+                // Refresh webview to show new chat history
+                if (this.webviewView) {
+                    this.webviewView.webview.postMessage({ type: 'clearChat' });
+                    // Restore the new workspace's chat history
+                    setTimeout(() => {
+                        this.restoreWorkspaceChatHistory();
+                    }, 100);
+                }
             })
         );
         
@@ -127,16 +148,42 @@ class CopilotSidebarChat {
     /**
      * Load chat history from persistent storage
      */
+    /**
+     * Get workspace-specific key for storage
+     */
+    getWorkspaceSpecificKey(baseKey) {
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        if (workspaceFolders && workspaceFolders.length > 0) {
+            // Use workspace folder name and path hash for unique identification
+            const workspacePath = workspaceFolders[0].uri.fsPath;
+            const workspaceName = workspaceFolders[0].name;
+            
+            // Create a simple hash of the workspace path for uniqueness
+            const pathHash = Buffer.from(workspacePath).toString('base64').substring(0, 8);
+            return `${baseKey}.${workspaceName}.${pathHash}`;
+        }
+        
+        // Fallback to global key if no workspace
+        return `${baseKey}.global`;
+    }
+
+    /**
+     * Load chat history from workspace-specific storage
+     */
     loadChatHistory() {
         try {
-            const savedHistory = this.context.globalState.get('aida.chatHistory', []);
-            const savedMessageHistory = this.context.globalState.get('aida.messageHistory', []);
+            const chatKey = this.getWorkspaceSpecificKey('aida.chatHistory');
+            const messageKey = this.getWorkspaceSpecificKey('aida.messageHistory');
+            
+            const savedHistory = this.context.globalState.get(chatKey, []);
+            const savedMessageHistory = this.context.globalState.get(messageKey, []);
             
             // Limit history to last 50 messages to prevent memory issues
             this.chatHistory = savedHistory.slice(-50);
             this.messageHistory = savedMessageHistory.slice(-20);
             
-            console.log(`📚 Loaded ${this.chatHistory.length} chat messages from storage`);
+            const workspaceName = vscode.workspace.workspaceFolders?.[0]?.name || 'global';
+            console.log(`📚 Loaded ${this.chatHistory.length} chat messages for workspace: ${workspaceName}`);
         } catch (error) {
             console.error('Failed to load chat history:', error);
             this.chatHistory = [];
@@ -145,7 +192,7 @@ class CopilotSidebarChat {
     }
 
     /**
-     * Save chat history to persistent storage
+     * Save chat history to workspace-specific persistent storage
      */
     saveChatHistory() {
         try {
@@ -156,25 +203,61 @@ class CopilotSidebarChat {
                 timestamp: msg.timestamp
             }));
             
-            this.context.globalState.update('aida.chatHistory', historyToSave);
-            this.context.globalState.update('aida.messageHistory', this.messageHistory);
+            const chatKey = this.getWorkspaceSpecificKey('aida.chatHistory');
+            const messageKey = this.getWorkspaceSpecificKey('aida.messageHistory');
             
-            console.log(`💾 Saved ${historyToSave.length} chat messages to storage`);
+            this.context.globalState.update(chatKey, historyToSave);
+            this.context.globalState.update(messageKey, this.messageHistory);
+            
+            const workspaceName = vscode.workspace.workspaceFolders?.[0]?.name || 'global';
+            console.log(`💾 Saved ${historyToSave.length} chat messages for workspace: ${workspaceName}`);
         } catch (error) {
             console.error('Failed to save chat history:', error);
         }
     }
 
     /**
-     * Clear chat history from storage
+     * Clear chat history from workspace-specific storage
      */
     clearChatHistory() {
         this.chatHistory = [];
         this.messageHistory = [];
         this.historyIndex = -1;
-        this.context.globalState.update('aida.chatHistory', []);
-        this.context.globalState.update('aida.messageHistory', []);
-        console.log('🗑️ Chat history cleared');
+        
+        const chatKey = this.getWorkspaceSpecificKey('aida.chatHistory');
+        const messageKey = this.getWorkspaceSpecificKey('aida.messageHistory');
+        
+        this.context.globalState.update(chatKey, []);
+        this.context.globalState.update(messageKey, []);
+        
+        const workspaceName = vscode.workspace.workspaceFolders?.[0]?.name || 'global';
+        console.log(`🗑️ Chat history cleared for workspace: ${workspaceName}`);
+    }
+
+    /**
+     * Restore workspace chat history to webview
+     */
+    restoreWorkspaceChatHistory() {
+        if (!this.webviewView || !this.chatHistory || this.chatHistory.length === 0) {
+            return;
+        }
+
+        console.log(`📚 Restoring ${this.chatHistory.length} workspace chat messages`);
+        
+        for (const message of this.chatHistory) {
+            if (message.role === 'user') {
+                this.webviewView.webview.postMessage({
+                    type: 'addUserMessage',
+                    message: message.content,
+                    images: message.images || []
+                });
+            } else if (message.role === 'assistant') {
+                this.webviewView.webview.postMessage({
+                    type: 'addAssistantMessage',
+                    message: message.content
+                });
+            }
+        }
     }
 
     /**
@@ -210,8 +293,40 @@ class CopilotSidebarChat {
                 return; // Don't process further
             }
             
-            // Add user message to chat
-            if (this.webviewView) {
+            // Check if user is asking about current file (explicit or implicit) - do this once at the top
+            const isCurrentFileRequest = userMessage.toLowerCase().includes('this file') || 
+                                        userMessage.toLowerCase().includes('current file') ||
+                                        userMessage.toLowerCase().includes('refactor this') ||
+                                        userMessage.toLowerCase().includes('analyze this') ||
+                                        // Vietnamese patterns
+                                        userMessage.toLowerCase().includes('file này') ||
+                                        userMessage.toLowerCase().includes('tệp này') ||
+                                        userMessage.toLowerCase().includes('code này') ||
+                                        userMessage.toLowerCase().includes('mã này') ||
+                                        userMessage.toLowerCase().includes('file hiện tại') ||
+                                        // Implicit current file requests (no specific file mentioned)
+                                        (userMessage.toLowerCase().includes('refactor') && !userMessage.toLowerCase().includes('create') && !userMessage.toLowerCase().includes('new')) ||
+                                        (userMessage.toLowerCase().includes('analyze') && !userMessage.toLowerCase().includes('create') && !userMessage.toLowerCase().includes('new')) ||
+                                        userMessage.toLowerCase().includes('review code') ||
+                                        userMessage.toLowerCase().includes('improve code') ||
+                                        userMessage.toLowerCase().includes('optimize code') ||
+                                        userMessage.toLowerCase().includes('fix code') ||
+                                        userMessage.toLowerCase().includes('clean up') ||
+                                        userMessage.toLowerCase().includes('modernize') ||
+                                        (userMessage.toLowerCase().includes('add') && (userMessage.toLowerCase().includes('type') || userMessage.toLowerCase().includes('interface'))) ||
+                                        userMessage.toLowerCase().includes('best practices') ||
+                                        // Vietnamese action patterns
+                                        userMessage.toLowerCase().includes('làm gì') ||
+                                        userMessage.toLowerCase().includes('chức năng') ||
+                                        userMessage.toLowerCase().includes('tác dụng') ||
+                                        userMessage.toLowerCase().includes('mục đích') ||
+                                        userMessage.toLowerCase().includes('hoạt động') ||
+                                        // General file inquiry without specific file mentioned
+                                        (userMessage.toLowerCase().includes('explain') && !userMessage.includes('.') && !userMessage.includes('/')) ||
+                                        (userMessage.toLowerCase().includes('what does') && !userMessage.includes('.') && !userMessage.includes('/'));
+
+            // Add user message to chat (except for current file requests which handle this separately)
+            if (!isCurrentFileRequest && this.webviewView) {
                 this.webviewView.webview.postMessage({
                     type: 'addUserMessage',
                     message: userMessage,
@@ -234,19 +349,21 @@ class CopilotSidebarChat {
             // Get current file context for smart suggestions
             const currentFileContext = await this.getCurrentFileContext();
 
-            // Add to history with images and mode/model info
-            this.chatHistory.push({
-                role: 'user', 
-                content: userMessage,
-                images: images,
-                mode: mode,
-                model: model,
-                fileContext: currentFileContext, // Add file context
-                timestamp: new Date()
-            });
-            
-            // Save user message to persistent storage
-            this.saveChatHistory();
+            // Add to history with images and mode/model info (except for current file requests which handle this separately)
+            if (!isCurrentFileRequest) {
+                this.chatHistory.push({
+                    role: 'user', 
+                    content: userMessage,
+                    images: images,
+                    mode: mode,
+                    model: model,
+                    fileContext: currentFileContext, // Add file context
+                    timestamp: new Date()
+                });
+                
+                // Save user message to persistent storage
+                this.saveChatHistory();
+            }
 
             console.log('💬 Processing sidebar message:', userMessage);
 
@@ -307,45 +424,38 @@ class CopilotSidebarChat {
             }
 
             // Handle Ask Mode with current file detection
-            // Check if user is asking about current file (explicit or implicit)
-            const isCurrentFileRequest = userMessage.toLowerCase().includes('this file') || 
-                                        userMessage.toLowerCase().includes('current file') ||
-                                        userMessage.toLowerCase().includes('refactor this') ||
-                                        userMessage.toLowerCase().includes('analyze this') ||
-                                        // Vietnamese patterns
-                                        userMessage.toLowerCase().includes('file này') ||
-                                        userMessage.toLowerCase().includes('tệp này') ||
-                                        userMessage.toLowerCase().includes('code này') ||
-                                        userMessage.toLowerCase().includes('mã này') ||
-                                        userMessage.toLowerCase().includes('file hiện tại') ||
-                                        // Implicit current file requests (no specific file mentioned)
-                                        (userMessage.toLowerCase().includes('refactor') && !userMessage.toLowerCase().includes('create') && !userMessage.toLowerCase().includes('new')) ||
-                                        (userMessage.toLowerCase().includes('analyze') && !userMessage.toLowerCase().includes('create') && !userMessage.toLowerCase().includes('new')) ||
-                                        userMessage.toLowerCase().includes('review code') ||
-                                        userMessage.toLowerCase().includes('improve code') ||
-                                        userMessage.toLowerCase().includes('optimize code') ||
-                                        userMessage.toLowerCase().includes('fix code') ||
-                                        userMessage.toLowerCase().includes('clean up') ||
-                                        userMessage.toLowerCase().includes('modernize') ||
-                                        (userMessage.toLowerCase().includes('add') && (userMessage.toLowerCase().includes('type') || userMessage.toLowerCase().includes('interface'))) ||
-                                        userMessage.toLowerCase().includes('best practices') ||
-                                        // Vietnamese action patterns
-                                        userMessage.toLowerCase().includes('làm gì') ||
-                                        userMessage.toLowerCase().includes('chức năng') ||
-                                        userMessage.toLowerCase().includes('tác dụng') ||
-                                        userMessage.toLowerCase().includes('mục đích') ||
-                                        userMessage.toLowerCase().includes('hoạt động') ||
-                                        // General file inquiry without specific file mentioned
-                                        (userMessage.toLowerCase().includes('explain') && !userMessage.includes('.') && !userMessage.includes('/')) ||
-                                        (userMessage.toLowerCase().includes('what does') && !userMessage.includes('.') && !userMessage.includes('/'));
+            // (isCurrentFileRequest already declared above)
 
             if (isCurrentFileRequest) {
                 // Get current file context for Ask mode too
                 const currentFileContext = await this.getCurrentFileContext();
                 
                 if (currentFileContext.hasFile) {
-                    // Enhance the message with file context
-                    const enhancedMessage = `${userMessage}\n\n**Current File Context:**\n- File: ${currentFileContext.fileName}\n- Language: ${currentFileContext.languageId}\n- Lines: ${currentFileContext.lineCount}\n\n**File Content:**\n\`\`\`${currentFileContext.languageId}\n${currentFileContext.content}\n\`\`\``;
+                    // Show original user message in UI (not enhanced message)
+                    if (this.webviewView) {
+                        this.webviewView.webview.postMessage({
+                            type: 'addUserMessage',
+                            message: userMessage, // Show original message only
+                            images: images
+                        });
+                    }
+
+                    // Add original user message to history (not enhanced)
+                    this.chatHistory.push({
+                        role: 'user', 
+                        content: userMessage, // Store original message
+                        images: images,
+                        mode: mode,
+                        model: model,
+                        fileContext: currentFileContext,
+                        timestamp: new Date()
+                    });
+                    
+                    // Save user message to persistent storage
+                    this.saveChatHistory();
+
+                    // Enhance the message with file context for AI only (not for UI)
+                    const enhancedMessageForAI = `${userMessage}\n\n**Current File Context:**\n- File: ${currentFileContext.fileName}\n- Language: ${currentFileContext.languageId}\n- Lines: ${currentFileContext.lineCount}\n\n**File Content:**\n\`\`\`${currentFileContext.languageId}\n${currentFileContext.content}\n\`\`\``;
                     
                     // Show typing indicator for Ask mode
                     if (this.webviewView) {
@@ -354,9 +464,9 @@ class CopilotSidebarChat {
                         });
                     }
 
-                    // Determine participant and get response with enhanced message
-                    const participant = this.determineParticipant(enhancedMessage);
-                    const response = await this.callParticipant(participant, enhancedMessage, images);
+                    // Determine participant and get response with enhanced message (AI gets full context)
+                    const participant = this.determineParticipant(enhancedMessageForAI);
+                    const response = await this.callParticipant(participant, enhancedMessageForAI, images);
 
                     // Add response to history
                     this.chatHistory.push({
