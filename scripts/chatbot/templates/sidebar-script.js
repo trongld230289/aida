@@ -694,7 +694,7 @@ function appendStreamingChunk(chunk) {
         // Store raw content
         contentDiv.setAttribute('data-raw-content', newContent);
         
-        // Optimized parsing strategy
+        // Optimized parsing strategy with smoother timing
         const contentLength = newContent.length;
         const isShortContent = contentLength < 500;
         const hasNewlines = chunk.includes('\n');
@@ -704,15 +704,17 @@ function appendStreamingChunk(chunk) {
             // Parse immediately for short content or structure changes
             updateStreamingDisplay(contentDiv, newContent);
         } else {
-            // Debounce parsing for long streaming content
+            // Smoother debounce for long streaming content
             clearTimeout(streamingParseTimeout);
             streamingParseTimeout = setTimeout(() => {
                 updateStreamingDisplay(contentDiv, newContent);
-            }, 100); // 100ms debounce
+            }, 32); // ~30fps for smoother experience instead of 100ms
         }
         
-        // Always scroll to bottom
-        chatContainer.scrollTop = chatContainer.scrollHeight;
+        // Smooth scroll to bottom
+        requestAnimationFrame(() => {
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        });
     }
 }
 
