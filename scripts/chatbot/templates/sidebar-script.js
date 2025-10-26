@@ -795,6 +795,8 @@ window.addEventListener('message', event => {
             msgInput.style.height = newHeight + 'px';
             // Position cursor at end
             msgInput.setSelectionRange(msgInput.value.length, msgInput.value.length);
+            // Update send button state
+            updateSendButtonState();
             break;
     }
 });
