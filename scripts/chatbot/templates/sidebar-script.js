@@ -482,41 +482,7 @@ function addMessage(content, role, images = []) {
     // Convert button placeholders to actual buttons
     const messageBody = messageDiv.querySelector('.message-body');
     if (messageBody) {
-        const buttonPlaceholders = messageBody.querySelectorAll('.button-placeholder');
-        buttonPlaceholders.forEach(placeholder => {
-            const title = placeholder.getAttribute('data-title');
-            const command = placeholder.getAttribute('data-command');
-            const args = placeholder.getAttribute('data-args');
-            const tooltip = placeholder.getAttribute('data-tooltip');
-            
-            const button = document.createElement('button');
-            button.className = 'file-diff-btn';
-            button.textContent = title;
-            button.title = tooltip;
-            button.onclick = function() {
-                try {
-                    // Check if this is a review command for AIDA
-                    if (command && command.includes('review')) {
-                        const parsedArgs = JSON.parse(args);
-                        const filePath = parsedArgs[0] || '';
-                        const reviewCommand = `@review-file ${filePath}`;
-                        
-                        // Set the message in input and send it
-                        msgInput.value = reviewCommand;
-                        sendMessage();
-                        return;
-                    }
-                    
-                    // For other commands, use the original diff view logic
-                    const parsedArgs = JSON.parse(args);
-                    openDiffView(command, JSON.stringify(parsedArgs));
-                } catch (e) {
-                    console.error('Failed to parse button args:', e);
-                }
-            };
-            
-            placeholder.parentNode.replaceChild(button, placeholder);
-        });
+        processButtonPlaceholders(messageBody);
     }
     
     chatContainer.scrollTop = chatContainer.scrollHeight;
@@ -707,14 +673,17 @@ function appendStreamingChunk(chunk) {
         // Store raw content
         contentDiv.setAttribute('data-raw-content', newContent);
         
+        // Check if this chunk contains button placeholders - PRIORITY PARSING!
+        const hasButtonPlaceholder = chunk.includes('button-placeholder') || chunk.includes('data-title');
+        
         // Optimized parsing strategy with smoother timing
         const contentLength = newContent.length;
         const isShortContent = contentLength < 500;
         const hasNewlines = chunk.includes('\n');
         const hasCodeBlock = chunk.includes('```') || chunk.includes('`');
         
-        if (isShortContent || hasNewlines || hasCodeBlock) {
-            // Parse immediately for short content or structure changes
+        if (hasButtonPlaceholder || isShortContent || hasNewlines || hasCodeBlock) {
+            // Parse immediately for buttons, short content or structure changes
             updateStreamingDisplay(contentDiv, newContent);
         } else {
             // Smoother debounce for long streaming content
@@ -737,12 +706,13 @@ function updateStreamingDisplay(contentDiv, content) {
         const shouldIncremental = content.length - lastParsedLength < 200 && 
                                  !content.includes('```') && 
                                  !content.includes('\n## ') &&
-                                 !content.includes('\n### ');
+                                 !content.includes('\n### ') &&
+                                 !content.includes('button-placeholder');
         
         if (shouldIncremental && lastParsedLength > 0) {
             // Try incremental update for simple text
             const newPart = content.substring(lastParsedLength);
-            if (newPart && !newPart.includes('*') && !newPart.includes('`')) {
+            if (newPart && !newPart.includes('*') && !newPart.includes('`') && !newPart.includes('span')) {
                 // Simple text append without re-parsing
                 const textNode = document.createTextNode(newPart);
                 contentDiv.appendChild(textNode);
@@ -751,7 +721,14 @@ function updateStreamingDisplay(contentDiv, content) {
             }
         }
         
-        // Full parse when needed
+        // Full parse when needed - but preserve existing buttons
+        const existingButtons = Array.from(contentDiv.querySelectorAll('.file-diff-btn'));
+        const buttonData = existingButtons.map(btn => ({
+            html: btn.outerHTML,
+            text: btn.textContent,
+            onClick: btn.onclick
+        }));
+        
         contentDiv.innerHTML = parseMarkdown(content);
         lastParsedLength = content.length;
         
@@ -767,47 +744,68 @@ function updateStreamingDisplay(contentDiv, content) {
             });
         }
         
-        // Convert button placeholders to actual buttons during streaming
-        const buttonPlaceholders = contentDiv.querySelectorAll('.button-placeholder');
-        buttonPlaceholders.forEach(placeholder => {
-            const title = placeholder.getAttribute('data-title');
-            const command = placeholder.getAttribute('data-command');
-            const args = placeholder.getAttribute('data-args');
-            const tooltip = placeholder.getAttribute('data-tooltip');
-            
-            const button = document.createElement('button');
-            button.className = 'file-diff-btn';
-            button.textContent = title;
-            button.title = tooltip;
-            button.onclick = function() {
-                try {
-                    // Check if this is a review command for AIDA
-                    if (command && command.includes('review')) {
-                        const parsedArgs = JSON.parse(args);
-                        const filePath = parsedArgs[0] || '';
-                        const reviewCommand = `@review-file ${filePath}`;
-                        
-                        // Set the message in input and send it
-                        msgInput.value = reviewCommand;
-                        sendMessage();
-                        return;
-                    }
-                    
-                    // For other commands, use the original diff view logic
-                    const parsedArgs = JSON.parse(args);
-                    openDiffView(command, JSON.stringify(parsedArgs));
-                } catch (e) {
-                    console.error('Failed to parse button args:', e);
-                }
-            };
-            
-            placeholder.parentNode.replaceChild(button, placeholder);
-        });
+        // Convert button placeholders to actual buttons during streaming - IMMEDIATELY!
+        processButtonPlaceholders(contentDiv);
+        
     } catch (error) {
         console.warn('Streaming display error:', error);
         // Fallback to simple text
         contentDiv.textContent = content;
     }
+}
+
+// Extract button processing to separate function for reuse
+function processButtonPlaceholders(container) {
+    const buttonPlaceholders = container.querySelectorAll('.button-placeholder:not(.processed)');
+    
+    if (buttonPlaceholders.length > 0) {
+        console.log(`🔘 Processing ${buttonPlaceholders.length} button placeholder(s) during streaming`);
+    }
+    
+    buttonPlaceholders.forEach(placeholder => {
+        const title = placeholder.getAttribute('data-title');
+        const command = placeholder.getAttribute('data-command');
+        const args = placeholder.getAttribute('data-args');
+        const tooltip = placeholder.getAttribute('data-tooltip');
+        
+        if (!title) return; // Skip invalid placeholders
+        
+        console.log(`🔘 Creating button: "${title}" with command: "${command}"`);
+        
+        const button = document.createElement('button');
+        button.className = 'file-diff-btn';
+        button.textContent = title;
+        button.title = tooltip;
+        button.onclick = function() {
+            try {
+                console.log(`🔘 Button clicked: "${title}"`);
+                // Check if this is a review command for AIDA
+                if (command && command.includes('review')) {
+                    const parsedArgs = JSON.parse(args);
+                    const filePath = parsedArgs[0] || '';
+                    const reviewCommand = `@review-file ${filePath}`;
+                    
+                    console.log(`🔘 Sending review command: ${reviewCommand}`);
+                    // Set the message in input and send it
+                    msgInput.value = reviewCommand;
+                    sendMessage();
+                    return;
+                }
+                
+                // For other commands, use the original diff view logic
+                const parsedArgs = JSON.parse(args);
+                openDiffView(command, JSON.stringify(parsedArgs));
+            } catch (e) {
+                console.error('Failed to parse button args:', e);
+            }
+        };
+        
+        // Mark as processed to avoid re-processing
+        placeholder.classList.add('processed');
+        
+        // Replace placeholder with button
+        placeholder.parentNode.replaceChild(button, placeholder);
+    });
 }
 
 function endStreamingMessage() {
@@ -839,41 +837,7 @@ function endStreamingMessage() {
             }
             
             // Convert button placeholders to actual buttons (MISSING LOGIC!)
-            const buttonPlaceholders = messageBody.querySelectorAll('.button-placeholder');
-            buttonPlaceholders.forEach(placeholder => {
-                const title = placeholder.getAttribute('data-title');
-                const command = placeholder.getAttribute('data-command');
-                const args = placeholder.getAttribute('data-args');
-                const tooltip = placeholder.getAttribute('data-tooltip');
-                
-                const button = document.createElement('button');
-                button.className = 'file-diff-btn';
-                button.textContent = title;
-                button.title = tooltip;
-                button.onclick = function() {
-                    try {
-                        // Check if this is a review command for AIDA
-                        if (command && command.includes('review')) {
-                            const parsedArgs = JSON.parse(args);
-                            const filePath = parsedArgs[0] || '';
-                            const reviewCommand = `@review-file ${filePath}`;
-                            
-                            // Set the message in input and send it
-                            msgInput.value = reviewCommand;
-                            sendMessage();
-                            return;
-                        }
-                        
-                        // For other commands, use the original diff view logic
-                        const parsedArgs = JSON.parse(args);
-                        openDiffView(command, JSON.stringify(parsedArgs));
-                    } catch (e) {
-                        console.error('Failed to parse button args:', e);
-                    }
-                };
-                
-                placeholder.parentNode.replaceChild(button, placeholder);
-            });
+            processButtonPlaceholders(messageBody);
         }
         
         // Reset streaming state
