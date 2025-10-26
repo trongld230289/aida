@@ -58,25 +58,25 @@ function initializeReviewChanges(context) {
                 // Check if there's an active file to review
                 const activeEditor = vscode.window.activeTextEditor;
                 if (activeEditor) {
-                    // Use shared "Enter twice" logic for confirmation
-                    if (handleEnterTwiceLogic) {
-                        const shouldContinue = await handleEnterTwiceLogic(
-                            'review-changes', 
-                            activeEditor, 
-                            stream, 
-                            async () => {
-                                await aiReviewChanges(activeEditor.document.fileName, stream, null, context, request);
-                            }
-                        );
-                        
-                        // If handleEnterTwiceLogic returns true, it handled everything (second enter)
-                        // If it returns false, it's showing the confirmation dialog (first enter)
-                        return;
-                    } else {
-                        // Fallback: Direct call to aiReviewChanges if handleEnterTwiceLogic is not available
+                    // Use shared "Enter twice" logic for confirmation - DISABLED for direct execution
+                    // if (handleEnterTwiceLogic) {
+                    //     const shouldContinue = await handleEnterTwiceLogic(
+                    //         'review-changes', 
+                    //         activeEditor, 
+                    //         stream, 
+                    //         async () => {
+                    //             await aiReviewChanges(activeEditor.document.fileName, stream, null, context, request);
+                    //         }
+                    //     );
+                    //     
+                    //     // If handleEnterTwiceLogic returns true, it handled everything (second enter)
+                    //     // If it returns false, it's showing the confirmation dialog (first enter)
+                    //     return;
+                    // } else {
+                        // Direct call to aiReviewChanges - no confirmation needed
                         await aiReviewChanges(activeEditor.document.fileName, stream, null, context, request);
                         return;
-                    }
+                    // }
                 } else {
                     stream.markdown('# 🔍 Code Review Assistant\n\n');
                     stream.markdown('Please provide a file path or open a file to review.\n\n');
