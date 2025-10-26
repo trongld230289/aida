@@ -42,14 +42,14 @@ class CopilotSidebarChat {
     /**
      * Update current file and notify webview
      */
-    updateCurrentFile(editor = null) {
+    updateCurrentFile(editor = null, forceUpdate = false) {
         // Use provided editor or get current active editor
         editor = editor || vscode.window.activeTextEditor;
         if (editor && editor.document) {
             const fileName = editor.document.fileName;
             const displayName = fileName.split(/[\\/]/).pop(); // Get just filename
             
-            if (this.currentFileName !== displayName) {
+            if (this.currentFileName !== displayName || forceUpdate) {
                 this.currentFileName = displayName;
                 
                 // Notify webview about file change
@@ -59,13 +59,14 @@ class CopilotSidebarChat {
                         fileName: displayName,
                         fullPath: fileName
                     });
+                    console.log('📁 Current file updated:', displayName, forceUpdate ? '(forced)' : '');
+                } else {
+                    console.log('📁 Webview not ready, current file will be updated later:', displayName);
                 }
-                
-                console.log('📁 Current file updated:', displayName);
             }
         } else {
             // No active editor
-            if (this.currentFileName !== null) {
+            if (this.currentFileName !== null || forceUpdate) {
                 this.currentFileName = null;
                 
                 if (this.webviewView) {
@@ -75,6 +76,7 @@ class CopilotSidebarChat {
                         fullPath: null
                     });
                 }
+                console.log('📁 Current file cleared');
             }
         }
     }
@@ -310,6 +312,12 @@ class CopilotSidebarChat {
                                         userMessage.toLowerCase().includes('current file') ||
                                         userMessage.toLowerCase().includes('refactor this') ||
                                         userMessage.toLowerCase().includes('analyze this') ||
+                                        // Vietnamese patterns
+                                        userMessage.toLowerCase().includes('file này') ||
+                                        userMessage.toLowerCase().includes('tệp này') ||
+                                        userMessage.toLowerCase().includes('code này') ||
+                                        userMessage.toLowerCase().includes('mã này') ||
+                                        userMessage.toLowerCase().includes('file hiện tại') ||
                                         // Implicit current file requests (no specific file mentioned)
                                         (userMessage.toLowerCase().includes('refactor') && !userMessage.toLowerCase().includes('create') && !userMessage.toLowerCase().includes('new')) ||
                                         (userMessage.toLowerCase().includes('analyze') && !userMessage.toLowerCase().includes('create') && !userMessage.toLowerCase().includes('new')) ||
@@ -320,7 +328,16 @@ class CopilotSidebarChat {
                                         userMessage.toLowerCase().includes('clean up') ||
                                         userMessage.toLowerCase().includes('modernize') ||
                                         (userMessage.toLowerCase().includes('add') && (userMessage.toLowerCase().includes('type') || userMessage.toLowerCase().includes('interface'))) ||
-                                        userMessage.toLowerCase().includes('best practices');
+                                        userMessage.toLowerCase().includes('best practices') ||
+                                        // Vietnamese action patterns
+                                        userMessage.toLowerCase().includes('làm gì') ||
+                                        userMessage.toLowerCase().includes('chức năng') ||
+                                        userMessage.toLowerCase().includes('tác dụng') ||
+                                        userMessage.toLowerCase().includes('mục đích') ||
+                                        userMessage.toLowerCase().includes('hoạt động') ||
+                                        // General file inquiry without specific file mentioned
+                                        (userMessage.toLowerCase().includes('explain') && !userMessage.includes('.') && !userMessage.includes('/')) ||
+                                        (userMessage.toLowerCase().includes('what does') && !userMessage.includes('.') && !userMessage.includes('/'));
 
             if (isCurrentFileRequest) {
                 // Get current file context for Ask mode too
@@ -411,6 +428,17 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
             // Determine participant and get response with images (Ask mode)
             const participant = this.determineParticipant(userMessage);
             
+            // Get current file context for better responses (reuse from above)
+            // const currentFileContext was already declared above
+            
+            // Enhance message with current file context if available (like GitHub Copilot)
+            let enhancedMessage = userMessage;
+            if (currentFileContext && currentFileContext.hasFile) {
+                // Add subtle file context that doesn't overwhelm the message
+                enhancedMessage = `${userMessage}\n\n**Current File Context:** ${currentFileContext.summary}\nFile: ${currentFileContext.languageId} file with ${currentFileContext.lineCount} lines`;
+                console.log('📁 Enhanced message with current file context:', currentFileContext.fileName);
+            }
+            
             // Create streaming callback for real-time updates
             let fullResponse = '';
             let isFirstChunk = true;
@@ -449,9 +477,9 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
             
             let response;
             if (shouldStream) {
-                response = await this.callParticipant(participant, userMessage, images, streamCallback);
+                response = await this.callParticipant(participant, enhancedMessage, images, streamCallback);
             } else {
-                response = await this.callParticipant(participant, userMessage, images);
+                response = await this.callParticipant(participant, enhancedMessage, images);
             }
             
             // Check for cancellation before completing
@@ -2604,13 +2632,18 @@ class AidaChatViewProvider {
             ]
         };
 
-        // Load HTML content asynchronously
-        this.loadWebviewContent(webviewView);
-        
-        // Initialize webview with current state after load
-        setTimeout(() => {
-            this.initializeWebviewState(webviewView);
-        }, 100);
+        // Load HTML content asynchronously and then initialize
+        this.loadWebviewContent(webviewView).then(() => {
+            // Initialize webview with current state after HTML is loaded
+            setTimeout(() => {
+                this.initializeWebviewState(webviewView);
+            }, 100);
+        }).catch(error => {
+            console.error('Failed to load webview content, initializing anyway:', error);
+            setTimeout(() => {
+                this.initializeWebviewState(webviewView);
+            }, 200);
+        });
 
         // Handle messages from webview
         webviewView.webview.onDidReceiveMessage(async (message) => {
@@ -2797,6 +2830,21 @@ class AidaChatViewProvider {
                         console.log('💾 Saved partial content to chat history');
                     }
                     break;
+                    
+                case 'frontendReady':
+                    // Frontend is ready, send current file info
+                    console.log('📁 Frontend ready, updating current file...');
+                    if (this.chatInstance && typeof this.chatInstance.updateCurrentFile === 'function') {
+                        const currentEditor = vscode.window.activeTextEditor;
+                        if (currentEditor) {
+                            this.chatInstance.updateCurrentFile(currentEditor, true);
+                            console.log('📁 Sent current file to ready frontend:', currentEditor.document.fileName);
+                        } else {
+                            this.chatInstance.updateCurrentFile(null, true);
+                            console.log('📁 No active editor, sent null to frontend');
+                        }
+                    }
+                    break;
             }
         });
 
@@ -2808,13 +2856,26 @@ class AidaChatViewProvider {
      */
     initializeWebviewState(webviewView) {
         try {
+            console.log('🔄 Initializing webview state...');
+            
             // Restore chat history
             this.restoreChatHistory(webviewView);
             
-            // Show current active file
-            // Use chatInstance.updateCurrentFile so we call the method on the CopilotSidebarChat instance
+            // Show current active file - Force update to ensure it's displayed
             if (this.chatInstance && typeof this.chatInstance.updateCurrentFile === 'function') {
-                this.chatInstance.updateCurrentFile();
+                // Force current file update by passing current active editor
+                const currentEditor = vscode.window.activeTextEditor;
+                console.log('📁 Active editor during init:', currentEditor ? currentEditor.document.fileName : 'None');
+                
+                if (currentEditor) {
+                    // Force update even if filename is same
+                    this.chatInstance.updateCurrentFile(currentEditor, true);
+                    console.log('📁 Forced current file update on webview init');
+                } else {
+                    // Still force update to clear any previous state
+                    this.chatInstance.updateCurrentFile(null, true);
+                    console.log('📁 No active editor found during webview init');
+                }
             } else {
                 console.warn('updateCurrentFile not available on chatInstance');
             }
