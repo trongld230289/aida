@@ -141,7 +141,7 @@ function activate(context) {
     let copilotSidebarChat = null;
     try {
         console.log('🔄 Initializing AIDA Copilot Sidebar Chat...');
-        const sidebarChatModule = require('./scripts/copilot-sidebar-chat.js');
+        const sidebarChatModule = require('./scripts/chatbot/copilot-sidebar-chat.js');
         const sidebarResult = sidebarChatModule.initializeCopilotSidebarChat(context);
         copilotSidebarChat = sidebarResult?.sidebarChat;
         console.log('✅ AIDA Copilot Sidebar Chat initialized successfully');
