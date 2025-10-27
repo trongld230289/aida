@@ -346,8 +346,15 @@ class CopilotSidebarChat {
             // Reset history navigation index
             this.historyIndex = -1;
 
-            // Get current file context for smart suggestions
-            const currentFileContext = await this.getCurrentFileContext();
+            // Get current file context for smart suggestions (skip for review commands that handle their own context)
+            const participantType = this.determineParticipant(userMessage);
+            const isReviewCommand = ['review-file', 'review-changes', 'review-pr', 'sync-review-templates'].includes(participantType);
+            
+            let currentFileContext = null;
+            if (!isReviewCommand) {
+                currentFileContext = await this.getCurrentFileContext();
+            }
+
 
             // Add to history with images and mode/model info (except for current file requests which handle this separately)
             if (!isCurrentFileRequest) {
