@@ -27,7 +27,8 @@ const participants = [
     { name: '@review-file', icon: '📁', description: 'Review current opening file or specify file path' },
     { name: '@review-changes', icon: '🔍', description: 'Review changes for current opening file or specify file path' },
     { name: '@review-pr', icon: '🔄', description: 'Review Azure DevOps Pull Request by PR ID or URL' },
-    { name: '@sync-review-templates', icon: '⚙️', description: 'Sync AIDA review templates to workspace' }
+    { name: '@sync-review-templates', icon: '⚙️', description: 'Sync AIDA review templates to workspace' },
+    { name: '/clear', icon: '🗑️', description: 'Clear chat history and start fresh conversation' }
 ];
 
 let selectedIndex = -1;
@@ -257,12 +258,25 @@ function cancelStreaming() {
 // Participant suggestion functions
 function handleParticipantSuggest(value, cursorPos) {
     const beforeCursor = value.substring(0, cursorPos);
+    // Match both @ and / commands
     const atMatch = beforeCursor.match(/@([a-z-]*)$/);
+    const slashMatch = beforeCursor.match(/\/([a-z-]*)$/);
     
     if (atMatch) {
         const query = atMatch[1].toLowerCase();
         const filtered = participants.filter(p => 
             p.name.toLowerCase().includes('@' + query)
+        );
+        
+        if (filtered.length > 0) {
+            showSuggestions(filtered);
+        } else {
+            hideSuggestions();
+        }
+    } else if (slashMatch) {
+        const query = slashMatch[1].toLowerCase();
+        const filtered = participants.filter(p => 
+            p.name.toLowerCase().includes('/' + query)
         );
         
         if (filtered.length > 0) {
@@ -321,15 +335,21 @@ function selectParticipant(index) {
     if (index >= 0 && index < items.length) {
         const participantName = items[index].querySelector('.participant-name').textContent;
         
-        // Replace the @ query with selected participant
+        // Replace the @ or / query with selected participant
         const value = msgInput.value;
         const cursorPos = msgInput.selectionStart;
         const beforeCursor = value.substring(0, cursorPos);
         const afterCursor = value.substring(cursorPos);
         const atMatch = beforeCursor.match(/@([a-z-]*)$/);
+        const slashMatch = beforeCursor.match(/\/([a-z-]*)$/);
         
         if (atMatch) {
             const newValue = beforeCursor.replace(/@([a-z-]*)$/, participantName + ' ') + afterCursor;
+            msgInput.value = newValue;
+            msgInput.focus();
+            msgInput.setSelectionRange(newValue.length - afterCursor.length, newValue.length - afterCursor.length);
+        } else if (slashMatch) {
+            const newValue = beforeCursor.replace(/\/([a-z-]*)$/, participantName + ' ') + afterCursor;
             msgInput.value = newValue;
             msgInput.focus();
             msgInput.setSelectionRange(newValue.length - afterCursor.length, newValue.length - afterCursor.length);
@@ -965,6 +985,7 @@ window.addEventListener('message', event => {
             break;
             
         case 'clearChat':
+            // Clear UI - backend already handles clearing history
             chatContainer.innerHTML = `
                 <div class="empty-state">
                     <div class="empty-icon">🤖</div>
