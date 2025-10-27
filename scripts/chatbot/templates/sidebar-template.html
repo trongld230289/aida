@@ -282,6 +282,76 @@
         line-height: 1.5;
       }
 
+      /* Copy button for code blocks - GitHub Copilot style */
+      .code-copy-btn {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        background-color: var(--vscode-button-background);
+        color: var(--vscode-button-foreground);
+        border: 1px solid var(--vscode-button-border);
+        border-radius: 3px;
+        padding: 4px 8px;
+        font-size: 10px;
+        cursor: pointer;
+        opacity: 0;
+        transform: translateY(-2px);
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        z-index: 100;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-family: var(--vscode-font-family);
+        white-space: nowrap;
+        min-width: 60px;
+        justify-content: center;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        backdrop-filter: blur(4px);
+        -webkit-backdrop-filter: blur(4px);
+      }
+
+      /* Always show copy button on hover with smooth animation */
+      .message-body pre:hover .code-copy-btn,
+      .code-copy-btn:hover,
+      .code-copy-btn:focus,
+      .code-copy-btn.copied {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      .code-copy-btn:hover {
+        background-color: var(--vscode-button-hoverBackground);
+        transform: translateY(0) scale(1.02);
+      }
+
+      .code-copy-btn:active {
+        background-color: var(--vscode-button-background);
+        transform: translateY(1px) scale(0.98);
+      }
+
+      .code-copy-btn.copied {
+        background-color: var(--vscode-testing-iconPassed);
+        color: white;
+        transform: translateY(0) scale(1.05);
+      }
+
+      /* Ensure copy button is always accessible on mobile/touch */
+      @media (hover: none) {
+        .code-copy-btn {
+          opacity: 0.7;
+          transform: translateY(0);
+        }
+
+        .message-body pre .code-copy-btn {
+          opacity: 0.8;
+        }
+      }
+
+      /* Pre element should have relative positioning for absolute button */
+      .message-body pre {
+        position: relative;
+      }
+
       /* File diff buttons like GitHub Copilot */
       .file-diff-btn {
         background-color: var(--vscode-button-background);
