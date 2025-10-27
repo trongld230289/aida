@@ -566,6 +566,9 @@ function addMessage(content, role, images = []) {
     const messageBody = messageDiv.querySelector('.message-body');
     if (messageBody) {
         processButtonPlaceholders(messageBody);
+        
+        // Add copy buttons to code blocks in this message
+        addCopyButtonsToCodeBlocks(messageBody);
     }
     
     chatContainer.scrollTop = chatContainer.scrollHeight;
@@ -817,12 +820,19 @@ function updateStreamingDisplay(contentDiv, content) {
             }
         }
         
-        // Full parse when needed - but preserve existing buttons
+        // Full parse when needed - but preserve existing buttons AND copy buttons
         const existingButtons = Array.from(contentDiv.querySelectorAll('.file-diff-btn'));
+        const existingCopyButtons = Array.from(contentDiv.querySelectorAll('.code-copy-btn'));
+        
         const buttonData = existingButtons.map(btn => ({
             html: btn.outerHTML,
             text: btn.textContent,
             onClick: btn.onclick
+        }));
+        
+        const copyButtonData = existingCopyButtons.map(btn => ({
+            parentPre: btn.closest('pre'),
+            html: btn.outerHTML
         }));
         
         contentDiv.innerHTML = parseMarkdown(content);
@@ -850,6 +860,27 @@ function updateStreamingDisplay(contentDiv, content) {
         
         // Convert button placeholders to actual buttons during streaming - IMMEDIATELY!
         processButtonPlaceholders(contentDiv);
+        
+        // Restore existing copy buttons to prevent flicker
+        copyButtonData.forEach(copyData => {
+            if (copyData.parentPre) {
+                const codeText = copyData.parentPre.textContent;
+                const matchingPre = Array.from(contentDiv.querySelectorAll('pre')).find(pre => 
+                    pre.textContent.trim() === codeText.trim()
+                );
+                
+                if (matchingPre && !matchingPre.querySelector('.code-copy-btn')) {
+                    matchingPre.classList.add('has-copy-btn');
+                    matchingPre.innerHTML += copyData.html;
+                    
+                    // Re-attach event listeners
+                    const restoredBtn = matchingPre.querySelector('.code-copy-btn');
+                    if (restoredBtn) {
+                        attachCopyButtonEvents(restoredBtn, matchingPre);
+                    }
+                }
+            }
+        });
         
     } catch (error) {
         console.warn('Streaming display error:', error);
@@ -922,6 +953,10 @@ function endStreamingMessage() {
             
             // Convert button placeholders to actual buttons (MISSING LOGIC!)
             processButtonPlaceholders(messageBody);
+            
+            // Add copy buttons to final streaming content (No flicker since streaming ended)
+            addCopyButtonsToCodeBlocks(messageBody);
+            console.log('✅ Added copy buttons to final streaming message');
         }
         
         // Reset streaming state
@@ -1065,3 +1100,138 @@ window.openDiffView = function(command, argsJson) {
         arguments: args
     });
 };
+
+// Helper function to attach copy button events (reusable)
+function attachCopyButtonEvents(copyBtn, pre) {
+    // Add click handler with enhanced feedback
+    copyBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        console.log('📋 Copy button clicked!');
+        
+        const codeElement = pre.querySelector('code');
+        const codeText = codeElement ? codeElement.textContent : pre.textContent;
+        
+        try {
+            // Use VS Code API to copy to clipboard
+            await navigator.clipboard.writeText(codeText);
+            
+            console.log('✅ Code copied to clipboard');
+            
+            // Show enhanced feedback
+            const originalHTML = copyBtn.innerHTML;
+            const originalClass = copyBtn.className;
+            
+            copyBtn.innerHTML = '✅ Copied!';
+            copyBtn.classList.add('copied');
+            
+            // Keep the button visible and interactive during feedback
+            setTimeout(() => {
+                copyBtn.innerHTML = originalHTML;
+                copyBtn.className = originalClass;
+            }, 2000);
+            
+        } catch (err) {
+            console.warn('Failed to copy code:', err);
+            
+            // Fallback: Show error feedback
+            const originalHTML = copyBtn.innerHTML;
+            copyBtn.innerHTML = '❌ Failed';
+            copyBtn.style.backgroundColor = 'var(--vscode-errorForeground)';
+            
+            setTimeout(() => {
+                copyBtn.innerHTML = originalHTML;
+                copyBtn.style.backgroundColor = '';
+            }, 2000);
+        }
+    });
+    
+    // Add keyboard accessibility
+    copyBtn.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            copyBtn.click();
+        }
+    });
+}
+
+// Add copy buttons to code blocks - GitHub Copilot style (Anti-flicker)
+function addCopyButtonsToCodeBlocks(container) {
+    const codeBlocks = container.querySelectorAll('pre:not(.has-copy-btn)');
+    console.log('🔍 Found NEW code blocks for copy buttons:', codeBlocks.length);
+    
+    if (codeBlocks.length === 0) return;
+    
+    codeBlocks.forEach((pre, index) => {
+        console.log('📋 Adding copy button to code block', index + 1);
+        
+        // Mark as processed IMMEDIATELY to prevent duplicates
+        pre.classList.add('has-copy-btn');
+        
+        // Ensure pre has relative positioning
+        if (getComputedStyle(pre).position === 'static') {
+            pre.style.position = 'relative';
+        }
+        
+        // Remove any existing copy buttons (safety check)
+        const existingBtns = pre.querySelectorAll('.code-copy-btn');
+        existingBtns.forEach(btn => {
+            btn.remove();
+            console.log('🗑️ Removed duplicate copy button');
+        });
+        
+        // Create copy button with improved UX
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'code-copy-btn';
+        copyBtn.innerHTML = '📋 Copy';
+        copyBtn.title = 'Copy code to clipboard';
+        copyBtn.setAttribute('aria-label', 'Copy code to clipboard');
+        
+        // Use helper function to attach events
+        attachCopyButtonEvents(copyBtn, pre);
+        
+        // Append to pre element
+        pre.appendChild(copyBtn);
+        console.log('✅ Copy button added to code block', index + 1);
+    });
+    
+    console.log(`🎯 Successfully added copy buttons to ${codeBlocks.length} code blocks`);
+}
+
+// Auto-add copy buttons when DOM content is loaded
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🎨 DOM loaded, initializing copy buttons...');
+    
+    // Add copy buttons to existing code blocks
+    addCopyButtonsToCodeBlocks(document);
+    
+    // Watch for new code blocks being added dynamically (SKIP during streaming to prevent flicker)
+    const observer = new MutationObserver(function(mutations) {
+        // Skip during streaming to prevent flicker
+        if (isStreaming && currentStreamingMessage) {
+            return;
+        }
+        
+        mutations.forEach(function(mutation) {
+            if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+                mutation.addedNodes.forEach(function(node) {
+                    if (node.nodeType === Node.ELEMENT_NODE) {
+                        // Check if the node itself is a pre element or contains pre elements
+                        if (node.tagName === 'PRE' || node.querySelectorAll) {
+                            addCopyButtonsToCodeBlocks(node.tagName === 'PRE' ? node.parentNode : node);
+                        }
+                    }
+                });
+            }
+        });
+    });
+    
+    // Start observing
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true
+    });
+    
+    console.log('👀 Started observing for new code blocks');
+});
