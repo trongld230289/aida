@@ -163,6 +163,8 @@ function activate(context) {
     let clearChatSidebarCommand = vscode.commands.registerCommand('aida.clearChatSidebar', async () => {
         if (copilotSidebarChat) {
             copilotSidebarChat.chatHistory = [];
+            // Save the cleared history to persistent storage
+            copilotSidebarChat.saveChatHistory();
             // Send clear message to webview
             if (copilotSidebarChat.webviewView) {
                 copilotSidebarChat.webviewView.webview.postMessage({ type: 'clearChat' });
