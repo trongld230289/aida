@@ -647,6 +647,14 @@ function parseMarkdown(text) {
                 sanitize: false,  // Allow HTML for buttons
                 pedantic: false,
                 highlight: function(code, lang) {
+                    // Decode HTML entities first
+                    code = code
+                        .replace(/&gt;/g, '>')
+                        .replace(/&lt;/g, '<')
+                        .replace(/&amp;/g, '&')
+                        .replace(/&quot;/g, '"')
+                        .replace(/&#39;/g, "'");
+                    
                     if (lang && hljs.getLanguage(lang)) {
                         try {
                             return hljs.highlight(code, { language: lang }).value;
@@ -805,6 +813,14 @@ function updateStreamingDisplay(contentDiv, content) {
         if (newCodeBlocks.length > 0 && typeof hljs !== 'undefined') {
             newCodeBlocks.forEach((block) => {
                 try {
+                    // Fix HTML entities in code blocks
+                    block.innerHTML = block.innerHTML
+                        .replace(/&gt;/g, '>')
+                        .replace(/&lt;/g, '<')
+                        .replace(/&amp;/g, '&')
+                        .replace(/&quot;/g, '"')
+                        .replace(/&#39;/g, "'");
+                    
                     hljs.highlightElement(block);
                 } catch (e) {
                     console.warn('Highlight.js error:', e);
