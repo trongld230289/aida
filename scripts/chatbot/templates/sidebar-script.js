@@ -567,8 +567,29 @@ function addMessage(content, role, images = []) {
     if (messageBody) {
         processButtonPlaceholders(messageBody);
         
+        // Apply syntax highlighting to code blocks (for history restore)
+        const codeBlocks = messageBody.querySelectorAll('pre code:not(.hljs)');
+        if (codeBlocks.length > 0 && typeof hljs !== 'undefined') {
+            codeBlocks.forEach((block) => {
+                try {
+                    // Fix HTML entities in code blocks
+                    block.innerHTML = block.innerHTML
+                        .replace(/&gt;/g, '>')
+                        .replace(/&lt;/g, '<')
+                        .replace(/&amp;/g, '&')
+                        .replace(/&quot;/g, '"')
+                        .replace(/&#39;/g, "'");
+                    
+                    hljs.highlightElement(block);
+                } catch (e) {
+                    console.warn('Highlight.js error in addMessage:', e);
+                }
+            });
+        }
+        
         // Add copy buttons to code blocks in this message
         addCopyButtonsToCodeBlocks(messageBody);
+        console.log('✅ Added copy buttons and syntax highlighting for message');
     }
     
     chatContainer.scrollTop = chatContainer.scrollHeight;
@@ -976,11 +997,15 @@ window.addEventListener('message', event => {
     switch (message.type) {
         case 'addUserMessage':
             addMessage(message.message, 'user', message.images);
+            // Schedule reprocess for history loading (debounced)
+            scheduleReprocess();
             break;
             
         case 'addAssistantMessage':
             hideTyping();
             addMessage(message.message, 'assistant');
+            // Schedule reprocess for history loading (debounced)
+            scheduleReprocess();
             break;
             
         case 'startStreamingMessage':
@@ -1201,10 +1226,34 @@ function addCopyButtonsToCodeBlocks(container) {
 
 // Auto-add copy buttons when DOM content is loaded
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('🎨 DOM loaded, initializing copy buttons...');
+    console.log('🎨 DOM loaded, initializing copy buttons and syntax highlighting...');
+    
+    // Process existing code blocks (for history restore)
+    const existingCodeBlocks = document.querySelectorAll('pre code:not(.hljs)');
+    if (existingCodeBlocks.length > 0 && typeof hljs !== 'undefined') {
+        existingCodeBlocks.forEach((block) => {
+            try {
+                // Fix HTML entities in code blocks
+                block.innerHTML = block.innerHTML
+                    .replace(/&gt;/g, '>')
+                    .replace(/&lt;/g, '<')
+                    .replace(/&amp;/g, '&')
+                    .replace(/&quot;/g, '"')
+                    .replace(/&#39;/g, "'");
+                
+                hljs.highlightElement(block);
+            } catch (e) {
+                console.warn('Highlight.js error in DOMContentLoaded:', e);
+            }
+        });
+        console.log(`✅ Applied syntax highlighting to ${existingCodeBlocks.length} existing code blocks`);
+    }
     
     // Add copy buttons to existing code blocks
     addCopyButtonsToCodeBlocks(document);
+    
+    // Process any existing button placeholders
+    processButtonPlaceholders(document);
     
     // Watch for new code blocks being added dynamically (SKIP during streaming to prevent flicker)
     const observer = new MutationObserver(function(mutations) {
@@ -1235,3 +1284,64 @@ document.addEventListener('DOMContentLoaded', function() {
     
     console.log('👀 Started observing for new code blocks');
 });
+
+// Function to reprocess entire chat (for history restore fix)
+let reprocessTimeout = null;
+
+function scheduleReprocess() {
+    // Debounce reprocessing to avoid excessive calls
+    if (reprocessTimeout) {
+        clearTimeout(reprocessTimeout);
+    }
+    
+    reprocessTimeout = setTimeout(() => {
+        reprocessChatMessages();
+        reprocessTimeout = null;
+    }, 500); // Wait 500ms after last message
+}
+
+function reprocessChatMessages() {
+    console.log('🔄 Reprocessing all chat messages...');
+    
+    const allMessages = document.querySelectorAll('.message');
+    let processedCount = 0;
+    
+    allMessages.forEach(messageDiv => {
+        const messageBody = messageDiv.querySelector('.message-body');
+        if (messageBody) {
+            // Apply syntax highlighting to unprocessed code blocks
+            const codeBlocks = messageBody.querySelectorAll('pre code:not(.hljs)');
+            if (codeBlocks.length > 0 && typeof hljs !== 'undefined') {
+                codeBlocks.forEach((block) => {
+                    try {
+                        // Fix HTML entities
+                        block.innerHTML = block.innerHTML
+                            .replace(/&gt;/g, '>')
+                            .replace(/&lt;/g, '<')
+                            .replace(/&amp;/g, '&')
+                            .replace(/&quot;/g, '"')
+                            .replace(/&#39;/g, "'");
+                        
+                        hljs.highlightElement(block);
+                    } catch (e) {
+                        console.warn('Highlight.js error in reprocess:', e);
+                    }
+                });
+            }
+            
+            // Add copy buttons to code blocks without them
+            addCopyButtonsToCodeBlocks(messageBody);
+            
+            // Process button placeholders
+            processButtonPlaceholders(messageBody);
+            
+            processedCount++;
+        }
+    });
+    
+    console.log(`✅ Reprocessed ${processedCount} messages`);
+}
+
+// Expose functions globally for manual trigger
+window.reprocessChatMessages = reprocessChatMessages;
+window.scheduleReprocess = scheduleReprocess;
