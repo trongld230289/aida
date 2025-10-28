@@ -1,17 +1,19 @@
 # 🤖 AIDA - AI Development Assistant
 
-**Advanced AI Development Assistant for VS Code**
+**Advanced AI Development Assistant with AIDA Chatbot for VS Code**
 
-> Transform your development workflow with AIDA - Your intelligent coding companion that understands your project, reviews your code, and helps you ship better software faster.
+> Transform your development workflow with AIDA - Your intelligent coding companion featuring built-in chatbot, support for your own AI API (OpenAI/Claude), and comprehensive development tools. No GitHub Copilot required!
 
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://marketplace.visualstudio.com/items?itemName=trongld232.aida)
+[![Version](https://img.shields.io/badge/version-1.0.1-blue.svg)](https://marketplace.visualstudio.com/items?itemName=trongld232.aida-dev)
 [![VS Code](https://img.shields.io/badge/VS%20Code-1.90+-green.svg)](https://code.visualstudio.com/)
 [![License](https://img.shields.io/badge/license-MIT-orange.svg)](LICENSE)
 
 ## 🌟 What is AIDA?
 
-**AIDA (AI Development Assistant)** is an intelligent VS Code extension that acts as your personal development companion. It combines advanced AI capabilities with deep project understanding to provide:
+**AIDA (AI Development Assistant)** is an intelligent VS Code extension that acts as your personal development companion. It features a built-in AIDA Chatbot and supports your own AI API keys, giving you flexibility to use OpenAI, Claude, or GitHub Copilot:
 
+- 🤖 **AIDA Chatbot** - Built-in chat interface with image support and conversation history
+- 🔧 **Flexible AI Integration** - Use your own OpenAI/Claude API or GitHub Copilot
 - 🔍 **Intelligent Code Review** - AI-powered analysis with framework-specific insights
 - 🚀 **Smart PR Analysis** - Cross-platform support for GitHub, GitLab, and Azure DevOps
 - 📊 **Project Scanning** - Comprehensive codebase analysis and architecture insights
@@ -25,6 +27,19 @@
 - **Framework Awareness**: Angular, React, Vue, Express, NestJS, ASP.NET
 - **Security Analysis**: Automated security vulnerability detection
 - **Performance Insights**: Code efficiency and optimization suggestions
+
+### 🤖 **AIDA Chatbot (No Copilot Required)**
+- **Built-in Chat Interface**: Copilot-style sidebar chat with conversation history
+- **Image Support**: Analyze code screenshots, error messages, and UI designs
+- **Flexible AI Backend**: Use OpenAI API, Claude API, or your custom AI service
+- **Smart Context**: Automatically detects current file and project context
+- **Multi-language**: Supports Vietnamese and English conversations
+
+### 🔧 **AI Integration Options**
+- **Your Own API Keys**: OpenAI GPT-4/5, Claude Sonnet, or custom AI endpoints
+- **GitHub Copilot**: Full compatibility with existing Copilot subscriptions
+- **Local AI Models**: Support for company-hosted AI services
+- **Hybrid Mode**: Mix and match different AI providers for different tasks
 
 ### 🚀 **Pull Request Intelligence**
 - **Cross-Platform**: GitHub, GitLab, Azure DevOps integration
@@ -48,23 +63,33 @@
 ### 1. Installation
 ```bash
 # Install from VS Code Marketplace
-ext install trongld232.aida
+ext install trongld232.aida-dev
 
 # Or install from VSIX
-code --install-extension aida-1.0.0.vsix
+code --install-extension aida-dev-1.0.1.vsix
 ```
 
-### 2. Initial Setup
-1. **Open Command Palette**: `Ctrl+Shift+P` (Windows/Linux) or `Cmd+Shift+P` (Mac)
-2. **Run Setup**: Type `AIDA: Setup AI Configuration`
-3. **Choose AI Provider**: Select from OpenAI, Anthropic, or custom endpoint
+### 2. Setup AIDA Chatbot (Optional - For Non-Copilot Users)
+1. **Open Settings**: `Ctrl+,` → Search "AIDA"
+2. **Enable AIDA Chatbot**: Set `aida.hasNoGithubCopilot` to `true`
+3. **Configure AI API**: Add your OpenAI or Claude API key
+4. **Open AIDA Chat**: Click AIDA icon in Activity Bar or use `Ctrl+Shift+A`
 
-### 3. Configure AI Settings
+### 3. AI Provider Configuration
 ```json
 {
-  "aida.ai.apiKey": "your-api-key-here",
+  // For OpenAI (GPT-4, GPT-5)
+  "aida.ai.apiKey": "sk-your-openai-key",
   "aida.ai.apiHost": "https://api.openai.com",
-  "aida.ai.model": "gpt-4o"
+  "aida.ai.model": "gpt-4o",
+
+  // For Anthropic Claude
+  "aida.ai.apiKey": "sk-ant-your-claude-key", 
+  "aida.ai.apiHost": "https://api.anthropic.com",
+  "aida.ai.model": "claude-3-5-sonnet-20241022",
+
+  // Use your API instead of Copilot
+  "aida.useApiKeyInsteadOfCopilot": true
 }
 ```
 
@@ -184,7 +209,6 @@ your-project/
 ├── VIDA/
 │   └── templates/
 │       └── review-code/
-│           ├── frameworks/
 │           ├── languages/
 │           └── fallback/
 

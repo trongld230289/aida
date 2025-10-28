@@ -2,7 +2,7 @@ const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
-const { executeAIReview, getUnifiedModel, getChecklistStatusIcon, shouldUseApiKey, displayReviewHeader } = require('./review-common');
+const { executeAIReview, getUnifiedModel, getChecklistStatusIcon, shouldUseApiKey, displayReviewHeader, loadTemplateWithPriority, displayCommonReviewInfo } = require('./review-common');
 const { autoDetectWorkspace, getReviewTemplateWithDetection, displayDetectionInfo } = require('./language-detection');
 
 // Import functions from extension.js
@@ -332,28 +332,15 @@ async function reviewChanges(diffContent, stream, changeType, selectedModel = nu
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
         const detection = await autoDetectWorkspace(workspaceFolder.uri.fsPath, filePath);
         
-        // Try framework-specific template first, then fallback
-        const templatePaths = [
-            path.join(global.extensionPath, 'templates', detection.templatePath, 'review-changes.md'),
-            path.join(global.extensionPath, 'templates', 'review-code', 'fallback', 'review-changes.md')
-        ];
+        console.log(`🎯 Detection result: "${detection.detected}" (type: ${detection.type})`);
         
-        let templateSource = 'fallback';
+        // Use common template loading function
+        const templateResult = await loadTemplateWithPriority('review-changes.md', detection);
+        templateContent = templateResult.content;
         
-        for (const templatePath of templatePaths) {
-            if (fs.existsSync(templatePath)) {
-                templateContent = fs.readFileSync(templatePath, 'utf8');
-                templateSource = detection.detected;
-                break;
-            }
-        }
-        
-        if (!templateContent) {
-            throw new Error('Template not found: review-changes.md');
-        }
-        
-        console.log(`✅ Loaded review template from: ${templateSource} (${templateContent.length} characters)`);
-        console.log(`🎯 Detection: ${detection.detected} (${detection.type})`);
+        // Update detection with template source info
+        detection.templateSource = templateResult.templateSource;
+        detection.templatePath = templateResult.templatePath;
         
         // Display detection information
         displayDetectionInfo(stream, detection, 'review-changes.md');
@@ -361,7 +348,10 @@ async function reviewChanges(diffContent, stream, changeType, selectedModel = nu
         // Display review header if workspace folder is provided
         if (workspaceFolder) {
             const displayPath = filePath ? path.relative(workspaceFolder.uri.fsPath, filePath) : changeType;
-            displayReviewHeader(stream, 'Changes Review', displayPath, diffContent.length, detection.templatePath);
+            displayCommonReviewInfo(stream, 'Changes Review', displayPath, {
+                length: diffContent.length,
+                lengthType: 'diff'
+            });
         }
         
         // Verify template doesn't have old git diff placeholder
@@ -405,9 +395,6 @@ async function reviewChanges(diffContent, stream, changeType, selectedModel = nu
         finalContent += '\n\n## GIT DIFF TO REVIEW\n\n```diff\n' + diffContent + '\n```\n';
     }
     
-    // Simple, safe approach - just display the template with diff
-    stream.markdown('# 📋 Start Code Review\n\n');
-    
     try {
         // Use unified model detection (same as review-file)
         const model = await getUnifiedModel(stream, selectedModel, context, request);
@@ -423,8 +410,6 @@ async function reviewChanges(diffContent, stream, changeType, selectedModel = nu
             }
         }
             
-        stream.markdown('🔄 **AI Analysis in progress...** (streaming git changes)\n\n');
-        
         // Use the unified AI execution function
         const success = await executeAIReview(finalContent, model, stream, 'Changes');
         if (!success) {

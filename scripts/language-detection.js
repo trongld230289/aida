@@ -637,10 +637,15 @@ function displayDetectionInfo(stream, detection, templateType) {
     }
     
     // Template info
+     // Add template used information
+    if (detection.templateSource && detection.templatePath) {
+        stream.markdown(`**Template used:** ${detection.templateSource}/${detection.templatePath}\n`);
+    }
     stream.markdown(`**Review Template:** \`${templateType}\`\n`);
-    stream.markdown(`**Template Path:** \`${detection.templatePath}/${templateType}\`\n`);
+    // stream.markdown(`**Template Path:** \`${detection.templatePath}/${templateType}\`\n`);
     stream.markdown(`**Confidence:** ${detection.confidence} (${detection.reason})\n\n`);
     
+   
     // Show appropriate icon and message
     const detectionEmoji = {
         'language': '💻', 

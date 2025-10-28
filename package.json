@@ -1,8 +1,8 @@
 {
-  "name": "aida",
+  "name": "aida-dev",
   "displayName": "AIDA - AI Development Assistant",
-  "description": "Advanced AI Development Assistant with intelligent code review, PR analysis, project scanning, and comprehensive development workflows. Your smart coding companion for TypeScript, JavaScript, Python, C#, and more.",
-  "version": "1.0.0",
+  "description": "Advanced AI Development Assistant with intelligent code review, PR analysis, project scanning, and AIDA Chatbot. Use your own AI API (OpenAI/Claude) or GitHub Copilot. Complete development workflows for TypeScript, JavaScript, Python, C#, and more.",
+  "version": "1.0.1",
   "publisher": "trongld232",
   "icon": "icons/extension-icon.png",
   "author": {
@@ -20,11 +20,15 @@
   "homepage": "https://github.com/trongld230289/aida#readme",
   "keywords": [
     "aida",
+    "aida chatbot",
     "ai assistant",
     "development assistant",
     "code review",
     "copilot",
     "chat participant",
+    "openai api",
+    "claude api",
+    "anthropic",
     "intelligent analysis",
     "typescript",
     "javascript",
@@ -39,9 +43,7 @@
     "gitlab",
     "claude",
     "gpt",
-    "github",
-    "gitlab",
-    "azure devops"
+    "no copilot needed"
   ],
   "engines": {
     "vscode": "^1.90.0"
@@ -289,9 +291,7 @@
     "vscode:prepublish": "echo 'Extension ready for packaging'",
     "test": "echo 'Extension test placeholder'"
   },
-  "dependencies": {
-    "axios": "^1.6.0"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@types/vscode": "^1.80.0",
     "@vscode/vsce": "^2.19.0"

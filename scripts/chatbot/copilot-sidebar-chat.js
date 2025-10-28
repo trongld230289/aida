@@ -261,6 +261,77 @@ class CopilotSidebarChat {
     }
 
     /**
+     * Ensure AIDA templates folder exists (like Copilot does)
+     */
+    async ensureAidaTemplatesExist() {
+        try {
+            const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+            if (!workspaceFolder) {
+                console.log('⚠️ No workspace folder found for AIDA templates');
+                return;
+            }
+
+            const aidaPath = path.join(workspaceFolder.uri.fsPath, 'AIDA');
+            const templatesPath = path.join(aidaPath, 'templates');
+            
+            // Check if AIDA templates already exist
+            if (require('fs').existsSync(templatesPath)) {
+                console.log('✅ AIDA templates already exist');
+                return;
+            }
+
+            console.log('🔄 AIDA Chatbot: Creating AIDA templates folder...');
+            
+            // Create AIDA/templates directory
+            require('fs').mkdirSync(templatesPath, { recursive: true });
+            
+            // Copy templates from extension to workspace
+            const extensionTemplatesPath = require('path').join(this.context.extensionPath, 'templates');
+            if (require('fs').existsSync(extensionTemplatesPath)) {
+                await this.copyTemplatesRecursively(extensionTemplatesPath, templatesPath);
+                console.log('✅ AIDA Chatbot: Templates created successfully');
+                
+                // Notify webview
+                if (this.webviewView) {
+                    this.webviewView.webview.postMessage({
+                        type: 'showNotification',
+                        message: '✅ AIDA templates created automatically!',
+                        isSuccess: true
+                    });
+                }
+            } else {
+                console.log('⚠️ Extension templates not found');
+            }
+        } catch (error) {
+            console.log('❌ Failed to create AIDA templates:', error.message);
+        }
+    }
+
+    /**
+     * Copy templates recursively
+     */
+    async copyTemplatesRecursively(src, dest) {
+        const fs = require('fs');
+        const path = require('path');
+        
+        if (!fs.existsSync(src)) return;
+        
+        fs.mkdirSync(dest, { recursive: true });
+        const entries = fs.readdirSync(src, { withFileTypes: true });
+        
+        for (const entry of entries) {
+            const srcPath = path.join(src, entry.name);
+            const destPath = path.join(dest, entry.name);
+            
+            if (entry.isDirectory()) {
+                await this.copyTemplatesRecursively(srcPath, destPath);
+            } else {
+                fs.copyFileSync(srcPath, destPath);
+            }
+        }
+    }
+
+    /**
      * Send message directly to sidebar
      */
     async sendMessage(message) {
@@ -2572,6 +2643,10 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
                 case 'review-file':
                     try {
                         console.log('📁 AIDA Chat: Calling review-file with streaming');
+                        
+                        // Ensure AIDA templates exist before review (like Copilot does)
+                        await this.ensureAidaTemplatesExist();
+                        
                         const reviewFileModule = require('../review-file.js');
                         await reviewFileModule.aiReviewFile(messageWithoutParticipant, mockStream, null, this.context);
                         return result || '✅ **File Review Complete**\n\nCode analysis completed.';
@@ -2583,6 +2658,10 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
                 case 'review-changes':  
                     try {
                         console.log('📝 AIDA Chat: Calling review-changes with streaming');
+                        
+                        // Ensure AIDA templates exist before review (like Copilot does)
+                        await this.ensureAidaTemplatesExist();
+                        
                         const reviewChangesModule = require('../review-changes.js');
                         await reviewChangesModule.aiReviewChanges(messageWithoutParticipant, mockStream, null, this.context);
                         return result || '✅ **Changes Review Complete**\n\nGit changes analysis completed.';
@@ -2594,6 +2673,10 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
                 case 'review-pr':
                     try {
                         console.log('🔄 AIDA Chat: Calling review-pr with streaming');
+
+                        // Ensure AIDA templates exist before review (like Copilot does)
+                        await this.ensureAidaTemplatesExist();
+
                         const reviewPRModule = require('../review-pr.js');
                         // handleReviewPr expects: (request, context, stream, token)
                         await reviewPRModule.handleReviewPr(mockContext, this.context, mockStream, null);

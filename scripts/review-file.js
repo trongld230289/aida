@@ -1,7 +1,7 @@
 const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
-const { executeAIReview, getUnifiedModel, shouldUseApiKey, displayReviewHeader } = require('./review-common');
+const { executeAIReview, getUnifiedModel, shouldUseApiKey, displayReviewHeader, loadTemplateWithPriority, displayCommonReviewInfo } = require('./review-common');
 const { autoDetectWorkspace, displayDetectionInfo, getLanguageFromExtension } = require('./language-detection');
 
 // Import functions from extension.js
@@ -326,20 +326,14 @@ async function reviewFile(filePath, stream, requestedModel = null, context = nul
             if (workspaceFolder) {
                 detection = await autoDetectWorkspace(workspaceFolder.uri.fsPath, filePath);
                 
-                // Try framework-specific template first, then fallback
-                const templatePaths = [
-                    path.join(global.extensionPath, 'templates', detection.templatePath, 'review-file.md'),
-                    path.join(global.extensionPath, 'templates', 'review-code', 'fallback', 'review-file.md')
-                ];
+                // Use common template loading function
+                const templateResult = await loadTemplateWithPriority('review-file.md', detection);
+                templateContent = templateResult.content;
                 
-                for (const templatePath of templatePaths) {
-                    if (fs.existsSync(templatePath)) {
-                        templateContent = fs.readFileSync(templatePath, 'utf8');
-                        break;
-                    }
-                }
+                // Update detection with template source info
+                detection.templateSource = templateResult.templateSource;
+                detection.templatePath = templateResult.templatePath;
                 
-                // Display detection information
                 displayDetectionInfo(stream, detection, 'review-file.md');
             }
         } catch (error) {
@@ -347,12 +341,10 @@ async function reviewFile(filePath, stream, requestedModel = null, context = nul
         }
         
         // Use reusable header display function
-        displayReviewHeader(stream, 'File Review', filePath, null, detection?.templatePath);
-        
-        stream.markdown(`**File:** \`${fileName}\`\n`);
-        stream.markdown(`**Type:** ${fileExtension}\n`);
-        stream.markdown(`**Size:** ${content.length} characters\n`);
-        stream.markdown(`**Date:** ${new Date().toLocaleDateString()}\n\n`);
+        displayCommonReviewInfo(stream, 'File Review', filePath, {
+            length: content.length,
+            lengthType: 'file'
+        });
 
         // Try to use AI model for comprehensive review
         try {
@@ -428,8 +420,6 @@ Provide comprehensive analysis with specific examples and actionable recommendat
             } else {
                 // Check if API key mode is enabled
                 if (shouldUseApiKey()) {
-                    stream.markdown('🔑 **API Key mode enabled** - Using your configured AI service for file analysis\n\n');
-                    
                     // Try to use API key mode
                     try {
                         const success = await executeAIReview(reviewPrompt, null, stream, 'File');
