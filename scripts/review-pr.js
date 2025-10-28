@@ -50,28 +50,58 @@ async function getPRReviewTemplate(templateType, prData) {
         
         // Load template content
         const fs = require('fs');
+        const vscode = require('vscode');
         const extensionPath = global.extensionPath || process.cwd();
-        const fullTemplatePath = path.join(extensionPath, 'templates', templatePath);
+        
+        // Try workspace AIDA templates first, then extension templates
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        let templatePaths = [];
+        let templateSource = 'extension/templates';
+        
+        if (workspaceFolder) {
+            const workspaceAidaPath = path.join(workspaceFolder.uri.fsPath, 'AIDA', 'templates');
+            templatePaths = [
+                // Workspace AIDA templates (highest priority)
+                path.join(workspaceAidaPath, 'review-code', 'languages', (detection.language || detection.framework || 'javascript').toLowerCase(), templateType),
+                path.join(workspaceAidaPath, 'review-code', 'fallback', templateType),
+                // Extension templates (fallback)
+                path.join(extensionPath, 'templates', templatePath),
+                path.join(extensionPath, 'templates', 'review-code', 'fallback', templateType)
+            ];
+        } else {
+            templatePaths = [
+                path.join(extensionPath, 'templates', templatePath),
+                path.join(extensionPath, 'templates', 'review-code', 'fallback', templateType)
+            ];
+        }
         
         let content = '';
-        if (fs.existsSync(fullTemplatePath)) {
-            content = fs.readFileSync(fullTemplatePath, 'utf8');
-            console.log(`✅ Loaded template: ${templatePath}`);
-        } else {
-            // Fallback to generic template
-            const fallbackPath = path.join(extensionPath, 'templates', 'review-code', 'fallback', templateType);
-            if (fs.existsSync(fallbackPath)) {
-                content = fs.readFileSync(fallbackPath, 'utf8');
-                console.log(`⚠️ Using fallback template: fallback/${templateType}`);
-            } else {
-                throw new Error(`Template not found: ${templatePath} and fallback not available`);
+        let usedTemplatePath = '';
+        
+        for (const fullTemplatePath of templatePaths) {
+            if (fs.existsSync(fullTemplatePath)) {
+                content = fs.readFileSync(fullTemplatePath, 'utf8');
+                usedTemplatePath = fullTemplatePath;
+                
+                // Determine template source
+                if (workspaceFolder && fullTemplatePath.includes(path.join(workspaceFolder.uri.fsPath, 'AIDA'))) {
+                    templateSource = 'workspace/AIDA/templates';
+                }
+                
+                console.log(`✅ Loaded template from: ${templateSource} - ${fullTemplatePath}`);
+                break;
             }
+        }
+        
+        if (!content) {
+            throw new Error(`Template not found: ${templatePath} and fallback not available`);
         }
 
         return {
             content,
             detection,
             templatePath,
+            templateSource,
             confidence: detection.confidence,
             debugInfo: detection.debugInfo
         };
@@ -402,6 +432,7 @@ async function handleReviewPr(request, context, stream, token) {
         let repository = null;
         let owner = null;
         let repo = null;
+        let originalUrl = null; // Store the original URL from user input
 
         // GitHub URL pattern: https://github.com/{owner}/{repo}/pull/{id}
         const githubUrlPattern = /https:\/\/github\.com\/([^\/]+)\/([^\/]+)\/pull\/(\d+)/i;
@@ -421,12 +452,14 @@ async function handleReviewPr(request, context, stream, token) {
             owner = githubMatch[1];
             repo = githubMatch[2];
             prId = githubMatch[3];
+            originalUrl = githubMatch[0]; // Store the full matched URL
         } else if (azureMatch) {
             repoType = 'azure';
             organization = azureMatch[1];
             project = azureMatch[2];
             repository = azureMatch[3];
             prId = azureMatch[4];
+            originalUrl = azureMatch[0]; // Store the full matched URL
         } else if (gitlabMatch) {
             repoType = 'gitlab';
             // Extract GitLab instance, owner, repo, and MR ID
@@ -434,6 +467,7 @@ async function handleReviewPr(request, context, stream, token) {
             owner = gitlabMatch[2]; // namespace/group
             repo = gitlabMatch[3]; // project name
             prId = gitlabMatch[4]; // merge request ID
+            originalUrl = gitlabMatch[0]; // Store the full matched URL
             
             // Store GitLab host for API calls
             organization = gitlabHost;
@@ -556,6 +590,16 @@ async function handleReviewPr(request, context, stream, token) {
                 stream.markdown(`🌿 **Merging**: \`${data.sourceBranch}\` → \`${data.targetBranch}\`\n\n`);
             }
             
+            // Import and use common review info display
+            const { displayCommonReviewInfo } = require('./review-common');
+            const displayName = repoType === 'github' ? `${owner}/${repo}` : 
+                               repoType === 'gitlab' ? `${owner}/${repo}` : 
+                               repository || `PR #${prId}`;
+            displayCommonReviewInfo(stream, 'PR Review', displayName, {
+                length: data.fileChanges ? data.fileChanges.length : 0,
+                lengthType: 'changes'
+            });
+            
             // Debug file changes for GitHub
             if (repoType === 'github' && data.fileChanges) {
                 console.log(`🐙 DEBUG: GitHub file changes:`, data.fileChanges.map(f => ({
@@ -572,8 +616,8 @@ async function handleReviewPr(request, context, stream, token) {
         // Display PR review results
         await displayPrReviewResults(stream, prAnalysis);
 
-        // Add quick review option
-        await addQuickReviewOption(stream, prAnalysis, request);
+        // Add quick review option with original URL
+        await addQuickReviewOption(stream, prAnalysis, request, originalUrl);
 
     } catch (error) {
         stream.markdown('❌ **Unexpected Error**\n\n');
@@ -1864,7 +1908,7 @@ function parseRealGitDiff(gitDiff, prId, org, proj, repo, diffCommand) {
 /**
  * Add quick review option using review-pr template
  */
-async function addQuickReviewOption(stream, prAnalysis, request) {
+async function addQuickReviewOption(stream, prAnalysis, request, originalUrl = null) {
     const data = prAnalysis.data;
 
     // 🔍 DEBUG: Check what we have in prAnalysis structure
@@ -1936,11 +1980,9 @@ async function addQuickReviewOption(stream, prAnalysis, request) {
     }
 
     try {
-        stream.markdown('## 🚀 AI-Powered Code Review\n\n');
-        stream.markdown('⚡ **Analyzing code changes with AI...**\n\n');
 
         // Actually perform the quick review with AI
-        await performQuickReviewWithAI(stream, data, request, diffContent);
+        await performQuickReviewWithAI(stream, data, request, diffContent, originalUrl);
 
     } catch (error) {
         console.error('Error in quick review option:', error);
@@ -1951,7 +1993,7 @@ async function addQuickReviewOption(stream, prAnalysis, request) {
 /**
  * Perform quick review with AI using template and shared functions
  */
-async function performQuickReviewWithAI(stream, prData, request, diffContent) {
+async function performQuickReviewWithAI(stream, prData, request, diffContent, originalUrl = null) {
     let templateContent;
 
     // Set global context for any sub-functions
@@ -1964,35 +2006,29 @@ async function performQuickReviewWithAI(stream, prData, request, diffContent) {
 
         console.log(`✅ Loaded ${templateResult.detection.template.name} review template from: ${templateResult.templatePath} (${templateResult.content.length} characters)`);
         
-        // Display PR detection information
-        stream.markdown('## 🎯 Auto-Detection Results (PR Mode)\n\n');
-        stream.markdown(`**Detection Method:** Content Analysis ✅\n`);
+        // Import and use displayCommonReviewInfo and displayDetectionInfo functions
+        const { displayCommonReviewInfo, displayDetectionInfo } = require('./review-common');
         
-        if (templateResult.detection.language) {
-            stream.markdown(`**Primary Language:** ${templateResult.detection.language}\n`);
-        }
+        // Display detection information FIRST (as user requested)
+        const detectionForDisplay = {
+            type: templateResult.detection.template.type || 'fallback',
+            detected: templateResult.detection.framework || templateResult.detection.language || 'General',
+            templatePath: templateResult.detection.template.type + '/' + templateResult.detection.template.name,
+            confidence: templateResult.confidence,
+            reason: `${templateResult.detection.template.name} template selected based on PR content analysis`
+        };
+        displayDetectionInfo(stream, detectionForDisplay, 'review-pr.md');
         
-        if (templateResult.detection.framework) {
-            stream.markdown(`**Framework:** ${templateResult.detection.framework}\n`);
-        }
-        
-        if (templateResult.detection.breakdown && Object.keys(templateResult.detection.breakdown).length > 0) {
-            const breakdown = Object.entries(templateResult.detection.breakdown)
-                .map(([lang, score]) => `${lang} (${score}%)`)
-                .join(', ');
-            stream.markdown(`**Language Breakdown:** ${breakdown}\n`);
-        }
-        
-        stream.markdown(`**Review Template:** \`${templateResult.detection.template.type}/${templateResult.detection.template.name}\`\n`);
-        stream.markdown(`**Confidence:** ${templateResult.confidence}\n\n`);
-        
-        if (templateResult.detection.template.type === 'framework') {
-            stream.markdown(`🚀 **Using ${templateResult.detection.framework}-specific review template**\n\n`);
-        } else if (templateResult.detection.template.type === 'language') {
-            stream.markdown(`🚀 **Using ${templateResult.detection.language}-specific review template**\n\n`);
-        } else {
-            stream.markdown(`🚀 **Using generic fallback review template**\n\n`);
-        }
+        // Display common review info SECOND (PR title, path, file changes count)
+        // Use original URL if available, otherwise fallback to generated name
+        const displayName = originalUrl || 
+                           (prData.gitlabHost ? `${prData.owner}/${prData.repository}` : 
+                            prData.owner && prData.repository ? `${prData.owner}/${prData.repository}` : 
+                            prData.repository || `PR #${prData.id}`);
+        displayCommonReviewInfo(stream, 'PR Quick Review', displayName, {
+            length: prData.fileChanges ? prData.fileChanges.length : 0,
+            lengthType: 'changes'
+        });
 
     } catch (error) {
         stream.markdown('❌ **Error**: Could not load quick review template\n');
@@ -2015,8 +2051,6 @@ async function performQuickReviewWithAI(stream, prData, request, diffContent) {
     processedTemplate += '**Instructions:** Please analyze the diff above using the strict review framework provided in this template.\n';
 
     try {
-        stream.markdown('🔄 **AI Quick Analysis in progress...** (streaming PR assessment)\n\n');
-
         // Get unified model using shared function with request
         const model = await getUnifiedModel(stream, null, null, request);
 

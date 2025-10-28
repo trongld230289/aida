@@ -1657,28 +1657,16 @@ async function getUnifiedModel(stream, requestedModel = null, chatContext = null
  * @param {number|null} diffLength - Length of diff content (for changes review)
  * @param {string|null} templatePath - Path to the template being used
  */
-function displayReviewHeader(stream, reviewType, filePath, diffLength = null, templatePath = null) {
+function displayReviewHeader(stream, reviewType, filePath, diffLength = null, templatePath = null, templateSource = null) {
     const path = require('path');
     const fileName = path.basename(filePath);
     const fullPath = filePath;
     
     stream.markdown(`# 🔍 ${reviewType}: \`${fileName}\`\n\n`);
-    stream.markdown(`📂 **Full Path:** \`${fullPath}\`\n\n`);
+    stream.markdown(`📂 **Full Path:** \`${fullPath}\`\n`);
     
     if (diffLength !== null) {
-        stream.markdown('## 📋 Current Changes Review\n\n');
-        stream.markdown(`**Diff Length:** ${diffLength} characters\n\n`);
-        if (templatePath) {
-            const templateFile = templatePath.replace(/.*[\\\/]/, '');
-            stream.markdown(`**Template used:** extension/templates/${templateFile}\n\n`);
-        }
-        stream.markdown('---\n\n');
-    } else {
-        stream.markdown('## 📄 File Review Analysis\n\n');
-        if (templatePath) {
-            const templateFile = templatePath.replace(/.*[\\\/]/, '');
-            stream.markdown(`**Template used:** extension/templates/${templateFile}\n\n`);
-        }
+        stream.markdown(`📄 **Diff Length:** ${diffLength} characters\n`);
     }
 }
 
@@ -2530,6 +2518,134 @@ function getLanguageFromExtension(ext) {
     return languageMap[ext] || 'text';
 }
 
+/**
+ * Load template with workspace AIDA priority
+ * @param {string} templateType - Template file name (e.g., 'review-file.md')
+ * @param {object} detection - Detection result object
+ * @returns {object} Template result with content, source, and path info
+ */
+async function loadTemplateWithPriority(templateType, detection) {
+    const vscode = require('vscode');
+    const fs = require('fs');
+    const path = require('path');
+    
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    let templatePaths = [];
+    let templateSourceDisplay = 'extension/templates';
+    let templatePathDisplay = detection.templatePath;
+    let templateContent = null;
+    let usedTemplatePath = null;
+    
+    if (workspaceFolder) {
+        const workspaceAidaPath = path.join(workspaceFolder.uri.fsPath, 'AIDA', 'templates');
+        templatePaths = [
+            // Workspace AIDA templates (highest priority)
+            path.join(workspaceAidaPath, 'review-code', 'languages', detection.detected.toLowerCase(), templateType),
+            path.join(workspaceAidaPath, 'review-code', 'fallback', templateType),
+            // Extension templates (fallback)
+            path.join(global.extensionPath, 'templates', detection.templatePath, templateType),
+            path.join(global.extensionPath, 'templates', 'review-code', 'fallback', templateType)
+        ];
+    } else {
+        templatePaths = [
+            path.join(global.extensionPath, 'templates', detection.templatePath, templateType),
+            path.join(global.extensionPath, 'templates', 'review-code', 'fallback', templateType)
+        ];
+    }
+    
+    // Try each template path in priority order
+    for (const templatePath of templatePaths) {
+        console.log(`🔍 Checking template path: ${templatePath}`);
+        if (fs.existsSync(templatePath)) {
+            console.log(`✅ Found template at: ${templatePath}`);
+            templateContent = fs.readFileSync(templatePath, 'utf8');
+            usedTemplatePath = templatePath;
+            break;
+        } else {
+            console.log(`❌ Template not found at: ${templatePath}`);
+        }
+    }
+    
+    // Determine template source for display
+    if (workspaceFolder && usedTemplatePath && usedTemplatePath.includes(path.join(workspaceFolder.uri.fsPath, 'AIDA'))) {
+        templateSourceDisplay = 'workspace/AIDA/templates';
+        // Extract language from workspace path: review-code/languages/angular
+        const workspaceAidaPath = path.join(workspaceFolder.uri.fsPath, 'AIDA', 'templates');
+        const relativePath = path.relative(workspaceAidaPath, usedTemplatePath);
+        const pathParts = relativePath.split(path.sep);
+        templatePathDisplay = pathParts.slice(0, -1).join('/'); // e.g., "review-code/languages/angular"
+    }
+    
+    if (!templateContent) {
+        throw new Error(`Template not found: ${templateType}`);
+    }
+    
+    console.log(`✅ Loaded review template from: ${templateSourceDisplay}/${templatePathDisplay} (${templateContent.length} characters)`);
+    
+    return {
+        content: templateContent,
+        templateSource: templateSourceDisplay,
+        templatePath: templatePathDisplay,
+        usedPath: usedTemplatePath
+    };
+}
+
+/**
+ * Display common review info header for all review types
+ * @param {object} stream - VS Code chat stream
+ * @param {string} reviewType - Type of review (File Review, Changes Review, PR Review)  
+ * @param {string} filePath - File path to display
+ * @param {object} options - Options { length, lengthType, lengthLabel }
+ */
+function displayCommonReviewInfo(stream, reviewType, filePath, options = {}) {
+    const path = require('path');
+    const vscode = require('vscode');
+    
+    // Extract file/folder name for title
+    const fileName = path.basename(filePath);
+    
+    // Convert absolute path to relative path from workspace root
+    let displayPath = filePath;
+    try {
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        if (workspaceFolder && path.isAbsolute(filePath)) {
+            // Convert to relative path from workspace root
+            const relativePath = path.relative(workspaceFolder.uri.fsPath, filePath);
+            // Use forward slashes for consistency (like VS Code)
+            displayPath = relativePath.replace(/\\/g, '/');
+        }
+    } catch (error) {
+        // Fallback to original path if conversion fails
+        console.log('Failed to convert to relative path:', error);
+    }
+    
+    // Display header
+    stream.markdown(`# 🔍 ${reviewType}: \`${fileName}\`\n\n`);
+    
+    // Display relative path 
+    stream.markdown(`📂 **Full Path:** \`${displayPath}\`\n\n`);
+    
+    // Display length info if provided
+    if (options.length !== null && options.length !== undefined) {
+        let icon = '📄';
+        let label = options.lengthLabel || 'File Length';
+        
+        if (options.lengthType === 'diff') {
+            icon = '📏';
+            label = 'Diff Length';
+        } else if (options.lengthType === 'file') {
+            icon = '📄'; 
+            label = 'File Length';
+        } else if (options.lengthType === 'changes') {
+            icon = '📊';
+            label = 'File Changes';
+        }
+        
+        const unit = options.lengthType === 'changes' ? '' : ' characters';
+        stream.markdown(`${icon} **${label}:** ${options.length}${unit}\n\n`);
+    }
+}
+
 module.exports = {
     executeAIReview,
     executeAIReviewWithApiKey,
@@ -2561,5 +2677,7 @@ module.exports = {
     showTokenStatistics,
     executeApiAnalysisCall,
     setGlobalAbortSignal,
-    getGlobalAbortSignal
+    getGlobalAbortSignal,
+    loadTemplateWithPriority,
+    displayCommonReviewInfo
 };
