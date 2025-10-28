@@ -276,6 +276,12 @@
         "name": "sync-review-templates",
         "description": "🔄 Sync AIDA review templates to workspace",
         "isSticky": true
+      },
+      {
+        "id": "scan-app",
+        "name": "scan-app",
+        "description": "🤖 AI-powered code scanning and duplicate detection",
+        "isSticky": true
       }
     ]
   },
