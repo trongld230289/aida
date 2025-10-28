@@ -14,6 +14,7 @@ const {
     showAvailableModels
 } = require('./scripts/review-common');
 
+
 // Session tracking for "Enter twice" functionality and change scores
 const chatSessions = new Map();
 
@@ -385,6 +386,19 @@ function activate(context) {
         console.error('❌ Error initializing PR review:', error);
         reviewPrParticipant = null;
         reviewPullRequest = null;
+    }
+
+    // Initialize scan-app functionality from external script
+    let scanAppParticipant;
+    try {
+        const scanApp = require('./scripts/scan-app');
+        const result = scanApp.initializeScanApp(context);
+        scanAppParticipant = result.scanAppParticipant;
+        console.log('✅ Scan-app participant initialized successfully');
+    } catch (error) {
+        console.error('❌ Failed to initialize scan-app participant:', error);
+        // Create a dummy participant to prevent errors
+        scanAppParticipant = null;
     }
 
     // Register command to view PR diff in webview FIRST
