@@ -4,7 +4,7 @@
 
 > Transform your development workflow with AIDA - Your intelligent coding companion featuring built-in chatbot, support for your own AI API (OpenAI/Claude), and comprehensive development tools. No GitHub Copilot required!
 
-[![Version](https://img.shields.io/badge/version-1.0.2-blue.svg)](https://marketplace.visualstudio.com/items?itemName=trongld232.aida-dev)
+[![Version](https://img.shields.io/badge/version-1.0.3-blue.svg)](https://marketplace.visualstudio.com/items?itemName=trongld232.aida-dev)
 [![VS Code](https://img.shields.io/badge/VS%20Code-1.90+-green.svg)](https://code.visualstudio.com/)
 [![License](https://img.shields.io/badge/license-MIT-orange.svg)](LICENSE)
 
@@ -57,16 +57,17 @@
 - **@review-file**: Comprehensive file analysis and suggestions
 - **@review-changes**: Git diff analysis with intelligent insights
 - **@review-pr**: Complete pull request review with team collaboration
+- **@sync-review-templates**: Sync AIDA review templates to workspace
+- **@scan-app**: AI-powered code scanning and duplicate detection
 
 ## 🚀 Quick Start
-
 ### 1. Installation
 ```bash
 # Install from VS Code Marketplace
 ext install trongld232.aida-dev
 
 # Or install from VSIX
-code --install-extension aida-dev-1.0.2.vsix
+code --install-extension aida-dev-1.0.3.vsix
 ```
 
 ### 2. Setup AIDA Chatbot (Optional - For Non-Copilot Users)

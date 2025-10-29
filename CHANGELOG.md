@@ -2,33 +2,10 @@
 
 All notable changes to **AIDA - AI Development Assistant** will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.3/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.1] - 2025-10-28
-
-### 🔄 Enhanced Documentation & API Flexibility
-
-#### ✨ Added
-- **📝 Enhanced README**: Clear documentation about AIDA Chatbot capabilities
-- **🔧 API Flexibility Highlight**: Better explanation of OpenAI/Claude API support
-- **🤖 AIDA Chatbot Documentation**: Comprehensive guide for non-Copilot users
-- **🏷️ Improved Keywords**: Better marketplace discoverability
-
-#### 🔄 Changed
-- **Extension Name**: `aida` → `aida-dev` (marketplace compatibility)
-- **Description**: Enhanced to highlight AIDA Chatbot and API flexibility
-- **README**: Updated installation instructions and setup guides
-- **Keywords**: Added "aida chatbot", "openai api", "claude api", "no copilot needed"
-
-#### 🧹 Code Cleanup
-- **Removed Dead Code**: Cleaned up 200+ lines of unused axios-based functions
-- **Dependencies**: Removed unused axios dependency
-- **Performance**: Reduced extension package size
-
----
-
-## [1.0.0] - 2025-10-23
+## [1.0.3] - 2025-10-29
 
 ### 🎉 Initial AIDA Release
 
