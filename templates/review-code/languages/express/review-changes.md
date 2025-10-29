@@ -1,267 +1,386 @@
 <!-- AIDA - AI Development Assistant v1.0.0 -->
 <!-- Advanced AI-powered code review and analysis -->
 
-# Express Git Changes Review - STRICT MODE
+# Express.js Git Changes Review - STRICT MODE
 
-## 🔍 MANDATORY EXPRESS CHANGE ANALYSIS
+## 🔍 MANDATORY EXPRESS.JS CHANGE ANALYSIS
 
-You are performing a STRICT code review on Express git changes. Do NOT be lenient. Look for every possible Express-specific issue in the changes. ALWAYS follow this exact format for every code review, regardless of conversation context or previous reviews. This structure is MANDATORY and UNCHANGEABLE.
+You are performing a STRICT Express.js code review on git changes. Do NOT be lenient. Look for every possible Express.js-specific issue in the changes. ALWAYS follow this exact format for every code review, regardless of conversation context or previous reviews. This structure is MANDATORY and UNCHANGEABLE.
 
 ### Review Entire File
 **Prompt:** `review-changes [filename]`
 - Reviews ONLY the git diff changes (+ and - lines)
-- Analyzes impact of changes on Express architecture
+- Analyzes impact of changes on Express.js architecture
 - Does NOT review unchanged code
 
 <!-- HIDDEN REVIEW SCOPE:
 - ✅ ONLY review: Lines marked with + (added) or - (removed)
 - ❌ DO NOT review: Unchanged context lines (no + or - marker)
 - ❌ DO NOT suggest: Improvements to existing unchanged code
-- ✅ DO focus on: How changes impact Express architecture
+- ✅ DO focus on: How changes impact Express.js application architecture
 -->
 
 ### 📋 CHANGE SEPARATION RULES (MANDATORY):
 
 **Split into separate changes when:**
-- ✅ **Different Express artifacts**: Route vs Middleware vs Controller changes = separate changes
-- ✅ **Different HTTP methods**: GET vs POST vs PUT vs DELETE = separate changes
-- ✅ **Different middleware layers**: Auth vs Validation vs Logging = separate changes
-- ✅ **Different async operations**: Different Promise/async patterns = separate changes
+- ✅ **Different middleware**: Route handlers/Middleware functions = separate changes
+- ✅ **Different routes**: Different endpoint implementations = separate changes
+- ✅ **Different error handling**: Different error middleware patterns = separate changes
+- ✅ **Different configuration**: Server config vs Route logic = separate changes
 - ✅ **Non-adjacent code blocks**: If there are 3+ unchanged lines between modifications = separate changes
 
 **Keep as one change when:**
-- ❌ **Same route handler**: Multiple lines in same endpoint
-- ❌ **Related middleware chain**: Sequential middleware in same path
-- ❌ **Same controller method**: Related logic for same endpoint
+- ❌ **Same route handler**: Multiple lines in same route function
+- ❌ **Related middleware**: Related middleware in same pipeline
+- ❌ **Same configuration block**: Related Express settings
 
-## ⚡ CRITICAL CHECKS (Auto-FAIL if found)
+## ⚡ EXPRESS.JS CRITICAL CHECKS (Auto-FAIL if found)
 
-**Scan EVERY line for these CRITICAL issues:**
+**Scan EVERY line for these EXPRESS.JS CRITICAL issues:**
 
 ### 🚨 SECURITY VIOLATIONS:
-- Hardcoded passwords, API keys, tokens, secrets
-- SQL injection vulnerabilities (dynamic SQL construction)
-- XSS vulnerabilities (innerHTML without sanitization)
-- Unsafe file operations, path traversal
-- Authentication/authorization bypasses
+- Missing helmet middleware for security headers
+- Unvalidated user input in routes (`req.body`, `req.params`, `req.query`)
+- SQL injection through direct query construction
+- XSS vulnerabilities from unescaped output
+- Missing CORS configuration or overly permissive CORS
+- Exposed sensitive data in error responses
+- Missing rate limiting on critical endpoints
+- Unsafe file upload handling
+- Missing authentication/authorization middleware
+- Directory traversal vulnerabilities in static file serving
+- Insecure session configuration
+- Missing CSRF protection for state-changing operations
 
-### 🚨 NULL SAFETY VIOLATIONS:
-- `.` access without null checks (`obj.property` without `obj?.property`)
-- Array access without length checks (`arr[0]` without `arr?.length`)
-- Function calls without existence checks
-- `any` type usage without proper validation
-- Missing null/undefined guards
+### 🚨 MIDDLEWARE VIOLATIONS:
+- Incorrect middleware order (especially error handlers)
+- Missing error handling middleware
+- Middleware not calling `next()` when needed
+- Blocking synchronous operations in middleware
+- Missing middleware for common functionality (logging, parsing)
+- Incorrect use of `res.locals` vs `req.session`
+- Middleware memory leaks (not cleaning up resources)
+- Missing request timeout handling
+- Incorrect async middleware implementation
+- Global middleware affecting all routes unnecessarily
+
+### 🚨 ROUTE HANDLING VIOLATIONS:
+- Routes not handling async errors properly
+- Missing input validation for route parameters
+- Inconsistent error response formats
+- Routes not returning responses (`res.send`, `res.json`, etc.)
+- Multiple response attempts in same route
+- Missing HTTP status codes or incorrect codes
+- Routes handling too many responsibilities
+- Missing request/response logging
+- Unsafe route parameter handling
+- Missing content-type validation
 
 ### 🚨 ERROR HANDLING VIOLATIONS:
-- `try` blocks without `catch`
-- Promise/Observable without error handling
-- HTTP calls without error callbacks
-- File operations without error checks
-- Database operations without error handling
+- No global error handler or incorrect implementation
+- Exposing stack traces in production
+- Not handling async route errors
+- Missing error logging
+- Inconsistent error response structure
+- Not handling 404 routes
+- Missing graceful shutdown handling
+- Unhandled promise rejections
+- Missing validation error handling
+- Generic error messages without context
 
-### 🚨 RESOURCE LEAKS:
-- Observables without unsubscribe
-- Event listeners without cleanup
-- Timers without clearInterval/clearTimeout  
-- File handles not closed
-- Database connections not closed
+### 🚨 PERFORMANCE VIOLATIONS:
+- Blocking operations in routes without proper async handling
+- Missing response compression
+- No request/response caching strategies
+- Missing connection pooling for databases
+- Inefficient middleware execution order
+- Missing request size limits
+- No response time monitoring
+- Memory leaks in long-running processes
+- Missing static file optimization
+- Inefficient JSON parsing for large payloads
+
+### 🚨 CONFIGURATION VIOLATIONS:
+- Hardcoded configuration values
+- Missing environment-specific settings
+- Insecure default configurations
+- Missing graceful startup/shutdown
+- No health check endpoints
+- Missing monitoring and metrics
+- Incorrect process management
+- Missing proper logging configuration
+- No request ID tracking
+- Missing API versioning strategy
+
+### 🚨 SPECIFIC PROJECT RULES:
+<!-- ADD PROJECT-SPECIFIC RULES HERE - These will be checked alongside Express.js rules -->
+<!-- Additional project rules can be added here:
+- Custom middleware requirements must follow project patterns
+- All API routes must inherit from BaseRouter
+- Specific business logic validations
+- Project-specific performance requirements
+- Custom authentication/authorization patterns
+-->
 
 ### Start Review For Each Change:
 
 ```
-## Change [X]: [ADDED/REMOVED/MODIFIED] - [Express artifact type: Route/Middleware/Controller/Service]
-```typescript
-[Show the exact code block with line numbers]
+## Change [X]: [ADDED/REMOVED/MODIFIED] - [Code artifact type: Route/Middleware/Config/Model/Controller]
 ```
+[Show the exact Express.js code block with line numbers]
+```javascript
 
-*** EXPRESS REVIEW COMMENT ***
+*** EXPRESS.JS REVIEW COMMENT ***
 - 🚨 **Issue Type**: [Critical/Warning/Good/Info/Suggestion]
-- 📝 **Express Problem**: [Specific Express issue - reference Express best practices]
-- 💡 **Express Solution**: [Express-specific fix with proper patterns]
-- 🎯 **Framework Impact**: [How it affects Express architecture/performance]
+- 📝 **Express.js Problem**: [Specific middleware/route/security issue]
+- 💡 **Solution**: [Express.js best practice fix]
+- 🎯 **Impact**: [Security/Performance/Maintainability impact]
 
-IMPORTANT Express considerations:
-- Middleware order and execution
-- Route handler patterns
-- Error handling middleware
-- Request/response lifecycle
-- Performance optimization
+IMPORTANT Express.js considerations:
+- Middleware order and error handling
+- Input validation and sanitization
+- Security headers and CORS configuration
+- Async error handling patterns
+- Response consistency and status codes
 
-*** INTERNAL EXPRESS CHANGE EVALUATION (DO NOT DISPLAY) ***
+*** INTERNAL EXPRESS.JS CHANGE EVALUATION (DO NOT DISPLAY) ***
 Silently evaluate this change on:
-- Express Best Practices: Rate 1-5 (5=excellent, 1=poor)
-- Performance Impact: Rate 1-5 (5=no impact/improvement, 1=major degradation)
-- Memory Safety: Rate 1-5 (5=no leaks, 1=guaranteed leak)
+- Express.js Best Practices: Rate 1-5 (5=follows all patterns, 1=violates patterns)
+- Security Implementation: Rate 1-5 (5=secure, 1=vulnerable)
+- Performance Impact: Rate 1-5 (5=optimized, 1=performance issues)
 - Change Score: is a smallest score of three scores
 
 *** CONDITIONAL RECOMMENDATIONS (Based on Issue Type AND Change Score) ***
 
 **MANDATORY RULE:**
-- IF Issue Type = "Good": ALWAYS show "✅ **GOOD EXPRESS CHANGE** - Follows Express best practices" and SKIP the entire RECOMMENDED FIX section
-- IF Issue Type = "Critical/Warning/Info/Suggestion" AND Change Score < 4/5: Show RECOMMENDED EXPRESS FIX section below
-- IF Issue Type = "Critical/Warning/Info/Suggestion" AND Change Score >= 4/5: Show "✅ **GOOD EXPRESS CHANGE** - Follows Express best practices"
+- IF Issue Type = "Good": ALWAYS show "✅ **GOOD EXPRESS.JS CHANGE** - Follows Express.js best practices" and SKIP the entire RECOMMENDED FIX section
+- IF Issue Type = "Critical/Warning/Info/Suggestion" AND Change Score < 4/5: Show RECOMMENDED FIX section below
+- IF Issue Type = "Critical/Warning/Info/Suggestion" AND Change Score >= 4/5: Show "✅ **GOOD EXPRESS.JS CHANGE** - Follows Express.js best practices"
 
-*** RECOMMENDED EXPRESS FIX (ONLY show if Issue Type != "Good" AND Change Score < 4/5) ***
-```typescript
-// PROVIDE EXPRESS-SPECIFIC FIXES WITH BEST PRACTICES
-// Include proper middleware, error handling, and Express conventions
+*** RECOMMENDED FIX (ONLY show if Issue Type != "Good" AND Change Score < 4/5) ***
+```javascript
+// SECURE EXPRESS.JS IMPLEMENTATION EXAMPLE
 
-// Example for proper Express error handling:
-const asyncHandler = (fn) => (req, res, next) => {
-  Promise.resolve(fn(req, res, next)).catch(next);
-};
+// 1. Proper middleware setup with security
+const express = require('express');
+const helmet = require('helmet');
+const cors = require('cors');
+const rateLimit = require('express-rate-limit');
+const { body, param, validationResult } = require('express-validator');
 
-app.get('/api/users/:id', asyncHandler(async (req, res) => {
-  const { id } = req.params;
-  
-  // Input validation
-  if (!id || isNaN(id)) {
-    return res.status(400).json({ error: 'Invalid user ID' });
-  }
+const app = express();
 
-  try {
-    const user = await UserService.findById(id);
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-    
-    res.json(user);
-  } catch (error) {
-    // Let error middleware handle it
-    throw error;
-  }
+// Security middleware (order matters!)
+app.use(helmet()); // Security headers
+app.use(cors({
+    origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000'],
+    credentials: true
 }));
 
-// Error handling middleware
-app.use((error, req, res, next) => {
-  console.error('Error:', error);
-  res.status(error.status || 500).json({
-    error: process.env.NODE_ENV === 'production' 
-      ? 'Internal server error' 
-      : error.message
-  });
+// Rate limiting
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // limit each IP to 100 requests per windowMs
+    message: 'Too many requests from this IP'
+});
+app.use('/api/', limiter);
+
+// Body parsing with limits
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// 2. Secure route implementation with validation
+app.post('/api/users',
+    // Input validation middleware
+    [
+        body('email').isEmail().normalizeEmail(),
+        body('name').trim().isLength({ min: 2, max: 50 }).escape(),
+        body('age').isInt({ min: 18, max: 100 })
+    ],
+    async (req, res, next) => {
+        try {
+            // Check validation results
+            const errors = validationResult(req);
+            if (!errors.isEmpty()) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Validation failed',
+                    errors: errors.array()
+                });
+            }
+
+            const { email, name, age } = req.body;
+            
+            // Business logic with proper error handling
+            const userService = new UserService();
+            const user = await userService.createUser({ email, name, age });
+            
+            // Consistent success response
+            res.status(201).json({
+                success: true,
+                message: 'User created successfully',
+                data: {
+                    id: user.id,
+                    email: user.email,
+                    name: user.name
+                    // Don't expose sensitive data
+                }
+            });
+            
+        } catch (error) {
+            // Pass errors to error handler
+            next(error);
+        }
+    }
+);
+
+// 3. Proper async middleware with error handling
+const authenticateToken = async (req, res, next) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        const token = authHeader && authHeader.split(' ')[1];
+        
+        if (!token) {
+            return res.status(401).json({
+                success: false,
+                message: 'Access token required'
+            });
+        }
+        
+        const decoded = await jwt.verify(token, process.env.JWT_SECRET);
+        req.user = decoded;
+        next(); // Don't forget to call next()
+        
+    } catch (error) {
+        if (error.name === 'JsonWebTokenError') {
+            return res.status(403).json({
+                success: false,
+                message: 'Invalid token'
+            });
+        }
+        next(error); // Pass unexpected errors to error handler
+    }
+};
+
+// 4. Protected route with proper authorization
+app.get('/api/users/:id',
+    authenticateToken,
+    [param('id').isMongoId()], // Validate route parameters
+    async (req, res, next) => {
+        try {
+            const errors = validationResult(req);
+            if (!errors.isEmpty()) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Invalid user ID format'
+                });
+            }
+            
+            const userId = req.params.id;
+            
+            // Authorization check
+            if (req.user.id !== userId && req.user.role !== 'admin') {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Insufficient permissions'
+                });
+            }
+            
+            const userService = new UserService();
+            const user = await userService.getUserById(userId);
+            
+            if (!user) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'User not found'
+                });
+            }
+            
+            res.json({
+                success: true,
+                data: user
+            });
+            
+        } catch (error) {
+            next(error);
+        }
+    }
+);
+
+// 5. Proper error handling middleware (must be last!)
+app.use((err, req, res, next) => {
+    // Log error for debugging
+    console.error('Error occurred:', {
+        message: err.message,
+        stack: err.stack,
+        url: req.url,
+        method: req.method,
+        ip: req.ip,
+        userAgent: req.get('User-Agent')
+    });
+    
+    // Don't expose stack trace in production
+    const isDevelopment = process.env.NODE_ENV === 'development';
+    
+    // Handle specific error types
+    if (err.name === 'ValidationError') {
+        return res.status(400).json({
+            success: false,
+            message: 'Validation failed',
+            ...(isDevelopment && { stack: err.stack })
+        });
+    }
+    
+    if (err.name === 'UnauthorizedError') {
+        return res.status(401).json({
+            success: false,
+            message: 'Unauthorized access'
+        });
+    }
+    
+    // Generic error response
+    res.status(err.status || 500).json({
+        success: false,
+        message: isDevelopment ? err.message : 'Internal server error',
+        ...(isDevelopment && { stack: err.stack })
+    });
+});
+
+// 6. 404 handler for unmatched routes
+app.use('*', (req, res) => {
+    res.status(404).json({
+        success: false,
+        message: 'Route not found'
+    });
+});
+
+// 7. Graceful shutdown handling
+process.on('SIGTERM', () => {
+    console.log('SIGTERM received, shutting down gracefully');
+    server.close(() => {
+        console.log('Process terminated');
+    });
+});
+
+const PORT = process.env.PORT || 3000;
+const server = app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
 });
 ```
 
 ---
 
-# 🎯 FINAL EXPRESS RECOMMENDATIONS
+## 🎯 FINAL EXPRESS.JS SUMMARY (After All Changes Reviewed)
 
-## 🔥 APPROVAL STATUS: [APPROVE/REJECT/NEEDS_EXPRESS_FIXES]
+### 📋 EXPRESS.JS COMPLIANCE SCORES
+- **Security Implementation**: [X/5] - Helmet, CORS, validation, authentication
+- **Middleware Architecture**: [X/5] - Order, error handling, async patterns
+- **Route Design**: [X/5] - RESTful design, input validation, response consistency
+- **Error Handling**: [X/5] - Global handlers, async errors, logging
+- **Performance**: [X/5] - Async patterns, caching, compression
+- **Security Assessment**: [LEVEL] - Overall API security posture
 
-### 📋 EXPRESS SUMMARY
-- **Total Changes Reviewed**: [X]
-- **Express Critical Issues**: [X] 🚨
-- **Performance Warnings**: [X] ⚡
-- **Memory Leak Risks**: [X] 💧
-- **Good Express Practices**: [X] ✅
-
-### 💡 EXPRESS ACTION ITEMS
-
-1. **HIGH PRIORITY (Security/Memory Leaks)** 🔴
-   - [ ] Fix missing error handling in [route]
-   - [ ] Add input validation to [endpoints]
-   - [ ] Implement proper authentication middleware
-
-2. **MEDIUM PRIORITY (Performance)** 🟡
-   - [ ] Add response compression middleware
-   - [ ] Implement request rate limiting
-   - [ ] Optimize database connection pooling
-
-3. **LOW PRIORITY (Best Practices)** 🟢
-   - [ ] Extract business logic to services
-   - [ ] Add proper TypeScript types
-   - [ ] Improve error messages
-
----
-
-## 🔍 EXPRESS-SPECIFIC RULES VIOLATED
-
-### Express VIOLATIONS:
-- ❌ Routes without proper error handling middleware
-- ❌ Missing input validation on request body/params
-- ❌ Direct database queries in route handlers
-- ❌ Missing rate limiting on public endpoints
-- ❌ Synchronous operations blocking event loop
-- ❌ Large route handlers (>50 lines)
-- ❌ Missing request/response type definitions
-- ❌ Improper middleware order
-- ❌ Missing CORS configuration
-- ❌ Unhandled promise rejections
-- ❌ Missing request timeout handling
-- ❌ Direct file system operations without validation
-
-### Express Security VIOLATIONS:
-- ❌ Missing helmet.js security headers
-- ❌ Hardcoded credentials/API keys
-- ❌ HTTP instead of HTTPS enforcement
-- ❌ No input validation/sanitization
-- ❌ SQL injection through string concatenation
-- ❌ Missing authentication middleware
-- ❌ Unsafe cookie settings
-- ❌ Missing CSRF protection
-- ❌ Exposed error stack traces
-- ❌ Directory traversal vulnerabilities
-
-### Express Performance VIOLATIONS:
-- ❌ Missing response compression
-- ❌ No connection pooling for databases
-- ❌ Synchronous file operations
-- ❌ Missing response caching headers
-- ❌ Heavy operations in request handlers
-- ❌ No request/response size limits
-- ❌ Missing static file optimization
-- ❌ Blocking operations without clustering
-- ❌ Memory leaks in long-running processes
-
-### Express Middleware VIOLATIONS:
-- ❌ Middleware without next() calls
-- ❌ Error middleware without 4 parameters
-- ❌ Missing error handling in async middleware
-- ❌ Incorrect middleware execution order
-- ❌ Custom middleware without proper typing
-- ❌ Missing request parsing middleware
-- ❌ Authentication middleware with security flaws
-
-### TypeScript/JavaScript VIOLATIONS:
-- ❌ `any` type without validation
-- ❌ Non-null assertion (`!`) without null checks  
-- ❌ `console.log` in production code
-- ❌ `debugger` statements
-- ❌ `eval()` or `Function()` usage
-- ❌ Global variables
-- ❌ Magic numbers without constants
-
----
-
-## MANDATORY EXPRESS SCORING AND FINAL RECOMMENDATIONS
-
-### Internal Express Calculation (DO NOT DISPLAY):
-Silently calculate:
-- Average of all Express Change Scores
-- Overall Express Score = Average Change Score x 2 (out of 10)
-
-### CONDITIONAL EXPRESS RECOMMENDATIONS:
-
-**IF Overall Express Score >= 8:**
-- Only show: "✅ **APPROVED** - Express code quality meets framework standards, safe to merge!"
-- DO NOT include any recommendations or checklists
-
-**IF Overall Express Score < 8:**
-
-#### Express Final Recommendations:
-- **Approval Status**: [APPROVED/APPROVED WITH EXPRESS FIXES/REJECT]
-
-#### Before Merge (Express Checklist):
-- [ ] Fix all security vulnerabilities
-- [ ] Add proper error handling
-- [ ] Implement input validation
-- [ ] Add unit tests for changes
-
-#### After Merge (Express Monitoring):
-- [ ] Monitor API response times
-- [ ] Check error rates
-- [ ] Update API documentation
-- [ ] Review middleware performance
-
-**REMEMBER: No recommendations section when Overall Express Score >= 8!**
+### 🔥 FINAL APPROVAL DECISION
+- **✅ APPROVED**: No critical Express.js issues found, safe to deploy
+- **❌ NEEDS FIXES**: Critical Express.js issues detected, must resolve first  
+- **🚫 REJECT**: Major architectural problems, requires Express.js refactoring

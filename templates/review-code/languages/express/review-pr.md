@@ -10,48 +10,115 @@ You are performing a STRICT code review. Do NOT be lenient. Look for every possi
 ### 📋 CHANGE SEPARATION RULES (MANDATORY):
 
 **Split into separate changes when:**
-- ✅ **Different Express artifacts**: Route vs Middleware vs Controller changes = separate changes
-- ✅ **Different HTTP methods**: GET vs POST vs PUT vs DELETE = separate changes
-- ✅ **Different middleware layers**: Auth vs Validation vs Logging = separate changes
-- ✅ **Different async operations**: Different Promise/async patterns = separate changes
+- ✅ **Different Express artifacts**: Route vs Middleware vs Controller vs Service changes = separate changes
+- ✅ **Different middleware**: Different middleware functions = separate changes
+- ✅ **Different routes**: Different endpoint implementations = separate changes
+- ✅ **Different error handling**: Different error middleware patterns = separate changes
 - ✅ **Non-adjacent code blocks**: If there are 3+ unchanged lines between modifications = separate changes
 
 **Keep as one change when:**
-- ❌ **Same route handler**: Multiple lines in same endpoint
-- ❌ **Related middleware chain**: Sequential middleware in same path
-- ❌ **Same controller method**: Related logic for same endpoint
+- ❌ **Same route handler**: Multiple lines in same route function
+- ❌ **Related middleware**: Related middleware in same pipeline
+- ❌ **Same configuration**: Related Express settings
 
 ## ⚡ CRITICAL CHECKS (Auto-FAIL if found)
 
 **Scan EVERY line for these CRITICAL issues:**
 
 ### 🚨 SECURITY VIOLATIONS:
-- Hardcoded passwords, API keys, tokens, secrets
-- SQL injection vulnerabilities (dynamic SQL construction)
-- XSS vulnerabilities (innerHTML without sanitization)
-- Unsafe file operations, path traversal
-- Authentication/authorization bypasses
+- Hardcoded passwords, API keys, secrets
+- Missing helmet middleware for security headers
+- Unvalidated user input in routes (req.body, req.params, req.query)
+- SQL injection through direct query construction
+- XSS vulnerabilities from unescaped output
+- Missing CORS configuration or overly permissive CORS
+- Exposed sensitive data in error responses
+- Missing rate limiting on critical endpoints
+- Unsafe file upload handling
+- Missing authentication/authorization middleware
+- Directory traversal vulnerabilities in static file serving
+- Insecure session configuration
 
-### 🚨 NULL SAFETY VIOLATIONS:
-- `.` access without null checks (`obj.property` without `obj?.property`)
-- Array access without length checks (`arr[0]` without `arr?.length`)
-- Function calls without existence checks
-- `any` type usage without proper validation
-- Missing null/undefined guards
+### 🚨 MIDDLEWARE VIOLATIONS:
+- Incorrect middleware order (especially error handlers)
+- Missing error handling middleware
+- Middleware not calling next() when needed
+- Blocking synchronous operations in middleware
+- Missing middleware for common functionality (logging, parsing)
+- Incorrect use of res.locals vs req.session
+- Middleware memory leaks (not cleaning up resources)
+- Missing request timeout handling
+- Incorrect async middleware implementation
+- Global middleware affecting all routes unnecessarily
+
+### 🚨 ROUTE HANDLING VIOLATIONS:
+- Routes not handling async errors properly
+- Missing input validation for route parameters
+- Inconsistent error response formats
+- Routes not returning responses (res.send, res.json, etc.)
+- Multiple response attempts in same route
+- Missing HTTP status codes or incorrect codes
+- Routes handling too many responsibilities
+- Missing request/response logging
+- Unsafe route parameter handling
+- Missing content-type validation
 
 ### 🚨 ERROR HANDLING VIOLATIONS:
-- `try` blocks without `catch`
-- Promise/Observable without error handling
-- HTTP calls without error callbacks
-- File operations without error checks
-- Database operations without error handling
+- No global error handler or incorrect implementation
+- Exposing stack traces in production
+- Not handling async route errors
+- Missing error logging
+- Inconsistent error response structure
+- Not handling 404 routes
+- Missing graceful shutdown handling
+- Unhandled promise rejections
+- Missing validation error handling
+- Generic error messages without context
 
-### 🚨 RESOURCE LEAKS:
-- Observables without unsubscribe
-- Event listeners without cleanup
-- Timers without clearInterval/clearTimeout  
-- File handles not closed
-- Database connections not closed
+### 🚨 PERFORMANCE VIOLATIONS:
+- Blocking operations in routes without proper async handling
+- Missing response compression
+- No request/response caching strategies
+- Missing connection pooling for databases
+- Inefficient middleware execution order
+- Missing request size limits
+- No response time monitoring
+- Memory leaks in long-running processes
+- Missing static file optimization
+- Inefficient JSON parsing for large payloads
+
+### 🚨 ASYNC VIOLATIONS:
+- Missing await for async operations
+- Unhandled promise rejections
+- Blocking operations on event loop
+- Missing error handling in async operations
+- Callback hell patterns
+- Missing timeout handling
+- Promise constructor anti-patterns
+- Memory leaks from unclosed streams
+- Missing proper cancellation patterns
+
+### 🚨 CONFIGURATION VIOLATIONS:
+- Hardcoded configuration values
+- Missing environment-specific settings
+- Insecure default configurations
+- Missing graceful startup/shutdown
+- No health check endpoints
+- Missing monitoring and metrics
+- Incorrect process management
+- Missing proper logging configuration
+- No request ID tracking
+- Missing API versioning strategy
+
+### 🚨 SPECIFIC PROJECT RULES:
+<!-- ADD PROJECT-SPECIFIC RULES HERE - These will be checked alongside Express.js rules -->
+<!-- Additional project rules can be added here:
+- Custom middleware requirements
+- Specific authentication patterns
+- Project-specific performance requirements
+- Custom error handling requirements
+- API design standards
+-->
 
 ## 📊 DETAILED FILE ANALYSIS
 
@@ -65,11 +132,11 @@ You are performing a STRICT code review. Do NOT be lenient. Look for every possi
 
 #### STRICT EVALUATION:
 - **🚨 Security**: [FOUND_ISSUES or "CLEAN"]
-- **🚨 Null Safety**: [FOUND_ISSUES or "CLEAN"] 
+- **🚨 Middleware**: [FOUND_ISSUES or "CLEAN"] 
+- **🚨 Route Handling**: [FOUND_ISSUES or "CLEAN"]
 - **🚨 Error Handling**: [FOUND_ISSUES or "CLEAN"]
-- **🚨 Resource Management**: [FOUND_ISSUES or "CLEAN"]
 - **⚠️ Performance**: [FOUND_ISSUES or "CLEAN"]
-- **⚠️ Code Quality**: [FOUND_ISSUES or "CLEAN"]
+- **⚠️ Configuration**: [FOUND_ISSUES or "CLEAN"]
 
 #### VERDICT:
 - 🚨 **CRITICAL**: [Reason - blocks deployment]
@@ -83,81 +150,22 @@ You are performing a STRICT code review. Do NOT be lenient. Look for every possi
 ### 🚨 SECURITY ISSUES:
 [List each security violation with exact line numbers and code]
 
-### 🚨 NULL SAFETY ISSUES:  
-[List each null safety violation with exact line numbers and code]
+### 🚨 MIDDLEWARE ISSUES:  
+[List each middleware violation with exact line numbers and code]
+
+### 🚨 ROUTE HANDLING ISSUES:
+[List each route handling violation with exact line numbers and code]
 
 ### 🚨 ERROR HANDLING ISSUES:
-[List each error handling issue with exact line numbers and code]
-
-### 🚨 RESOURCE LEAK ISSUES:
-[List each resource leak with exact line numbers and code]
+[List each error handling violation with exact line numbers and code]
 
 ## ⚠️ WARNING ISSUES (Should fix)
 
 ### ⚠️ PERFORMANCE ISSUES:
-[List performance bottlenecks, O(n²) operations, inefficient code]
+[List performance bottlenecks, inefficient operations]
 
-### ⚠️ CODE QUALITY ISSUES:
-[List naming violations, complex functions, code smells]
-
----
-
-## 🔍 SPECIFIC RULES VIOLATED
-
-### TypeScript/JavaScript VIOLATIONS:
-- ❌ `any` type without validation
-- ❌ Non-null assertion (`!`) without null checks  
-- ❌ `console.log` in production code
-- ❌ `debugger` statements
-- ❌ `eval()` or `Function()` usage
-- ❌ Global variables
-- ❌ Magic numbers without constants
-
-### Express VIOLATIONS:
-- ❌ Routes without proper error handling middleware
-- ❌ Missing input validation on request body/params
-- ❌ Direct database queries in route handlers
-- ❌ Missing rate limiting on public endpoints
-- ❌ Synchronous operations blocking event loop
-- ❌ Large route handlers (>50 lines)
-- ❌ Missing request/response type definitions
-- ❌ Improper middleware order
-- ❌ Missing CORS configuration
-- ❌ Unhandled promise rejections
-- ❌ Missing request timeout handling
-- ❌ Direct file system operations without validation
-
-### Express Security VIOLATIONS:
-- ❌ Missing helmet.js security headers
-- ❌ Hardcoded credentials/API keys
-- ❌ HTTP instead of HTTPS enforcement
-- ❌ No input validation/sanitization
-- ❌ SQL injection through string concatenation
-- ❌ Missing authentication middleware
-- ❌ Unsafe cookie settings
-- ❌ Missing CSRF protection
-- ❌ Exposed error stack traces
-- ❌ Directory traversal vulnerabilities
-
-### Express Performance VIOLATIONS:
-- ❌ Missing response compression
-- ❌ No connection pooling for databases
-- ❌ Synchronous file operations
-- ❌ Missing response caching headers
-- ❌ Heavy operations in request handlers
-- ❌ No request/response size limits
-- ❌ Missing static file optimization
-- ❌ Blocking operations without clustering
-- ❌ Memory leaks in long-running processes
-
-### Express Middleware VIOLATIONS:
-- ❌ Middleware without next() calls
-- ❌ Error middleware without 4 parameters
-- ❌ Missing error handling in async middleware
-- ❌ Incorrect middleware execution order
-- ❌ Custom middleware without proper typing
-- ❌ Missing request parsing middleware
-- ❌ Authentication middleware with security flaws
+### ⚠️ CONFIGURATION ISSUES:
+[List configuration violations, missing settings]
 
 ---
 
@@ -176,37 +184,26 @@ You are performing a STRICT code review. Do NOT be lenient. Look for every possi
 
 ### MANDATORY Action Items:
 1. Fix ALL security issues immediately
-2. Add null checks for ALL property access
-3. Add error handling for ALL operations
-4. Clean up ALL resource leaks
+2. Add proper middleware order and error handling
+3. Add input validation for ALL routes
+4. Add proper error handling for ALL operations
 5. Remove ALL debugging code
+6. Implement proper security headers
+7. Add proper async error handling
 
 ---
 
-## 🎯 STRICT CHECKLIST
+## 🎯 FINAL EXPRESS.JS SUMMARY (After All Changes Reviewed)
 
-**ZERO tolerance policy:**
+### 📋 COMPLIANCE SCORES
+- **Security Implementation**: [X/5] - Helmet, CORS, validation, authentication
+- **Middleware Architecture**: [X/5] - Order, error handling, async patterns
+- **Route Design**: [X/5] - RESTful design, input validation, response consistency
+- **Error Handling**: [X/5] - Global handlers, async errors, logging
+- **Performance**: [X/5] - Async patterns, caching, compression
+- **Configuration**: [X/5] - Environment handling, security settings, monitoring
 
-- [❌/✅] **🚨 Security**: NO secrets, NO XSS, NO SQL injection
-- [❌/✅] **🚨 Null Safety**: ALL `.` access protected  
-- [❌/✅] **🚨 Error Handling**: ALL operations have error handling
-- [❌/✅] **🚨 Resource Management**: ALL resources properly cleaned
-- [❌/✅] **⚠️ Performance**: NO O(n²), NO memory leaks
-- [❌/✅] **⚠️ Code Quality**: NO `any`, NO magic numbers
-- [❌/✅] **⚠️ Best Practices**: Follows ALL conventions
-
----
-
-## 🚨 FINAL VERDICT
-
-**DEPLOYMENT DECISION**: [APPROVE/REJECT/NEEDS_WORK]
-
-**Reasoning**: [Based on concrete violations found]
-
-**Critical Blockers**: [Number] issues that MUST be fixed
-
-**Review Standards**: STRICT MODE - Found [X] violations
-
----
-
-**⚠️ NOTE**: This is a STRICT review. Any violation should result in WARNING or CRITICAL status. Do NOT be lenient.
+### 🔥 FINAL APPROVAL DECISION
+- **✅ APPROVED**: No critical Express.js issues found, safe to deploy
+- **❌ NEEDS FIXES**: Critical Express.js issues detected, must resolve first  
+- **🚫 REJECT**: Major architectural problems, requires Express.js refactoring

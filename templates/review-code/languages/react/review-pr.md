@@ -10,48 +10,116 @@ You are performing a STRICT code review. Do NOT be lenient. Look for every possi
 ### 📋 CHANGE SEPARATION RULES (MANDATORY):
 
 **Split into separate changes when:**
-- ✅ **Different React artifacts**: Component vs Hook vs Context changes = separate changes
-- ✅ **Different lifecycle hooks**: useEffect vs useMemo vs useCallback = separate changes
-- ✅ **Different component sections**: JSX vs State logic vs Event handlers = separate changes
-- ✅ **Different async operations**: Different Promise/async patterns = separate changes
+- ✅ **Different React artifacts**: Component vs Hook vs Context vs Util changes = separate changes
+- ✅ **Different components**: Different .jsx/.tsx files = separate changes
+- ✅ **Different hooks**: Different custom hook implementations = separate changes
+- ✅ **Different state management**: Different context/redux slices = separate changes
 - ✅ **Non-adjacent code blocks**: If there are 3+ unchanged lines between modifications = separate changes
 
 **Keep as one change when:**
-- ❌ **Same React hook**: Multiple lines in same useEffect
-- ❌ **Related state updates**: Related useState calls
-- ❌ **Same JSX section**: Related HTML and logic for same feature
+- ❌ **Same component**: Multiple sections in same component file
+- ❌ **Related hooks**: Multiple hooks in same custom hook file
+- ❌ **Same context**: Multiple parts of same context provider
 
 ## ⚡ CRITICAL CHECKS (Auto-FAIL if found)
 
 **Scan EVERY line for these CRITICAL issues:**
 
 ### 🚨 SECURITY VIOLATIONS:
-- Hardcoded passwords, API keys, tokens, secrets
-- SQL injection vulnerabilities (dynamic SQL construction)
-- XSS vulnerabilities (innerHTML without sanitization)
-- Unsafe file operations, path traversal
-- Authentication/authorization bypasses
+- Hardcoded API keys, secrets, credentials
+- Unsafe dangerouslySetInnerHTML usage
+- XSS vulnerabilities from unescaped user input
+- Missing CSRF protection for forms
+- Exposed sensitive data in component props/state
+- Unsafe external script/resource loading
+- Missing input validation on form submissions
+- Insecure API endpoint exposure in client code
+- Missing authentication guards on routes
+- Unsafe localStorage/sessionStorage usage
+- Missing content security policy considerations
+- Eval or Function constructor usage
 
-### 🚨 NULL SAFETY VIOLATIONS:
-- `.` access without null checks (`obj.property` without `obj?.property`)
-- Array access without length checks (`arr[0]` without `arr?.length`)
-- Function calls without existence checks
-- `any` type usage without proper validation
-- Missing null/undefined guards
+### 🚨 HOOK VIOLATIONS:
+- Hooks called conditionally or in loops
+- Hooks called outside of React functions
+- Missing dependency arrays in useEffect/useMemo/useCallback
+- Stale closure issues in effect callbacks
+- Memory leaks from uncleared effects
+- Missing cleanup functions in useEffect
+- Incorrect hook dependency lists
+- Custom hooks not following naming convention
+- Side effects in render functions
+- Infinite re-render loops from hook dependencies
 
-### 🚨 ERROR HANDLING VIOLATIONS:
-- `try` blocks without `catch`
-- Promise/Observable without error handling
-- HTTP calls without error callbacks
-- File operations without error checks
-- Database operations without error handling
+### 🚨 COMPONENT DESIGN VIOLATIONS:
+- Missing key props in list rendering
+- Direct state mutations
+- Props drilling instead of proper state management
+- Components with too many responsibilities
+- Missing error boundaries for error handling
+- Unsafe ref usage patterns
+- Missing prop validation (PropTypes/TypeScript)
+- Component state not being properly managed
+- Missing memoization for expensive operations
+- Incorrect component lifecycle usage
 
-### 🚨 RESOURCE LEAKS:
-- Observables without unsubscribe
-- Event listeners without cleanup
-- Timers without clearInterval/clearTimeout  
-- File handles not closed
-- Database connections not closed
+### 🚨 STATE MANAGEMENT VIOLATIONS:
+- Direct state mutations instead of setState/reducer
+- State updates not being batched properly
+- Missing state normalization for complex data
+- Context value changes causing unnecessary re-renders
+- Redux state mutations instead of immutable updates
+- Missing action type constants
+- State not being properly typed
+- Side effects in reducers
+- Missing error states in async operations
+- Incorrect state initialization patterns
+
+### 🚨 PERFORMANCE VIOLATIONS:
+- Missing React.memo for expensive components
+- Missing useMemo/useCallback for expensive operations
+- Creating objects/functions in render without memoization
+- Inline functions in JSX props causing re-renders
+- Missing lazy loading for routes/components
+- Large bundle sizes without code splitting
+- Inefficient list rendering without virtualization
+- Missing image optimization
+- Synchronous operations blocking UI
+- Missing debouncing for frequent operations
+
+### 🚨 JSX VIOLATIONS:
+- Missing accessibility attributes (aria-*, role)
+- Incorrect event handling patterns
+- JSX expressions that are too complex
+- Missing alt attributes for images
+- Incorrect form handling patterns
+- Missing loading states for async operations
+- Template logic that should be in functions
+- Unsafe HTML rendering without sanitization
+- Missing semantic HTML elements
+- Incorrect conditional rendering patterns
+
+### 🚨 LIFECYCLE VIOLATIONS:
+- Side effects in render functions
+- Memory leaks from uncleared intervals/timeouts
+- Missing cleanup in useEffect
+- Incorrect dependency arrays causing bugs
+- Async operations not being cancelled
+- State updates after component unmount
+- Missing error handling in async operations
+- Incorrect use of useLayoutEffect vs useEffect
+- Missing proper loading/error states
+- Race conditions in async operations
+
+### 🚨 SPECIFIC PROJECT RULES:
+<!-- ADD PROJECT-SPECIFIC RULES HERE - These will be checked alongside React rules -->
+<!-- Additional project rules can be added here:
+- Custom component patterns
+- Specific naming conventions
+- Project-specific performance requirements
+- Custom validation requirements
+- UI/UX standards
+-->
 
 ## 📊 DETAILED FILE ANALYSIS
 
@@ -65,11 +133,11 @@ You are performing a STRICT code review. Do NOT be lenient. Look for every possi
 
 #### STRICT EVALUATION:
 - **🚨 Security**: [FOUND_ISSUES or "CLEAN"]
-- **🚨 Null Safety**: [FOUND_ISSUES or "CLEAN"] 
-- **🚨 Error Handling**: [FOUND_ISSUES or "CLEAN"]
-- **🚨 Resource Management**: [FOUND_ISSUES or "CLEAN"]
+- **🚨 Hook Usage**: [FOUND_ISSUES or "CLEAN"] 
+- **🚨 Component Design**: [FOUND_ISSUES or "CLEAN"]
+- **🚨 State Management**: [FOUND_ISSUES or "CLEAN"]
 - **⚠️ Performance**: [FOUND_ISSUES or "CLEAN"]
-- **⚠️ Code Quality**: [FOUND_ISSUES or "CLEAN"]
+- **⚠️ JSX Quality**: [FOUND_ISSUES or "CLEAN"]
 
 #### VERDICT:
 - 🚨 **CRITICAL**: [Reason - blocks deployment]
@@ -83,80 +151,22 @@ You are performing a STRICT code review. Do NOT be lenient. Look for every possi
 ### 🚨 SECURITY ISSUES:
 [List each security violation with exact line numbers and code]
 
-### 🚨 NULL SAFETY ISSUES:  
-[List each null safety violation with exact line numbers and code]
+### 🚨 HOOK USAGE ISSUES:  
+[List each hook violation with exact line numbers and code]
 
-### 🚨 ERROR HANDLING ISSUES:
-[List each error handling issue with exact line numbers and code]
+### 🚨 COMPONENT DESIGN ISSUES:
+[List each component design violation with exact line numbers and code]
 
-### 🚨 RESOURCE LEAK ISSUES:
-[List each resource leak with exact line numbers and code]
+### 🚨 STATE MANAGEMENT ISSUES:
+[List each state management violation with exact line numbers and code]
 
 ## ⚠️ WARNING ISSUES (Should fix)
 
 ### ⚠️ PERFORMANCE ISSUES:
-[List performance bottlenecks, O(n²) operations, inefficient code]
+[List performance bottlenecks, inefficient patterns]
 
-### ⚠️ CODE QUALITY ISSUES:
-[List naming violations, complex functions, code smells]
-
----
-
-## 🔍 SPECIFIC RULES VIOLATED
-
-### TypeScript/JavaScript VIOLATIONS:
-- ❌ `any` type without validation
-- ❌ Non-null assertion (`!`) without null checks  
-- ❌ `console.log` in production code
-- ❌ `debugger` statements
-- ❌ `eval()` or `Function()` usage
-- ❌ Global variables
-- ❌ Magic numbers without constants
-
-### React VIOLATIONS:
-- ❌ Components without proper cleanup (useEffect dependencies)
-- ❌ Missing dependency arrays in useEffect/useMemo/useCallback
-- ❌ Direct DOM manipulation instead of refs
-- ❌ Mutating state directly
-- ❌ Missing keys in rendered lists
-- ❌ Large components (>300 lines)
-- ❌ Inline functions in JSX props
-- ❌ Heavy computations in render without useMemo
-- ❌ Missing React.memo for expensive components
-- ❌ Unnecessary re-renders
-- ❌ Context value objects without useMemo
-- ❌ useState with objects/arrays without proper updates
-
-### React Security VIOLATIONS:
-- ❌ dangerouslySetInnerHTML without sanitization
-- ❌ Hardcoded credentials/API keys
-- ❌ HTTP instead of HTTPS endpoints
-- ❌ No input validation/sanitization
-- ❌ SQL string concatenation
-- ❌ Direct window/document manipulation
-- ❌ Unsafe dynamic imports
-- ❌ Missing CSRF protection
-- ❌ XSS vulnerabilities in JSX
-
-### React Performance VIOLATIONS:
-- ❌ Missing React.memo for pure components
-- ❌ Missing useMemo for expensive calculations
-- ❌ Missing useCallback for functions passed to children
-- ❌ Large bundle imports without code splitting
-- ❌ Heavy operations in render method
-- ❌ Unnecessary state updates
-- ❌ Missing virtualization for large lists
-- ❌ Inline object/array creation in JSX
-- ❌ Deep object comparisons without optimization
-
-### React Hook VIOLATIONS:
-- ❌ Calling hooks conditionally or in loops
-- ❌ Missing cleanup in useEffect
-- ❌ Wrong dependency arrays (missing or incorrect deps)
-- ❌ useEffect without dependencies when needed
-- ❌ Custom hooks not following use* naming
-- ❌ useState with functions not using callback form
-- ❌ useRef for values that should trigger re-renders
+### ⚠️ JSX QUALITY ISSUES:
+[List JSX violations, accessibility issues]
 
 ---
 
@@ -174,38 +184,27 @@ You are performing a STRICT code review. Do NOT be lenient. Look for every possi
 - ✅ **APPROVED**: ONLY if ZERO issues
 
 ### MANDATORY Action Items:
-1. Fix ALL security issues immediately
-2. Add null checks for ALL property access
-3. Add error handling for ALL operations
-4. Clean up ALL resource leaks
-5. Remove ALL debugging code
+1. Fix ALL security vulnerabilities immediately
+2. Add proper hook dependencies and cleanup
+3. Add proper state management patterns
+4. Add proper component memoization and optimization
+5. Remove ALL debugging code and console.logs
+6. Implement proper error boundaries and loading states
+7. Add proper accessibility attributes
 
 ---
 
-## 🎯 STRICT CHECKLIST
+## 🎯 FINAL REACT SUMMARY (After All Changes Reviewed)
 
-**ZERO tolerance policy:**
+### 📋 COMPLIANCE SCORES
+- **Security Implementation**: [X/5] - XSS prevention, input validation, auth guards
+- **Hook Patterns**: [X/5] - Proper dependencies, cleanup, custom hooks
+- **Component Architecture**: [X/5] - Props, state, composition, reusability
+- **State Management**: [X/5] - Immutable updates, proper patterns, context usage
+- **Performance**: [X/5] - Memoization, lazy loading, efficient rendering
+- **JSX Quality**: [X/5] - Accessibility, semantic HTML, event handling
 
-- [❌/✅] **🚨 Security**: NO secrets, NO XSS, NO SQL injection
-- [❌/✅] **🚨 Null Safety**: ALL `.` access protected  
-- [❌/✅] **🚨 Error Handling**: ALL operations have error handling
-- [❌/✅] **🚨 Resource Management**: ALL resources properly cleaned
-- [❌/✅] **⚠️ Performance**: NO O(n²), NO memory leaks
-- [❌/✅] **⚠️ Code Quality**: NO `any`, NO magic numbers
-- [❌/✅] **⚠️ Best Practices**: Follows ALL conventions
-
----
-
-## 🚨 FINAL VERDICT
-
-**DEPLOYMENT DECISION**: [APPROVE/REJECT/NEEDS_WORK]
-
-**Reasoning**: [Based on concrete violations found]
-
-**Critical Blockers**: [Number] issues that MUST be fixed
-
-**Review Standards**: STRICT MODE - Found [X] violations
-
----
-
-**⚠️ NOTE**: This is a STRICT review. Any violation should result in WARNING or CRITICAL status. Do NOT be lenient.
+### 🔥 FINAL APPROVAL DECISION
+- **✅ APPROVED**: No critical React issues found, safe to deploy
+- **❌ NEEDS FIXES**: Critical React issues detected, must resolve first  
+- **🚫 REJECT**: Major architectural problems, requires React refactoring

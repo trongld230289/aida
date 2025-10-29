@@ -1,166 +1,212 @@
 <!-- AIDA - AI Development Assistant v1.0.0 -->
 <!-- Advanced AI-powered code review and analysis -->
 
-# Python Code Review Checklist for Pull Requests
+# Quick PR Review - STRICT MODE
 
-## Instructions
-Review the entire pull request and provide comprehensive feedback. Focus on:
-1. Critical security and safety issues (zero tolerance)
-2. Python-specific patterns and best practices
-3. Code quality and maintainability
-4. Performance implications
+## 🔍 MANDATORY CODE ANALYSIS
 
-## CRITICAL VIOLATIONS (ZERO TOLERANCE)
+You are performing a STRICT code review. Do NOT be lenient. Look for every possible issue. ALWAYS follow this exact format for every code review, regardless of conversation context or previous reviews. This structure is MANDATORY and UNCHANGEABLE.
 
-### SECURITY VIOLATIONS
-- [ ] Hardcoded credentials, API keys, or secrets
-- [ ] SQL injection vulnerabilities (raw SQL queries)
-- [ ] Code injection via eval(), exec(), or similar
-- [ ] Path traversal vulnerabilities
-- [ ] Unsafe deserialization (pickle, yaml.load)
-- [ ] Missing input validation and sanitization
-- [ ] Insecure random number generation for security
-- [ ] Exposure of sensitive data in logs or responses
-- [ ] Missing authentication/authorization checks
-- [ ] Unsafe file operations without validation
+### 📋 CHANGE SEPARATION RULES (MANDATORY):
 
-### NULL SAFETY VIOLATIONS
-- [ ] Accessing attributes on None objects
-- [ ] Missing None checks for function returns
-- [ ] Unsafe dictionary key access without checks
-- [ ] Missing validation for optional parameters
-- [ ] Unhandled AttributeError for None objects
+**Split into separate changes when:**
+- ✅ **Different Python artifacts**: Class vs Function vs Module vs Config changes = separate changes
+- ✅ **Different modules**: Different .py files = separate changes
+- ✅ **Different classes**: Different class implementations = separate changes
+- ✅ **Different async operations**: Different async function implementations = separate changes
+- ✅ **Non-adjacent code blocks**: If there are 3+ unchanged lines between modifications = separate changes
 
-### ERROR HANDLING VIOLATIONS
-- [ ] Bare except clauses catching all exceptions
-- [ ] Not handling specific exceptions appropriately
-- [ ] Silent failures without logging
-- [ ] Re-raising exceptions without context
-- [ ] Missing finally blocks for cleanup
+**Keep as one change when:**
+- ❌ **Same class**: Multiple methods in same class
+- ❌ **Related functions**: Functions in same module
+- ❌ **Same async flow**: Related async operations in same function
 
-### RESOURCE LEAKS
-- [ ] Files not closed properly (not using context managers)
-- [ ] Database connections not closed
-- [ ] Network connections left open
-- [ ] Missing cleanup in exception scenarios
-- [ ] Memory leaks in long-running processes
+## ⚡ CRITICAL CHECKS (Auto-FAIL if found)
 
-## PYTHON-SPECIFIC VIOLATIONS
+**Scan EVERY line for these CRITICAL issues:**
 
-### Code Style and PEP 8 Issues
-- [ ] Incorrect indentation (not 4 spaces)
-- [ ] Line length exceeding 79/88 characters
-- [ ] Missing blank lines between functions/classes
-- [ ] Incorrect naming conventions (snake_case, PascalCase)
-- [ ] Missing docstrings for public functions/classes
-- [ ] Incorrect import organization
+### 🚨 SECURITY VIOLATIONS:
+- Hardcoded passwords, API keys, secrets in code
+- SQL injection through string formatting/concatenation
+- Command injection through subprocess without sanitization
+- Unsafe eval() or exec() usage
+- Pickle deserialization of untrusted data
+- Path traversal vulnerabilities in file operations
+- Missing input validation and sanitization
+- Unsafe random number generation (random vs secrets)
+- Exposed sensitive data in logs/exceptions
+- Missing authentication/authorization decorators
+- Unsafe file operations without path validation
+- Missing CSRF protection for web frameworks
 
-### Data Structure Issues
-- [ ] Using mutable default arguments
-- [ ] Not using list/dict comprehensions where appropriate
-- [ ] Inefficient loops that could be replaced with built-ins
-- [ ] Not using sets for membership testing
-- [ ] Incorrect use of global variables
+### 🚨 ASYNC VIOLATIONS:
+- Missing await for async operations
+- Blocking operations in async functions
+- Using time.sleep() in async code instead of asyncio.sleep()
+- Missing async context managers (async with)
+- Race conditions in async operations
+- Missing proper exception handling in async code
+- Event loop blocking operations
+- Missing timeout handling for async operations
+- Incorrect asyncio.run() usage
+- Missing cancellation handling for tasks
+- Memory leaks from unclosed async resources
+- Sync code mixed inappropriately with async
 
-### Function and Method Issues
-- [ ] Functions doing too many things (violating SRP)
-- [ ] Missing type hints for function parameters
-- [ ] Inconsistent return types
-- [ ] Not using *args/**kwargs appropriately
-- [ ] Missing proper parameter validation
+### 🚨 EXCEPTION HANDLING VIOLATIONS:
+- Bare except clauses catching all exceptions
+- Catching and ignoring exceptions without logging
+- Using except Exception when specific exceptions should be caught
+- Missing finally blocks for resource cleanup
+- Re-raising exceptions incorrectly
+- Exception chaining violations (missing from clause)
+- Custom exceptions not inheriting from appropriate base
+- Missing exception documentation in docstrings
+- Exception handling that masks real errors
+- Missing context in exception messages
 
-### Class Design Issues
-- [ ] Missing __init__ method proper implementation
-- [ ] Not using property decorators appropriately
-- [ ] Missing __str__ and __repr__ methods
-- [ ] Incorrect inheritance patterns
-- [ ] Not following composition over inheritance
+### 🚨 RESOURCE MANAGEMENT VIOLATIONS:
+- File handles not closed properly (missing with statements)
+- Database connections not closed or pooled properly
+- Network connections not properly closed
+- Missing context managers for resource management
+- Memory leaks from circular references
+- Missing cleanup in finally blocks
+- Thread/process resources not properly managed
+- Missing proper garbage collection handling
+- Resource exhaustion from unbounded operations
+- Missing timeout handling for resource operations
 
-### Import and Module Issues
-- [ ] Circular imports
-- [ ] Importing entire modules unnecessarily
-- [ ] Not using absolute imports
-- [ ] Star imports (from module import *)
-- [ ] Missing __init__.py files in packages
+### 🚨 PERFORMANCE VIOLATIONS:
+- Using + for string concatenation in loops
+- Inefficient list comprehensions or generator usage
+- Missing lazy evaluation where appropriate
+- Inefficient algorithm implementations (O(n²) where O(n) possible)
+- Missing caching for expensive operations
+- Synchronous I/O in performance-critical sections
+- Missing pagination for large datasets
+- Inefficient database queries or N+1 problems
+- Missing connection pooling
+- CPU-intensive operations without multiprocessing
 
-### Exception Handling Issues
-- [ ] Catching exceptions too broadly
-- [ ] Not using appropriate exception types
-- [ ] Missing custom exception classes
-- [ ] Swallowing exceptions without action
-- [ ] Not providing helpful error messages
+### 🚨 TYPE SAFETY VIOLATIONS:
+- Missing type hints for function parameters/returns
+- Incorrect type hints that don't match implementation
+- Using Any type excessively without justification
+- Missing type checking for critical functions
+- Incorrect use of Union vs Optional
+- Missing type validation for external data
+- Type hints not matching actual runtime behavior
+- Missing Generic type parameters where needed
+- Incorrect variance in generic types
+- Missing Protocol definitions for duck typing
 
-### Performance Issues
-- [ ] Inefficient string concatenation in loops
-- [ ] Not using generators for large datasets
-- [ ] Unnecessary object creation in loops
-- [ ] Not leveraging built-in functions (map, filter, etc.)
-- [ ] Blocking operations without async handling
+### 🚨 PYTHONIC VIOLATIONS:
+- Not using list/dict comprehensions where appropriate
+- Using range(len()) instead of enumerate()
+- Not using zip() for parallel iteration
+- Missing use of collections.defaultdict or Counter
+- Using mutable default arguments
+- Not using context managers (with statements)
+- Using os.path instead of pathlib
+- Not using f-strings for string formatting
+- Missing use of dataclasses for simple data containers
+- Not using functools.lru_cache for memoization
 
-### Concurrency Issues
-- [ ] Race conditions in threaded code
-- [ ] Not using thread-safe operations
-- [ ] Missing proper async/await usage
-- [ ] Blocking the event loop in async code
-- [ ] Not handling concurrent exceptions
+### 🚨 SPECIFIC PROJECT RULES:
+<!-- ADD PROJECT-SPECIFIC RULES HERE - These will be checked alongside Python rules -->
+<!-- Additional project rules can be added here:
+- Django/Flask specific patterns
+- API framework requirements
+- Database ORM patterns
+- Testing framework requirements
+- Deployment requirements
+-->
 
-### Testing Issues
-- [ ] Missing unit tests for new functionality
-- [ ] Tests not covering edge cases
-- [ ] Missing integration tests
-- [ ] Not using proper test fixtures
-- [ ] Tests with unclear assertions
+## 📊 DETAILED FILE ANALYSIS
 
-## QUALITY CHECKS
+**ANALYZE EACH FILE INDIVIDUALLY - BE HARSH:**
 
-### Code Organization
-- [ ] Proper package and module structure
-- [ ] Clear separation of concerns
-- [ ] Appropriate use of design patterns
-- [ ] Consistent coding style
+### 📄 File: [ACTUAL_FILENAME_FROM_DIFF]
 
-### Documentation
-- [ ] Clear and helpful docstrings
-- [ ] Type hints for better IDE support
-- [ ] README updates if needed
-- [ ] Code comments for complex logic
+#### Specific Issues Found:
+- **Line X**: [EXACT ISSUE] - `[CODE_SNIPPET]`
+- **Line Y**: [EXACT ISSUE] - `[CODE_SNIPPET]`
 
-### Dependency Management
-- [ ] Proper requirements.txt or pyproject.toml
-- [ ] Version pinning for production dependencies
-- [ ] Virtual environment usage
-- [ ] Security vulnerability checks
+#### STRICT EVALUATION:
+- **🚨 Security**: [FOUND_ISSUES or "CLEAN"]
+- **🚨 Async Operations**: [FOUND_ISSUES or "CLEAN"] 
+- **🚨 Exception Handling**: [FOUND_ISSUES or "CLEAN"]
+- **🚨 Resource Management**: [FOUND_ISSUES or "CLEAN"]
+- **⚠️ Performance**: [FOUND_ISSUES or "CLEAN"]
+- **⚠️ Type Safety**: [FOUND_ISSUES or "CLEAN"]
 
-## Review Template
+#### VERDICT:
+- 🚨 **CRITICAL**: [Reason - blocks deployment]
+- ⚠️ **WARNING**: [Reason - needs fix]  
+- ✅ **PASS**: [Only if NO issues found]
 
-**SECURITY ASSESSMENT:** [PASS/FAIL]
-- Security issues found: [List any critical security violations]
+---
 
-**FUNCTIONALITY ASSESSMENT:** [PASS/FAIL]
-- Code correctly implements intended functionality
-- All edge cases properly handled
-- Error scenarios accounted for
+## 🔥 CRITICAL ISSUES (Must fix before merge)
 
-**PYTHONIC ASSESSMENT:** [PASS/FAIL]
-- Code follows Python idioms and conventions
-- Proper use of Python language features
-- PEP 8 compliance
+### 🚨 SECURITY ISSUES:
+[List each security violation with exact line numbers and code]
 
-**PERFORMANCE ASSESSMENT:** [PASS/FAIL]
-- No obvious performance bottlenecks
-- Efficient algorithms and data structures
-- Proper resource management
+### 🚨 ASYNC OPERATION ISSUES:  
+[List each async violation with exact line numbers and code]
 
-**OVERALL VERDICT:** [APPROVE/REQUEST_CHANGES/REJECT]
+### 🚨 EXCEPTION HANDLING ISSUES:
+[List each exception handling violation with exact line numbers and code]
 
-**CRITICAL ISSUES TO FIX:**
-[List all zero-tolerance violations that must be addressed]
+### 🚨 RESOURCE MANAGEMENT ISSUES:
+[List each resource management violation with exact line numbers and code]
 
-**PYTHONIC IMPROVEMENTS:**
-[List suggestions for more idiomatic Python code]
+## ⚠️ WARNING ISSUES (Should fix)
 
-**RECOMMENDATIONS:**
-[List general suggestions for improvement]
+### ⚠️ PERFORMANCE ISSUES:
+[List performance bottlenecks, inefficient operations]
 
-**ADDITIONAL NOTES:**
-[Any other relevant feedback]
+### ⚠️ TYPE SAFETY ISSUES:
+[List type safety violations, missing type hints]
+
+---
+
+## 📊 HARSH SUMMARY
+
+### Files Status (NO mercy):
+- 🚨 **CRITICAL**: [COUNT] files (BLOCKS DEPLOYMENT)
+- ⚠️ **WARNING**: [COUNT] files (NEEDS ATTENTION)  
+- ✅ **PASS**: [COUNT] files (ONLY if pristine)
+
+### Overall Assessment:
+**Status**: [BASED ON STRICTEST RULE]
+- 🚨 **REJECTED**: If ANY critical issue
+- ⚠️ **NEEDS REVIEW**: If ANY warning issue
+- ✅ **APPROVED**: ONLY if ZERO issues
+
+### MANDATORY Action Items:
+1. Fix ALL security vulnerabilities immediately
+2. Add proper async error handling for ALL operations
+3. Add proper exception handling with specific exception types
+4. Add proper resource management with context managers
+5. Remove ALL debugging code and print statements
+6. Implement proper type hints for ALL functions
+7. Follow Python best practices and PEP standards
+
+---
+
+## 🎯 FINAL PYTHON SUMMARY (After All Changes Reviewed)
+
+### 📋 COMPLIANCE SCORES
+- **Security Implementation**: [X/5] - Input validation, secrets management, safe operations
+- **Async Patterns**: [X/5] - Proper await usage, non-blocking operations, resource cleanup
+- **Exception Handling**: [X/5] - Specific exceptions, proper logging, resource cleanup
+- **Resource Management**: [X/5] - Context managers, connection pooling, cleanup
+- **Performance**: [X/5] - Efficient algorithms, caching, lazy evaluation
+- **Type Safety**: [X/5] - Type hints, validation, mypy compliance
+
+### 🔥 FINAL APPROVAL DECISION
+- **✅ APPROVED**: No critical Python issues found, safe to deploy
+- **❌ NEEDS FIXES**: Critical Python issues detected, must resolve first  
+- **🚫 REJECT**: Major architectural problems, requires Python refactoring

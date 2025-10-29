@@ -314,6 +314,50 @@ function isCompatibleLanguage(framework, language) {
 }
 
 /**
+ * Find nearest project root from a file path
+ * Walks up the directory tree looking for project indicators
+ * @param {string} filePath - Full path to the file being reviewed
+ * @returns {string} - Path to the nearest project root
+ */
+function findNearestProjectRoot(filePath) {
+    // Project indicators in order of priority
+    const projectIndicators = [
+        'angular.json',        // Angular project
+        'package.json',        // Node.js project
+        'pyproject.toml',      // Python project
+        'requirements.txt',    // Python project
+        'Cargo.toml',          // Rust project
+        'go.mod',              // Go project
+        '.git',                // Git repository
+        'tsconfig.json',       // TypeScript project
+        'composer.json'        // PHP project
+    ];
+    
+    let currentDir = path.dirname(filePath);
+    const rootDir = path.parse(currentDir).root;
+    
+    while (currentDir !== rootDir) {
+        // Check for any project indicator
+        for (const indicator of projectIndicators) {
+            const indicatorPath = path.join(currentDir, indicator);
+            if (fs.existsSync(indicatorPath)) {
+                console.log(`🎯 Found project root at: ${currentDir} (indicator: ${indicator})`);
+                return currentDir;
+            }
+        }
+        
+        // Move up one directory
+        const parentDir = path.dirname(currentDir);
+        if (parentDir === currentDir) break; // Reached filesystem root
+        currentDir = parentDir;
+    }
+    
+    // Fallback to file's directory
+    console.log(`⚠️ No project root found, using file directory: ${path.dirname(filePath)}`);
+    return path.dirname(filePath);
+}
+
+/**
  * Single File Detection - Use workspace detection for consistency
  * Used for: @review-file individual file analysis
  * @param {string} filePath - Path to the file
@@ -387,25 +431,59 @@ async function autoDetectWorkspace(workspacePath, targetFilePath = null) {
         // PHASE 1: Framework Detection (Priority 1) - All map to languages path
         console.log('🔍 Phase 1: Framework Detection');
         
-        // Angular Detection
-        const angularConfig = path.join(workspacePath, 'angular.json');
-        const packageJson = path.join(workspacePath, 'package.json');
+        // If we have a target file, find the nearest project root from that file
+        let searchPath = workspacePath;
+        if (targetFilePath) {
+            searchPath = findNearestProjectRoot(targetFilePath);
+            console.log(`🔍 Searching from file location: ${searchPath}`);
+        }
+        
+        // Angular Detection - Check from searchPath
+        const angularConfig = path.join(searchPath, 'angular.json');
+        const packageJson = path.join(searchPath, 'package.json');
         
         if (fs.existsSync(angularConfig)) {
-            console.log('✅ Angular detected: angular.json found');
+            console.log(`✅ Angular detected: angular.json found at ${searchPath}`);
             return {
                 ...detectionResult,
                 type: 'language',
                 detected: 'Angular',
                 templatePath: 'review-code/languages/angular',
                 confidence: 'high',
-                reason: 'angular.json configuration file found'
+                reason: `angular.json configuration file found at ${searchPath}`
             };
         }
+        
+        // If no target file provided, fallback to checking subdirectories
+        if (!targetFilePath) {
+            try {
+                const subdirs = fs.readdirSync(workspacePath, { withFileTypes: true })
+                    .filter(dirent => dirent.isDirectory())
+                    .map(dirent => dirent.name);
+                    
+                for (const subdir of subdirs) {
+                    const subAngularConfig = path.join(workspacePath, subdir, 'angular.json');
+                    if (fs.existsSync(subAngularConfig)) {
+                        console.log(`✅ Angular detected: angular.json found in subdirectory ${subdir}`);
+                        return {
+                            ...detectionResult,
+                            type: 'language',
+                            detected: 'Angular',
+                            templatePath: 'review-code/languages/angular',
+                            confidence: 'high',
+                            reason: `angular.json configuration file found in ${subdir} subdirectory`
+                        };
+                    }
+                }
+            } catch (error) {
+                console.log('⚠️ Error checking subdirectories for Angular:', error.message);
+            }
+        }
 
-        // React Detection (package.json based)
-        if (fs.existsSync(packageJson)) {
-            const packageContent = JSON.parse(fs.readFileSync(packageJson, 'utf8'));
+        // React Detection (package.json based) - Use searchPath
+        const packageJsonPath = path.join(searchPath, 'package.json');
+        if (fs.existsSync(packageJsonPath)) {
+            const packageContent = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
             
             // React Framework
             if (packageContent.dependencies?.react || packageContent.devDependencies?.react) {
@@ -477,11 +555,11 @@ async function autoDetectWorkspace(workspacePath, targetFilePath = null) {
             }
         }
 
-        // PHASE 2: Language Detection (Priority 2)
+        // PHASE 2: Language Detection (Priority 2) - Use searchPath
         console.log('🔍 Phase 2: Language Detection');
 
         // TypeScript Detection
-        const tsConfigPath = path.join(workspacePath, 'tsconfig.json');
+        const tsConfigPath = path.join(searchPath, 'tsconfig.json');
         if (fs.existsSync(tsConfigPath) || 
             (targetFilePath && targetFilePath.endsWith('.ts'))) {
             console.log('✅ TypeScript detected');
@@ -496,7 +574,7 @@ async function autoDetectWorkspace(workspacePath, targetFilePath = null) {
         }
 
         // JavaScript Detection
-        if (fs.existsSync(packageJson) || 
+        if (fs.existsSync(packageJsonPath) || 
             (targetFilePath && targetFilePath.endsWith('.js'))) {
             console.log('✅ JavaScript detected');
             return {
@@ -512,7 +590,7 @@ async function autoDetectWorkspace(workspacePath, targetFilePath = null) {
         // Python Detection
         const pythonFiles = ['requirements.txt', 'pyproject.toml', 'setup.py'];
         for (const pythonFile of pythonFiles) {
-            if (fs.existsSync(path.join(workspacePath, pythonFile))) {
+            if (fs.existsSync(path.join(searchPath, pythonFile))) {
                 console.log('✅ Python detected');
                 return {
                     ...detectionResult,
@@ -552,7 +630,7 @@ async function autoDetectWorkspace(workspacePath, targetFilePath = null) {
         }
 
         // Go Detection
-        if (fs.existsSync(path.join(workspacePath, 'go.mod')) ||
+        if (fs.existsSync(path.join(searchPath, 'go.mod')) ||
             (targetFilePath && targetFilePath.endsWith('.go'))) {
             console.log('✅ Go detected');
             return {
@@ -566,7 +644,7 @@ async function autoDetectWorkspace(workspacePath, targetFilePath = null) {
         }
 
         // Rust Detection
-        if (fs.existsSync(path.join(workspacePath, 'Cargo.toml')) ||
+        if (fs.existsSync(path.join(searchPath, 'Cargo.toml')) ||
             (targetFilePath && targetFilePath.endsWith('.rs'))) {
             console.log('✅ Rust detected');
             return {

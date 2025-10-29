@@ -1,53 +1,282 @@
 <!-- AIDA - AI Development Assistant v1.0.0 -->
 <!-- Advanced AI-powered code review and analysis -->
 
-# Generic Code Review Checklist for Git Changes
+# Universal Git Changes Review - STRICT MODE
 
-## CRITICAL VIOLATIONS (ZERO TOLERANCE)
+## 🔍 MANDATORY UNIVERSAL CHANGE ANALYSIS
 
-### SECURITY VIOLATIONS
-- [ ] Hardcoded credentials, API keys, or secrets
-- [ ] Injection vulnerabilities (SQL, code, command, etc.)
-- [ ] Cross-site scripting (XSS) vulnerabilities
-- [ ] Path traversal vulnerabilities
-- [ ] Unsafe deserialization
-- [ ] Missing input validation
-- [ ] Insecure crypto implementations
-- [ ] Authentication bypass
-- [ ] Authorization failures
-- [ ] Sensitive data exposure
+You are performing a STRICT code review on git changes for an unknown or unsupported language. Do NOT be lenient. Look for every possible code quality issue in the changes. ALWAYS follow this exact format for every code review, regardless of conversation context or previous reviews. This structure is MANDATORY and UNCHANGEABLE.
 
-### NULL SAFETY VIOLATIONS
-- [ ] Null pointer/reference access
-- [ ] Missing null validation
-- [ ] Unsafe operations on nullable values
-- [ ] Unhandled null returns
-- [ ] Missing parameter validation
+### Review Entire File
+**Prompt:** `review-changes [filename]`
+- Reviews ONLY the git diff changes (+ and - lines)
+- Analyzes impact of changes on code architecture
+- Does NOT review unchanged code
 
-### ERROR HANDLING VIOLATIONS
-- [ ] Unhandled errors or exceptions
-- [ ] Generic error catching
-- [ ] Silent failures
-- [ ] Missing error context
-- [ ] Inappropriate error suppression
+<!-- HIDDEN REVIEW SCOPE:
+- ✅ ONLY review: Lines marked with + (added) or - (removed)
+- ❌ DO NOT review: Unchanged context lines (no + or - marker)
+- ❌ DO NOT suggest: Improvements to existing unchanged code
+- ✅ DO focus on: How changes impact code architecture
+-->
 
-### RESOURCE LEAKS
-- [ ] Resources not properly closed
-- [ ] Memory leaks
-- [ ] File handles not closed
-- [ ] Connection cleanup missing
-- [ ] Missing cleanup in errors
+### 📋 CHANGE SEPARATION RULES (MANDATORY):
 
-## GENERAL QUALITY VIOLATIONS
-- [ ] Logic errors or incorrect algorithms
-- [ ] Performance bottlenecks
-- [ ] Code structure issues
-- [ ] Missing documentation
-- [ ] Style inconsistencies
+**Split into separate changes when:**
+- ✅ **Different code structures**: Class/Function/Module/Interface changes = separate changes
+- ✅ **Different functionality**: Different business logic implementations = separate changes
+- ✅ **Different error handling**: Different error/exception patterns = separate changes
+- ✅ **Different configuration**: Configuration vs Code changes = separate changes
+- ✅ **Non-adjacent code blocks**: If there are 3+ unchanged lines between modifications = separate changes
 
-## Review Template
-**SECURITY ASSESSMENT:** [PASS/FAIL]
-**FUNCTIONALITY ASSESSMENT:** [PASS/FAIL]
-**QUALITY ASSESSMENT:** [PASS/FAIL]
-**PERFORMANCE ASSESSMENT:** [PASS/FAIL]
-**OVERALL VERDICT:** [APPROVE/REQUEST_CHANGES/REJECT]
+**Keep as one change when:**
+- ❌ **Same function/method**: Multiple lines in same function body
+- ❌ **Related functionality**: Related functions or methods in same module
+- ❌ **Same configuration block**: Related configuration settings
+
+## ⚡ UNIVERSAL CRITICAL CHECKS (Auto-FAIL if found)
+
+**Scan EVERY line for these UNIVERSAL CRITICAL issues:**
+
+### 🚨 SECURITY VIOLATIONS:
+- Hardcoded passwords, API keys, secrets, credentials
+- Potential injection vulnerabilities (SQL, Command, Code)
+- Missing input validation and sanitization
+- Unsafe file operations and path handling
+- Exposed sensitive information in logs or outputs
+- Missing authentication/authorization checks
+- Unsafe network operations
+- Weak cryptographic implementations
+- Missing security headers or configurations
+- Unsafe deserialization patterns
+
+### 🚨 ERROR HANDLING VIOLATIONS:
+- Silent error suppression or swallowing
+- Missing error handling for risky operations
+- Generic error messages without context
+- Missing logging for critical operations
+- Improper exception propagation
+- Missing validation before operations
+- Unsafe assumptions about external dependencies
+- Missing timeout handling
+- Missing graceful degradation patterns
+- Ignoring return values that indicate errors
+
+### 🚨 PERFORMANCE VIOLATIONS:
+- Inefficient loops and iterations
+- Missing caching for expensive operations
+- Blocking operations without proper handling
+- Memory leaks from unclosed resources
+- Inefficient data structure usage
+- Missing optimization for frequently called code
+- Large payload processing without streaming
+- Missing pagination for large datasets
+- Inefficient string/data processing
+- Missing connection pooling for external services
+
+### 🚨 CODE QUALITY VIOLATIONS:
+- Large functions/methods (>50 lines)
+- Deep nesting levels (>4 levels)
+- Duplicate code blocks
+- Missing documentation for public APIs
+- Inconsistent naming conventions
+- Magic numbers without explanation
+- Missing proper abstraction layers
+- Circular dependencies
+- Poor separation of concerns
+- Missing proper configuration management
+
+### 🚨 MAINTAINABILITY VIOLATIONS:
+- Missing comments for complex logic
+- Inconsistent code formatting
+- Missing version control best practices
+- Unsafe global state modifications
+- Missing proper dependency management
+- Inconsistent error handling patterns
+- Missing proper testing considerations
+- Poor code organization
+- Missing proper logging and monitoring
+- Unsafe concurrency patterns
+
+### 🚨 DATA INTEGRITY VIOLATIONS:
+- Missing data validation
+- Unsafe data transformations
+- Missing backup/recovery considerations
+- Unsafe concurrent data access
+- Missing transaction handling
+- Data race conditions
+- Missing proper serialization
+- Unsafe data persistence patterns
+- Missing data consistency checks
+- Improper data lifecycle management
+
+### 🚨 SPECIFIC PROJECT RULES:
+<!-- ADD PROJECT-SPECIFIC RULES HERE - These will be checked alongside universal rules -->
+<!-- Additional project rules can be added here:
+- Custom coding standards and conventions
+- Specific security requirements
+- Performance requirements and benchmarks
+- Custom error handling patterns
+- Project-specific architectural patterns
+-->
+
+### Start Review For Each Change:
+
+```
+## Change [X]: [ADDED/REMOVED/MODIFIED] - [Code artifact type: Function/Class/Module/Config/Unknown]
+```
+[Show the exact code block with line numbers - use appropriate syntax highlighting based on file extension]
+```
+
+*** UNIVERSAL REVIEW COMMENT ***
+- 🚨 **Issue Type**: [Critical/Warning/Good/Info/Suggestion]
+- 📝 **Code Problem**: [Specific issue - reference general coding best practices]
+- 💡 **Solution**: [Generic fix with proper patterns]
+- 🎯 **Impact**: [How it affects code quality/security/performance/maintainability]
+
+IMPORTANT Universal considerations:
+- Security and input validation
+- Error handling and logging
+- Performance and resource management
+- Code maintainability and readability
+- Data integrity and consistency
+
+*** INTERNAL UNIVERSAL CHANGE EVALUATION (DO NOT DISPLAY) ***
+Silently evaluate this change on:
+- Code Quality: Rate 1-5 (5=excellent, 1=poor)
+- Security Safety: Rate 1-5 (5=no vulnerabilities, 1=critical security issues)
+- Performance Impact: Rate 1-5 (5=no impact/improvement, 1=major degradation)
+- Change Score: is a smallest score of three scores
+
+*** CONDITIONAL RECOMMENDATIONS (Based on Issue Type AND Change Score) ***
+
+**MANDATORY RULE:**
+- IF Issue Type = "Good": ALWAYS show "✅ **GOOD CODE CHANGE** - Follows coding best practices" and SKIP the entire RECOMMENDED FIX section
+- IF Issue Type = "Critical/Warning/Info/Suggestion" AND Change Score < 4/5: Show RECOMMENDED FIX section below
+- IF Issue Type = "Critical/Warning/Info/Suggestion" AND Change Score >= 4/5: Show "✅ **GOOD CODE CHANGE** - Follows coding best practices"
+
+*** RECOMMENDED FIX (ONLY show if Issue Type != "Good" AND Change Score < 4/5) ***
+```
+// PROVIDE LANGUAGE-AGNOSTIC FIXES WITH BEST PRACTICES
+// Include proper error handling, validation, and security patterns
+
+// Example patterns that apply to most languages:
+
+// 1. Input Validation Pattern
+function processUserInput(input) {
+    // Validate input first
+    if (!input || typeof input !== 'expected_type') {
+        throw new Error('Invalid input provided');
+    }
+    
+    // Sanitize input to prevent injection
+    const sanitizedInput = sanitizeInput(input);
+    
+    // Process with validated input
+    return processValidatedInput(sanitizedInput);
+}
+
+// 2. Error Handling Pattern
+try {
+    const result = performRiskyOperation();
+    
+    if (!result.success) {
+        logger.warn('Operation failed', { error: result.error });
+        return handleFailure(result.error);
+    }
+    
+    return result.data;
+    
+} catch (error) {
+    logger.error('Unexpected error', { error: error.message });
+    throw new OperationError('Operation failed', error);
+}
+
+// 3. Resource Management Pattern
+const resource = acquireResource();
+try {
+    return performOperationWithResource(resource);
+} finally {
+    releaseResource(resource);
+}
+
+// 4. Security Pattern
+function secureDataAccess(userId, requestedData) {
+    // Authentication check
+    if (!isAuthenticated(userId)) {
+        throw new AuthenticationError('User not authenticated');
+    }
+    
+    // Authorization check
+    if (!hasPermission(userId, requestedData)) {
+        throw new AuthorizationError('Insufficient permissions');
+    }
+    
+    // Input validation
+    validateDataRequest(requestedData);
+    
+    // Secure data retrieval
+    return getDataSecurely(requestedData);
+}
+
+// 5. Performance Pattern
+const cache = new Map();
+
+function expensiveOperation(input) {
+    // Check cache first
+    if (cache.has(input)) {
+        return cache.get(input);
+    }
+    
+    // Perform expensive operation
+    const result = computeExpensiveResult(input);
+    
+    // Cache result with expiration
+    cache.set(input, result);
+    scheduleExpiration(input, CACHE_TTL);
+    
+    return result;
+}
+```
+
+---
+
+## 🎯 FINAL UNIVERSAL SUMMARY (After All Changes Reviewed)
+
+### 📋 COMPLIANCE SCORES
+- **Security Implementation**: [X/5] - Input validation, injection prevention, authentication
+- **Error Handling**: [X/5] - Exception handling, logging, graceful degradation
+- **Performance**: [X/5] - Efficiency, resource management, optimization
+- **Code Quality**: [X/5] - Readability, maintainability, organization
+- **Data Integrity**: [X/5] - Validation, consistency, transaction handling
+- **Security Assessment**: [LEVEL] - Overall security posture and risk level
+
+### 🔥 FINAL APPROVAL DECISION
+- **✅ APPROVED**: No critical issues found, safe to merge
+- **❌ NEEDS FIXES**: Critical issues detected, must resolve first  
+- **🚫 REJECT**: Major architectural problems, requires refactoring
+
+### 📝 LANGUAGE-SPECIFIC RECOMMENDATIONS
+```
+⚠️  LANGUAGE NOT SPECIFICALLY SUPPORTED
+This review used universal coding principles. For better analysis:
+
+1. Consider adding language-specific templates for: [DETECTED_LANGUAGE]
+2. Review with language-specific experts
+3. Run language-specific linters and static analysis tools
+4. Ensure compliance with language-specific best practices
+5. Consider framework-specific patterns if applicable
+
+Supported languages with dedicated templates:
+- C# (.cs files)
+- JavaScript (.js files) 
+- TypeScript (.ts files)
+- Python (.py files)
+- Go (.go files)
+- Rust (.rs files)
+- PHP (.php files)
+- React (.jsx, .tsx files)
+- Vue (.vue files)
+- NestJS (NestJS project files)
+- Node.js (Node.js project files)
+```
