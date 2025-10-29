@@ -200,7 +200,10 @@ class CopilotSidebarChat {
             const historyToSave = this.chatHistory.map(msg => ({
                 role: msg.role,
                 content: msg.content,
-                timestamp: msg.timestamp
+                timestamp: msg.timestamp,
+                images: msg.images, // Include images to preserve image-based conversations
+                mode: msg.mode,     // Include mode for context
+                model: msg.model    // Include model for context
             }));
             
             const chatKey = this.getWorkspaceSpecificKey('aida.chatHistory');
@@ -560,6 +563,9 @@ class CopilotSidebarChat {
                             message: response
                         });
                     }
+                    
+                    // Save chat history after AI response
+                    this.saveChatHistory();
                     return;
                 } else {
                     // No file is open, show helpful message
