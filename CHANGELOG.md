@@ -2,8 +2,36 @@
 
 All notable changes to **AIDA - AI Development Assistant** will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.3/),
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.4/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.0.4] - 2025-10-30
+
+### 🔧 Enhanced Features & Template Improvements
+
+#### ✨ Added
+- **📝 Comprehensive Review Templates**: Complete suite of language and framework-specific templates
+  - Framework templates: Angular, Vue.js, React, NestJS, Express.js
+  - Language templates: TypeScript, JavaScript, Python, C#, Go, PHP, Rust, Node.js
+  - Generic fallback template for universal code analysis
+- **🛡️ Advanced Security Analysis**: Enhanced security violation detection across all languages
+- **⚡ Performance Optimization**: Improved performance checks and recommendations
+- **🎯 Framework-Specific Patterns**: Deep framework understanding with best practice enforcement
+- **📊 Enhanced Health Metrics**: Comprehensive scoring system with 5-star ratings
+- **🔍 Critical Check Categories**: 9-10 critical violation categories per template
+
+#### 🔄 Improved
+- **🤖 Template System**: Consolidated and standardized all review templates
+- **📈 Code Analysis**: More detailed analysis with extensive code examples
+- **🎨 Action Items**: Better prioritization with Critical, Important, and Improvement categories
+- **💡 Upgrade Recommendations**: Enhanced migration paths and performance improvements
+- **🔒 Security Focus**: Strengthened security violation detection and mitigation strategies
+
+#### 🏗️ Technical Enhancements
+- **Template Structure**: Consistent 1000+ line templates with comprehensive coverage
+- **Framework Detection**: Improved auto-detection for template selection
+- **Code Examples**: Extensive real-world code examples in each template
+- **Documentation**: Enhanced inline documentation and usage examples
 
 ## [1.0.3] - 2025-10-29
 

@@ -10,16 +10,16 @@ You are performing a STRICT code review. Do NOT be lenient. Look for every possi
 ### 📋 CHANGE SEPARATION RULES (MANDATORY):
 
 **Split into separate changes when:**
-- ✅ **Different JavaScript artifacts**: Function vs Class vs Module changes = separate changes
-- ✅ **Different async patterns**: Promise vs async/await vs callback = separate changes
-- ✅ **Different scopes**: Global vs Local vs Module scope = separate changes
-- ✅ **Different operations**: Different API calls or business logic = separate changes
+- ✅ **Different JavaScript artifacts**: Function vs Class vs Module vs Object changes = separate changes
+- ✅ **Different functions**: Different function definitions = separate changes
+- ✅ **Different async operations**: Different Promise/async patterns = separate changes
+- ✅ **Different event handlers**: Different DOM event handling = separate changes
 - ✅ **Non-adjacent code blocks**: If there are 3+ unchanged lines between modifications = separate changes
 
 **Keep as one change when:**
-- ❌ **Same function**: Multiple lines in same function body
-- ❌ **Related operations**: Sequential steps in same workflow
-- ❌ **Same module exports**: Related function definitions
+- ❌ **Same JavaScript function**: Multiple lines in same function body
+- ❌ **Related object properties**: Related properties and methods in same object
+- ❌ **Same module exports**: Related exports in same file
 
 ## ⚡ CRITICAL CHECKS (Auto-FAIL if found)
 
@@ -27,31 +27,95 @@ You are performing a STRICT code review. Do NOT be lenient. Look for every possi
 
 ### 🚨 SECURITY VIOLATIONS:
 - Hardcoded passwords, API keys, tokens, secrets
-- SQL injection vulnerabilities (dynamic SQL construction)
-- XSS vulnerabilities (innerHTML without sanitization)
-- Unsafe file operations, path traversal
+- XSS vulnerabilities (innerHTML with user input)
+- eval() or Function() constructor usage
+- Missing input validation/sanitization
 - Authentication/authorization bypasses
-
-### 🚨 NULL SAFETY VIOLATIONS:
-- `.` access without null checks (`obj.property` without `obj?.property`)
-- Array access without length checks (`arr[0]` without `arr?.length`)
-- Function calls without existence checks
-- `any` type usage without proper validation
-- Missing null/undefined guards
+- Unsafe external script loading
+- Missing CSRF protection
+- Insecure local storage usage for sensitive data
+- Command injection in Node.js environments
+- Path traversal vulnerabilities
+- Missing Content Security Policy considerations
+- Unsafe postMessage usage
 
 ### 🚨 ERROR HANDLING VIOLATIONS:
-- `try` blocks without `catch`
-- Promise/Observable without error handling
-- HTTP calls without error callbacks
-- File operations without error checks
-- Database operations without error handling
+- Missing try-catch blocks for risky operations
+- Promise rejections without catch handlers
+- Missing error handling for async operations
+- Silent error swallowing (empty catch blocks)
+- Generic error messages without context
+- Missing validation for external inputs
+- Unhandled edge cases in user interactions
+- Missing timeout handling for network requests
+- Missing graceful degradation for failed features
+- console.error without proper error handling
 
-### 🚨 RESOURCE LEAKS:
-- Observables without unsubscribe
-- Event listeners without cleanup
-- Timers without clearInterval/clearTimeout  
-- File handles not closed
-- Database connections not closed
+### 🚨 MEMORY & RESOURCE VIOLATIONS:
+- Memory leaks from event listeners without cleanup
+- Missing cleanup for timers/intervals
+- Circular references causing memory leaks
+- Missing cleanup for DOM references
+- Event listeners on global objects without removal
+- Missing AbortController for fetch requests
+- Large object references not cleared
+- Missing weak references where appropriate
+- Closure memory leaks
+
+### 🚨 ASYNC/PROMISE VIOLATIONS:
+- Missing await for Promise operations
+- Promise constructor anti-patterns
+- Callback hell patterns
+- Missing error handling in async operations
+- Mixing callbacks and Promises inconsistently
+- Missing timeout for async operations
+- Race conditions in async code
+- Missing proper cancellation patterns
+- Unhandled promise rejections
+
+### 🚨 PERFORMANCE VIOLATIONS:
+- Blocking operations on main thread
+- Missing debouncing/throttling for frequent operations
+- Inefficient DOM manipulations (repeated queries)
+- Missing lazy loading for large resources
+- Inefficient array/object operations (O(n²))
+- Missing memoization for expensive computations
+- Large bundle imports without tree shaking
+- Missing code splitting strategies
+- Synchronous localStorage operations in loops
+
+### 🚨 ES6+/MODERN JAVASCRIPT VIOLATIONS:
+- Using var instead of const/let
+- Missing arrow function benefits
+- Missing destructuring patterns
+- Missing template literals for string building
+- Missing proper class usage
+- Missing Map/Set for appropriate use cases
+- Missing spread operator usage
+- Missing default parameters
+- Missing proper module import/export
+- Missing proper iteration methods (forEach, map, filter)
+
+### 🚨 DOM & BROWSER VIOLATIONS:
+- Missing null checks for DOM elements
+- Direct DOM manipulation without framework patterns
+- Missing proper event delegation
+- Unsafe innerHTML usage
+- Missing accessibility attributes
+- Poor mobile responsiveness considerations
+- Missing proper form validation
+- Unsafe cookie handling
+- Missing proper viewport handling
+
+### 🚨 SPECIFIC PROJECT RULES:
+<!-- ADD PROJECT-SPECIFIC RULES HERE - These will be checked alongside JavaScript rules -->
+<!-- Additional project rules can be added here:
+- Custom naming conventions
+- Specific framework requirements
+- Project-specific performance requirements
+- Custom security requirements
+- Accessibility compliance standards
+-->
 
 ## 📊 DETAILED FILE ANALYSIS
 
@@ -65,11 +129,11 @@ You are performing a STRICT code review. Do NOT be lenient. Look for every possi
 
 #### STRICT EVALUATION:
 - **🚨 Security**: [FOUND_ISSUES or "CLEAN"]
-- **🚨 Null Safety**: [FOUND_ISSUES or "CLEAN"] 
-- **🚨 Error Handling**: [FOUND_ISSUES or "CLEAN"]
-- **🚨 Resource Management**: [FOUND_ISSUES or "CLEAN"]
+- **🚨 Error Handling**: [FOUND_ISSUES or "CLEAN"] 
+- **🚨 Memory Management**: [FOUND_ISSUES or "CLEAN"]
+- **🚨 Async Patterns**: [FOUND_ISSUES or "CLEAN"]
 - **⚠️ Performance**: [FOUND_ISSUES or "CLEAN"]
-- **⚠️ Code Quality**: [FOUND_ISSUES or "CLEAN"]
+- **⚠️ Modern JS**: [FOUND_ISSUES or "CLEAN"]
 
 #### VERDICT:
 - 🚨 **CRITICAL**: [Reason - blocks deployment]
@@ -83,69 +147,22 @@ You are performing a STRICT code review. Do NOT be lenient. Look for every possi
 ### 🚨 SECURITY ISSUES:
 [List each security violation with exact line numbers and code]
 
-### 🚨 NULL SAFETY ISSUES:  
-[List each null safety violation with exact line numbers and code]
+### 🚨 ERROR HANDLING ISSUES:  
+[List each error handling violation with exact line numbers and code]
 
-### 🚨 ERROR HANDLING ISSUES:
-[List each error handling issue with exact line numbers and code]
+### 🚨 MEMORY MANAGEMENT ISSUES:
+[List each memory leak with exact line numbers and code]
 
-### 🚨 RESOURCE LEAK ISSUES:
-[List each resource leak with exact line numbers and code]
+### 🚨 ASYNC PATTERN ISSUES:
+[List each async/promise violation with exact line numbers and code]
 
 ## ⚠️ WARNING ISSUES (Should fix)
 
 ### ⚠️ PERFORMANCE ISSUES:
-[List performance bottlenecks, O(n²) operations, inefficient code]
+[List performance bottlenecks, inefficient operations]
 
-### ⚠️ CODE QUALITY ISSUES:
-[List naming violations, complex functions, code smells]
-
----
-
-## 🔍 SPECIFIC RULES VIOLATED
-
-### JavaScript VIOLATIONS:
-- ❌ Missing input validation
-- ❌ Unhandled promise rejections
-- ❌ Variable hoisting issues
-- ❌ Missing semicolons
-- ❌ Global variable usage
-- ❌ eval() or Function() usage
-- ❌ Missing error handling
-- ❌ Prototype pollution vulnerabilities
-- ❌ Memory leaks in closures
-- ❌ Missing JSDoc documentation
-- ❌ Inconsistent variable declarations (var/let/const)
-- ❌ Missing strict mode
-
-### JavaScript Security VIOLATIONS:
-- ❌ innerHTML with dynamic content
-- ❌ Hardcoded credentials/API keys
-- ❌ HTTP instead of HTTPS endpoints
-- ❌ No input validation/sanitization
-- ❌ SQL string concatenation
-- ❌ Direct DOM manipulation without validation
-- ❌ Unsafe eval() usage
-- ❌ Missing CSRF protection
-- ❌ XSS vulnerabilities
-
-### JavaScript Performance VIOLATIONS:
-- ❌ Inefficient loops and iterations
-- ❌ Memory leaks in event listeners
-- ❌ Blocking operations on main thread
-- ❌ Unnecessary object creation in loops
-- ❌ Missing debouncing/throttling
-- ❌ Deep object cloning without optimization
-- ❌ Synchronous operations that could be async
-
-### JavaScript Best Practices VIOLATIONS:
-- ❌ Functions longer than 50 lines
-- ❌ Deeply nested conditions (>3 levels)
-- ❌ Magic numbers without constants
-- ❌ Missing return statements
-- ❌ Inconsistent naming conventions
-- ❌ Missing parameter validation
-- ❌ Callback hell without promises
+### ⚠️ MODERN JAVASCRIPT ISSUES:
+[List ES6+ violations, outdated patterns]
 
 ---
 
@@ -164,37 +181,26 @@ You are performing a STRICT code review. Do NOT be lenient. Look for every possi
 
 ### MANDATORY Action Items:
 1. Fix ALL security issues immediately
-2. Add null checks for ALL property access
-3. Add error handling for ALL operations
-4. Clean up ALL resource leaks
-5. Remove ALL debugging code
+2. Add error handling for ALL async operations
+3. Clean up ALL memory leaks
+4. Remove ALL debugging code
+5. Fix ALL performance bottlenecks
+6. Modernize ALL outdated JavaScript patterns
+7. Add proper input validation
 
 ---
 
-## 🎯 STRICT CHECKLIST
+## 🎯 FINAL JAVASCRIPT SUMMARY (After All Changes Reviewed)
 
-**ZERO tolerance policy:**
+### 📋 COMPLIANCE SCORES
+- **Security Implementation**: [X/5] - XSS prevention, input validation, secure patterns
+- **Error Handling**: [X/5] - Comprehensive error catching, async error handling, user feedback
+- **Memory Management**: [X/5] - Proper cleanup, leak prevention, resource management
+- **Async Patterns**: [X/5] - Promise handling, async/await usage, error propagation
+- **Performance**: [X/5] - Efficient operations, optimization, resource usage
+- **Modern JavaScript**: [X/5] - ES6+ usage, best practices, code quality
 
-- [❌/✅] **🚨 Security**: NO secrets, NO XSS, NO SQL injection
-- [❌/✅] **🚨 Null Safety**: ALL `.` access protected  
-- [❌/✅] **🚨 Error Handling**: ALL operations have error handling
-- [❌/✅] **🚨 Resource Management**: ALL resources properly cleaned
-- [❌/✅] **⚠️ Performance**: NO O(n²), NO memory leaks
-- [❌/✅] **⚠️ Code Quality**: NO magic numbers, proper naming
-- [❌/✅] **⚠️ Best Practices**: Follows ALL conventions
-
----
-
-## 🚨 FINAL VERDICT
-
-**DEPLOYMENT DECISION**: [APPROVE/REJECT/NEEDS_WORK]
-
-**Reasoning**: [Based on concrete violations found]
-
-**Critical Blockers**: [Number] issues that MUST be fixed
-
-**Review Standards**: STRICT MODE - Found [X] violations
-
----
-
-**⚠️ NOTE**: This is a STRICT review. Any violation should result in WARNING or CRITICAL status. Do NOT be lenient.
+### 🔥 FINAL APPROVAL DECISION
+- **✅ APPROVED**: No critical issues found, safe to merge
+- **❌ NEEDS FIXES**: Critical issues detected, must resolve first  
+- **🚫 REJECT**: Major architectural problems, requires refactoring

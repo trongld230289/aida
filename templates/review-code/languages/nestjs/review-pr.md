@@ -10,48 +10,109 @@ You are performing a STRICT code review. Do NOT be lenient. Look for every possi
 ### 📋 CHANGE SEPARATION RULES (MANDATORY):
 
 **Split into separate changes when:**
-- ✅ **Different NestJS artifacts**: Controller vs Service vs Module changes = separate changes
-- ✅ **Different decorators**: @Get vs @Post vs @Put vs @Delete = separate changes
-- ✅ **Different layers**: Guards vs Interceptors vs Pipes = separate changes
+- ✅ **Different NestJS artifacts**: Controller vs Service vs Module vs Guard changes = separate changes
+- ✅ **Different decorators**: Different decorator patterns = separate changes
 - ✅ **Different async operations**: Different Promise/async patterns = separate changes
+- ✅ **Different dependency injection**: Different provider patterns = separate changes
 - ✅ **Non-adjacent code blocks**: If there are 3+ unchanged lines between modifications = separate changes
 
 **Keep as one change when:**
-- ❌ **Same controller method**: Multiple lines in same endpoint
-- ❌ **Related dependency injection**: Related service injections
-- ❌ **Same module configuration**: Related imports/providers
+- ❌ **Same NestJS class**: Multiple lines in same controller/service
+- ❌ **Related methods**: Related CRUD operations in same service
+- ❌ **Same module**: Related providers in same module
 
 ## ⚡ CRITICAL CHECKS (Auto-FAIL if found)
 
 **Scan EVERY line for these CRITICAL issues:**
 
 ### 🚨 SECURITY VIOLATIONS:
-- Hardcoded passwords, API keys, tokens, secrets
-- SQL injection vulnerabilities (dynamic SQL construction)
-- XSS vulnerabilities (innerHTML without sanitization)
-- Unsafe file operations, path traversal
-- Authentication/authorization bypasses
+- Hardcoded passwords, API keys, secrets
+- Missing authentication guards on protected routes
+- Missing authorization checks
+- SQL injection vulnerabilities in database queries
+- XSS vulnerabilities in response data
+- Missing input validation with class-validator
+- Missing rate limiting on API endpoints
+- Unsafe file upload handling
+- Missing CORS configuration
+- Exposed sensitive information in error responses
+- Missing CSRF protection
+- Unsafe JWT handling
 
-### 🚨 NULL SAFETY VIOLATIONS:
-- `.` access without null checks (`obj.property` without `obj?.property`)
-- Array access without length checks (`arr[0]` without `arr?.length`)
-- Function calls without existence checks
-- `any` type usage without proper validation
-- Missing null/undefined guards
+### 🚨 DEPENDENCY INJECTION VIOLATIONS:
+- Missing proper provider registration in modules
+- Circular dependencies between services
+- Missing proper scope definition (Singleton, Request, Transient)
+- Incorrect injection token usage
+- Missing proper interface abstractions
+- Direct class instantiation instead of DI
+- Missing proper factory patterns
+- Incorrect module imports/exports
+- Missing proper provider dependencies
+
+### 🚨 DECORATOR VIOLATIONS:
+- Missing required decorators (@Controller, @Injectable)
+- Incorrect HTTP method decorators
+- Missing proper validation decorators
+- Incorrect parameter decorators usage
+- Missing proper route parameter validation
+- Incorrect guard/interceptor decorator placement
+- Missing proper DTO validation decorators
+- Incorrect custom decorator implementation
 
 ### 🚨 ERROR HANDLING VIOLATIONS:
-- `try` blocks without `catch`
-- Promise/Observable without error handling
-- HTTP calls without error callbacks
-- File operations without error checks
-- Database operations without error handling
+- Missing global exception filters
+- Generic error responses exposing internals
+- Missing proper HTTP status codes
+- Missing error logging
+- Unhandled promise rejections
+- Missing validation error handling
+- Poor error message formatting
+- Missing proper exception hierarchy
+- Missing graceful error recovery
 
-### 🚨 RESOURCE LEAKS:
-- Observables without unsubscribe
-- Event listeners without cleanup
-- Timers without clearInterval/clearTimeout  
-- File handles not closed
-- Database connections not closed
+### 🚨 ASYNC VIOLATIONS:
+- Missing await for async operations
+- Blocking operations in request handlers
+- Missing proper timeout handling
+- Promise constructor anti-patterns
+- Missing error handling in async operations
+- Mixing callbacks and promises
+- Missing proper cancellation patterns
+- Memory leaks from unclosed streams
+- Missing proper database transaction handling
+
+### 🚨 DATABASE VIOLATIONS:
+- Missing proper repository patterns
+- SQL injection through ORM misuse
+- Missing database transaction handling
+- Missing proper connection management
+- Missing database error handling
+- N+1 query problems
+- Missing proper indexing considerations
+- Missing data validation at entity level
+- Missing proper migration patterns
+
+### 🚨 API DESIGN VIOLATIONS:
+- Missing proper DTO classes
+- Inconsistent API response formats
+- Missing proper OpenAPI/Swagger documentation
+- Missing proper versioning strategy
+- Missing pagination for list endpoints
+- Incorrect HTTP status code usage
+- Missing proper content-type handling
+- Poor RESTful design principles
+- Missing proper request/response validation
+
+### 🚨 SPECIFIC PROJECT RULES:
+<!-- ADD PROJECT-SPECIFIC RULES HERE - These will be checked alongside NestJS rules -->
+<!-- Additional project rules can be added here:
+- Custom authentication patterns
+- Specific validation requirements
+- Project-specific architectural patterns
+- Custom error handling requirements
+- Microservice communication patterns
+-->
 
 ## 📊 DETAILED FILE ANALYSIS
 
@@ -65,11 +126,11 @@ You are performing a STRICT code review. Do NOT be lenient. Look for every possi
 
 #### STRICT EVALUATION:
 - **🚨 Security**: [FOUND_ISSUES or "CLEAN"]
-- **🚨 Null Safety**: [FOUND_ISSUES or "CLEAN"] 
+- **🚨 Dependency Injection**: [FOUND_ISSUES or "CLEAN"] 
+- **🚨 Decorators**: [FOUND_ISSUES or "CLEAN"]
 - **🚨 Error Handling**: [FOUND_ISSUES or "CLEAN"]
-- **🚨 Resource Management**: [FOUND_ISSUES or "CLEAN"]
-- **⚠️ Performance**: [FOUND_ISSUES or "CLEAN"]
-- **⚠️ Code Quality**: [FOUND_ISSUES or "CLEAN"]
+- **⚠️ Async Patterns**: [FOUND_ISSUES or "CLEAN"]
+- **⚠️ API Design**: [FOUND_ISSUES or "CLEAN"]
 
 #### VERDICT:
 - 🚨 **CRITICAL**: [Reason - blocks deployment]
@@ -83,73 +144,22 @@ You are performing a STRICT code review. Do NOT be lenient. Look for every possi
 ### 🚨 SECURITY ISSUES:
 [List each security violation with exact line numbers and code]
 
-### 🚨 NULL SAFETY ISSUES:  
-[List each null safety violation with exact line numbers and code]
+### 🚨 DEPENDENCY INJECTION ISSUES:  
+[List each DI violation with exact line numbers and code]
+
+### 🚨 DECORATOR ISSUES:
+[List each decorator violation with exact line numbers and code]
 
 ### 🚨 ERROR HANDLING ISSUES:
-[List each error handling issue with exact line numbers and code]
-
-### 🚨 RESOURCE LEAK ISSUES:
-[List each resource leak with exact line numbers and code]
+[List each error handling violation with exact line numbers and code]
 
 ## ⚠️ WARNING ISSUES (Should fix)
 
-### ⚠️ PERFORMANCE ISSUES:
-[List performance bottlenecks, O(n²) operations, inefficient code]
+### ⚠️ ASYNC PATTERN ISSUES:
+[List async/promise pattern violations]
 
-### ⚠️ CODE QUALITY ISSUES:
-[List naming violations, complex functions, code smells]
-
----
-
-## 🔍 SPECIFIC RULES VIOLATED
-
-### TypeScript/JavaScript VIOLATIONS:
-- ❌ `any` type without validation
-- ❌ Non-null assertion (`!`) without null checks  
-- ❌ `console.log` in production code
-- ❌ `debugger` statements
-- ❌ `eval()` or `Function()` usage
-- ❌ Global variables
-- ❌ Magic numbers without constants
-
-### NestJS VIOLATIONS:
-- ❌ Controllers without proper dependency injection
-- ❌ Services not marked as @Injectable
-- ❌ Missing validation pipes
-- ❌ Direct database access in controllers
-- ❌ Missing guards on protected routes
-- ❌ Large controllers (>200 lines)
-- ❌ Business logic in controllers
-- ❌ Missing DTO validation
-- ❌ Improper exception handling
-- ❌ Missing module imports/exports
-- ❌ Circular dependencies between modules
-- ❌ Custom decorators without proper typing
-
-### NestJS Security VIOLATIONS:
-- ❌ Missing authentication guards
-- ❌ Unsafe JWT implementations
-- ❌ Missing rate limiting
-- ❌ Exposed sensitive data in responses
-- ❌ Missing input validation pipes
-- ❌ Unsafe cookie configurations
-
-### NestJS Performance VIOLATIONS:
-- ❌ Missing caching interceptors
-- ❌ Heavy operations in request lifecycle
-- ❌ No database connection pooling
-- ❌ Missing async/await patterns
-- ❌ Synchronous operations in controllers
-- ❌ Missing pagination for large datasets
-
-### NestJS Architecture VIOLATIONS:
-- ❌ Business logic in controllers
-- ❌ Missing service layer separation
-- ❌ Improper module organization
-- ❌ Missing proper error filters
-- ❌ Incorrect pipe usage
-- ❌ Missing interceptor chains
+### ⚠️ API DESIGN ISSUES:
+[List API design violations, poor practices]
 
 ---
 
@@ -168,37 +178,26 @@ You are performing a STRICT code review. Do NOT be lenient. Look for every possi
 
 ### MANDATORY Action Items:
 1. Fix ALL security issues immediately
-2. Add null checks for ALL property access
-3. Add error handling for ALL operations
-4. Clean up ALL resource leaks
-5. Remove ALL debugging code
+2. Add proper authentication/authorization
+3. Fix ALL dependency injection violations
+4. Add proper error handling for ALL operations
+5. Add validation for ALL DTOs
+6. Remove ALL debugging code
+7. Implement proper API documentation
 
 ---
 
-## 🎯 STRICT CHECKLIST
+## 🎯 FINAL NESTJS SUMMARY (After All Changes Reviewed)
 
-**ZERO tolerance policy:**
+### 📋 COMPLIANCE SCORES
+- **Security Implementation**: [X/5] - Authentication, authorization, input validation
+- **Dependency Injection**: [X/5] - Proper DI patterns, module organization, provider scope
+- **API Design**: [X/5] - RESTful design, DTOs, documentation, validation
+- **Error Handling**: [X/5] - Exception filters, proper HTTP codes, logging
+- **Async Patterns**: [X/5] - Promise handling, async/await usage, performance
+- **Architecture**: [X/5] - Module structure, separation of concerns, scalability
 
-- [❌/✅] **🚨 Security**: NO secrets, NO XSS, NO SQL injection
-- [❌/✅] **🚨 Null Safety**: ALL `.` access protected  
-- [❌/✅] **🚨 Error Handling**: ALL operations have error handling
-- [❌/✅] **🚨 Resource Management**: ALL resources properly cleaned
-- [❌/✅] **⚠️ Performance**: NO O(n²), NO memory leaks
-- [❌/✅] **⚠️ Code Quality**: NO `any`, NO magic numbers
-- [❌/✅] **⚠️ Best Practices**: Follows ALL conventions
-
----
-
-## 🚨 FINAL VERDICT
-
-**DEPLOYMENT DECISION**: [APPROVE/REJECT/NEEDS_WORK]
-
-**Reasoning**: [Based on concrete violations found]
-
-**Critical Blockers**: [Number] issues that MUST be fixed
-
-**Review Standards**: STRICT MODE - Found [X] violations
-
----
-
-**⚠️ NOTE**: This is a STRICT review. Any violation should result in WARNING or CRITICAL status. Do NOT be lenient.
+### 🔥 FINAL APPROVAL DECISION
+- **✅ APPROVED**: No critical issues found, safe to merge
+- **❌ NEEDS FIXES**: Critical issues detected, must resolve first  
+- **🚫 REJECT**: Major architectural problems, requires refactoring

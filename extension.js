@@ -126,7 +126,7 @@ async function setupAzureDevOpsSettings() {
  */
 function activate(context) {
     // console.log('Reload 4');
-    console.log('🤖 AIDA v1.0.3 - AI Development Assistant');
+    console.log('🤖 AIDA v1.0.4 - AI Development Assistant');
     console.log('🚀 AIDA extension is now active!');
     
     // Store extension path globally for diff module access
