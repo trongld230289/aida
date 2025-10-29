@@ -419,7 +419,7 @@ class CopilotSidebarChat {
 
             // Get current file context for smart suggestions (skip for review commands that handle their own context)
             const participantType = this.determineParticipant(userMessage);
-            const isReviewCommand = ['review-file', 'review-changes', 'review-pr', 'sync-review-templates'].includes(participantType);
+            const isReviewCommand = ['review-file', 'review-changes', 'review-pr', 'sync-review-templates','scan-app'].includes(participantType);
             
             let currentFileContext = null;
             if (!isReviewCommand) {
@@ -726,6 +726,7 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
         if (lowerMessage.includes('@review-changes')) return 'review-changes';  
         if (lowerMessage.includes('@review-pr')) return 'review-pr';
         if (lowerMessage.includes('@sync-review-templates')) return 'sync-review-templates';
+        if (lowerMessage.includes('@scan-app')) return 'scan-app';
         
         return 'general';
     }
@@ -2694,6 +2695,17 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
                         return result || '✅ **Template Sync Complete**\n\nTemplate synchronization completed.';
                     } catch (error) {
                         console.error('❌ AIDA Chat sync-review-templates error:', error);
+                        return '❌ **Error**: ' + error.message + '\n\nPlease check the console for details.';
+                    }
+
+                case 'scan-app':
+                    try {
+                        console.log('🔍 AIDA Chat: Calling scan-app with reusable logic');
+                        const scanModule = require('../scan-app.js');
+                        await scanModule.handleScanApp(messageWithoutParticipant, mockStream, null, this.context);
+                        return result || '✅ **Scan Complete**\n\nCode scanning and duplicate detection completed.';
+                    } catch (error) {
+                        console.error('❌ AIDA Chat scan-app error:', error);
                         return '❌ **Error**: ' + error.message + '\n\nPlease check the console for details.';
                     }
 

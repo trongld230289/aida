@@ -16,6 +16,36 @@ if (!global.fetch) {
 }
 
 /**
+ * Handle scan-app requests from chat interface
+ */
+async function handleScanApp(message, stream, token, context) {
+    console.log('🔍 Smart Scanner called from chat:', message);
+    
+    try {
+        const query = message.trim().toLowerCase();
+        
+        if (query.includes('api') || query.includes('endpoint')) {
+            await scanApiPatterns(stream, query);
+        } else if (query.includes('component') || query.includes('class')) {
+            await scanComponentPatterns(stream, query);
+        } else if (query.includes('function') || query.includes('method')) {
+            await scanFunctionPatterns(stream, query);
+        } else if (query.includes('duplicate') || query.includes('similar')) {
+            await scanAllPatterns(stream, query);
+        } else if (query.includes('architecture') || query.includes('structure')) {
+            await analyzeArchitecture(stream);
+        } else {
+            await showSmartScanHelp(stream);
+        }
+        
+    } catch (error) {
+        console.error('Smart Scanner error:', error);
+        stream.markdown(`❌ **Error:** ${error.message}`);
+        throw error;
+    }
+}
+
+/**
  * Initialize Smart App Scanner with AST analysis
  */
 function initializeScanApp(context) {
@@ -23,29 +53,7 @@ function initializeScanApp(context) {
     
     try {
         const scanAppParticipant = vscode.chat.createChatParticipant('scan-app', async (request, context, stream, token) => {
-            console.log('🔍 Smart Scanner called:', request.prompt);
-            
-            try {
-                const query = request.prompt.trim().toLowerCase();
-                
-                if (query.includes('api') || query.includes('endpoint')) {
-                    await scanApiPatterns(stream, query);
-                } else if (query.includes('component') || query.includes('class')) {
-                    await scanComponentPatterns(stream, query);
-                } else if (query.includes('function') || query.includes('method')) {
-                    await scanFunctionPatterns(stream, query);
-                } else if (query.includes('duplicate') || query.includes('similar')) {
-                    await scanAllPatterns(stream, query);
-                } else if (query.includes('architecture') || query.includes('structure')) {
-                    await analyzeArchitecture(stream);
-                } else {
-                    await showSmartScanHelp(stream);
-                }
-                
-            } catch (error) {
-                console.error('Smart Scanner error:', error);
-                stream.markdown(`❌ **Error:** ${error.message}`);
-            }
+            await handleScanApp(request.prompt, stream, token, context);
         });
         
         console.log('✅ scan-app participant created successfully');
@@ -1338,5 +1346,6 @@ function getBusinessIcon(domain) {
 }
 
 module.exports = {
-    initializeScanApp
+    initializeScanApp,
+    handleScanApp
 };
