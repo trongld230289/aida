@@ -2,8 +2,29 @@
 
 All notable changes to **AIDA - AI Development Assistant** will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.4/),
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.5/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.0.5] - 2025-10-31
+
+### 🎯 Enhanced Chat Interface & User Experience
+
+#### ✨ Added
+- **🤖 Smart Autocomplete**: Enhanced chat autocomplete with single-result auto-selection via Enter key
+- **💬 Improved Chat UX**: Clean visual design with highlighted participant names and removed animations
+- **🔄 Smart /clear Command**: Clears chat view while preserving user input history
+- **📝 Enhanced Documentation**: Updated README with comprehensive configuration examples and usage guides
+- **🎨 Visual Polish**: Improved chat interface styling with better user experience
+
+#### 🔧 Improved
+- **📖 Documentation Accuracy**: Synchronized all language lists and command descriptions across documentation
+- **⚙️ Configuration Examples**: Complete configuration guide with all available settings
+- **🎯 Template Organization**: Validated and organized template structure across 9 supported languages
+
+#### 🐛 Fixed
+- **🎨 Animation Issues**: Removed distracting pulse animations from chat interface
+- **📝 Typos**: Fixed documentation typos and inconsistencies
+- **🔧 Language Categorization**: Corrected language support lists to match actual implementation
 
 ## [1.0.4] - 2025-10-30
 

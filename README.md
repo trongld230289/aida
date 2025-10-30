@@ -4,7 +4,7 @@
 
 > Transform your development workflow with AIDA - Your intelligent coding companion featuring built-in chatbot, support for your own AI API (OpenAI/Claude), and comprehensive development tools. No GitHub Copilot required!
 
-[![Version](https://img.shields.io/badge/version-1.0.4-blue.svg)](https://marketplace.visualstudio.com/items?itemName=trongld232.aida-dev)
+[![Version](https://img.shields.io/badge/version-1.0.5-blue.svg)](https://marketplace.visualstudio.com/items?itemName=trongld232.aida-dev)
 [![VS Code](https://img.shields.io/badge/VS%20Code-1.90+-green.svg)](https://code.visualstudio.com/)
 [![License](https://img.shields.io/badge/license-MIT-orange.svg)](LICENSE)
 
@@ -23,8 +23,8 @@
 ## ✨ Key Features
 
 ### 🔍 **Smart Code Review**
-- **Multi-language Support**: TypeScript, JavaScript, Python, C#, Java, Go, Rust
-- **Framework Awareness**: Angular, React, Vue, Express, NestJS, ASP.NET
+- **Multi-language Support**: TypeScript, JavaScript, Python, C#, Go
+- **Framework Awareness**: Angular, React, Vue, Node.js
 - **Security Analysis**: Automated security vulnerability detection
 - **Performance Insights**: Code efficiency and optimization suggestions
 
@@ -67,13 +67,21 @@
 ext install trongld232.aida-dev
 
 # Or install from VSIX
-code --install-extension aida-dev-1.0.4.vsix
+code --install-extension aida-dev-1.0.5.vsix
 ```
+### 2. User Cases
+#### 1. With Github Copilot
+1. **Just Use After Install**
 
-### 2. Setup AIDA Chatbot (Optional - For Non-Copilot Users)
+#### 2. Use External AI API With Github Copilot
 1. **Open Settings**: `Ctrl+,` → Search "AIDA"
-2. **Enable AIDA Chatbot**: Set `aida.hasNoGithubCopilot` to `true`
-3. **Configure AI API**: Add your OpenAI or Claude API key
+2. **Enable AIDA Chatbot**: Set `Use Api Key Instead Of Copilot` to `true`
+3. **Configure AI API**: Add your OpenAI or STU key
+
+#### 3. Setup AIDA Chatbot (For Non-Copilot Users)
+1. **Open Settings**: `Ctrl+,` → Search "AIDA"
+2. **Enable AIDA Chatbot**: Set `Has No Github Copilot` to `true`
+3. **Configure AI API**: Add your OpenAI or STU key
 4. **Open AIDA Chat**: Click AIDA icon in Activity Bar or use `Ctrl+Shift+A`
 
 ### 3. AI Provider Configuration
@@ -81,133 +89,114 @@ code --install-extension aida-dev-1.0.4.vsix
 {
   // For OpenAI (GPT-4, GPT-5)
   "aida.ai.apiKey": "sk-your-openai-key",
-  "aida.ai.apiHost": "https://api.openai.com",
+  "aida.ai.apiHost": "https://api.openai.com/v1/chat/completions",
   "aida.ai.model": "gpt-4o",
 
-  // For Anthropic Claude
+  // For STU (Claude)
   "aida.ai.apiKey": "sk-ant-your-claude-key", 
-  "aida.ai.apiHost": "https://api.anthropic.com",
-  "aida.ai.model": "claude-3-5-sonnet-20241022",
+  "aida.ai.apiHost": "https://aiportalapi.stu-platform.live/jpe/chat/completions",
+  "aida.ai.model": "Claude-4-Sonnet",
 
-  // Use your API instead of Copilot
-  "aida.useApiKeyInsteadOfCopilot": true
+  // AIDA Chatbot Configuration
+  "aida.useApiKeyInsteadOfCopilot": true,
+  "aida.hasNoGithubCopilot": true,
+
+  // Platform Integration Tokens To Review Pull Request
+  "aida.github.personalAccessToken": "ghp_your-github-token",
+  "aida.gitlab.personalAccessToken": "glpat-your-gitlab-token",
+  "aida.azureDevOps.personalAccessToken": "your-azure-devops-token",
+  "aida.azureDevOps.organization": "your-organization-name",
+  "aida.azureDevOps.defaultProject": "your-default-project",
 }
 ```
 
 ### 4. Start Using AIDA
 - **Review Files**: Right-click any file → `AIDA: Review File`
-- **Analyze Changes**: Right-click in Git view → `AIDA: Review Changes`
-- **Chat Interface**: Open chat and use `@review-file`, `@scan-app`, etc.
+- **Analyze Changes**: Right-click in Git view → `AIDA: Review Changes`  
+- **Chat Interface**: Open AIDA Chat and type commands with `@` prefix
 
-## 💬 Chat Participants
+## 💬 AIDA Chat Commands
 
-### 📁 **@review-file** - Intelligent File Analysis
+AIDA Chat provides intelligent code analysis through simple chat commands. Open the chat interface and use these participants:
+
+### 📁 **@review-file** - Analyze Any File
+**Usage:** `tpye: @review-file [file-path] in chat input`
 ```
 @review-file src/components/UserProfile.tsx
+@review-file    // Reviews current active file
 ```
-- Comprehensive code quality analysis
-- Security vulnerability scanning
-- Performance optimization suggestions
-- Best practices recommendations
+**What it does:**
+- ✅ Code quality & security analysis
+- 🚀 Performance optimization suggestions  
+- 📋 Best practices recommendations
+- 🔍 Bug detection and fixes
 
-### 🔍 **@review-changes** - Git Diff Intelligence
+### � **@review-changes** - Analyze Git Changes
+**Usage:** `type: @review-changes in chat input`
 ```
 @review-changes
 ```
-- Smart analysis of your git changes
-- Impact assessment and risk evaluation
-- Suggested improvements and fixes
-- Breaking change detection
+**What it does:**
+- 📊 Smart analysis of your uncommitted changes
+- ⚠️ Impact assessment and risk evaluation
+- 💡 Improvement suggestions and fixes
+- 🚨 Breaking change detection
 
-### 🚀 **@review-pr** - Pull Request Assistant
+### 🚀 **@review-pr** - Analyze Pull Requests
+**Usage:** `type: @review-pr [pr-url] in chat input`
 ```
 @review-pr https://github.com/user/repo/pull/123
+@review-pr https://gitlab.com/user/repo/-/merge_requests/45
 ```
-- Cross-platform PR analysis (GitHub, GitLab, Azure DevOps)
-- Team collaboration insights
-- Automated review comments
-- Merge readiness assessment
+**What it does:**
+- 🔍 Cross-platform PR analysis (GitHub, GitLab, Azure DevOps)
+- 👥 Team collaboration insights
+- 📝 Automated review comments
+- ✅ Merge readiness assessment
+
+### 🎯 **Alternative Ways to Use AIDA**
+
+**Right-click Context Menu:**
+- Right-click on any file → `AIDA: Review File`
+- Right-click in Git changes → `AIDA: Review Changes`
+
+**Command Palette** (`Ctrl + Shift + P`):
+- `AIDA: Review File` - Analyze current file
+- `AIDA: Review Changes` - Analyze git changes  
+- `AIDA: Review Pull Request` - Review PR by URL
+- `AIDA: Open AIDA Chat` - Open chat interface
+
+### 🔧 **@sync-review-templates** - Sync Templates
+**Usage:** `@sync-review-templates`
+```
+@sync-review-templates
+```
+**What it does:**
+- 📥 Downloads latest AIDA review templates to your workspace
+- 🎯 Sets up language-specific templates (Angular, React, Vue, etc.)
+- 🔄 Updates existing templates with improvements
 
 ## 🧪 **Experimental Features**
 
 AIDA includes experimental features currently in development:
 
-- **@scan-app**: Project-wide code analysis and architecture insights
-- **@daily-report**: Automated progress tracking and reporting
+- **@scan-app**: scode scaning and duplicate detection for API
 
 *Note: Experimental features are controlled by developers and not available in production releases.*
-
-## ⚙️ Configuration
-
-### AI Provider Setup
-
-#### OpenAI Configuration
-```json
-{
-  "aida.ai.apiKey": "sk-...",
-  "aida.ai.apiHost": "https://api.openai.com",
-  "aida.ai.model": "gpt-4o"
-}
-```
-
-#### Anthropic (Claude) Configuration
-```json
-{
-  "aida.ai.apiKey": "sk-ant-...",
-  "aida.ai.apiHost": "https://api.anthropic.com",
-  "aida.ai.model": "claude-3-sonnet-20240229"
-}
-```
-
-#### Custom AI Endpoint
-```json
-{
-  "aida.ai.apiKey": "your-key",
-  "aida.ai.apiHost": "https://your-ai-service.com",
-  "aida.ai.model": "your-model"
-}
-```
-
-
-
-### Platform Integration
-
-#### GitHub Setup
-```json
-{
-  "aida.github.personalAccessToken": "ghp_..."
-}
-```
-
-#### GitLab Setup
-```json
-{
-  "aida.gitlab.personalAccessToken": "glpat-..."
-}
-```
-
-#### Azure DevOps Setup
-```json
-{
-  "aida.azureDevOps.personalAccessToken": "your-token",
-  "aida.azureDevOps.organization": "your-org",
-  "aida.azureDevOps.defaultProject": "your-project"
-}
-```
 
 ## 🎯 Advanced Usage
 
 ### Custom Review Templates
 AIDA uses intelligent template selection based on your project:
 
-- **Framework-Specific**: Angular, React, Vue, Express, NestJS
-- **Language-Specific**: TypeScript, JavaScript, Python, C#, Java, Go, Rust
-- **Custom Templates**: Create your own in `VIDA/templates/review-code/`
+- **Framework-Specific**: Angular, React, Vue, Node.js
+- **Language-Specific**: TypeScript, JavaScript, Python, C#, Go
+- **Custom Templates**: Create your own in `AIDA/templates/review-code/`
 
 ### Project Structure
 ```
 your-project/
-├── VIDA/
+├── AIDA/
 │   └── templates/
 │       └── review-code/
 │           ├── languages/
@@ -216,26 +205,14 @@ your-project/
 ```
 
 ### Command Palette Actions
-- `AIDA: Setup AI Configuration` - Configure AI providers
-- `AIDA: Setup Azure DevOps` - Azure DevOps integration
-- `AIDA: Show Available Models` - View supported AI models
-- `AIDA: Review File` - Analyze current file
-- `AIDA: Review Changes` - Analyze git changes
+- `AIDA: Setup Azure DevOps Token` - Configure Azure DevOps integration
+- `AIDA: Show Available Language Models` - View supported AI models
+- `AIDA: Review File` - Review current file
+- `AIDA: Review Changes` - Review git changes
+- `AIDA: Review Pull Request` - Review PR by URL
+- `AIDA: Open AIDA Chat` - Open AIDA sidebar chat interface 
 
 ## 🔧 Development & Contributing
-
-### Building from Source
-```bash
-git clone https://github.com/trongld230289/aida.git
-cd aida
-npm install
-npm run compile
-```
-
-### Running in Development
-1. Open project in VS Code
-2. Press `F5` to launch Extension Development Host
-3. Test AIDA features in the new window
 
 ### Contributing
 We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
@@ -256,18 +233,6 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 
 ### Community
 - 🌟 **Star us on GitHub**: [github.com/trongld230289/aida](https://github.com/trongld230289/aida)
-- 🐦 **Follow Updates**: [@trongld232](https://twitter.com/trongld232)
-
-## 📋 Changelog
-
-### v1.0.0 - Initial Release (October 23, 2025)
-- 🎉 **Initial AIDA Release** - Complete rebrand from AI Self Check
-- 🤖 **AI Development Assistant** - Advanced intelligent coding companion
-- 🔍 **Enhanced Code Review** - Multi-language and framework support
-- 🚀 **PR Intelligence** - Cross-platform pull request analysis
-- 📊 **Project Scanning** - Comprehensive codebase analysis
-- 💬 **Chat Participants** - Natural language code interaction
-- 🛠️ **Development Workflows** - Automated reporting and project management
 
 ## 📄 License
 

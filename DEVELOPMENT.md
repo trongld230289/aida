@@ -26,7 +26,7 @@ AIDA uses a simple approach for feature management:
   {
     "id": "review-pr", 
     "name": "review-pr",
-    "description": "🔍 Review Azure DevOps Pull Request by PR ID or URL"
+    "description": "🔍 Review Pull Request by URL"
   }
 ]
 ```
