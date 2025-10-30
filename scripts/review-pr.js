@@ -2,7 +2,7 @@ const vscode = require('vscode');
 const path = require('path');
 const https = require('https');
 const { execSync } = require('child_process');
-const { getUnifiedModel, executeAIReview, shouldUseApiKey } = require('./review-common');
+const { getUnifiedModel, executeAIReview, shouldUseApiKey, processTemplateContent } = require('./review-common');
 const { detectFromPRFiles, getReviewTemplateWithDetection, displayDetectionInfo } = require('./language-detection');
 
 // Import functions from extension.js
@@ -62,7 +62,7 @@ async function getPRReviewTemplate(templateType, prData) {
             const workspaceAidaPath = path.join(workspaceFolder.uri.fsPath, 'AIDA', 'templates');
             templatePaths = [
                 // Workspace AIDA templates (highest priority)
-                path.join(workspaceAidaPath, 'review-code', 'languages', (detection.language || detection.framework || 'javascript').toLowerCase(), templateType),
+                path.join(workspaceAidaPath, 'review-code', 'languages', (detection.framework || detection.language || 'javascript').toLowerCase(), templateType),
                 path.join(workspaceAidaPath, 'review-code', 'fallback', templateType),
                 // Extension templates (fallback)
                 path.join(extensionPath, 'templates', templatePath),
@@ -97,8 +97,11 @@ async function getPRReviewTemplate(templateType, prData) {
             throw new Error(`Template not found: ${templatePath} and fallback not available`);
         }
 
+        // Process template content with placeholder replacement using new utility function
+        const processedContent = processTemplateContent(content, usedTemplatePath);
+
         return {
-            content,
+            content: processedContent,
             detection,
             templatePath,
             templateSource,
