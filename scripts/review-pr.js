@@ -885,7 +885,7 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
 
                             if (baseContent !== null || sourceContent !== null) {
                                 // Generate unified diff using diff library
-                                diffContent = generateDiffOnly(filePath, baseContent || '', sourceContent || '', change.changeType);
+                                diffContent = generateUnifiedDiff(filePath, baseContent || '', sourceContent || '', change.changeType);
 
                                 // Count changes using our counting function
                                 const counts = countDiffLines(diffContent);
