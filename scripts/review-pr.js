@@ -594,14 +594,14 @@ async function handleReviewPr(request, context, stream, token) {
             }
             
             // Import and use common review info display
-            const { displayCommonReviewInfo } = require('./review-common');
-            const displayName = repoType === 'github' ? `${owner}/${repo}` : 
-                               repoType === 'gitlab' ? `${owner}/${repo}` : 
-                               repository || `PR #${prId}`;
-            displayCommonReviewInfo(stream, 'PR Review', displayName, {
-                length: data.fileChanges ? data.fileChanges.length : 0,
-                lengthType: 'changes'
-            });
+            // const { displayCommonReviewInfo } = require('./review-common');
+            // const displayName = repoType === 'github' ? `${owner}/${repo}` : 
+            //                    repoType === 'gitlab' ? `${owner}/${repo}` : 
+            //                    repository || `PR #${prId}`;
+            // displayCommonReviewInfo(stream, 'PR Review', displayName, {
+            //     length: data.fileChanges ? data.fileChanges.length : 0,
+            //     lengthType: 'changes'
+            // });
             
             // Debug file changes for GitHub
             if (repoType === 'github' && data.fileChanges) {
