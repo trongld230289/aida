@@ -65,6 +65,15 @@ function openModelConfig() {
     });
 }
 
+// Function to update model display from settings
+function updateModelDisplay(modelName) {
+    console.log('🤖 Updating model display to:', modelName);
+    const modelNameElement = document.querySelector('.model-name');
+    if (modelNameElement) {
+        modelNameElement.textContent = modelName;
+    }
+}
+
 // Initialize placeholder for default mode
 updatePlaceholderForMode(currentMode);
 
@@ -1064,6 +1073,11 @@ window.addEventListener('message', event => {
         case 'updateCurrentFile':
             console.log('📁 Frontend received updateCurrentFile:', message.fileName, message.fullPath);
             updateCurrentFileDisplay(message.fileName, message.fullPath);
+            break;
+            
+        case 'updateModelName':
+            console.log('🤖 Frontend received updateModelName:', message.modelName);
+            updateModelDisplay(message.modelName);
             break;
             
         case 'setInputValue':
