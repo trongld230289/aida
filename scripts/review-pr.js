@@ -9,7 +9,7 @@ const { detectFromPRFiles, getReviewTemplateWithDetection, displayDetectionInfo 
 let checkAndInitializeTemplates;
 try {
     const extensionModule = require('../extension');
-    checkAndInitializeTemplates = extensionModule.checkAndInitializeTemplates;
+    checkAndInitializeTemplates = extensionModule.ensureAidaTemplatesForReview;
 } catch (error) {
     console.log('⚠️ Could not import functions from extension.js');
 }

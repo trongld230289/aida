@@ -2,6 +2,15 @@ const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
 
+// Import sync function from extension.js
+let handleSyncTemplates;
+try {
+    const extensionModule = require('../extension');
+    handleSyncTemplates = extensionModule.handleSyncTemplates;
+} catch (error) {
+    console.log('⚠️ Could not import handleSyncTemplates from extension.js');
+}
+
 /**
  * Initialize sync-review-templates chat participant
  * @param {vscode.ExtensionContext} context
@@ -14,13 +23,13 @@ function initializeSyncTemplates(context) {
     const syncTemplatesParticipant = vscode.chat.createChatParticipant('sync-review-templates', async (request, chatContext, stream, token) => {
         console.log('🔄 @sync-review-templates triggered');
         
-        // Simple test - just output basic message
-        stream.markdown('✅ **sync-review-templates is working!**\n\n');
-        
-        
         try {
             stream.markdown('# 🔄 AIDA Template Sync\n\n');
-            stream.markdown('Checking for new review templates...\n\n');
+
+            if (!handleSyncTemplates) {
+                stream.markdown('❌ **Error:** Sync function not available\n\n');
+                return;
+            }
 
             const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
             if (!workspaceFolder) {
@@ -28,41 +37,25 @@ function initializeSyncTemplates(context) {
                 return;
             }
 
-            const extensionTemplatesPath = path.join(context.extensionPath, 'templates');
             const workspaceAidaPath = path.join(workspaceFolder.uri.fsPath, 'AIDA', 'templates');
+            const aidaExists = fs.existsSync(workspaceAidaPath);
 
-            // Check if extension templates exist
-            if (!fs.existsSync(extensionTemplatesPath)) {
-                stream.markdown('❌ **Error:** Extension templates not found\n\n');
-                return;
-            }
-
-            stream.markdown('📁 **Extension templates:** `' + extensionTemplatesPath + '`\n\n');
-            stream.markdown('📁 **Workspace AIDA path:** `' + workspaceAidaPath + '`\n\n');
-
-            // Check if workspace AIDA folder exists
-            if (!fs.existsSync(workspaceAidaPath)) {
-                stream.markdown('🆕 **Creating AIDA folder structure...**\n\n');
-                await createAidaTemplateStructure(extensionTemplatesPath, workspaceAidaPath);
-                stream.markdown('✅ **AIDA templates created successfully!**\n\n');
-                await displayTemplateSummary(stream, workspaceAidaPath);
+            if (aidaExists) {
+                stream.markdown('📁 **AIDA folder exists** - Syncing new language templates...\n\n');
             } else {
-                stream.markdown('📋 **Checking for new languages...**\n\n');
-                const syncResult = await syncNewLanguageTemplates(extensionTemplatesPath, workspaceAidaPath);
-                
-                if (syncResult.newLanguages.length > 0) {
-                    stream.markdown(`✅ **Synced ${syncResult.newLanguages.length} new language(s):**\n`);
-                    syncResult.newLanguages.forEach(lang => {
-                        stream.markdown(`- 📝 ${lang}\n`);
-                    });
-                    stream.markdown('\n');
-                } else {
-                    stream.markdown('✅ **All templates are up to date!**\n\n');
-                }
-                
-                await displayTemplateSummary(stream, workspaceAidaPath);
+                stream.markdown('🆕 **AIDA folder not found** - Creating complete template structure...\n\n');
             }
 
+            // Use the centralized sync logic from extension.js
+            await handleSyncTemplates(context);
+
+            if (aidaExists) {
+                stream.markdown('✅ **Template sync completed!** New languages have been added to your AIDA folder.\n\n');
+            } else {
+                stream.markdown('✅ **AIDA templates created successfully!** Complete template structure is now available.\n\n');
+            }
+
+            await displayTemplateSummary(stream, workspaceAidaPath);
             stream.markdown('---\n\n');
             stream.markdown('💡 **Tip:** Use `@review-file` or `@review-changes` to start reviewing with templates\n\n');
 

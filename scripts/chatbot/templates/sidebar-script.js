@@ -184,15 +184,31 @@ msgInput.addEventListener('drop', async function(event) {
 // Send on Enter and handle suggestions
 msgInput.addEventListener('keydown', function(e) {
     if (participantSuggest.style.display === 'block') {
+        const suggestionItems = participantSuggest.querySelectorAll('.participant-item');
+        
         if (e.key === 'ArrowDown') {
             e.preventDefault();
             navigateSuggestions(1);
         } else if (e.key === 'ArrowUp') {
             e.preventDefault();
             navigateSuggestions(-1);
-        } else if (e.key === 'Enter' && selectedIndex >= 0) {
+        } else if (e.key === 'Enter') {
             e.preventDefault();
-            selectParticipant(selectedIndex);
+            
+            // Enhanced autocomplete: if only 1 suggestion and no selection, auto-select it
+            if (suggestionItems.length === 1 && selectedIndex < 0) {
+                selectParticipant(0);
+                console.log('🎯 Auto-selected single suggestion');
+            } else if (selectedIndex >= 0) {
+                // User has manually selected a suggestion
+                selectParticipant(selectedIndex);
+                console.log('🎯 Selected manually chosen suggestion:', selectedIndex);
+            } else {
+                // Multiple suggestions but none selected - hide suggestions and send message
+                hideSuggestions();
+                sendMessage();
+                console.log('🎯 Multiple suggestions available but none selected - sending message');
+            }
         } else if (e.key === 'Escape') {
             hideSuggestions();
         }
@@ -301,15 +317,17 @@ function handleParticipantSuggest(value, cursorPos) {
 
 function showSuggestions(filtered) {
     selectedIndex = -1;
-    participantSuggest.innerHTML = filtered.map((p, index) => 
-        '<div class="participant-item" data-index="' + index + '">' +
+    participantSuggest.innerHTML = filtered.map((p, index) => {
+        // Add special styling for single suggestion to indicate auto-complete
+        const autoSelectClass = filtered.length === 1 ? ' auto-select-hint' : '';
+        return '<div class="participant-item' + autoSelectClass + '" data-index="' + index + '">' +
             '<span class="participant-icon">' + p.icon + '</span>' +
             '<div>' +
                 '<div class="participant-name">' + p.name + '</div>' +
                 '<div class="participant-description">' + p.description + '</div>' +
             '</div>' +
-        '</div>'
-    ).join('');
+        '</div>';
+    }).join('');
     
     participantSuggest.style.display = 'block';
     
@@ -317,6 +335,8 @@ function showSuggestions(filtered) {
     participantSuggest.querySelectorAll('.participant-item').forEach((item, index) => {
         item.addEventListener('click', () => selectParticipant(index));
     });
+    
+    console.log('🎯 Showing', filtered.length, 'suggestion(s)', filtered.length === 1 ? '(auto-select enabled)' : '');
 }
 
 function hideSuggestions() {
