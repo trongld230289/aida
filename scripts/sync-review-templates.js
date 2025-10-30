@@ -186,12 +186,12 @@ async function displayTemplateSummary(stream, aidaPath) {
             stream.markdown('## 📋 Available Templates:\n\n');
             
             if (languages.length > 0) {
-                // Group languages by category for better display
+                // Group languages by category for better display (based on actual available languages)
                 const webLanguages = languages.filter(lang => 
-                    ['javascript', 'typescript', 'react', 'vue', 'angular', 'html', 'css'].includes(lang.toLowerCase())
+                    ['javascript', 'typescript', 'react', 'vue', 'angular'].includes(lang.toLowerCase())
                 );
                 const backendLanguages = languages.filter(lang => 
-                    ['python', 'java', 'csharp', 'go', 'rust', 'php', 'nodejs', 'nestjs'].includes(lang.toLowerCase())
+                    ['python', 'csharp', 'go', 'nodejs'].includes(lang.toLowerCase())
                 );
                 const otherLanguages = languages.filter(lang => 
                     !webLanguages.includes(lang) && !backendLanguages.includes(lang)

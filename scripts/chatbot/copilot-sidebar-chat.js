@@ -2960,10 +2960,10 @@ class AidaChatViewProvider {
                                     syncResult += '✅ **All templates are up to date!**\n\n';
                                     syncResult += '## 📋 Available Templates:\n\n';
                                     
-                                    // Categorize languages
+                                    // Categorize languages based on actual available languages
                                     const webFrontend = ['angular', 'javascript', 'react', 'typescript', 'vue'];
-                                    const backend = ['csharp', 'go', 'nestjs', 'nodejs', 'php', 'python', 'rust'];
-                                    const other = ['express'];
+                                    const backend = ['csharp', 'go', 'nodejs', 'python'];
+                                    const other = []; // No other languages currently
                                     
                                     if (extLanguages.some(lang => webFrontend.includes(lang))) {
                                         syncResult += '**🌐 Web & Frontend:**\n';

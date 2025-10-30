@@ -38,77 +38,7 @@ You are performing a STRICT code review on Vue git changes. Do NOT be lenient. L
 
 **Scan EVERY line for these VUE-SPECIFIC CRITICAL issues:**
 
-### 🚨 SECURITY VIOLATIONS:
-- Unescaped user input in v-html directives
-- Missing input validation in form components
-- XSS vulnerabilities through dynamic component rendering
-- Unsafe use of dangerouslySetInnerHTML equivalent
-- Client-side authentication logic only
-- Hardcoded API keys or secrets in Vue files
-- Missing CSRF protection in forms
-- Unsafe file upload implementations
-- Missing sanitization of user-generated content
-- Eval-like functions in template expressions
-
-### 🚨 REACTIVITY & STATE VIOLATIONS:
-- Direct mutation of props in child components
-- Missing reactive declarations for computed dependencies
-- Memory leaks from unremoved event listeners
-- Improper use of reactive vs ref
-- Missing cleanup in onUnmounted hooks
-- Circular dependencies in computed properties
-- Missing watch cleanup
-- Infinite loops in watchers
-- State mutations outside of proper patterns
-- Missing toRef/toRefs for prop destructuring
-
-### 🚨 PERFORMANCE VIOLATIONS:
-- Missing v-memo for expensive list rendering
-- Heavy computations in template expressions
-- Missing lazy loading for large components
-- Inappropriate use of watchers instead of computed
-- Missing key attributes in v-for loops
-- Inefficient component re-renders
-- Large bundle sizes from unnecessary imports
-- Missing tree-shaking optimizations
-- Blocking operations in setup() function
-- Creating reactive objects in render without memoization
-
-### 🚨 VUE COMPOSITION API VIOLATIONS:
-- Mixing Options API with Composition API
-- Incorrect setup() return object structure
-- Missing toRef/toRefs for prop destructuring
-- Improper reactive object destructuring
-- Missing return statement in composables
-- Incorrect lifecycle hook usage in Composition API
-- Not using computed for derived state
-- Improper async operations in setup()
-- Missing proper TypeScript integration
-- Violating composable naming conventions
-
-### 🚨 TEMPLATE & COMPONENT VIOLATIONS:
-- Missing component name declarations
-- Improper v-model usage with custom components
-- Missing emit declarations for custom events
-- Incorrect slot usage and scoped slots
-- Missing prop validation and default values
-- Non-unique keys in v-for loops
-- Improper conditional rendering patterns
-- Missing accessibility attributes (a11y)
-- Incorrect directive usage
-- Missing component registration
-
-### 🚨 ROUTING & NAVIGATION VIOLATIONS:
-- Missing route guards for protected pages
-- Improper navigation methods
-- Missing error handling for route transitions
-- Hardcoded route paths instead of named routes
-- Missing dynamic route validation
-- Improper query parameter handling
-- Missing route meta configuration
-- Memory leaks from route watchers
-- Missing navigation guards cleanup
-- Improper router-link usage
+{{REVIEW_BASE}}
 
 ### 🚨 SPECIFIC PROJECT RULES:
 <!-- ADD PROJECT-SPECIFIC RULES HERE - These will be checked alongside Vue rules -->

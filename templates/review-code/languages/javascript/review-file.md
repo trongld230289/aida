@@ -13,55 +13,8 @@ This template focuses specifically on JavaScript framework best practices, patte
 
 **Scan EVERY line for these JAVASCRIPT-SPECIFIC CRITICAL issues:**
 
-### 🚨 SECURITY VIOLATIONS:
-- Hardcoded passwords, API keys, tokens, secrets
-- Unsafe eval() or Function() constructor usage
-- XSS vulnerabilities from unescaped user input
-- Command injection through child_process
-- Path traversal vulnerabilities in file operations
-- Missing input validation and sanitization
-- Unsafe regular expressions (ReDoS)
-- Exposed sensitive data in logs/errors
-- Missing authentication/authorization checks
-- Unsafe file upload handling
-- Insecure random number generation
-- Missing CSRF protection for web applications
+{{REVIEW_BASE}}
 
-### 🚨 TYPE SAFETY VIOLATIONS:
-- Missing parameter validation in functions
-- No type checking for critical operations
-- Unsafe property access without checks
-- Missing null/undefined validation
-- Incorrect use of typeof or instanceof
-- No validation for function arguments
-- Missing bounds checking for arrays
-- Unsafe object property access
-- No validation for external data
-- Missing runtime type assertions
-
-### 🚨 ASYNC/PROMISE VIOLATIONS:
-- Missing await for async operations
-- Unhandled promise rejections
-- Promise constructor anti-patterns
-- Callback hell patterns
-- Missing error handling in async operations
-- Race conditions in async operations
-- Missing timeout handling for async operations
-- Fire-and-forget async operations without error handling
-- Mixing callbacks with promises incorrectly
-- Missing proper cancellation patterns
-
-### 🚨 MEMORY MANAGEMENT VIOLATIONS:
-- Memory leaks from event listeners
-- Circular references without cleanup
-- Timers without proper clearance
-- DOM elements not properly removed
-- Large objects kept in memory unnecessarily
-- Missing cleanup in closures
-- Event handlers without removal
-- Global variables accumulation
-- Missing weak references for caches
-- Resource leaks in streams
 
 ### 🚨 ERROR HANDLING VIOLATIONS:
 - Try-catch blocks without proper error handling
@@ -75,42 +28,6 @@ This template focuses specifically on JavaScript framework best practices, patte
 - Missing operational vs programmer error distinction
 - Incorrect error propagation patterns
 
-### 🚨 PERFORMANCE VIOLATIONS:
-- Inefficient DOM manipulation patterns
-- Missing event delegation
-- Synchronous operations blocking UI
-- Inefficient loop patterns
-- Missing debouncing for frequent operations
-- Large object creation in hot paths
-- Missing lazy loading for heavy resources
-- Inefficient string concatenation in loops
-- Missing memoization for expensive computations
-- No optimization for frequent function calls
-
-### 🚨 ES6+ VIOLATIONS:
-- Using var instead of let/const
-- Missing arrow functions where appropriate
-- Not using destructuring for cleaner code
-- Missing template literals for string formatting
-- Not using modern array methods (map, filter, reduce)
-- Missing proper module imports/exports
-- Not using async/await over promises
-- Missing spread operator usage
-- Not using default parameters
-- Missing proper class syntax
-
-### 🚨 DOM MANIPULATION VIOLATIONS:
-- Direct DOM manipulation without safety checks
-- Missing event delegation patterns
-- Not using DocumentFragment for multiple insertions
-- Missing proper event cleanup
-- Unsafe innerHTML usage
-- Not using modern DOM APIs
-- Missing accessibility considerations
-- Memory leaks from DOM event listeners
-- Inefficient DOM queries
-- Missing progressive enhancement
-
 ### 🚨 CODE QUALITY VIOLATIONS:
 - Magic numbers without named constants
 - Functions with too many parameters (>5)
@@ -122,16 +39,6 @@ This template focuses specifically on JavaScript framework best practices, patte
 - Duplicate code without refactoring
 - Missing proper error messages
 - No code organization patterns
-
-### 🚨 SPECIFIC PROJECT RULES:
-<!-- ADD PROJECT-SPECIFIC RULES HERE - These will be checked alongside JavaScript rules -->
-<!-- Additional project rules can be added here:
-- Framework-specific patterns
-- Build tool requirements
-- Linting rule compliance
-- Performance requirements
-- Browser compatibility requirements
--->
 
 ---
 
