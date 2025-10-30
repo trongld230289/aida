@@ -2838,6 +2838,23 @@ class AidaChatViewProvider {
     constructor(context, chatInstance) {
         this.context = context;
         this.chatInstance = chatInstance;
+        
+        // Listen for configuration changes to update model name
+        this.setupConfigurationListener();
+    }
+    
+    /**
+     * Setup listener for configuration changes
+     */
+    setupConfigurationListener() {
+        vscode.workspace.onDidChangeConfiguration((event) => {
+            if (event.affectsConfiguration('aida.ai.model')) {
+                console.log('🤖 Model configuration changed, updating webview...');
+                if (this.chatInstance.webviewView) {
+                    this.sendCurrentModelName(this.chatInstance.webviewView);
+                }
+            }
+        });
     }
 
     resolveWebviewView(webviewView, context, token) {
@@ -3076,6 +3093,9 @@ class AidaChatViewProvider {
         try {
             console.log('🔄 Initializing webview state...');
             
+            // Send current model name to frontend
+            this.sendCurrentModelName(webviewView);
+            
             // Restore chat history
             this.restoreChatHistory(webviewView);
             
@@ -3101,6 +3121,25 @@ class AidaChatViewProvider {
             console.log('🔄 Webview state initialized');
         } catch (error) {
             console.error('Failed to initialize webview state:', error);
+        }
+    }
+
+    /**
+     * Send current model name from settings to webview
+     */
+    sendCurrentModelName(webviewView) {
+        try {
+            const config = vscode.workspace.getConfiguration('aida');
+            const modelFromSettings = config.get('ai.model', 'Claude-4-Sonnet');
+            
+            console.log('🤖 Sending model name to frontend:', modelFromSettings);
+            
+            webviewView.webview.postMessage({
+                type: 'updateModelName',
+                modelName: modelFromSettings
+            });
+        } catch (error) {
+            console.error('Failed to send model name:', error);
         }
     }
 
