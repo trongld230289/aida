@@ -131,12 +131,6 @@ function activate(context) {
     
     // Store extension path globally for diff module access
     global.extensionPath = context.extensionPath;
-    
-    // Track if templates have been initialized (lazy loading)
-    global.templatesInitialized = false;
-
-    // Templates will be created lazily when first @review command is used
-    // ensureTemplatesExist(context); // Removed auto-creation
 
     // Initialize Copilot-Style Sidebar Chat (True GitHub Copilot Experience)
     let copilotSidebarChat = null;
@@ -584,16 +578,62 @@ function activate(context) {
 }
 
 /**
- * Check and lazy-load templates if not already initialized
- * Called by review functions before template usage
+ * Ensure AIDA templates exist for review commands
+ * For @review-* commands: Create AIDA folder if not exists, do nothing if exists
  * @param {vscode.ExtensionContext} context
  */
-async function checkAndInitializeTemplates(context) {
-    if (!global.templatesInitialized) {
-        console.log('🔄 First @review usage - initializing AIDA templates...');
-        await ensureTemplatesExistLazy(context);
-        global.templatesInitialized = true;
-        console.log('✅ AIDA templates ready for use');
+async function ensureAidaTemplatesForReview(context) {
+    try {
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        if (!workspaceFolder) {
+            console.log('No workspace folder found, skipping template generation');
+            return;
+        }
+
+        const workspaceAidaPath = path.join(workspaceFolder.uri.fsPath, 'AIDA');
+        
+        // Check if AIDA folder exists
+        if (!fs.existsSync(workspaceAidaPath)) {
+            console.log('🆕 AIDA folder not found - creating complete template structure...');
+            const extensionTemplatesPath = path.join(context.extensionPath, 'templates');
+            await createAidaTemplateStructure(extensionTemplatesPath, path.join(workspaceAidaPath, 'templates'));
+            console.log('✅ AIDA templates created for review commands');
+        } else {
+            console.log('✅ AIDA folder exists - no action needed for review commands');
+        }
+        
+    } catch (error) {
+        console.error('Error ensuring AIDA templates for review:', error);
+    }
+}
+
+/**
+ * Handle template sync for @sync command
+ * If AIDA exists: sync new language templates only
+ * If AIDA doesn't exist: create complete AIDA structure
+ * @param {vscode.ExtensionContext} context
+ */
+async function handleSyncTemplates(context) {
+    try {
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        if (!workspaceFolder) {
+            console.log('No workspace folder found, skipping sync');
+            return;
+        }
+
+        const extensionTemplatesPath = path.join(context.extensionPath, 'templates');
+        const workspaceAidaPath = path.join(workspaceFolder.uri.fsPath, 'AIDA', 'templates');
+        
+        if (!fs.existsSync(workspaceAidaPath)) {
+            console.log('🆕 AIDA not found - creating complete template structure via sync...');
+            await createAidaTemplateStructure(extensionTemplatesPath, workspaceAidaPath);
+        } else {
+            console.log('🔄 AIDA exists - syncing new language templates...');
+            await syncNewLanguageTemplates(extensionTemplatesPath, workspaceAidaPath);
+        }
+        
+    } catch (error) {
+        console.error('Error handling sync templates:', error);
     }
 }
 
@@ -604,29 +644,9 @@ async function checkAndInitializeTemplates(context) {
  * @param {vscode.ExtensionContext} context
  */
 async function ensureTemplatesExistLazy(context) {
-    try {
-        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-        if (!workspaceFolder) {
-            console.log('No workspace folder found, skipping template generation');
-            return;
-        }
-
-        const extensionTemplatesPath = path.join(context.extensionPath, 'templates');
-        const workspaceAidaPath = path.join(workspaceFolder.uri.fsPath, 'AIDA', 'templates');
-        
-        // Check if AIDA folder exists, if not create it with all available templates
-        if (!fs.existsSync(workspaceAidaPath)) {
-            console.log('Creating AIDA template structure in workspace...');
-            await createAidaTemplateStructure(extensionTemplatesPath, workspaceAidaPath);
-        } else {
-            // Check for new languages and auto-sync
-            await syncNewLanguageTemplates(extensionTemplatesPath, workspaceAidaPath);
-        }
-        
-        console.log('Template management completed - AIDA structure up to date');
-    } catch (error) {
-        console.error('Error managing templates:', error);
-    }
+    // This function is deprecated - use ensureAidaTemplatesForReview or handleSyncTemplates instead
+    console.warn('⚠️  ensureTemplatesExistLazy is deprecated');
+    await ensureAidaTemplatesForReview(context);
 }
 
 /**
@@ -2352,7 +2372,8 @@ module.exports = {
     activate,
     deactivate,
     handleEnterTwiceLogic,  // Export for use in review-changes.js and review-file.js
-    checkAndInitializeTemplates,  // Export for lazy template loading
+    ensureAidaTemplatesForReview,  // Export for review commands (replaces checkAndInitializeTemplates)
+    handleSyncTemplates,  // Export for sync command
     createAidaTemplateStructure,  // Export for sync-review-templates
     syncNewLanguageTemplates  // Export for sync-review-templates
 };

@@ -7,11 +7,11 @@ const { autoDetectWorkspace, getReviewTemplateWithDetection, displayDetectionInf
 
 // Import functions from extension.js
 let handleEnterTwiceLogic;
-let checkAndInitializeTemplates;
+let ensureAidaTemplatesForReview;
 try {
     const extensionModule = require('../extension');
     handleEnterTwiceLogic = extensionModule.handleEnterTwiceLogic;
-    checkAndInitializeTemplates = extensionModule.checkAndInitializeTemplates;
+    ensureAidaTemplatesForReview = extensionModule.ensureAidaTemplatesForReview;
 } catch (error) {
     console.log('⚠️ Could not import functions from extension.js');
 }
@@ -25,17 +25,9 @@ function initializeReviewChanges(context) {
     // Create chat participant for review-changes
     const reviewChangesParticipant = vscode.chat.createChatParticipant('review-changes', async (request, chatContext, stream, token) => {
         try {
-            // First time check - create AIDA structure if not exists
-            if (checkAndInitializeTemplates) {
-                const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-                if (workspaceFolder) {
-                    const aidaPath = path.join(workspaceFolder.uri.fsPath, 'AIDA');
-                    if (!require('fs').existsSync(aidaPath)) {
-                        console.log('🔄 First @review usage - creating AIDA templates...');
-                        await checkAndInitializeTemplates(context);
-                        console.log('✅ AIDA templates created. Use @sync-review-templates for updates.');
-                    }
-                }
+            // Ensure AIDA templates exist for review commands (create if not exists)
+            if (ensureAidaTemplatesForReview) {
+                await ensureAidaTemplatesForReview(context);
             }
             
             console.log('🎯 review-changes participant called');

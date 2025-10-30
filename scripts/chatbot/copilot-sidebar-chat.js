@@ -357,7 +357,7 @@ class CopilotSidebarChat {
             // Check for /clear command
             if (userMessage.trim() === '/clear') {
                 // Clear chat history
-                this.clearChatHistory();
+                // this.clearChatHistory();
                 this.chatbotService.clearHistory();
                 
                 // Send clear command to frontend
