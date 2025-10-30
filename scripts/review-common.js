@@ -1414,6 +1414,99 @@ async function executeAIReviewWithCopilot(userPrompt, model, stream, reviewType 
  * @param {object} context - VS Code extension context
  * @returns {object} - {content: string, source: string, path: string}
  */
+/**
+ * Process template content by replacing placeholders with base template content
+ * @param {string} templateContent - The raw template content
+ * @param {string} templateDir - Directory containing the templates
+ * @returns {string} - Processed template content with placeholders replaced
+ */
+function processTemplateWithPlaceholders(templateContent, templateDir) {
+    console.log('🔍 DEBUG: processTemplateWithPlaceholders called');
+    console.log('🔍 DEBUG: Call stack:', new Error().stack?.split('\n').slice(1, 4).join('\n'));
+    console.log('🔍 DEBUG: templateDir =', templateDir);
+    console.log('🔍 DEBUG: templateContent.length =', templateContent.length);
+    console.log('🔍 DEBUG: contains {{REVIEW_BASE}}?', templateContent.includes('{{REVIEW_BASE}}'));
+    
+    // Check if already processed (to avoid double processing)
+    if (templateContent.includes('<!-- AIDA_PROCESSED -->')) {
+        console.log('🔍 DEBUG: Template already processed, skipping...');
+        return templateContent.replace('<!-- AIDA_PROCESSED -->\n', '');
+    }
+    
+    // Check if template contains the placeholder
+    if (!templateContent.includes('{{REVIEW_BASE}}')) {
+        console.log('🔍 DEBUG: No {{REVIEW_BASE}} placeholder found, returning original content');
+        return templateContent; // No placeholders to replace
+    }
+
+    console.log('🔄 Processing template with {{REVIEW_BASE}} placeholder...');
+
+    try {
+        // Try to load the review-base.md file from the same directory
+        const basePath = path.join(templateDir, 'review-base.md');
+        console.log('🔍 DEBUG: Looking for base template at:', basePath);
+        console.log('🔍 DEBUG: Base template exists?', fs.existsSync(basePath));
+        
+        if (fs.existsSync(basePath)) {
+            const baseContent = fs.readFileSync(basePath, 'utf8');
+            console.log(`✅ Loaded base template from: ${basePath}`);
+            console.log('🔍 DEBUG: baseContent.length =', baseContent.length);
+            
+            // Extract the Angular critical checks content (exclude header comments)
+            const angularChecksContent = extractAngularChecks(baseContent);
+            console.log('🔍 DEBUG: angularChecksContent.length =', angularChecksContent.length);
+            console.log('🔍 DEBUG: angularChecksContent preview:', angularChecksContent.substring(0, 200) + '...');
+            
+            // Replace all occurrences of the placeholder
+            const processedContent = templateContent.replace(/\{\{REVIEW_BASE\}\}/g, angularChecksContent);
+            
+            console.log('✅ Template placeholder replacement completed');
+            console.log('🔍 DEBUG: processedContent.length =', processedContent.length);
+            console.log('🔍 DEBUG: Still contains {{REVIEW_BASE}}?', processedContent.includes('{{REVIEW_BASE}}'));
+            
+            return processedContent;
+        } else {
+            console.warn(`⚠️ Base template not found at: ${basePath}, using original content`);
+            return templateContent;
+        }
+    } catch (error) {
+        console.error('❌ Error processing template placeholders:', error);
+        return templateContent; // Return original content on error
+    }
+}
+
+/**
+ * Extract Angular critical checks content from review-base.md
+ * @param {string} baseContent - Content of the base template
+ * @returns {string} - Extracted Angular checks content
+ */
+function extractAngularChecks(baseContent) {
+    const lines = baseContent.split('\n');
+    const startIndex = lines.findIndex(line => line.includes('### 🚨 SECURITY VIOLATIONS:'));
+    
+    if (startIndex === -1) {
+        console.warn('⚠️ Could not find Angular critical checks start marker in base template');
+        return '<!-- Angular critical checks not found -->';
+    }
+
+    // Find the end of the critical checks (before final comments or end of file)
+    const endMarkers = ['```', '## ', '---'];
+    let endIndex = lines.length;
+    
+    for (let i = startIndex + 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (endMarkers.some(marker => line.startsWith(marker)) && line !== '```markdown') {
+            endIndex = i;
+            break;
+        }
+    }
+
+    const extractedContent = lines.slice(startIndex, endIndex).join('\n').trim();
+    console.log(`📋 Extracted ${extractedContent.split('\n').length} lines from base template`);
+    
+    return extractedContent;
+}
+
 function getReviewTemplate(templateName, context = null) {
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
     
@@ -1430,11 +1523,16 @@ function getReviewTemplate(templateName, context = null) {
     
     try {
         if (fs.existsSync(templatePath)) {
-            const content = fs.readFileSync(templatePath, 'utf8');
-            console.log(`✅ Loaded template from: ${templatePath}`);
+            const rawContent = fs.readFileSync(templatePath, 'utf8');
+            
+            // Process template with placeholder replacement
+            const templateDir = path.dirname(templatePath);
+            const processedContent = processTemplateWithPlaceholders(rawContent, templateDir);
+            
+            console.log(`✅ Loaded and processed template from: ${templatePath}`);
             
             return {
-                content: content,
+                content: processedContent,
                 source: templateSource,
                 path: templatePath
             };
@@ -2211,10 +2309,16 @@ async function getReviewTemplateWithDetection(templateType, context = null, targ
     }
 
     try {
-        const content = fs.readFileSync(templatePath, 'utf8');
+        const rawContent = fs.readFileSync(templatePath, 'utf8');
+        
+        // Process template with placeholder replacement
+        const templateDir = path.dirname(templatePath);
+        const processedContent = processTemplateWithPlaceholders(rawContent, templateDir);
+        
+        console.log(`✅ Loaded and processed template from: ${templatePath}`);
         
         return {
-            content: content,
+            content: processedContent,
             source: templateSource,
             path: templatePath,
             detection: detection
@@ -2558,7 +2662,11 @@ async function loadTemplateWithPriority(templateType, detection) {
         console.log(`🔍 Checking template path: ${templatePath}`);
         if (fs.existsSync(templatePath)) {
             console.log(`✅ Found template at: ${templatePath}`);
-            templateContent = fs.readFileSync(templatePath, 'utf8');
+            const rawContent = fs.readFileSync(templatePath, 'utf8');
+            
+            // Process template with placeholder replacement using new utility function
+            templateContent = processTemplateContent(rawContent, templatePath);
+            
             usedTemplatePath = templatePath;
             break;
         } else {
@@ -2646,6 +2754,69 @@ function displayCommonReviewInfo(stream, reviewType, filePath, options = {}) {
     }
 }
 
+/**
+ * Load base template content from the same directory as main template
+ * @param {string} mainTemplatePath - Full path to the main template file
+ * @param {string} baseFileName - Base template filename (e.g., 'review-base.md')
+ * @returns {string|null} - Base template content or null if not found
+ */
+function loadBaseTemplate(mainTemplatePath, baseFileName) {
+    const fs = require('fs');
+    const path = require('path');
+    
+    try {
+        // Get directory of main template
+        const templateDir = path.dirname(mainTemplatePath);
+        
+        // Build base template path in same directory
+        const baseTemplatePath = path.join(templateDir, baseFileName);
+        
+        console.log(`🔍 Looking for base template: ${baseTemplatePath}`);
+        
+        if (fs.existsSync(baseTemplatePath)) {
+            const baseContent = fs.readFileSync(baseTemplatePath, 'utf8');
+            console.log(`✅ Loaded base template: ${baseTemplatePath} (${baseContent.length} chars)`);
+            return baseContent;
+        } else {
+            console.log(`⚠️ Base template not found: ${baseTemplatePath}`);
+            return null;
+        }
+    } catch (error) {
+        console.log(`❌ Error loading base template: ${error.message}`);
+        return null;
+    }
+}
+
+/**
+ * Process template content with placeholder replacement
+ * @param {string} content - Template content
+ * @param {string} mainTemplatePath - Path to main template (for finding base templates)
+ * @param {string} placeholder - Placeholder to replace (default: '{{REVIEW_BASE}}')
+ * @param {string} baseFileName - Base template filename (default: 'review-base.md')
+ * @returns {string} - Processed content with placeholders replaced
+ */
+function processTemplateContent(content, mainTemplatePath, placeholder = '{{REVIEW_BASE}}', baseFileName = 'review-base.md') {
+    console.log(`🔧 Processing template placeholders for: ${placeholder}`);
+    
+    if (!content.includes(placeholder)) {
+        console.log(`ℹ️ No ${placeholder} placeholder found, using content as-is`);
+        return content;
+    }
+    
+    console.log(`✅ Found ${placeholder} placeholder, loading base content...`);
+    
+    const baseContent = loadBaseTemplate(mainTemplatePath, baseFileName);
+    
+    if (baseContent) {
+        const processedContent = content.replace(new RegExp(placeholder.replace(/[{}]/g, '\\$&'), 'g'), baseContent);
+        console.log(`🔧 Replaced ${placeholder} with base content (final length: ${processedContent.length} chars)`);
+        return processedContent;
+    } else {
+        console.log(`⚠️ Base template not found, keeping ${placeholder} placeholder as-is`);
+        return content;
+    }
+}
+
 module.exports = {
     executeAIReview,
     executeAIReviewWithApiKey,
@@ -2679,5 +2850,8 @@ module.exports = {
     setGlobalAbortSignal,
     getGlobalAbortSignal,
     loadTemplateWithPriority,
-    displayCommonReviewInfo
+    displayCommonReviewInfo,
+    processTemplateWithPlaceholders,
+    loadBaseTemplate,
+    processTemplateContent
 };
