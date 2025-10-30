@@ -38,102 +38,7 @@ You are performing a STRICT code review on C# git changes. Do NOT be lenient. Lo
 
 **Scan EVERY line for these C#-SPECIFIC CRITICAL issues:**
 
-### 🚨 SECURITY VIOLATIONS:
-- Hardcoded passwords, API keys, connection strings, secrets
-- SQL injection vulnerabilities (string concatenation in SQL)
-- XSS vulnerabilities (unescaped output)
-- Path traversal vulnerabilities
-- Authentication/authorization bypasses
-- Insecure deserialization
-- Weak cryptography implementations
-- No input validation/sanitization
-- Missing authentication attributes
-- Unsafe reflection usage
-- File operations without validation
-- HTTP instead of HTTPS endpoints
-
-### 🚨 RESOURCE LEAKS & MEMORY VIOLATIONS:
-- IDisposable objects without using statements
-- Unmanaged resources without proper disposal
-- Event handlers without unsubscription
-- Missing async/await patterns causing blocking
-- Memory leaks from static references
-- Missing cancellation token usage
-- Stream/FileStream without proper disposal
-- Database connections without disposal
-- HttpClient instances not properly managed
-- Timer objects without disposal
-
-### 🚨 NULL SAFETY & ERROR HANDLING VIOLATIONS:
-- Nullable reference access without null checks
-- Missing null-conditional operators (?.)
-- Null-forgiving operator (!) without validation
-- Missing try-catch blocks for risky operations
-- Exception swallowing (empty catch blocks)
-- Generic exceptions instead of specific ones
-- Missing async exception handling
-- Unhandled Task exceptions
-- Missing validation for method parameters
-- Dereference without null checks
-
-### 🚨 C# ARCHITECTURE VIOLATIONS:
-- Violation of SOLID principles
-- Missing dependency injection patterns
-- Circular dependencies
-- Static classes used incorrectly
-- Missing interface implementations
-- Poor separation of concerns
-- Large methods (>50 lines)
-- Deep nesting levels (>4 levels)
-- Missing async/await in I/O operations
-- Synchronous calls to async methods
-- Missing ConfigureAwait(false) in libraries
-- Controller methods without proper HTTP verbs
-
-### 🚨 PERFORMANCE VIOLATIONS:
-- String concatenation in loops
-- Missing StringBuilder usage
-- Inefficient LINQ operations
-- Missing async/await for I/O operations
-- Boxing/unboxing of value types
-- Unnecessary object allocations
-- Missing caching for expensive operations
-- N+1 database query problems
-- Synchronous database operations
-- Missing pagination for large datasets
-- Inefficient collections usage
-
-### 🚨 ASYNC/AWAIT VIOLATIONS:
-- Missing async/await keywords
-- Async void methods (except event handlers)
-- Blocking on async code (.Result, .Wait())
-- Missing ConfigureAwait(false) in libraries
-- Not using CancellationToken
-- Async methods without Task return type
-- Deadlock-prone async patterns
-- Mixed async/sync code paths
-- Missing exception handling in async methods
-
-### 🚨 .NET FRAMEWORK/CORE VIOLATIONS:
-- Deprecated API usage
-- Missing using statements for namespaces
-- Incorrect attribute usage
-- Missing XML documentation
-- Non-standard naming conventions
-- Missing sealed classes where appropriate
-- Incorrect access modifiers
-- Missing readonly keywords
-- Improper generic constraints
-
-### 🚨 SPECIFIC PROJECT RULES:
-<!-- ADD PROJECT-SPECIFIC RULES HERE - These will be checked alongside C# rules -->
-<!-- Additional project rules can be added here:
-- Custom naming conventions must follow PascalCase
-- All API controllers must inherit from BaseController
-- Specific business logic validations
-- Project-specific performance requirements
-- Custom attribute usage requirements
--->
+{{REVIEW_BASE}}
 
 ### Start Review For Each Change:
 
@@ -201,17 +106,17 @@ public async Task<IActionResult> GetUsersAsync(CancellationToken cancellationTok
 
 ---
 
-## 🎯 FINAL C# SUMMARY (After All Changes Reviewed)
+# 🎯 FINAL C# SUMMARY (After All Changes Reviewed)
 
-### 📋 COMPLIANCE SCORES
-- **Async/Await Patterns**: [X/5] - Proper async implementation, cancellation tokens
-- **Memory Management**: [X/5] - Resource disposal, using statements, garbage collection
-- **Exception Handling**: [X/5] - Try-catch blocks, specific exceptions, logging
-- **Dependency Injection**: [X/5] - DI container usage, service registration, lifetime management
-- **LINQ Optimization**: [X/5] - Query efficiency, deferred execution, performance
-- **Security Assessment**: [LEVEL] - Input validation, authorization, secure coding
+## 📋 COMPLIANCE SCORES
+- **RxJS Compliance**: [X/5] - Subscription management, operators, error handling
+- **Component Design**: [X/5] - Architecture, separation, lifecycle hooks  
+- **Template Quality**: [X/5] - Performance, data binding, best practices
+- **Dependency Injection**: [X/5] - Service scope, providers, patterns
+- **Security Assessment**: [LEVEL] - XSS, validation, DOM access
+- **Performance Impact**: [LEVEL] - Change detection, bundle, memory
 
-### 🔥 FINAL APPROVAL DECISION
+## 🔥 FINAL APPROVAL DECISION
 - **✅ APPROVED**: No critical issues found, safe to merge
 - **❌ NEEDS FIXES**: Critical issues detected, must resolve first  
 - **🚫 REJECT**: Major architectural problems, requires refactoring
