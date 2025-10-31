@@ -4,7 +4,7 @@
 
 > Transform your development workflow with AIDA - Your intelligent coding companion featuring built-in chatbot, support for your own AI API (OpenAI/Claude), and comprehensive development tools. No GitHub Copilot required!
 
-[![Version](https://img.shields.io/badge/version-1.0.5-blue.svg)](https://marketplace.visualstudio.com/items?itemName=trongld232.aida-dev)
+[![Version](https://img.shields.io/badge/version-1.0.6-blue.svg)](https://marketplace.visualstudio.com/items?itemName=trongld232.aida-dev)
 [![VS Code](https://img.shields.io/badge/VS%20Code-1.90+-green.svg)](https://code.visualstudio.com/)
 [![License](https://img.shields.io/badge/license-MIT-orange.svg)](LICENSE)
 
@@ -67,7 +67,7 @@
 ext install trongld232.aida-dev
 
 # Or install from VSIX
-code --install-extension aida-dev-1.0.5.vsix
+code --install-extension aida-dev-1.0.6.vsix
 ```
 ### 2. User Cases
 #### 1. With Github Copilot
@@ -76,12 +76,12 @@ code --install-extension aida-dev-1.0.5.vsix
 #### 2. Use External AI API With Github Copilot
 1. **Open Settings**: `Ctrl+,` → Search "AIDA"
 2. **Enable AIDA Chatbot**: Set `Use Api Key Instead Of Copilot` to `true`
-3. **Configure AI API**: Add your OpenAI or STU key
+3. **Configure AI API**: Add your OpenAI or Claude key
 
 #### 3. Setup AIDA Chatbot (For Non-Copilot Users)
 1. **Open Settings**: `Ctrl+,` → Search "AIDA"
 2. **Enable AIDA Chatbot**: Set `Has No Github Copilot` to `true`
-3. **Configure AI API**: Add your OpenAI or STU key
+3. **Configure AI API**: Add your OpenAI or Claude key
 4. **Open AIDA Chat**: Click AIDA icon in Activity Bar or use `Ctrl+Shift+A`
 
 ### 3. AI Provider Configuration
@@ -92,10 +92,10 @@ code --install-extension aida-dev-1.0.5.vsix
   "aida.ai.apiHost": "https://api.openai.com/v1/chat/completions",
   "aida.ai.model": "gpt-4o",
 
-  // For STU (Claude)
+  // For Claude API
   "aida.ai.apiKey": "sk-ant-your-claude-key", 
-  "aida.ai.apiHost": "https://aiportalapi.stu-platform.live/jpe/chat/completions",
-  "aida.ai.model": "Claude-4-Sonnet",
+  "aida.ai.apiHost": "https://api.anthropic.com/v1/messages",
+  "aida.ai.model": "claude-3-sonnet-20240229",
 
   // AIDA Chatbot Configuration
   "aida.useApiKeyInsteadOfCopilot": true,
@@ -120,7 +120,7 @@ code --install-extension aida-dev-1.0.5.vsix
 AIDA Chat provides intelligent code analysis through simple chat commands. Open the chat interface and use these participants:
 
 ### 📁 **@review-file** - Analyze Any File
-**Usage:** `tpye: @review-file [file-path] in chat input`
+**Usage:** `type: @review-file [file-path] in chat input`
 ```
 @review-file src/components/UserProfile.tsx
 @review-file    // Reviews current active file
@@ -131,7 +131,7 @@ AIDA Chat provides intelligent code analysis through simple chat commands. Open 
 - 📋 Best practices recommendations
 - 🔍 Bug detection and fixes
 
-### � **@review-changes** - Analyze Git Changes
+### 🔄 **@review-changes** - Analyze Git Changes
 **Usage:** `type: @review-changes in chat input`
 ```
 @review-changes
@@ -219,10 +219,10 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 
 ## 📚 Documentation
 
-- **[User Guide](docs/USER_GUIDE.md)** - Comprehensive usage documentation
-- **[API Reference](docs/API.md)** - Extension API and configuration options
-- **[Template Guide](docs/TEMPLATES.md)** - Custom template creation
-- **[Troubleshooting](docs/TROUBLESHOOTING.md)** - Common issues and solutions
+- **[User Guide](https://github.com/trongld230289/aida/blob/main/docs/USER_GUIDE.md)** - Complete guide to using AIDA with step-by-step tutorials, chat commands, and best practices
+- **[API Reference](https://github.com/trongld230289/aida/blob/main/docs/API.md)** - Technical documentation for developers, configuration options, and programmatic integration
+- **[Template Guide](https://github.com/trongld230289/aida/blob/main/docs/TEMPLATES.md)** - Create and customize code review templates for your team's coding standards
+- **[Troubleshooting](https://github.com/trongld230289/aida/blob/main/docs/TROUBLESHOOTING.md)** - Quick solutions to common issues, debugging tips, and getting help
 
 ## 🆘 Support & Community
 
