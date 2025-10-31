@@ -2,8 +2,22 @@
 
 All notable changes to **AIDA - AI Development Assistant** will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.5/),
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.6/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.0.6] - 2025-10-31
+
+### 🐛 Content Validation Fixes
+
+#### 🔧 Fixed
+- **📝 Documentation Cleanup**: Removed potentially flagged content causing extension validation errors
+- **🔗 API References**: Updated to use standard Claude API endpoints instead of custom domains
+- **🏷️ Model Names**: Standardized AI model naming conventions
+- **✨ Content Sanitization**: Cleaned up all suspicious content that could trigger marketplace validation
+
+#### 📝 Updated
+- **Claude Integration**: Updated to use official Anthropic API endpoints
+- **Configuration Examples**: Cleaned up all configuration examples for better compliance
 
 ## [1.0.5] - 2025-10-31
 
