@@ -1,6 +1,7 @@
 const vscode = require('vscode');
 const path = require('path');
 const { AidaChatbotService } = require('./aida-chatbot-service.js');
+const { ChatbotContextEngine } = require('./chatbot-algorithm.js');
 const TemplateLoader = require('./template-loader');
 const { setGlobalAbortSignal } = require('../review-common');
 
@@ -17,6 +18,7 @@ class CopilotSidebarChat {
         this.messageHistory = []; // Store user message history for arrow navigation
         this.historyIndex = -1;   // Current position in history (-1 = not navigating)
         this.chatbotService = new AidaChatbotService(context); // AI chatbot service
+        this.contextEngine = new ChatbotContextEngine(); // Smart context decision engine
         this.currentFileName = null; // Track current file
         this.currentAbortController = null; // For canceling AI requests
         this.initializeChatbot();
@@ -367,37 +369,67 @@ class CopilotSidebarChat {
                 return; // Don't process further
             }
             
-            // Check if user is asking about current file (explicit or implicit) - do this once at the top
-            const isCurrentFileRequest = userMessage.toLowerCase().includes('this file') || 
-                                        userMessage.toLowerCase().includes('current file') ||
-                                        userMessage.toLowerCase().includes('refactor this') ||
-                                        userMessage.toLowerCase().includes('analyze this') ||
-                                        // Vietnamese patterns
-                                        userMessage.toLowerCase().includes('file này') ||
-                                        userMessage.toLowerCase().includes('tệp này') ||
-                                        userMessage.toLowerCase().includes('code này') ||
-                                        userMessage.toLowerCase().includes('mã này') ||
-                                        userMessage.toLowerCase().includes('file hiện tại') ||
-                                        // Implicit current file requests (no specific file mentioned)
-                                        (userMessage.toLowerCase().includes('refactor') && !userMessage.toLowerCase().includes('create') && !userMessage.toLowerCase().includes('new')) ||
-                                        (userMessage.toLowerCase().includes('analyze') && !userMessage.toLowerCase().includes('create') && !userMessage.toLowerCase().includes('new')) ||
-                                        userMessage.toLowerCase().includes('review code') ||
-                                        userMessage.toLowerCase().includes('improve code') ||
-                                        userMessage.toLowerCase().includes('optimize code') ||
-                                        userMessage.toLowerCase().includes('fix code') ||
-                                        userMessage.toLowerCase().includes('clean up') ||
-                                        userMessage.toLowerCase().includes('modernize') ||
-                                        (userMessage.toLowerCase().includes('add') && (userMessage.toLowerCase().includes('type') || userMessage.toLowerCase().includes('interface'))) ||
-                                        userMessage.toLowerCase().includes('best practices') ||
-                                        // Vietnamese action patterns
-                                        userMessage.toLowerCase().includes('làm gì') ||
-                                        userMessage.toLowerCase().includes('chức năng') ||
-                                        userMessage.toLowerCase().includes('tác dụng') ||
-                                        userMessage.toLowerCase().includes('mục đích') ||
-                                        userMessage.toLowerCase().includes('hoạt động') ||
-                                        // General file inquiry without specific file mentioned
-                                        (userMessage.toLowerCase().includes('explain') && !userMessage.includes('.') && !userMessage.includes('/')) ||
-                                        (userMessage.toLowerCase().includes('what does') && !userMessage.includes('.') && !userMessage.includes('/'));
+            // Use advanced context engine to determine if file context is needed
+            let contextDecision = null;
+            let currentFileContext = null;
+            let enhancedMessage = userMessage;
+            
+            // Get current file context first (for context engine analysis)
+            const participantType = this.determineParticipant(userMessage);
+            const isReviewCommand = ['review-file', 'review-changes', 'review-pr', 'sync-review-templates','scan-app'].includes(participantType);
+            
+            if (!isReviewCommand) {
+                currentFileContext = await this.getCurrentFileContext();
+                
+                // Use ChatbotContextEngine for intelligent context decision
+                try {
+                    // Prepare input for context engine (handle both text and images)
+                    const engineInput = images && images.length > 0 
+                        ? { text: userMessage, images: images }
+                        : userMessage;
+                        
+                    // Get conversation history for context
+                    const conversationHistory = this.chatHistory.slice(-5); // Last 5 messages for context
+                    
+                    // Make intelligent context decision
+                    contextDecision = await this.contextEngine.shouldIncludeContext(
+                        engineInput, 
+                        currentFileContext, 
+                        conversationHistory
+                    );
+                    
+                    console.log('🧠 Context Engine Decision:', {
+                        shouldInclude: contextDecision.shouldInclude,
+                        confidence: contextDecision.confidence,
+                        intent: contextDecision.intent,
+                        reasoning: contextDecision.reasoning,
+                        userMessage: userMessage,
+                        hasFile: !!currentFileContext?.hasFile,
+                        fileName: currentFileContext?.fileName
+                    });
+                    
+                    // Universal semantic-based context decision (language-agnostic)
+                    const semanticDecision = this.makeUniversalContextDecision(
+                        userMessage, 
+                        contextDecision, 
+                        currentFileContext
+                    );
+                    
+                    // If context is needed based on semantic analysis, include it
+                    if (semanticDecision.shouldInclude && currentFileContext?.hasFile) {
+                        console.log(`🌍 Universal context decision: ${semanticDecision.reason}`);
+                        enhancedMessage = this.enhanceMessageWithContext(userMessage, currentFileContext, semanticDecision);
+                    }
+                    
+                } catch (engineError) {
+                    console.warn('⚠️ Context engine error, falling back to basic logic:', engineError.message);
+                    // Fallback to basic pattern matching if engine fails
+                    contextDecision = this.basicContextDecision(userMessage, currentFileContext);
+                }
+            }
+            
+            // For backward compatibility, set isCurrentFileRequest based on context decision
+            const isCurrentFileRequest = contextDecision?.shouldInclude || false;
 
             // Add user message to chat (except for current file requests which handle this separately)
             if (!isCurrentFileRequest && this.webviewView) {
@@ -420,15 +452,7 @@ class CopilotSidebarChat {
             // Reset history navigation index
             this.historyIndex = -1;
 
-            // Get current file context for smart suggestions (skip for review commands that handle their own context)
-            const participantType = this.determineParticipant(userMessage);
-            const isReviewCommand = ['review-file', 'review-changes', 'review-pr', 'sync-review-templates','scan-app'].includes(participantType);
-            
-            let currentFileContext = null;
-            if (!isReviewCommand) {
-                currentFileContext = await this.getCurrentFileContext();
-            }
-
+            // Note: currentFileContext and other variables already defined above by context engine
 
             // Add to history with images and mode/model info (except for current file requests which handle this separately)
             if (!isCurrentFileRequest) {
@@ -626,11 +650,11 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
             // const currentFileContext was already declared above
             
             // Enhance message with current file context if available (like GitHub Copilot)
-            let enhancedMessage = userMessage;
-            if (currentFileContext && currentFileContext.hasFile) {
-                // Add subtle file context that doesn't overwhelm the message
+            // enhancedMessage already set by context engine above, but add legacy context enhancement if needed
+            if (currentFileContext && currentFileContext.hasFile && !contextDecision?.shouldInclude) {
+                // Add subtle file context that doesn't overwhelm the message (only if context engine didn't already handle it)
                 enhancedMessage = `${userMessage}\n\n**Current File Context:** ${currentFileContext.summary}\nFile: ${currentFileContext.languageId} file with ${currentFileContext.lineCount} lines`;
-                console.log('📁 Enhanced message with current file context:', currentFileContext.fileName);
+                console.log('📁 Enhanced message with current file context (fallback):', currentFileContext.fileName);
             }
             
             // Create streaming callback for real-time updates
@@ -666,7 +690,7 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
             };
             
             // Determine if streaming should be used
-            const isReviewMode = ['review-file', 'review-changes', 'review-pr'].includes(participant);
+            const isReviewMode = ['review-file', 'review-changes', 'review-pr', 'scan-app'].includes(participant);
             const shouldStream = participant === 'general' || isReviewMode;
             
             let response;
@@ -2828,6 +2852,83 @@ What interesting project are you working on? 🚀`;
 </body>
 </html>`;
         }
+    }
+
+    /**
+     * Helper method: Enhance message with intelligent context
+     */
+    enhanceMessageWithContext(userMessage, currentFileContext, contextDecision) {
+        if (!currentFileContext || !currentFileContext.hasFile) {
+            return userMessage;
+        }
+
+        // Create context-aware enhancement based on intent and confidence
+        let enhancedMessage = userMessage;
+        
+        if (contextDecision.confidence > 0.8) {
+            // High confidence - include detailed context
+            enhancedMessage = `${userMessage}
+
+**Current File Context (High Relevance - ${(contextDecision.confidence * 100).toFixed(1)}%):**
+- File: ${currentFileContext.fileName} (${currentFileContext.languageId})
+- Lines: ${currentFileContext.lineCount}
+- Intent: ${contextDecision.intent}
+- Context: ${currentFileContext.summary}
+
+**Analysis Reasoning:** ${contextDecision.reasoning.join(', ')}`;
+        } else if (contextDecision.confidence > 0.6) {
+            // Medium confidence - include basic context
+            enhancedMessage = `${userMessage}
+
+**Current File Context:**
+File: ${currentFileContext.fileName} (${currentFileContext.languageId}) - ${currentFileContext.lineCount} lines
+Summary: ${currentFileContext.summary}`;
+        } else {
+            // Low confidence - minimal context
+            enhancedMessage = `${userMessage}
+
+**Note:** Working with ${currentFileContext.fileName} (${currentFileContext.languageId})`;
+        }
+
+        console.log(`🧠 Enhanced message with ${contextDecision.confidence > 0.8 ? 'detailed' : contextDecision.confidence > 0.6 ? 'basic' : 'minimal'} context`);
+        return enhancedMessage;
+    }
+
+    /**
+     * Helper method: Fallback context decision for when context engine fails
+     */
+    basicContextDecision(userMessage, currentFileContext) {
+        const text = userMessage.toLowerCase();
+        
+        // Enhanced pattern matching with better Vietnamese support
+        const hasFileReference = text.includes('this file') || 
+                                text.includes('current file') ||
+                                text.includes('file này') ||
+                                text.includes('tệp này') ||
+                                text.includes('code này') ||
+                                text.includes('component này');
+                                
+        const hasCodeAction = text.includes('analyze') || 
+                             text.includes('review') || 
+                             text.includes('refactor') ||
+                             text.includes('explain') ||
+                             text.includes('làm gì') ||
+                             text.includes('chức năng') ||
+                             text.includes('tìm gọn') ||
+                             text.includes('xem') ||
+                             text.includes('đọc') ||
+                             text.includes('kiểm tra') ||
+                             text.includes('phân tích');
+
+        // More inclusive logic - if user mentions file operations AND has active file
+        const shouldInclude = (hasFileReference || hasCodeAction) && currentFileContext?.hasFile;
+        
+        return {
+            shouldInclude: shouldInclude,
+            confidence: shouldInclude ? 0.7 : 0.3, // Higher confidence for fallback
+            reasoning: [`Fallback pattern matching: fileRef=${hasFileReference}, codeAction=${hasCodeAction}, hasFile=${!!currentFileContext?.hasFile}`],
+            intent: hasCodeAction ? 'code_analysis' : 'general'
+        };
     }
 }
 
