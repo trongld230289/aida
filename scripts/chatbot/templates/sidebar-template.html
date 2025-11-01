@@ -630,33 +630,47 @@
         background-color: rgba(255, 255, 255, 0.1);
       }
 
-      /* Image hover tooltip */
-      .image-tooltip {
-        position: absolute;
-        bottom: 100%;
-        left: 50%;
-        transform: translateX(-50%);
+      /* GitHub Copilot style image hover tooltip - smooth positioning */
+      .image-hover-tooltip {
+        position: fixed;
+        top: 0;
+        left: 0;
         background-color: var(--vscode-editorHoverWidget-background);
         border: 1px solid var(--vscode-editorHoverWidget-border);
-        border-radius: 4px;
+        border-radius: 6px;
         padding: 8px;
-        z-index: 1000;
+        z-index: 10000;
         pointer-events: none;
         opacity: 0;
-        transition: opacity 0.2s;
+        visibility: hidden;
+        transition: opacity 0.15s ease;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
         max-width: 300px;
-        max-height: 200px;
+        max-height: 250px;
+        font-size: 11px;
+        will-change: transform;
       }
 
-      .image-tooltip.show {
+      .image-hover-tooltip.visible {
         opacity: 1;
+        visibility: visible;
       }
 
-      .image-tooltip img {
+      .image-hover-tooltip img {
         max-width: 280px;
-        max-height: 180px;
+        max-height: 200px;
         object-fit: contain;
-        border-radius: 2px;
+        border-radius: 3px;
+        display: block;
+      }
+
+      .image-hover-tooltip .tooltip-filename {
+        margin-top: 6px;
+        font-size: 10px;
+        color: var(--vscode-descriptionForeground);
+        text-align: center;
+        opacity: 0.9;
+        font-weight: 500;
       }
 
       .input-container {
