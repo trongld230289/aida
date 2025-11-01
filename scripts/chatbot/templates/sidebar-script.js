@@ -16,6 +16,7 @@ const removeFileBtn = document.getElementById('removeFileBtn');
 
 // Image attachments array
 let imageAttachments = [];
+let imageCounter = 0; // Counter for image numbering
 
 // Mode and model state
 let currentMode = 'ask'; // 'ask' or 'agent'
@@ -408,17 +409,33 @@ async function addImageAttachment(file) {
         const reader = new FileReader();
         
         reader.onload = function(e) {
+            const base64Data = e.target.result;
+            
+            // 🔍 Feature 1: Check for duplicate images
+            const isDuplicate = imageAttachments.some(img => img.data === base64Data);
+            if (isDuplicate) {
+                showError('⚠️ This image has already been added');
+                return;
+            }
+            
+            // 🔢 Feature 2: Auto-increment image counter
+            imageCounter++;
+            const imageNumber = imageCounter;
+            
             const imageData = {
                 id: Date.now() + '_' + Math.random().toString(36).substr(2, 9),
-                data: e.target.result,
+                data: base64Data,
                 type: file.type,
-                name: file.name || 'image',
-                size: file.size
+                name: file.name || `image ${imageNumber}`, // Auto-numbered name
+                size: file.size,
+                number: imageNumber // Store the number for reference
             };
             
             imageAttachments.push(imageData);
             displayImageAttachment(imageData);
             updateAttachmentsVisibility();
+            
+            console.log(`✅ Added image ${imageNumber}: ${imageData.name}`);
         };
         
         reader.onerror = function() {
@@ -436,14 +453,17 @@ function displayImageAttachment(imageData) {
     attachmentDiv.className = 'image-attachment';
     attachmentDiv.setAttribute('data-id', imageData.id);
     
+    // 🔢 Display with numbered name
+    const displayName = imageData.number ? `Image ${imageData.number}` : imageData.name;
+    
     attachmentDiv.innerHTML = `
         <div class="image-preview" onclick="showImageTooltip(this)">
-            <img src="${imageData.data}" alt="${imageData.name}">
+            <img src="${imageData.data}" alt="${displayName}">
             <div class="image-tooltip">
-                <img src="${imageData.data}" alt="${imageData.name}">
+                <img src="${imageData.data}" alt="${displayName}">
             </div>
         </div>
-        <div class="image-filename" title="${imageData.name}">${imageData.name}</div>
+        <div class="image-filename" title="${displayName}">${displayName}</div>
         <button class="remove-image" onclick="removeImageAttachment('${imageData.id}')" title="Remove image">×</button>
     `;
     
@@ -458,8 +478,36 @@ function removeImageAttachment(imageId) {
         attachmentElement.remove();
     }
     
+    // 🔄 Renumber remaining images to keep sequence 1,2,3...
+    renumberImages();
+    
     updateAttachmentsVisibility();
     updateSendButtonState();
+}
+
+/**
+ * Renumber images to maintain continuous sequence (1,2,3...)
+ * Updates both data and UI display
+ */
+function renumberImages() {
+    imageAttachments.forEach((img, index) => {
+        const newNumber = index + 1;
+        img.number = newNumber;
+        img.name = `image ${newNumber}`;
+        
+        // Update UI display
+        const attachmentElement = document.querySelector(`[data-id="${img.id}"]`);
+        if (attachmentElement) {
+            const filenameElement = attachmentElement.querySelector('.image-filename');
+            const displayName = `Image ${newNumber}`;
+            filenameElement.textContent = displayName;
+            filenameElement.title = displayName;
+        }
+    });
+    
+    // Update counter to next available number
+    imageCounter = imageAttachments.length;
+    console.log(`🔄 Renumbered ${imageAttachments.length} images, next will be ${imageCounter + 1}`);
 }
 
 function updateAttachmentsVisibility() {
@@ -472,8 +520,10 @@ function updateAttachmentsVisibility() {
 
 function clearImageAttachments() {
     imageAttachments = [];
+    imageCounter = 0; // 🔄 Reset image counter when clearing
     attachmentsContainer.innerHTML = '';
     updateAttachmentsVisibility();
+    console.log('🗑️ Image attachments and counter reset');
 }
 
 function updateSendButtonState() {
@@ -1083,6 +1133,9 @@ window.addEventListener('message', event => {
                     <p>I can help you review code, analyze changes, and more!</p>
                 </div>
             `;
+            // 🔄 Reset image counter when clearing chat
+            imageCounter = 0;
+            console.log('🗑️ Chat cleared, image counter reset');
             break;
             
         case 'syncInfo':
