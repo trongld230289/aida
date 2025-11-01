@@ -457,11 +457,8 @@ function displayImageAttachment(imageData) {
     const displayName = imageData.number ? `Image ${imageData.number}` : imageData.name;
     
     attachmentDiv.innerHTML = `
-        <div class="image-preview" onclick="showImageTooltip(this)">
+        <div class="image-preview" data-image-src="${imageData.data}" data-image-name="${displayName}">
             <img src="${imageData.data}" alt="${displayName}">
-            <div class="image-tooltip">
-                <img src="${imageData.data}" alt="${displayName}">
-            </div>
         </div>
         <div class="image-filename" title="${displayName}">${displayName}</div>
         <button class="remove-image" onclick="removeImageAttachment('${imageData.id}')" title="Remove image">×</button>
@@ -534,13 +531,109 @@ function updateSendButtonState() {
     sendBtn.disabled = !hasText;
 }
 
+// Image hover tooltip - GitHub Copilot style with smart positioning
+let imageHoverTooltip = null;
+let tooltipTimeout = null;
+
+function createImageHoverTooltip() {
+    if (!imageHoverTooltip) {
+        imageHoverTooltip = document.createElement('div');
+        imageHoverTooltip.className = 'image-hover-tooltip';
+        imageHoverTooltip.innerHTML = `
+            <img src="" alt="">
+            <div class="tooltip-filename"></div>
+        `;
+        document.body.appendChild(imageHoverTooltip);
+        console.log('✅ Created global image hover tooltip');
+    }
+    return imageHoverTooltip;
+}
+
+function showSmartImageTooltip(imageElement, imageSrc, imageName, mouseX, mouseY) {
+    const tooltip = createImageHoverTooltip();
+    
+    // Set image data
+    const tooltipImg = tooltip.querySelector('img');
+    const tooltipFilename = tooltip.querySelector('.tooltip-filename');
+    
+    tooltipImg.src = imageSrc;
+    tooltipImg.alt = imageName;
+    tooltipFilename.textContent = imageName;
+    
+    // Show tooltip
+    tooltip.classList.add('visible');
+    
+    // Position tooltip immediately at mouse position
+    if (mouseX !== undefined && mouseY !== undefined) {
+        updateTooltipPosition(mouseX, mouseY);
+    }
+    
+    console.log('🖼️ Showing smart tooltip for:', imageName);
+}
+
+function hideImageTooltip() {
+    if (imageHoverTooltip) {
+        imageHoverTooltip.classList.remove('visible');
+        // Remove position classes
+        imageHoverTooltip.className = 'image-hover-tooltip';
+        console.log('🫥 Hiding image tooltip');
+    }
+}
+
+function updateTooltipPosition(mouseX, mouseY) {
+    if (!imageHoverTooltip || !imageHoverTooltip.classList.contains('visible')) return;
+    
+    const tooltip = imageHoverTooltip;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    
+    // GitHub Copilot positioning - consistent offset from cursor
+    const offsetX = 12;
+    const offsetY = 12;
+    const margin = 8;
+    
+    // Get tooltip dimensions without positioning (more efficient)
+    const rect = tooltip.getBoundingClientRect();
+    const tooltipWidth = rect.width || 300; // fallback if not measured yet
+    const tooltipHeight = rect.height || 250;
+    
+    // Start with default bottom-right position
+    let finalX = mouseX + offsetX;
+    let finalY = mouseY + offsetY;
+    
+    // Check right edge - switch to left side of cursor
+    if (finalX + tooltipWidth > viewportWidth - margin) {
+        finalX = mouseX - tooltipWidth - offsetX;
+    }
+    
+    // Check bottom edge - switch to top of cursor  
+    if (finalY + tooltipHeight > viewportHeight - margin) {
+        finalY = mouseY - tooltipHeight - offsetY;
+    }
+    
+    // Final boundary checks
+    if (finalX < margin) {
+        finalX = margin;
+    }
+    if (finalY < margin) {
+        finalY = margin;
+    }
+    
+    // Apply position in one go (no flicker)
+    tooltip.style.transform = `translate(${finalX}px, ${finalY}px)`;
+    
+    console.log(`📍 Smooth positioning: cursor(${mouseX}, ${mouseY}) → tooltip(${finalX}, ${finalY})`);
+}
+
 function showImageTooltip(element) {
     const tooltip = element.querySelector('.image-tooltip');
-    tooltip.classList.add('show');
-    
-    setTimeout(() => {
-        tooltip.classList.remove('show');
-    }, 2000);
+    if (tooltip) {
+        tooltip.classList.add('show');
+        
+        setTimeout(() => {
+            tooltip.classList.remove('show');
+        }, 2000);
+    }
 }
 
 function showError(message) {
@@ -625,8 +718,9 @@ function addMessage(content, role, images = []) {
     let imagesHTML = '';
     if (role === 'user' && images && images.length > 0) {
         imagesHTML = '<div class="message-images">';
-        images.forEach(img => {
-            imagesHTML += `<img src="${img.data}" alt="${img.name || 'Image'}" class="message-image" onclick="expandImage(this)">`;
+        images.forEach((img, index) => {
+            const displayName = img.name || `Image ${index + 1}`;
+            imagesHTML += `<img src="${img.data}" alt="${displayName}" class="message-image" data-image-name="${displayName}">`;
         });
         imagesHTML += '</div>';
     }
@@ -1177,6 +1271,9 @@ updateSendButtonState();
 // Initialize button states (ensure cancel is hidden initially)
 updateButtonStates();
 
+// Pre-create tooltip for better performance (no delay on first hover)
+createImageHoverTooltip();
+
 // Notify backend that frontend is ready and request current file
 setTimeout(() => {
     console.log('📁 Frontend ready, requesting current file...');
@@ -1314,7 +1411,7 @@ function addCopyButtonsToCodeBlocks(container) {
 
 // Auto-add copy buttons when DOM content is loaded
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('🎨 DOM loaded, initializing copy buttons and syntax highlighting...');
+    console.log('🎨 DOM loaded, initializing copy buttons, syntax highlighting, and image tooltips...');
     
     // Process existing code blocks (for history restore)
     const existingCodeBlocks = document.querySelectorAll('pre code:not(.hljs)');
@@ -1343,6 +1440,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // Process any existing button placeholders
     processButtonPlaceholders(document);
     
+    // Initialize image hover tooltips
+    initializeImageTooltipEvents();
+    
     // Watch for new code blocks being added dynamically (SKIP during streaming to prevent flicker)
     const observer = new MutationObserver(function(mutations) {
         // Skip during streaming to prevent flicker
@@ -1358,6 +1458,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         if (node.tagName === 'PRE' || node.querySelectorAll) {
                             addCopyButtonsToCodeBlocks(node.tagName === 'PRE' ? node.parentNode : node);
                         }
+                        
+                        // Check for new image elements
+                        if (node.querySelector && node.querySelector('.image-preview')) {
+                            initializeImageTooltipEvents();
+                        }
                     }
                 });
             }
@@ -1370,8 +1475,99 @@ document.addEventListener('DOMContentLoaded', function() {
         subtree: true
     });
     
-    console.log('👀 Started observing for new code blocks');
+    console.log('👀 Started observing for new code blocks and image elements');
 });
+
+// Initialize image tooltip event listeners
+function initializeImageTooltipEvents() {
+    console.log('🖼️ Initializing image tooltip events...');
+    
+    // Use event delegation for better performance and dynamic content support
+    document.removeEventListener('mouseenter', handleImageHover, true);
+    document.removeEventListener('mouseleave', handleImageLeave, true);
+    document.removeEventListener('mousemove', handleMouseMove, true);
+    
+    document.addEventListener('mouseenter', handleImageHover, true);
+    document.addEventListener('mouseleave', handleImageLeave, true);
+    document.addEventListener('mousemove', handleMouseMove, true);
+    document.addEventListener('click', handleImageClick, true);
+    
+    console.log('✅ Image tooltip events initialized with delegation');
+}
+
+// Event handlers for image tooltips - GitHub Copilot behavior
+function handleImageHover(event) {
+    const imageAttachment = event.target.closest('.image-attachment'); // Changed to entire attachment
+    const messageImage = event.target.closest('.message-image');
+    
+    // Capture mouse position immediately (before setTimeout)
+    const mouseX = event.clientX;
+    const mouseY = event.clientY;
+    
+    if (imageAttachment) {
+        // Get data from the image-preview inside the attachment
+        const imagePreview = imageAttachment.querySelector('.image-preview');
+        const imageSrc = imagePreview?.getAttribute('data-image-src') || imagePreview?.querySelector('img')?.src;
+        const imageName = imagePreview?.getAttribute('data-image-name') || 'Image';
+        
+        if (imageSrc) {
+            clearTimeout(tooltipTimeout);
+            tooltipTimeout = setTimeout(() => {
+                showSmartImageTooltip(imageAttachment, imageSrc, imageName, mouseX, mouseY);
+            }, 500);
+        }
+        console.log('🖱️ Mouse entered image attachment:', imageName);
+    } else if (messageImage) {
+        const imageSrc = messageImage.src;
+        const imageName = messageImage.getAttribute('data-image-name') || messageImage.alt || 'Image';
+        
+        if (imageSrc) {
+            clearTimeout(tooltipTimeout);
+            tooltipTimeout = setTimeout(() => {
+                showSmartImageTooltip(messageImage, imageSrc, imageName, mouseX, mouseY);
+            }, 500);
+        }
+        console.log('🖱️ Mouse entered message image:', imageName);
+    }
+}
+
+function handleImageLeave(event) {
+    const imageAttachment = event.target.closest('.image-attachment'); // Changed to entire attachment
+    const messageImage = event.target.closest('.message-image');
+    
+    if (imageAttachment || messageImage) {
+        clearTimeout(tooltipTimeout);
+        hideImageTooltip();
+        console.log('🫥 Mouse left image element');
+    }
+}
+
+function handleMouseMove(event) {
+    if (imageHoverTooltip && imageHoverTooltip.classList.contains('visible')) {
+        updateTooltipPosition(event.clientX, event.clientY);
+    }
+}
+
+// Handle image clicks - show tooltip on hover, expand on click
+function handleImageClick(event) {
+    const messageImage = event.target.closest('.message-image');
+    const imageAttachment = event.target.closest('.image-attachment');
+    
+    if (messageImage) {
+        // Hide tooltip before expanding
+        hideImageTooltip();
+        // Expand image in new window
+        expandImage(messageImage);
+    } else if (imageAttachment) {
+        // For attachment clicks, check if it's the remove button
+        const removeButton = event.target.closest('.remove-image');
+        if (!removeButton) {
+            // Hide tooltip if clicking on attachment (but not remove button)
+            hideImageTooltip();
+            // Could add expand functionality for attachments here if needed
+        }
+    }
+}
 
 // Function to reprocess entire chat (for history restore fix)
 let reprocessTimeout = null;
