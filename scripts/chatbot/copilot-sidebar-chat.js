@@ -358,14 +358,22 @@ class CopilotSidebarChat {
         try {
             // Check for /clear command
             if (userMessage.trim() === '/clear') {
-                // Clear chat history
-                // this.clearChatHistory();
-                this.chatbotService.clearHistory();
+                // Clear conversation messages but preserve input history
+                this.chatHistory = []; // Clear in-memory conversation
+                this.chatbotService.clearHistory(); // Clear AI service conversation history
+                
+                // Clear only conversation from persistent storage, keep message history
+                const chatKey = this.getWorkspaceSpecificKey('aida.chatHistory');
+                this.context.globalState.update(chatKey, []);
+                
+                // DON'T clear messageHistory and historyIndex - preserve for arrow navigation
                 
                 // Send clear command to frontend
                 if (this.webviewView) {
                     this.webviewView.webview.postMessage({ type: 'clearChat' });
                 }
+                
+                console.log('🗑️ Conversation cleared - arrow key history preserved');
                 return; // Don't process further
             }
             
