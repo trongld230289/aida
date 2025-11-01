@@ -409,16 +409,30 @@ class CopilotSidebarChat {
                     });
                     
                     // Universal semantic-based context decision (language-agnostic)
-                    const semanticDecision = this.makeUniversalContextDecision(
+                    const semanticDecision = this.contextEngine.makeUniversalContextDecision(
                         userMessage, 
                         contextDecision, 
                         currentFileContext
                     );
                     
-                    // If context is needed based on semantic analysis, include it
-                    if (semanticDecision.shouldInclude && currentFileContext?.hasFile) {
-                        console.log(`🌍 Universal context decision: ${semanticDecision.reason}`);
-                        enhancedMessage = this.enhanceMessageWithContext(userMessage, currentFileContext, semanticDecision);
+                    // Enhanced multimodal context decision (like GitHub Copilot)
+                    const multimodalDecision = this.makeMultimodalContextDecision(
+                        userMessage, 
+                        images, 
+                        currentFileContext, 
+                        contextDecision, 
+                        semanticDecision
+                    );
+                    
+                    // Apply multimodal decision
+                    if (multimodalDecision.shouldInclude) {
+                        console.log(`🖼️ Multimodal context decision: ${multimodalDecision.reason}`);
+                        contextDecision.shouldInclude = true;
+                        contextDecision.reasoning = [...(contextDecision.reasoning || []), multimodalDecision.reason];
+                        enhancedMessage = multimodalDecision.enhancedMessage;
+                    } else if (!contextDecision.shouldInclude) {
+                        // If all decisions say no, log why
+                        console.log(`🚫 No context needed: Engine=${contextDecision.shouldInclude}, Semantic=${semanticDecision.shouldInclude}, Multimodal=${multimodalDecision.shouldInclude}`);
                     }
                     
                 } catch (engineError) {
@@ -650,11 +664,19 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
             // const currentFileContext was already declared above
             
             // Enhance message with current file context if available (like GitHub Copilot)
-            // enhancedMessage already set by context engine above, but add legacy context enhancement if needed
-            if (currentFileContext && currentFileContext.hasFile && !contextDecision?.shouldInclude) {
-                // Add subtle file context that doesn't overwhelm the message (only if context engine didn't already handle it)
-                enhancedMessage = `${userMessage}\n\n**Current File Context:** ${currentFileContext.summary}\nFile: ${currentFileContext.languageId} file with ${currentFileContext.lineCount} lines`;
-                console.log('📁 Enhanced message with current file context (fallback):', currentFileContext.fileName);
+            // enhancedMessage should already be set by context engine above if context is needed
+            if (currentFileContext && currentFileContext.hasFile) {
+                if (contextDecision?.shouldInclude) {
+                    // Context engine decided context is needed - use enhanced message from context engine
+                    console.log('📁 Using enhanced message from context engine:', currentFileContext.fileName);
+                    // enhancedMessage already set by this.enhanceMessageWithContext() above
+                } else {
+                    // Context engine decided no context needed, but add minimal context as fallback
+                    enhancedMessage = `${userMessage}\n\n**Current File Context:** ${currentFileContext.summary}\nFile: ${currentFileContext.languageId} file with ${currentFileContext.lineCount} lines`;
+                    console.log('📁 Enhanced message with minimal context (fallback):', currentFileContext.fileName);
+                }
+            } else {
+                console.log('📁 No file context available');
             }
             
             // Create streaming callback for real-time updates
@@ -694,6 +716,7 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
             const shouldStream = participant === 'general' || isReviewMode;
             
             let response;
+            console.log('🤖 Calling participant with enhanced message:', enhancedMessage.substring(0, 200) + '...');
             if (shouldStream) {
                 response = await this.callParticipant(participant, enhancedMessage, images, streamCallback);
             } else {
@@ -2855,6 +2878,185 @@ What interesting project are you working on? 🚀`;
     }
 
     /**
+     * Multimodal context decision (Hybrid approach like GitHub Copilot)
+     * Step 1: Fast rule-based pre-filtering (90% cases)
+     * Step 2: LLM semantic analysis for complex cases (10% cases)
+     */
+    makeMultimodalContextDecision(userMessage, images, currentFileContext, contextDecision, semanticDecision) {
+        const hasImages = images && images.length > 0;
+        const hasCurrentFile = currentFileContext && currentFileContext.hasFile;
+        
+        console.log(`🔍 Hybrid analysis: ${images.length} image(s) + ${hasCurrentFile ? 'current file' : 'no file'}`);
+        
+        // Step 1: Fast rule-based decision (primary)
+        const ruleDecision = this.makeRuleBasedDecision(userMessage, images, currentFileContext);
+        
+        // Step 2: Check if we need semantic analysis (secondary)
+        if (this.needsSemanticAnalysis(ruleDecision, userMessage, hasImages, hasCurrentFile)) {
+            console.log(`🧠 Complex case detected - using semantic analysis`);
+            const semanticDecision = this.contextEngine.shouldIncludeContext(userMessage, currentFileContext);
+            return this.combineDecisions(ruleDecision, semanticDecision, userMessage, currentFileContext, images);
+        }
+        
+        console.log(`⚡ Rule-based decision: ${ruleDecision.reason}`);
+        return ruleDecision;
+    }
+
+    /**
+     * Fast rule-based decision (GitHub Copilot style)
+     * Handles 90% of common cases in milliseconds
+     */
+    makeRuleBasedDecision(userMessage, images, currentFileContext) {
+        const hasImages = images && images.length > 0;
+        const hasCurrentFile = currentFileContext && currentFileContext.hasFile;
+        const text = userMessage.toLowerCase();
+        
+        // Rule 1: No images - use file context if available
+        if (!hasImages) {
+            return {
+                shouldInclude: hasCurrentFile,
+                reason: hasCurrentFile ? 'Rule: No images, include current file' : 'Rule: No images, no current file',
+                enhancedMessage: hasCurrentFile ? this.enhanceMessageWithContext(userMessage, currentFileContext, {shouldInclude: true}) : userMessage,
+                confidence: 0.9
+            };
+        }
+        
+        // Rule 2: Only images, no current file
+        if (hasImages && !hasCurrentFile) {
+            return {
+                shouldInclude: false,
+                reason: 'Rule: Only images, no current file available',
+                enhancedMessage: userMessage,
+                confidence: 0.95
+            };
+        }
+        
+        // Rule 3: Images + current file - check explicit file references
+        if (hasImages && hasCurrentFile) {
+            const explicitFileRef = text.includes('current file') || text.includes('this file') || 
+                                   text.includes('open file') || text.includes('file này') ||
+                                   text.includes('tệp này') || text.includes('current code');
+            
+            if (explicitFileRef) {
+                return {
+                    shouldInclude: true,
+                    reason: 'Rule: Explicit file reference with images',
+                    enhancedMessage: this.createMultimodalEnhancedMessage(userMessage, currentFileContext, images),
+                    confidence: 0.9
+                };
+            }
+            
+            // Default: Images priority, file as background
+            return {
+                shouldInclude: true,
+                reason: 'Rule: Images with file background context',
+                enhancedMessage: this.createImageFocusedEnhancedMessage(userMessage, currentFileContext, images),
+                confidence: 0.7 // Lower confidence - might need semantic analysis
+            };
+        }
+        
+        // Fallback
+        return {
+            shouldInclude: false,
+            reason: 'Rule: Default fallback',
+            enhancedMessage: userMessage,
+            confidence: 0.5
+        };
+    }
+
+    /**
+     * Determine if semantic analysis is needed (GitHub Copilot strategy)
+     * Only for complex/ambiguous cases where rules aren't sufficient
+     */
+    needsSemanticAnalysis(ruleDecision, userMessage, hasImages, hasCurrentFile) {
+        // Low confidence from rules
+        if (ruleDecision.confidence < 0.8) {
+            return true;
+        }
+        
+        // Complex multimodal scenario
+        if (hasImages && hasCurrentFile) {
+            const text = userMessage.toLowerCase();
+            
+            // Ambiguous references that need semantic analysis
+            const ambiguousTerms = ['này', 'this', 'it', 'code', 'function', 'component', 'làm gì', 'how'];
+            const hasAmbiguous = ambiguousTerms.some(term => text.includes(term));
+            
+            if (hasAmbiguous && !text.includes('current file') && !text.includes('image')) {
+                return true;
+            }
+        }
+        
+        // Cross-reference analysis needed
+        const needsCrossRef = userMessage.length > 100 || // Complex question
+                             userMessage.includes('compare') || 
+                             userMessage.includes('difference') ||
+                             userMessage.includes('so sánh') ||
+                             userMessage.includes('khác nhau');
+        
+        return needsCrossRef;
+    }
+
+    /**
+     * Combine rule-based and semantic decisions (hybrid)
+     */
+    combineDecisions(ruleDecision, semanticDecision, userMessage, currentFileContext, images) {
+        const hasImages = images && images.length > 0;
+        
+        // If semantic analysis strongly disagrees with rules
+        if (Math.abs(semanticDecision.confidence - ruleDecision.confidence) > 0.3) {
+            // Use higher confidence decision
+            if (semanticDecision.confidence > ruleDecision.confidence) {
+                return {
+                    shouldInclude: semanticDecision.shouldInclude,
+                    reason: `Hybrid: Semantic override (confidence: ${semanticDecision.confidence.toFixed(2)}) - ${semanticDecision.reason}`,
+                    enhancedMessage: hasImages ? 
+                        this.createMultimodalEnhancedMessage(userMessage, currentFileContext, images) :
+                        this.enhanceMessageWithContext(userMessage, currentFileContext, semanticDecision)
+                };
+            }
+        }
+        
+        // Combine insights from both
+        return {
+            shouldInclude: ruleDecision.shouldInclude,
+            reason: `Hybrid: Rule-based confirmed by semantic analysis - ${ruleDecision.reason}`,
+            enhancedMessage: ruleDecision.enhancedMessage
+        };
+    }
+
+    /**
+     * Create enhanced message for multimodal context (image + current file)
+     */
+    createMultimodalEnhancedMessage(userMessage, currentFileContext, images) {
+        return `${userMessage}
+
+**Multimodal Context Analysis:**
+🖼️ **Images**: ${images.length} image(s) attached
+📁 **Current File**: ${currentFileContext.fileName} (${currentFileContext.languageId})
+- Lines: ${currentFileContext.lineCount}
+- Summary: ${currentFileContext.summary}
+
+**Instructions**: Please analyze both the attached image(s) and the current file context. If the user asks about "file này" or "this file", determine whether they're referring to the code in the image or the current open file, and provide appropriate analysis.
+
+**Current File Content (for reference):**
+\`\`\`${currentFileContext.languageId}
+${currentFileContext.content.substring(0, 1000)}${currentFileContext.content.length > 1000 ? '...' : ''}
+\`\`\``;
+    }
+
+    /**
+     * Create enhanced message focused on images with file as background
+     */
+    createImageFocusedEnhancedMessage(userMessage, currentFileContext, images) {
+        return `${userMessage}
+
+**Context**: You have ${images.length} image(s) to analyze. Current file (${currentFileContext.fileName}) is available as background context if relevant.
+
+**Background File Info**: ${currentFileContext.summary}`;
+    }
+
+    /**
      * Helper method: Enhance message with intelligent context
      */
     enhanceMessageWithContext(userMessage, currentFileContext, contextDecision) {
@@ -2906,22 +3108,39 @@ Summary: ${currentFileContext.summary}`;
                                 text.includes('file này') ||
                                 text.includes('tệp này') ||
                                 text.includes('code này') ||
-                                text.includes('component này');
+                                text.includes('component này') ||
+                                text.includes('file nay') ||  // Without diacritics
+                                text.includes('code nay');
                                 
         const hasCodeAction = text.includes('analyze') || 
                              text.includes('review') || 
                              text.includes('refactor') ||
                              text.includes('explain') ||
                              text.includes('làm gì') ||
+                             text.includes('lam gi') ||  // Without diacritics
                              text.includes('chức năng') ||
+                             text.includes('chuc nang') || // Without diacritics
                              text.includes('tìm gọn') ||
+                             text.includes('tim gon') || // Without diacritics
                              text.includes('xem') ||
                              text.includes('đọc') ||
+                             text.includes('doc') || // Without diacritics
                              text.includes('kiểm tra') ||
-                             text.includes('phân tích');
+                             text.includes('kiem tra') || // Without diacritics
+                             text.includes('phân tích') ||
+                             text.includes('phan tich') || // Without diacritics
+                             text.includes('help') ||
+                             text.includes('giúp') ||
+                             text.includes('giup') || // Without diacritics
+                             text.includes('about') ||
+                             text.includes('về') ||  // About in Vietnamese
+                             text.includes('vậy') || // Question ending particle
+                             text.includes('thế'); // Alternative question particle
 
         // More inclusive logic - if user mentions file operations AND has active file
         const shouldInclude = (hasFileReference || hasCodeAction) && currentFileContext?.hasFile;
+        
+        console.log(`🔍 Basic context decision: fileRef=${hasFileReference}, codeAction=${hasCodeAction}, hasFile=${!!currentFileContext?.hasFile}, result=${shouldInclude}`);
         
         return {
             shouldInclude: shouldInclude,

@@ -137,6 +137,11 @@ class AidaChatbotService {
         try {
             console.log('💬 generateResponse called with:', { message: userMessage, imageCount: images?.length || 0, streaming: !!streamCallback });
             
+            // Notify user about image processing approach
+            if (images && images.length > 0) {
+                console.log(`🖼️ Processing ${images.length} image(s) from CURRENT message only (not from conversation history)`);
+            }
+            
             // Add user message to history with images
             this.addMessage('user', userMessage, images);
 
@@ -182,39 +187,40 @@ class AidaChatbotService {
             const systemMessage = messages.find(m => m.role === 'system');
             const conversationMessages = messages.filter(m => m.role !== 'system');
             
-            // Extract images from conversation messages
-            const allImages = conversationMessages
-                .filter(msg => msg.images && msg.images.length > 0)
-                .flatMap(msg => msg.images);
+            // Extract images ONLY from the latest user message (current conversation turn)
+            const latestUserMessage = conversationMessages.filter(msg => msg.role === 'user').pop();
+            const currentImages = latestUserMessage && latestUserMessage.images ? latestUserMessage.images : [];
             
-            // Create conversation context for user prompt
+            console.log(`🖼️ Using ${currentImages.length} images from current message only (not from history)`);
+            
+            // Create conversation context for user prompt (without image history pollution)
             const conversationText = conversationMessages.map(msg => {
                 let text = `${msg.role.toUpperCase()}: ${msg.content}`;
                 
-                // Add image info if present
-                if (msg.images && msg.images.length > 0) {
-                    text += ` [${msg.images.length} image(s) attached]`;
+                // Only show image info for current message to avoid confusion
+                if (msg.role === 'user' && msg === latestUserMessage && msg.images && msg.images.length > 0) {
+                    text += ` [${msg.images.length} image(s) attached to current message]`;
                 }
                 
                 return text;
             }).join('\n\n');
             
             console.log('🔄 Using shared callAI function from review-common');
-            console.log(`🖼️ Found ${allImages.length} images in conversation`);
+            console.log(`🖼️ Processing ${currentImages.length} images from current message only`);
             
-            // Use shared callAI function with chat-optimized options and images
+            // Use shared callAI function with chat-optimized options and ONLY current images
             const chatOptions = {
                 temperature: 0.7,
                 max_tokens: 4000,
                 stream: !!streamCallback, // Enable streaming if callback provided
-                response_format: streamCallback ? undefined : undefined, // Always disable JSON for chat
+                response_format: streamCallback ? undefined : undefined // Always disable JSON for chat
             };
             
             const result = await callAI(
                 systemMessage?.content || this.systemPrompt || 'You are AIDA, a helpful coding assistant.',
                 conversationText,
                 chatOptions,
-                allImages // Pass images to shared callAI
+                currentImages // Pass ONLY current images, not historical ones
             );
             
             // Handle streaming vs non-streaming responses

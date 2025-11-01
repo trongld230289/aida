@@ -770,10 +770,10 @@ class ChatbotContextEngine {
             decision.reasoning = ['Context needed but no active file available'];
         }
 
-        // Layer 5: Confidence threshold check
-        if (decision.confidence < 0.5) {
+        // Layer 5: Confidence threshold check (lowered for short questions)
+        if (decision.confidence < 0.3) {
             decision.include = false;
-            decision.reasoning.push('Confidence below threshold');
+            decision.reasoning.push('Confidence below threshold (0.3)');
         }
 
         // Layer 6: Override for explicit requests
@@ -781,6 +781,14 @@ class ChatbotContextEngine {
             decision.include = true;
             decision.confidence = Math.max(decision.confidence, 0.8);
             decision.reasoning.push('Override: Explicit code modification request');
+        }
+
+        // Layer 7: Override for Vietnamese/short file questions 
+        const shortQuestionPatterns = /\b(code này|file này|làm gì|chức năng|what does|this file|this code)\b/i;
+        if (shortQuestionPatterns.test(analysisData.originalText || '') && hasActiveFile && !decision.include) {
+            decision.include = true;
+            decision.confidence = Math.max(decision.confidence, 0.6);
+            decision.reasoning.push('Override: Short file question detected');
         }
 
         return decision;
