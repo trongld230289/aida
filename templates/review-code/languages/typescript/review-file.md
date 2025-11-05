@@ -7,6 +7,11 @@
 
 This template focuses specifically on TypeScript framework best practices, patterns, and common pitfalls. Use this for reviewing TypeScript classes, interfaces, types, modules, and configuration files.
 
+🎯 REVIEW PRINCIPLES:
+- ONLY flag issues that violate the specific rules in the template
+- If code follows template guidelines, it's acceptable - don't force changes
+- Focus on actual violations, not subjective preferences
+
 ---
 
 ## ⚡ TYPESCRIPT CRITICAL CHECKS (Auto-FAIL if found)

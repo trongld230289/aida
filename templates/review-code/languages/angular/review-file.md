@@ -7,6 +7,11 @@
 
 This template focuses specifically on Angular framework best practices, patterns, and common pitfalls. Use this for reviewing Angular components, services, directives, pipes, and modules.
 
+🎯 REVIEW PRINCIPLES:
+- ONLY flag issues that violate the specific rules in the template
+- If code follows template guidelines, it's acceptable - don't force changes
+- Focus on actual violations, not subjective preferences
+
 ---
 
 ## ⚡ ANGULAR CRITICAL CHECKS (Auto-FAIL if found)

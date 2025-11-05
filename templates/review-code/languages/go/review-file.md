@@ -7,6 +7,11 @@
 
 This template focuses specifically on Go framework best practices, patterns, and common pitfalls. Use this for reviewing Go packages, functions, structs, interfaces, and configuration files.
 
+🎯 REVIEW PRINCIPLES:
+- ONLY flag issues that violate the specific rules in the template
+- If code follows template guidelines, it's acceptable - don't force changes
+- Focus on actual violations, not subjective preferences
+
 ---
 
 ## ⚡ GO CRITICAL CHECKS (Auto-FAIL if found)

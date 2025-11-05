@@ -7,6 +7,11 @@
 
 This is a fallback template for comprehensive file analysis when no specific language/framework template is available. It provides general code quality, security, and maintainability checks applicable to most programming languages.
 
+🎯 REVIEW PRINCIPLES:
+- ONLY flag issues that violate the specific rules in the template
+- If code follows template guidelines, it's acceptable - don't force changes
+- Focus on actual violations, not subjective preferences
+
 ---
 
 <!-- 

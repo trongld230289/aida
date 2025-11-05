@@ -308,14 +308,16 @@ async function showAzureDevOpsDiffInWebview(prAnalysis, stream) {
     global.prDiffCache.project = data.project;
     global.prDiffCache.repository = data.repository;
     global.prDiffCache.sourceCommit = data.sourceCommit;
-    global.prDiffCache.targetCommit = data.targetCommit;
+    global.prDiffCache.targetCommit = data.targetCommit; // This is now merge base
+    global.prDiffCache.mergeBaseCommit = data.mergeBaseCommit; // Explicit merge base reference
     
     console.log('🚀 Cached Azure DevOps API credentials for full content retrieval:');
     console.log(`   Organization: ${data.organization}`);
     console.log(`   Project: ${data.project}`);
     console.log(`   Repository: ${data.repository}`);
-    console.log(`   Source Commit: ${data.sourceCommit?.substring(0, 7)}`);
-    console.log(`   Target Commit: ${data.targetCommit?.substring(0, 7)}`);
+    console.log(`   Source Commit (PR): ${data.sourceCommit?.substring(0, 7)}`);
+    console.log(`   Target Commit (Merge Base): ${data.targetCommit?.substring(0, 7)} - CORRECTED`);
+    console.log(`   Merge Base: ${data.mergeBaseCommit?.substring(0, 7)} - for Monaco diff accuracy`);
     console.log(`   Access Token: ${accessToken ? '✅ Available' : '❌ Missing'}`);
 
     stream.markdown('🔵 **Azure DevOps Diff Webview Display**\n\n');
@@ -778,6 +780,7 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
         let fileChanges = [];
         let finalDiff = '';
         let diffSource = 'PR-specific changes only';
+        let mergeBaseCommit = null; // Store the actual merge base for Monaco diff view
 
         console.log('🔍 Getting PR-specific changes from source commit...');
 
@@ -850,22 +853,40 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
 
                 console.log(`✅ Found ${actualFiles.length} actual file changes in PR (filtered from ${changesResponse.data.changeEntries.length} total entries)`);
 
-                // STEP 4 (SIMPLIFIED): Use file content + diff library only (universal approach)
-                console.log('🔄 Using simplified file content + diff library approach...');
+                // STEP 4 (CORRECTED): Find merge base to get actual branch point 
+                console.log('🔄 Finding merge base (branch point) for accurate diff...');
 
-                // Get correct target branch HEAD commit (not PR merge target)
-                let baseCommit = pr.lastMergeTargetCommit?.commitId;
+                // Get source and target commits from PR
                 const sourceCommit = pr.lastMergeSourceCommit?.commitId;
+                const targetCommit = pr.lastMergeTargetCommit?.commitId;
                 
+                if (!sourceCommit || !targetCommit) {
+                    throw new Error('Missing source or target commit information in PR data');
+                }
+                
+                console.log(`🎯 Source commit (PR): ${sourceCommit.substring(0, 7)}`);
+                console.log(`🎯 Target commit (${targetBranch}): ${targetCommit.substring(0, 7)}`);
+                
+                // Find merge base (the common ancestor commit where the branch diverged)
+                let baseCommit;
                 try {
-                    const branchUrl = `https://dev.azure.com/${organization}/${project}/_apis/git/repositories/${repository}/refs?filter=heads/${targetBranch}&api-version=7.0`;
-                    const branchResponse = await makeAzureDevOpsRequest(branchUrl, token);
-                    if (branchResponse.success && branchResponse.data.value && branchResponse.data.value.length > 0) {
-                        baseCommit = branchResponse.data.value[0].objectId;
-                        console.log(`✅ Using actual HEAD of ${targetBranch}: ${baseCommit.substring(0,7)} (instead of PR merge target: ${pr.lastMergeTargetCommit?.commitId?.substring(0,7)})`);
+                    const mergeBaseUrl = `https://dev.azure.com/${organization}/${project}/_apis/git/repositories/${repository}/commits/${sourceCommit}/mergebases?otherCommitId=${targetCommit}&api-version=7.0`;
+                    const mergeBaseResponse = await makeAzureDevOpsRequest(mergeBaseUrl, token);
+                    
+                    if (mergeBaseResponse.success && mergeBaseResponse.data.value && mergeBaseResponse.data.value.length > 0) {
+                        baseCommit = mergeBaseResponse.data.value[0].commitId;
+                        mergeBaseCommit = baseCommit; // Store for Monaco diff view
+                        console.log(`✅ Found merge base (branch point): ${baseCommit.substring(0, 7)}`);
+                        console.log(`📊 This will show ONLY changes made in the feature branch, not full target branch diff`);
+                    } else {
+                        console.log(`⚠️ Could not find merge base, falling back to target commit`);
+                        baseCommit = targetCommit;
+                        mergeBaseCommit = targetCommit; // Fallback to target commit
                     }
                 } catch (error) {
-                    console.log(`⚠️ Failed to get HEAD of ${targetBranch}, using PR merge target commit`);
+                    console.log(`❌ Error finding merge base: ${error.message}, using target commit`);
+                    baseCommit = targetCommit;
+                    mergeBaseCommit = targetCommit; // Fallback to target commit
                 }
 
                 // Process file changes with simple approach
@@ -879,12 +900,22 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
 
                     if (baseCommit && sourceCommit) {
                         try {
+                            console.log(`🔍 Comparing commits for ${filePath} (CORRECTED LOGIC):`);
+                            console.log(`  📍 Base commit (merge base): ${baseCommit.substring(0, 7)} - branch point where ${targetBranch} and feature branch diverged`);
+                            console.log(`  📍 Source commit (PR): ${sourceCommit.substring(0, 7)} - latest commit in feature branch`);
+                            console.log(`  💡 This shows ONLY changes made in feature branch, not full diff vs current ${targetBranch}`);
+                            
                             // Get file content from both commits
                             const baseContent = await getFileContent(organization, project, repository, filePath, baseCommit, token);
                             const sourceContent = await getFileContent(organization, project, repository, filePath, sourceCommit, token);
 
+                            console.log(`📊 Content retrieved:`);
+                            console.log(`  Base content (merge base): ${baseContent ? baseContent.length + ' chars' : 'NULL'}`);
+                            console.log(`  Source content (PR): ${sourceContent ? sourceContent.length + ' chars' : 'NULL'}`);
+
                             if (baseContent !== null || sourceContent !== null) {
                                 // Generate unified diff using diff library
+                                console.log(`🎯 Calling generateUnifiedDiff for ${filePath} with CORRECTED commits...`);
                                 diffContent = generateUnifiedDiff(filePath, baseContent || '', sourceContent || '', change.changeType);
 
                                 // Count changes using our counting function
@@ -892,7 +923,7 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
                                 additions = counts.additions;
                                 deletions = counts.deletions;
 
-                                console.log(`✅ Generated diff for ${filePath}: +${additions}/-${deletions}`);
+                                console.log(`✅ Generated diff for ${filePath}: +${additions}/-${deletions} (using merge base)`);
                             } else {
                                 console.log(`⚠️ Could not fetch content for ${filePath}`);
                                 diffContent = `diff --git a/${filePath} b/${filePath}\n[Could not retrieve file content]`;
@@ -940,7 +971,8 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
                 sourceBranch: sourceBranch,
                 targetBranch: targetBranch,
                 sourceCommit: pr.lastMergeSourceCommit?.commitId,
-                targetCommit: pr.lastMergeTargetCommit?.commitId,
+                targetCommit: mergeBaseCommit || pr.lastMergeTargetCommit?.commitId, // Use merge base for correct Monaco diff
+                mergeBaseCommit: mergeBaseCommit, // Store merge base explicitly for reference
                 diffCommand: diffSource,
                 fileChanges: fileChanges,
                 // Include commits and final diff info (PR-specific only)

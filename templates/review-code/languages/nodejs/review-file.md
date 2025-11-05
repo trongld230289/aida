@@ -7,6 +7,11 @@
 
 This template focuses specifically on Node.js backend development best practices, patterns, and common pitfalls. Use this for reviewing Node.js applications, APIs, middleware, and server-side architecture.
 
+🎯 REVIEW PRINCIPLES:
+- ONLY flag issues that violate the specific rules in the template
+- If code follows template guidelines, it's acceptable - don't force changes
+- Focus on actual violations, not subjective preferences
+
 ---
 
 <!-- 

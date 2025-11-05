@@ -7,6 +7,11 @@
 
 This template focuses specifically on React framework best practices, patterns, and common pitfalls. Use this for reviewing React components, hooks, context providers, and application architecture.
 
+🎯 REVIEW PRINCIPLES:
+- ONLY flag issues that violate the specific rules in the template
+- If code follows template guidelines, it's acceptable - don't force changes
+- Focus on actual violations, not subjective preferences
+
 ---
 
 <!-- 
