@@ -367,6 +367,9 @@ function activate(context) {
     const reviewFile = require('./scripts/review-file');
     const { reviewFileParticipant } = reviewFile.initializeReviewFile(context);
 
+    const reviewAllChanges = require('./scripts/review-all-changes');
+    const { reviewAllChangesParticipant } = reviewAllChanges.initializeReviewAllChanges(context);
+
     console.log('🔄 About to initialize PR review...');
     // Initialize PR review functionality from external script
     let reviewPrParticipant, reviewPullRequest;
@@ -564,6 +567,7 @@ function activate(context) {
         reviewChangesContextCommand,
         reviewChangesParticipant,
         reviewFileParticipant,
+        reviewAllChangesParticipant,
         reviewPrParticipant,
         reviewPullRequest,
         syncTemplatesParticipant,

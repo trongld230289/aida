@@ -384,7 +384,7 @@ class CopilotSidebarChat {
             
             // Get current file context first (for context engine analysis)
             const participantType = this.determineParticipant(userMessage);
-            const isReviewCommand = ['review-file', 'review-changes', 'review-pr', 'sync-review-templates','scan-app'].includes(participantType);
+            const isReviewCommand = ['review-file', 'review-changes', 'review-all-changes', 'review-pr', 'sync-review-templates','scan-app'].includes(participantType);
             
             if (!isReviewCommand) {
                 currentFileContext = await this.getCurrentFileContext();
@@ -720,7 +720,7 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
             };
             
             // Determine if streaming should be used
-            const isReviewMode = ['review-file', 'review-changes', 'review-pr', 'scan-app'].includes(participant);
+            const isReviewMode = ['review-file', 'review-changes', 'review-all-changes', 'review-pr', 'scan-app', 'sync-review-templates'].includes(participant);
             const shouldStream = participant === 'general' || isReviewMode;
             
             let response;
@@ -785,6 +785,7 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
         
         if (lowerMessage.includes('@review-file')) return 'review-file';
         if (lowerMessage.includes('@review-changes')) return 'review-changes';  
+        if (lowerMessage.includes('@review-all-changes')) return 'review-all-changes';
         if (lowerMessage.includes('@review-pr')) return 'review-pr';
         if (lowerMessage.includes('@sync-review-templates')) return 'sync-review-templates';
         if (lowerMessage.includes('@scan-app')) return 'scan-app';
@@ -2732,6 +2733,21 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
                         return '❌ **Error**: ' + error.message + '\n\nPlease check the console for details.';
                     }
 
+                case 'review-all-changes':  
+                    try {
+                        console.log('🔍 AIDA Chat: Calling review-all-changes with streaming');
+                        
+                        // Ensure AIDA templates exist before review (like Copilot does)
+                        await this.ensureAidaTemplatesExist();
+                        
+                        const reviewAllChangesModule = require('../review-all-changes.js');
+                        await reviewAllChangesModule.aiReviewAllChanges(messageWithoutParticipant, mockStream, null, this.context);
+                        return result || '✅ **All Changes Review Complete**\n\nWorkspace git changes analysis completed.';
+                    } catch (error) {
+                        console.error('❌ AIDA Chat review-all-changes error:', error);
+                        return '❌ **Error**: ' + error.message + '\n\nPlease check the console for details.';
+                    }
+
                 case 'review-pr':
                     try {
                         console.log('🔄 AIDA Chat: Calling review-pr with streaming');
@@ -2824,6 +2840,7 @@ Xin chào! Tôi là AIDA, trợ lý AI chuyên về lập trình.
 **Commands đặc biệt:**
 - \`@review-file\` - Review file hiện tại
 - \`@review-changes\` - Phân tích git changes
+- \`@review-all-changes\` - Phân tích TẤT CẢ git changes trong workspace
 - \`@review-pr\` - Review pull request  
 - \`@sync-review-templates\` - Sync templates
 
@@ -2842,6 +2859,7 @@ Hello! I'm AIDA, your AI coding assistant.
 **Special Commands:**
 - \`@review-file\` - Review current file
 - \`@review-changes\` - Analyze git changes
+- \`@review-all-changes\` - Analyze ALL git changes in workspace
 - \`@review-pr\` - Review pull request
 - \`@sync-review-templates\` - Sync templates
 
@@ -3318,7 +3336,7 @@ class AidaChatViewProvider {
                                     }
                                     
                                     syncResult += '**Total:** ' + extLanguages.length + ' language templates available\n\n';
-                                    syncResult += '---\n\n💡 **Tip:** Use `@review-file` or `@review-changes` to start reviewing with templates\n';
+                                    syncResult += '---\n\n💡 **Tip:** Use `@review-file`, `@review-changes`, or `@review-all-changes` to start reviewing with templates\n';
                                 } else {
                                     syncResult += '⚠️ **Extension templates not found**\n';
                                 }

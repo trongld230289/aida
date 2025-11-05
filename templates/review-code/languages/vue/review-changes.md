@@ -45,6 +45,8 @@ You are performing a STRICT code review on Vue git changes. Do NOT be lenient. L
 
 {{REVIEW_BASE}}
 
+## 📄 File: [ACTUAL_FILENAME_FROM_DIFF]
+
 ### 🚨 SPECIFIC PROJECT RULES:
 <!-- ADD PROJECT-SPECIFIC RULES HERE - These will be checked alongside Vue rules -->
 <!-- Additional project rules can be added here:

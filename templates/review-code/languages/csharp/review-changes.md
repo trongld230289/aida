@@ -45,6 +45,8 @@ You are performing a STRICT code review on C# git changes. Do NOT be lenient. Lo
 
 {{REVIEW_BASE}}
 
+## 📄 File: [ACTUAL_FILENAME_FROM_DIFF]
+
 ### Start Review For Each Change:
 
 ```

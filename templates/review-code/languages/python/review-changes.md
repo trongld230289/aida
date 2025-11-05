@@ -45,6 +45,8 @@ You are performing a STRICT code review on Python git changes. Do NOT be lenient
 
 {{REVIEW_BASE}}
 
+## 📄 File: [ACTUAL_FILENAME_FROM_DIFF]
+
 ### Start Review For Each Change:
 
 ```

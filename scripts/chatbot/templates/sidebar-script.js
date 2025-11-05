@@ -27,6 +27,7 @@ let currentFileContext = null; // Track current file context
 const participants = [
     { name: '@review-file', icon: '📁', description: 'Review current opening file or specify file path' },
     { name: '@review-changes', icon: '🔍', description: 'Review changes for current opening file or specify file path' },
+    { name: '@review-all-changes', icon: '🔍', description: 'Review ALL git changes in workspace (all modified files)' },
     { name: '@review-pr', icon: '🔄', description: 'Review Pull Request by URL' },
     { name: '@sync-review-templates', icon: '⚙️', description: 'Sync AIDA review templates to workspace' },
     { name: '@scan-app', icon: '🤖', description: 'AI-powered code scanning and duplicate detection' },

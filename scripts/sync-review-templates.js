@@ -57,7 +57,7 @@ function initializeSyncTemplates(context) {
 
             await displayTemplateSummary(stream, workspaceAidaPath);
             stream.markdown('---\n\n');
-            stream.markdown('💡 **Tip:** Use `@review-file` or `@review-changes` to start reviewing with templates\n\n');
+            stream.markdown('💡 **Tip:** Use `@review-file`, `@review-changes`, or `@review-all-changes` to start reviewing with templates\n\n');
 
         } catch (error) {
             console.error('❌ Error in sync-review-templates:', error);

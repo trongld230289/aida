@@ -456,6 +456,7 @@ Tôi có thể giúp bạn với câu hỏi về "${message}".
 **Hoặc thử các lệnh đặc biệt:**
 - \`@review-file\` - Review file code
 - \`@review-changes\` - Phân tích thay đổi
+- \`@review-all-changes\` - Phân tích TẤT CẢ thay đổi trong workspace
 - \`@review-pr\` - Review pull request
 
 Hãy cho tôi thêm chi tiết nhé! 💻`;
@@ -472,6 +473,7 @@ I can help you with your question about "${message}".
 **Or try special commands:**
 - \`@review-file\` - Review current file
 - \`@review-changes\` - Analyze changes
+- \`@review-all-changes\` - Analyze ALL changes in workspace
 - \`@review-pr\` - Review pull request
 
 Please provide more details! 💻`;
@@ -540,6 +542,7 @@ ${greeting}
 **Commands đặc biệt:**
 - \`@review-file\` - Review file hiện tại
 - \`@review-changes\` - Phân tích git changes
+- \`@review-all-changes\` - Phân tích TẤT CẢ git changes
 - \`@review-pr\` - Review pull request
 
 Bạn đang code gì thú vị vậy? 🚀`;
@@ -559,6 +562,7 @@ ${greeting}
 **Special Commands:**
 - \`@review-file\` - Review current file
 - \`@review-changes\` - Analyze git changes
+- \`@review-all-changes\` - Analyze ALL git changes
 - \`@review-pr\` - Review pull request
 
 What interesting project are you working on? 🚀`;
