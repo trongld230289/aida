@@ -291,7 +291,13 @@
     "vscode:prepublish": "echo 'Extension ready for packaging'",
     "test": "echo 'Extension test placeholder'"
   },
-  "dependencies": {},
+  "dependencies": {
+    "franc": "^6.2.0",
+    "lru-cache": "^10.4.3",
+    "natural": "^6.12.0",
+    "string-similarity": "^4.0.4",
+    "tesseract.js": "^6.0.1"
+  },
   "devDependencies": {
     "@types/vscode": "^1.80.0",
     "@vscode/vsce": "^2.19.0"

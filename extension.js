@@ -135,13 +135,13 @@ function activate(context) {
     // Initialize Copilot-Style Sidebar Chat (True GitHub Copilot Experience)
     let copilotSidebarChat = null;
     try {
-        console.log('🔄 Initializing AIDA Copilot Sidebar Chat...');
-        const sidebarChatModule = require('./scripts/chatbot/copilot-sidebar-chat.js');
+        console.log('🔄 Initializing AIDA Chatbot Sidebar...');
+        const sidebarChatModule = require('./scripts/chatbot/chatbot-sidebar.js');
         const sidebarResult = sidebarChatModule.initializeCopilotSidebarChat(context);
         copilotSidebarChat = sidebarResult?.sidebarChat;
-        console.log('✅ AIDA Copilot Sidebar Chat initialized successfully');
+        console.log('✅ AIDA Chatbot Sidebar initialized successfully');
     } catch (error) {
-        console.error('❌ Failed to initialize AIDA Copilot Sidebar Chat:', error);
+        console.error('❌ Failed to initialize AIDA Chatbot Sidebar:', error);
         console.error('❌ Error details:', error.stack);
     }
 

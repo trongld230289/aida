@@ -4,6 +4,9 @@
  * Similar to GitHub Copilot's sophisticated context detection
  */
 
+// Import the new context detector
+const ContextDetector = require('./context-detector');
+
 class ChatbotContextEngine {
     constructor() {
         this.initialized = false;
@@ -12,6 +15,50 @@ class ChatbotContextEngine {
         this.languageDetector = new LanguageDetector();
         this.semanticAnalyzer = new SemanticAnalyzer();
         this.contextScorer = new ContextRelevanceScorer();
+        
+        // Initialize the new context detector
+        this.contextDetector = new ContextDetector();
+    }
+
+    /**
+     * NEW: Enhanced shouldIncludeContent method using the new detector
+     * @param {string} userMessage - User's message
+     * @param {Object} editorContext - Editor context object
+     * @returns {Object} Decision result with confidence score and reasoning
+     */
+    shouldIncludeContent(userMessage, editorContext = {}) {
+        try {
+            // Use the new context detector
+            const decision = this.contextDetector.shouldIncludeContent(userMessage, editorContext);
+            
+            console.log('🔍 Context Detection Result:', {
+                message: userMessage.substring(0, 50) + (userMessage.length > 50 ? '...' : ''),
+                includeContent: decision.includeContent,
+                confidence: decision.confidence,
+                method: decision.method,
+                language: decision.language,
+                reasons: decision.reasons
+            });
+            
+            return decision;
+        } catch (error) {
+            console.error('❌ Context detection error:', error);
+            // Fallback to conservative approach
+            return {
+                includeContent: !!editorContext.selectedText, // Include content only if text is selected
+                confidence: 50,
+                reasons: ['Fallback due to error: ' + error.message],
+                language: 'en',
+                method: 'fallback'
+            };
+        }
+    }
+
+    /**
+     * Get performance report from context detector
+     */
+    getContextDetectorReport() {
+        return this.contextDetector.getPerformanceReport();
     }
 
     /**
@@ -1269,4 +1316,7 @@ class ContextRelevanceScorer {
     }
 }
 
-module.exports = { ChatbotContextEngine };
+module.exports = { 
+    ChatbotContextEngine,
+    ContextDetector 
+};

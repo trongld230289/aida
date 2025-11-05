@@ -1,6 +1,6 @@
 const vscode = require('vscode');
 const path = require('path');
-const { AidaChatbotService } = require('./aida-chatbot-service.js');
+const { AidaChatbotService } = require('./chatbot-service.js');
 const { ChatbotContextEngine } = require('./chatbot-algorithm.js');
 const TemplateLoader = require('./template-loader');
 const { setGlobalAbortSignal } = require('../review-common');
@@ -3578,7 +3578,7 @@ class AidaChatViewProvider {
 }
 
 /**
- * Initialize Copilot Sidebar Chat (True GitHub Copilot Experience)
+ * Initialize Chatbot Sidebar (True GitHub Copilot Experience)
  */
 function initializeCopilotSidebarChat(context) {
     try {
@@ -3590,7 +3590,7 @@ function initializeCopilotSidebarChat(context) {
             sidebarChat.show();
         });
 
-        console.log('✅ AIDA Copilot Sidebar Chat initialized');
+        console.log('✅ AIDA Chatbot Sidebar initialized');
         
         return {
             sidebarChat,
@@ -3599,7 +3599,7 @@ function initializeCopilotSidebarChat(context) {
         };
 
     } catch (error) {
-        console.error('❌ Failed to initialize Copilot Sidebar Chat:', error);
+        console.error('❌ Failed to initialize Chatbot Sidebar:', error);
         return null;
     }
 }

@@ -1,4 +1,3 @@
-
 const fs = require('fs').promises;
 const path = require('path');
 const { detectProvider, callAI, mapProviderResponse } = require('../review-common');
