@@ -67,7 +67,7 @@ If this works, AIDA is functioning correctly.
 
 3. **Manual Installation**
    ```bash
-   code --install-extension aida-dev-1.0.6.vsix
+   code --install-extension aida-dev-1.0.8.vsix
    ```
 
 4. **Network Issues**
@@ -562,7 +562,7 @@ If this works, AIDA is functioning correctly.
 When reporting issues, include:
 
 ```
-**AIDA Version**: 1.0.6
+**AIDA Version**: 1.0.8
 **VS Code Version**: 1.90.0
 **Operating System**: Windows 11 / macOS 14 / Ubuntu 22.04
 **AI Provider**: OpenAI / Claude / Copilot

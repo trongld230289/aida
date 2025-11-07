@@ -100,24 +100,38 @@ function initializeReviewChanges(context) {
 
 // HELPER: Get target file information from input
 function getTargetFileInfo(input) {
-    // Check if input contains file path indicators
-    const isFilePath = input && (
-        input.includes('.ts') || input.includes('.js') || 
-        input.includes('.html') || input.includes('.css') || 
-        input.includes('/') || input.includes('\\')
-    );
-    
-    if (isFilePath) {
+    // Handle VS Code URI object (from Source Control context menu)
+    if (input && typeof input === 'object' && input.fsPath) {
         return {
             type: 'file',
-            path: input.trim(),
-            source: 'input'
+            path: input.fsPath,
+            source: 'uri'
         };
     }
     
-    // Get current editor file
+    // Handle string input (file path)
+    if (typeof input === 'string') {
+        // Check if input contains file path indicators
+        const isFilePath = input && (
+            input.includes('.ts') || input.includes('.js') || 
+            input.includes('.html') || input.includes('.css') || 
+            input.includes('/') || input.includes('\\')
+        );
+        
+        if (isFilePath) {
+            console.log('🐛 DEBUG - String file path detected:', input);
+            return {
+                type: 'file',
+                path: input.trim(),
+                source: 'input'
+            };
+        }
+    }
+    
+    // Get current editor file as fallback
     const activeEditor = vscode.window.activeTextEditor;
     if (activeEditor) {
+        console.log('🐛 DEBUG - Using active editor:', activeEditor.document.fileName);
         return {
             type: 'file',
             path: activeEditor.document.fileName,
@@ -125,6 +139,7 @@ function getTargetFileInfo(input) {
         };
     }
     
+    console.log('🐛 DEBUG - No file detected, using workspace');
     return {
         type: 'workspace',
         path: null,
@@ -230,22 +245,53 @@ async function getGitDiffForTarget(targetInfo, workspaceFolder) {
 }
 
 // HELPER: Handle scenario when no changes found
-async function handleNoChangesScenario(stream, selectedModel, context, message) {
+async function handleNoChangesScenario(stream, selectedModel, context, message, requestedFilePath = null) {
     stream.markdown(`✅ **${message}**\n\n`);
     
-    // Offer to review active file instead
-    const activeEditor = vscode.window.activeTextEditor;
-    if (activeEditor) {
-        const fileName = path.basename(activeEditor.document.fileName);
-        stream.markdown(`💡 **Would you like to review the active file?**\n`);
-        stream.markdown(`📂 **Current file:** \`${fileName}\`\n\n`);
+    // Try to offer review of the originally requested file if available
+    let targetFilePath = null;
+    let fileName = null;
+    
+    if (requestedFilePath) {
+        // Use the requested file path
+        targetFilePath = requestedFilePath;
+        fileName = path.basename(requestedFilePath);
+        
+        console.log('🐛 DEBUG - Using requested file:', fileName);
+        
+        stream.markdown(`💡 **Would you like to review the requested file?**\n`);
+        stream.markdown(`📂 **Requested file:** \`${fileName}\`\n\n`);
         
         // Create button for confirming file review
         stream.button({
             command: 'aida.confirmFileReview',
             title: `✅ Yes, review file ${fileName}`,
-            arguments: [activeEditor.document.fileName]
+            arguments: [targetFilePath]
         });
+    } else {
+        // Fallback to active file if no requested file
+        console.log('🐛 DEBUG - No requestedFilePath, falling back to active editor');
+        
+        const activeEditor = vscode.window.activeTextEditor;
+        if (activeEditor) {
+            targetFilePath = activeEditor.document.fileName;
+            fileName = path.basename(activeEditor.document.fileName);
+            
+            console.log('🐛 DEBUG - Using active file:', fileName);
+            
+            stream.markdown(`💡 **Would you like to review the active file?**\n`);
+            stream.markdown(`📂 **Current file:** \`${fileName}\`\n\n`);
+            
+            // Create button for confirming file review
+            stream.button({
+                command: 'aida.confirmFileReview',
+                title: `✅ Yes, review file ${fileName}`,
+                arguments: [targetFilePath]
+            });
+        }
+    }
+    
+    if (targetFilePath) {
         
         stream.markdown('\n');
         
@@ -296,8 +342,8 @@ async function aiReviewChanges(input, stream, selectedModel = null, context = nu
         const diffResult = await getGitDiffForTarget(targetInfo, workspaceFolder);
         
         if (!diffResult.success) {
-            // Handle no changes scenario
-            await handleNoChangesScenario(stream, selectedModel, context, diffResult.message);
+            // Handle no changes scenario - pass the requested file path
+            await handleNoChangesScenario(stream, selectedModel, context, diffResult.message, targetInfo.path);
             return;
         }
 

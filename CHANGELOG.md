@@ -2,8 +2,67 @@
 
 All notable changes to **AIDA - AI Development Assistant** will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.6/),
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.12/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.0.12] - 2025-11-06
+
+### 🎨 UI/UX Improvements & Code Cleanup
+
+#### 🔧 Changed
+- **📋 Context Menu Order**: Reordered context menus to show "Review Changes" before "Review File"
+- **🧹 Code Cleanup**: Removed debug console logs from review changes functionality
+- **📂 Source Control UX**: Fixed file suggestion to show correct requested file instead of currently opened file
+- **🎯 Menu Grouping**: Improved menu positioning for better user experience
+
+#### 🐛 Fixed
+- **📄 File Detection**: Fixed issue where "Review Changes" suggested wrong file in no-changes scenarios
+- **🔄 Menu Structure**: Cleaned up editor context menu by removing redundant "Review All Changes"
+
+## [1.0.11] - 2025-11-06
+
+### 🐛 Bug Fixes & Stability Improvements
+
+#### 🔧 Fixed
+- **🎭 Monaco Editor**: Fixed Monaco Editor loading issues in PR review feature
+- **📦 Package Dependencies**: Added proper Monaco Editor files inclusion in package
+- **⚠️ Error Handling**: Enhanced error handling with fallback views for Monaco Editor failures
+- **🔄 Webpack Configuration**: Improved external dependencies handling for better compatibility
+
+#### 🔧 Changed
+- **📊 Presentation**: Added detailed ROI calculation formulas with VN market rates ($20-30/hour)
+- **📋 Package Structure**: Updated file inclusion patterns for better extension packaging
+
+## [1.0.10] - 2025-11-06
+
+### ✨ Minor Updates & Improvements
+
+#### 🔧 Changed
+- **📊 Presentation Updates**: Enhanced AIDA presentation with improved navigation and content
+- **🎨 UI Improvements**: Better styling and visual consistency across components
+- **📝 Documentation**: Updated presentation materials and roadmap timeline
+
+---
+
+## [1.0.9] - 2025-11-06
+
+### ✨ New Features & Template Updates
+
+#### 🚀 Added
+- **🔍 @review-all-changes**: New command to review ALL git changes in workspace at once
+  - Uses same `review-changes.md` template as `@review-changes`
+  - Automatically filters out config files (.gitignore, package-lock.json, .env, etc.)
+  - Available in GitHub Copilot Chat, AIDA Chatbot, Command Palette (Ctrl+Shift+P), and Context Menu
+  - Single API call optimization combining all diffs for efficiency
+  - Full streaming support in AIDA chatbot sidebar
+
+#### 🔧 Enhanced
+- **📋 Review Templates**: Updated all review templates with improved analysis patterns
+- **🎯 Command Integration**: Added @review-all-changes to all access points:
+  - GitHub Copilot Chat: `@review-all-changes`
+  - AIDA Chatbot: `@review-all-changes` with streaming
+  - Command Palette: "AIDA: Review All Changes"
+  - Right-click Context Menu: "AIDA: Review All Changes"
 
 ## [1.0.6] - 2025-10-31
 

@@ -2,7 +2,7 @@
   "name": "aida-dev",
   "displayName": "AIDA - AI Development Assistant",
   "description": "Advanced AI Development Assistant with intelligent code review, PR analysis, project scanning, and AIDA Chatbot. Use your own AI API (OpenAI/Claude) or GitHub Copilot. Complete development workflows for TypeScript, JavaScript, Python, C#, and more.",
-  "version": "1.0.6",
+  "version": "1.0.13",
   "publisher": "trongld232",
   "icon": "icons/extension-icon.png",
   "author": {
@@ -25,25 +25,8 @@
     "development assistant",
     "code review",
     "copilot",
-    "chat participant",
-    "openai api",
-    "claude api",
-    "anthropic",
     "intelligent analysis",
-    "typescript",
-    "javascript",
-    "python",
-    "csharp",
-    "git",
-    "diff",
-    "project scanner",
-    "pull request",
-    "azure devops",
-    "github",
-    "gitlab",
-    "claude",
-    "gpt",
-    "no copilot needed"
+    "project scanner"
   ],
   "engines": {
     "vscode": "^1.90.0"
@@ -60,7 +43,21 @@
   "activationEvents": [
     "onStartupFinished"
   ],
-  "main": "./extension.js",
+  "main": "./dist/extension.js",
+  "files": [
+    "dist/**/*",
+    "icons/**/*",
+    "templates/**/*",
+    "docs/**/*",
+    "documents/**/*",
+    "scripts/**/*",
+    "node_modules/monaco-editor/min/**/*",
+    "*.md",
+    "LICENSE.txt",
+    "*.png",
+    "*.jpg",
+    "*.html"
+  ],
   "contributes": {
     "commands": [
       {
@@ -74,6 +71,11 @@
         "category": "AIDA"
       },
       {
+        "command": "aida.reviewAllChanges",
+        "title": "Review All Changes",
+        "category": "AIDA"
+      },
+      {
         "command": "aida.reviewPullRequest",
         "title": "Review Pull Request",
         "category": "AIDA"
@@ -81,17 +83,23 @@
       {
         "command": "aida.setupAzureDevOps",
         "title": "Setup Azure DevOps Token",
-        "category": "AIDA"
+        "category": "AIDA",
+        "icon": "$(key)"
       },
       {
         "command": "aida.showAvailableModels",
         "title": "Show Available Language Models",
-        "category": "AIDA"
+        "category": "AIDA",
+        "icon": "$(library)"
       },
       {
         "command": "aida.openChat",
         "title": "Open AIDA Chat",
-        "category": "AIDA"
+        "category": "AIDA",
+        "icon": {
+          "light": "./icons/extension-icon.svg",
+          "dark": "./icons/extension-icon.svg"
+        }
       },
       {
         "command": "aida.openSidebarChat",
@@ -128,26 +136,38 @@
     "menus": {
       "editor/context": [
         {
-          "command": "aida.reviewFile",
-          "group": "navigation@1",
+          "command": "aida.reviewChanges",
+          "group": "z_commands@1",
           "when": "editorTextFocus"
         },
         {
-          "command": "aida.reviewChanges",
-          "group": "navigation@2",
+          "command": "aida.reviewFile",
+          "group": "z_commands@2",
           "when": "editorTextFocus"
         }
       ],
       "explorer/context": [
         {
-          "command": "aida.reviewFile",
+          "command": "aida.reviewChanges",
           "group": "navigation@1",
           "when": "resourceExtname =~ /\\.(ts|js|tsx|jsx|html|htm|css|scss|less|py|java|cs|cpp|c|php|rb|go|rs|kt|swift)$/"
         },
         {
-          "command": "aida.reviewChanges",
+          "command": "aida.reviewFile",
           "group": "navigation@2",
           "when": "resourceExtname =~ /\\.(ts|js|tsx|jsx|html|htm|css|scss|less|py|java|cs|cpp|c|php|rb|go|rs|kt|swift)$/"
+        }
+      ],
+      "scm/resourceState/context": [
+        {
+          "command": "aida.reviewChanges",
+          "group": "aida@1",
+          "when": "scmResourceGroup == workingTree || scmResourceGroup == index"
+        },
+        {
+          "command": "aida.reviewFile",
+          "group": "aida@2",
+          "when": "scmResourceGroup == workingTree || scmResourceGroup == index"
         }
       ],
       "view/title": [
@@ -239,7 +259,6 @@
           "type": "webview",
           "id": "aidaChatSidebar",
           "name": "AIDA Chat",
-          "when": "true",
           "icon": "$(comment-discussion)"
         }
       ]
@@ -249,8 +268,7 @@
         {
           "id": "aidaChatContainer",
           "title": "AIDA Chat",
-          "icon": "$(comment-discussion)",
-          "when": "false"
+          "icon": "$(comment-discussion)"
         }
       ]
     },
@@ -294,18 +312,30 @@
     ]
   },
   "scripts": {
-    "vscode:prepublish": "echo 'Extension ready for packaging'",
-    "test": "echo 'Extension test placeholder'"
+    "vscode:prepublish": "webpack --mode production",
+    "test": "echo 'Extension test placeholder'",
+    "build": "webpack --mode production",
+    "build:dev": "webpack --mode development",
+    "webpack": "webpack --mode development --watch",
+    "package": "vsce package"
   },
   "dependencies": {
+    "@vscode/vscode-languagedetection": "^1.0.22",
+    "diff": "^5.2.0",
     "franc": "^6.2.0",
     "lru-cache": "^10.4.3",
+    "monaco-editor": "^0.52.0",
     "natural": "^6.12.0",
     "string-similarity": "^4.0.4",
     "tesseract.js": "^6.0.1"
   },
   "devDependencies": {
     "@types/vscode": "^1.80.0",
-    "@vscode/vsce": "^2.19.0"
+    "@vscode/vsce": "^2.19.0",
+    "copy-webpack-plugin": "^13.0.1",
+    "ts-loader": "^9.5.4",
+    "typescript": "^5.9.3",
+    "webpack": "^5.102.1",
+    "webpack-cli": "^6.0.1"
   }
 }

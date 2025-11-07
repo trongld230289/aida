@@ -118,18 +118,13 @@ async function getPRReviewTemplate(templateType, prData) {
     }
 }
 
-// Try to require diff package with fallback to bundled version
+// Try to require diff package with fallback
 let Diff;
 try {
-    // First try the bundled diff in extension directory
-    if (global.extensionPath) {
-        Diff = require(path.join(global.extensionPath, 'diff'));
-    } else {
-        // Fallback to relative path from current directory
-        Diff = require('../diff');
-    }
+    // Use npm installed diff package
+    Diff = require('diff');
 } catch (error) {
-    console.warn('⚠️ Bundled diff not available, using fallback diff functionality');
+    console.warn('⚠️ diff package not available, using fallback diff functionality');
     // Create a simple fallback for basic diff functionality
     Diff = {
         createPatch: (fileName, oldStr, newStr) => {

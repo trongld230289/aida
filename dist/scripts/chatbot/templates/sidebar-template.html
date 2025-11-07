@@ -1,0 +1,1114 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+    <title>AIDA Chat</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/typescript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/csharp.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js"></script>
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/vs2015.min.css">
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: var(--vscode-font-family);
+        font-size: var(--vscode-font-size);
+        background-color: var(--vscode-sideBar-background);
+        color: var(--vscode-sideBar-foreground);
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      /* Chat Header */
+      .chat-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--vscode-widget-border);
+        background-color: var(--vscode-sideBar-background);
+        min-height: 40px;
+      }
+
+      .header-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 600;
+        font-size: 13px;
+        color: var(--vscode-sideBar-foreground);
+      }
+
+      .header-icon {
+        font-size: 16px;
+      }
+
+      .header-actions {
+        display: flex;
+        gap: 4px;
+      }
+
+      .header-btn {
+        background: none;
+        border: none;
+        color: var(--vscode-icon-foreground);
+        cursor: pointer;
+        padding: 4px 6px;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background-color 0.1s ease;
+        font-size: 14px;
+      }
+
+      .header-btn:hover {
+        background-color: var(--vscode-toolbar-hoverBackground);
+      }
+
+      .header-btn:active {
+        background-color: var(--vscode-toolbar-activeBackground);
+      }
+
+      /* GitHub Copilot Flat UI Design */
+      .chat-container {
+        flex: 1;
+        overflow-y: auto;
+        padding: 16px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      .message {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding-bottom: 16px;
+        position: relative;
+      }
+
+      /* GitHub Copilot style separator - very subtle */
+      .message:not(:last-child)::after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 12px;
+        right: 12px;
+        height: 1px;
+        background: var(--vscode-widget-border);
+        opacity: 0.1;
+      }
+
+      /* GitHub Copilot separator - very light line with flag */
+      .conversation-starter {
+        margin-top: 16px;
+        padding-top: 12px;
+        border-top: 1px solid var(--vscode-widget-border);
+        border-top-color: rgba(128, 128, 128, 0.15);
+        position: relative;
+      }
+
+      /* Simple flag for regular separators */
+      .conversation-starter::before {
+        content: '🏁';
+        position: absolute;
+        top: -8px;
+        left: 8px;
+        background: var(--vscode-sideBar-background);
+        padding: 0 4px;
+        font-size: 10px;
+        opacity: 0.6;
+      }
+
+      /* "New Conversation" text only for truly new conversations */
+      .conversation-starter.truly-new-conversation::before {
+        content: '💬 New Conversation';
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 0 8px;
+        font-size: 10px;
+        color: var(--vscode-descriptionForeground);
+        font-weight: 500;
+        opacity: 0.8;
+      }
+
+      .message-meta {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--vscode-foreground);
+        margin-bottom: 4px;
+      }
+
+      .msg-avatar {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        font-weight: 600;
+        flex-shrink: 0;
+      }
+
+      .message.user .msg-avatar {
+        background-color: var(--vscode-button-background);
+        color: var(--vscode-button-foreground);
+      }
+
+      .message.assistant .msg-avatar {
+        background: linear-gradient(135deg, #7c3aed 0%, #3b82f6 100%);
+        color: white;
+      }
+
+      /* Flat message design like GitHub Copilot */
+      .message-body {
+        margin-left: 0;
+        padding: 0;
+        font-size: 12px;
+        line-height: 1.4;
+        word-wrap: break-word;
+        word-break: break-word;
+        color: var(--vscode-foreground);
+      }
+
+      .message-body hr {
+        border-color: #ffffff2e;
+        margin: 2px 0;
+      }
+
+      .message.user .message-body {
+        padding: 0px 12px;
+        margin-left: 28px;
+        background-color: var(--vscode-chat-requestBubbleBackground);
+        border-radius: 6px;
+        color: var(--vscode-foreground);
+        opacity: 0.95;
+      }
+
+      .message.user .message-body:hover {
+        background-color: var(--vscode-chat-requestBubbleHoverBackground);
+      }
+
+      .message.assistant .message-body {
+        color: var(--vscode-foreground);
+      }
+
+      /* GitHub Copilot Code Styling with Syntax Highlighting */
+      .message-body pre {
+        background-color: var(--vscode-editor-background);
+        border: 1px solid var(--vscode-panel-border);
+        border-radius: 4px;
+        padding: 8px 10px;
+        margin: 6px 0;
+        overflow-x: auto;
+        font-family: var(--vscode-editor-font-family);
+        font-size: 11px;
+        line-height: 1.3;
+        position: relative;
+      }
+
+      .message-body pre code {
+        background: none !important;
+        padding: 0 !important;
+        border-radius: 0 !important;
+        font-family: var(--vscode-editor-font-family);
+        font-size: 11px;
+        color: var(--vscode-editor-foreground);
+      }
+
+      .message-body code:not(pre code) {
+        background-color: var(--vscode-textCodeBlock-background);
+        padding: 1px 4px;
+        border-radius: 3px;
+        font-family: var(--vscode-editor-font-family);
+        font-size: 11px;
+        color: var(--vscode-textPreformat-foreground);
+      }
+
+      /* Highlight.js theme override for VS Code */
+      .hljs {
+        background: transparent !important;
+        color: var(--vscode-editor-foreground) !important;
+      }
+
+      /* Markdown elements styling - GitHub Copilot size */
+      .message-body h1,
+      .message-body h2,
+      .message-body h3,
+      .message-body h4 {
+        margin: 8px 0 6px 0;
+        font-weight: 600;
+        color: var(--vscode-foreground);
+      }
+
+      .message-body h1 {
+        font-size: 1.538em;
+      }
+
+      .message-body h2 {
+        font-size: 1.384em;
+      }
+
+      .message-body h3 {
+        font-size: 1.157em;
+      }
+
+      .message-body h4 {
+        font-size: 1em;
+        padding: 4px 0;
+      }
+
+      .message-body p {
+        margin: 8px 0;
+        line-height: 1.5;
+      }
+
+      /* Copy button for code blocks - GitHub Copilot style */
+      .code-copy-btn {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        background-color: var(--vscode-button-background);
+        color: var(--vscode-button-foreground);
+        border: 1px solid var(--vscode-button-border);
+        border-radius: 3px;
+        padding: 4px 8px;
+        font-size: 10px;
+        cursor: pointer;
+        opacity: 0;
+        transform: translateY(-2px);
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        z-index: 100;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-family: var(--vscode-font-family);
+        white-space: nowrap;
+        min-width: 60px;
+        justify-content: center;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        backdrop-filter: blur(4px);
+        -webkit-backdrop-filter: blur(4px);
+      }
+
+      /* Always show copy button on hover with smooth animation */
+      .message-body pre:hover .code-copy-btn,
+      .code-copy-btn:hover,
+      .code-copy-btn:focus,
+      .code-copy-btn.copied {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      .code-copy-btn:hover {
+        background-color: var(--vscode-button-hoverBackground);
+        transform: translateY(0) scale(1.02);
+      }
+
+      .code-copy-btn:active {
+        background-color: var(--vscode-button-background);
+        transform: translateY(1px) scale(0.98);
+      }
+
+      .code-copy-btn.copied {
+        background-color: var(--vscode-testing-iconPassed);
+        color: white;
+        transform: translateY(0) scale(1.05);
+      }
+
+      /* Ensure copy button is always accessible on mobile/touch */
+      @media (hover: none) {
+        .code-copy-btn {
+          opacity: 0.7;
+          transform: translateY(0);
+        }
+
+        .message-body pre .code-copy-btn {
+          opacity: 0.8;
+        }
+      }
+
+      /* Pre element should have relative positioning for absolute button */
+      .message-body pre {
+        position: relative;
+      }
+
+      /* File diff buttons like GitHub Copilot */
+      .file-diff-btn {
+        background-color: var(--vscode-button-background);
+        color: var(--vscode-button-foreground);
+        border: 1px solid var(--vscode-button-border);
+        border-radius: 3px;
+        padding: 6px 8px;
+        font-size: 12px;
+        cursor: pointer;
+        margin: 2px 4px 5px 0;
+        display: inline-block;
+        vertical-align: middle;
+        transition: background-color 0.1s;
+      }
+
+      .file-diff-btn:hover {
+        background-color: var(--vscode-button-hoverBackground);
+      }
+
+      .file-diff-btn:active {
+        background-color: var(--vscode-button-background);
+        transform: translateY(1px);
+      }
+
+      .button-placeholder {
+        font-weight: bold;
+        color: var(--vscode-textLink-foreground);
+        text-decoration: underline;
+        cursor: pointer;
+      }
+
+      .message-body ul,
+      .message-body ol {
+        margin: 8px 0;
+        padding-left: 20px;
+      }
+
+      .message-body li {
+        margin: 4px 0;
+      }
+
+      .message-body blockquote {
+        border-left: 3px solid var(--vscode-textLink-foreground);
+        padding-left: 12px;
+        margin: 8px 0;
+        font-style: italic;
+        opacity: 0.8;
+      }
+
+      /* Input area - sidebar optimized */
+      /* GitHub Copilot Input Area - Flat Design */
+      .input-area {
+        padding: 12px;
+        border-top: 1px solid var(--vscode-panel-border);
+        background-color: var(--vscode-sideBar-background);
+        flex-shrink: 0;
+      }
+
+      /* Current File Indicator - GitHub Copilot Style */
+      .current-file-indicator {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 6px;
+        background-color: var(--vscode-badge-background);
+        border: none;
+        border-radius: 12px;
+        margin-bottom: 6px;
+        font-size: 10px;
+        color: var(--vscode-badge-foreground);
+        max-width: fit-content;
+      }
+
+      .file-icon {
+        font-size: 10px;
+        flex-shrink: 0;
+        opacity: 0.8;
+      }
+
+      .file-info {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .file-name {
+        font-weight: 400;
+        color: var(--vscode-badge-foreground);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 120px;
+      }
+
+      .file-label {
+        display: none;
+        /* Hide label like Copilot */
+      }
+
+      .remove-file-btn {
+        width: 12px;
+        height: 12px;
+        border: none;
+        background: transparent;
+        color: var(--vscode-badge-foreground);
+        cursor: pointer;
+        border-radius: 2px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        flex-shrink: 0;
+        opacity: 0.7;
+        margin-left: 2px;
+      }
+
+      .remove-file-btn:hover {
+        opacity: 1;
+        background-color: rgba(255, 255, 255, 0.1);
+      }
+
+      /* Mode and Model selectors */
+      .chat-controls {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 8px;
+        gap: 8px;
+      }
+
+      .mode-selector {
+        display: flex;
+        background-color: var(--vscode-input-background);
+        border: 1px solid var(--vscode-input-border);
+        border-radius: 6px;
+        overflow: hidden;
+      }
+
+      .mode-button {
+        padding: 4px 12px;
+        border: none;
+        background: transparent;
+        color: var(--vscode-input-foreground);
+        font-size: 11px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .mode-button:hover {
+        background-color: var(--vscode-list-hoverBackground);
+      }
+
+      .mode-button.active {
+        background-color: var(--vscode-button-background);
+        color: var(--vscode-button-foreground);
+      }
+
+      .model-selector {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 8px;
+        background-color: var(--vscode-input-background);
+        border: 1px solid var(--vscode-input-border);
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 11px;
+        color: var(--vscode-input-foreground);
+        transition: all 0.2s;
+      }
+
+      .model-selector:hover {
+        background-color: var(--vscode-list-hoverBackground);
+      }
+
+      .model-icon {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #7c3aed 0%, #3b82f6 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 8px;
+        font-weight: bold;
+      }
+
+      .model-name {
+        font-weight: 500;
+      }
+
+      .model-status {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background-color: #22c55e;
+      }
+
+      /* Image attachments container - GitHub Copilot Style */
+      .attachments-container {
+        max-height: 60px;
+        overflow-y: auto;
+        margin-bottom: 6px;
+        display: none;
+        gap: 4px;
+      }
+
+      .attachments-container.has-attachments {
+        display: flex;
+        flex-wrap: wrap;
+      }
+
+      .image-attachment {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 3px 6px;
+        background-color: var(--vscode-badge-background);
+        border: none;
+        border-radius: 12px;
+        font-size: 10px;
+        color: var(--vscode-badge-foreground);
+        position: relative;
+        max-width: fit-content;
+      }
+
+      .image-attachment:hover {
+        cursor: pointer;
+      }
+
+      .image-preview {
+        width: 16px;
+        height: 16px;
+        border-radius: 2px;
+        overflow: hidden;
+        flex-shrink: 0;
+        position: relative;
+        cursor: pointer;
+      }
+
+      .image-preview img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+
+      .image-filename {
+        font-size: 10px;
+        color: var(--vscode-badge-foreground);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 80px;
+      }
+
+      .remove-image {
+        width: 12px;
+        height: 12px;
+        border: none;
+        background: none;
+        color: var(--vscode-badge-foreground);
+        cursor: pointer;
+        border-radius: 2px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        opacity: 0.7;
+        margin-left: 2px;
+      }
+
+      .remove-image:hover {
+        opacity: 1;
+        background-color: rgba(255, 255, 255, 0.1);
+      }
+
+      /* GitHub Copilot style image hover tooltip - smooth positioning */
+      .image-hover-tooltip {
+        position: fixed;
+        top: 0;
+        left: 0;
+        background-color: var(--vscode-editorHoverWidget-background);
+        border: 1px solid var(--vscode-editorHoverWidget-border);
+        border-radius: 6px;
+        padding: 8px;
+        z-index: 10000;
+        pointer-events: none;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.15s ease;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        max-width: 300px;
+        max-height: 250px;
+        font-size: 11px;
+        will-change: transform;
+      }
+
+      .image-hover-tooltip.visible {
+        opacity: 1;
+        visibility: visible;
+      }
+
+      .image-hover-tooltip img {
+        max-width: 280px;
+        max-height: 200px;
+        object-fit: contain;
+        border-radius: 3px;
+        display: block;
+      }
+
+      .image-hover-tooltip .tooltip-filename {
+        margin-top: 6px;
+        font-size: 10px;
+        color: var(--vscode-descriptionForeground);
+        text-align: center;
+        opacity: 0.9;
+        font-weight: 500;
+      }
+
+      .input-container {
+        position: relative;
+        display: flex;
+        align-items: flex-end;
+      }
+
+      .msg-input {
+        flex: 1;
+        min-height: 36px;
+        max-height: 120px;
+        height: 36px;
+        /* Default height */
+        padding: 9px 36px 9px 12px;
+        border: 2px solid var(--vscode-input-border);
+        border-radius: 3px;
+        background-color: var(--vscode-input-background);
+        color: var(--vscode-input-foreground);
+        font-size: 13px;
+        font-family: inherit;
+        resize: none;
+        outline: none;
+        overflow-y: auto;
+        transition: border-color 0.2s ease;
+        scrollbar-width: none;
+        /* Firefox */
+        -ms-overflow-style: none;
+        /* IE and Edge */
+      }
+
+      .msg-input::-webkit-scrollbar {
+        display: none;
+        /* Chrome, Safari, Opera */
+      }
+
+      .msg-input:focus {
+        border-color: var(--vscode-button-background);
+        box-shadow: 0 0 0 0 var(--vscode-button-background);
+      }
+
+      .msg-input::placeholder {
+        color: var(--vscode-input-placeholderForeground);
+        opacity: 0.7;
+      }
+
+      /* GitHub Copilot Send Button */
+      .send-btn {
+        position: absolute;
+        right: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 24px;
+        height: 24px;
+        border: none;
+        border-radius: 4px;
+        background-color: var(--vscode-button-background);
+        color: var(--vscode-button-foreground);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 9px;
+      }
+
+      .send-btn:hover:not(:disabled) {
+        background-color: var(--vscode-button-hoverBackground);
+      }
+
+      .send-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      /* GitHub Copilot Cancel Button */
+      .cancel-btn {
+        position: absolute;
+        right: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 26px;
+        height: 26px;
+        border: 1px solid var(--vscode-button-border);
+        border-radius: 13px;
+        /* Circle */
+        background-color: var(--vscode-button-secondaryBackground);
+        color: var(--vscode-errorForeground);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        transition: all 0.15s ease;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      }
+
+      .cancel-btn:hover {
+        background-color: var(--vscode-errorBackground);
+        color: var(--vscode-errorForeground);
+        border-color: var(--vscode-errorForeground);
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+        transform: translateY(-50%) scale(1.05);
+      }
+
+      .cancel-btn:active {
+        transform: translateY(-50%) scale(0.95);
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+      }
+
+      /* User message images display */
+      .message-images {
+        margin-top: 8px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .message-image {
+        max-width: 200px;
+        max-height: 150px;
+        border-radius: 4px;
+        border: 1px solid var(--vscode-widget-border);
+        cursor: pointer;
+        transition: transform 0.2s;
+      }
+
+      .message-image:hover {
+        transform: scale(1.05);
+      }
+
+      /* Typing indicator - old bottom style (keeping for compatibility) */
+      .typing {
+        display: none;
+        margin-left: 18px;
+        padding: 4px 8px;
+        color: var(--vscode-descriptionForeground);
+        font-size: 10px;
+        font-style: italic;
+      }
+
+      /* Inline typing indicator like GitHub Copilot */
+      .inline-typing {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--vscode-descriptionForeground);
+        font-size: 11px;
+        font-style: italic;
+        padding: 4px 0;
+      }
+
+      .typing.show {
+        display: block;
+      }
+
+      /* Streaming message styles */
+      .streaming-message .streaming-content {
+        position: relative;
+        /* Minimal optimization for smoother animation */
+        contain: layout;
+        will-change: auto;
+      }
+
+      .streaming-message .streaming-content::after {
+        content: '▋';
+        color: var(--vscode-button-background);
+        animation: blink 1s infinite;
+        margin-left: 1px;
+      }
+
+      /* Optimize chat container for smoother scrolling */
+      .chat-container {
+        /* Enable hardware acceleration for smooth scrolling */
+        transform: translateZ(0);
+        /* Better scroll performance */
+        scroll-behavior: smooth;
+      }
+
+      @keyframes blink {
+
+        0%,
+        50% {
+          opacity: 1;
+        }
+
+        51%,
+        100% {
+          opacity: 0;
+        }
+      }
+
+      .typing-dots {
+        display: inline-flex;
+        gap: 1px;
+        margin-left: 4px;
+      }
+
+      .typing-dot {
+        width: 2px;
+        height: 2px;
+        border-radius: 50%;
+        background-color: var(--vscode-descriptionForeground);
+        animation: typing 1.4s infinite ease-in-out;
+      }
+
+      .typing-dot:nth-child(1) {
+        animation-delay: -0.32s;
+      }
+
+      .typing-dot:nth-child(2) {
+        animation-delay: -0.16s;
+      }
+
+      @keyframes typing {
+
+        0%,
+        80%,
+        100% {
+          opacity: 0.3;
+        }
+
+        40% {
+          opacity: 1;
+        }
+      }
+
+      /* Empty state - sidebar optimized */
+      .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        text-align: center;
+        color: var(--vscode-descriptionForeground);
+        padding: 16px 8px;
+      }
+
+      .empty-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #7c3aed 0%, #3b82f6 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 24px;
+        margin-bottom: 12px;
+        box-shadow: 0 4px 16px rgba(124, 58, 237, 0.3);
+      }
+
+      .empty-state h3 {
+        font-size: 14px;
+        font-weight: 600;
+        margin-bottom: 6px;
+        color: var(--vscode-foreground);
+      }
+
+      .empty-state p {
+        font-size: 11px;
+        line-height: 1.4;
+      }
+
+      /* Scrollbar - thin for sidebar */
+      .chat-container::-webkit-scrollbar {
+        width: 4px;
+      }
+
+      .chat-container::-webkit-scrollbar-track {
+        background: transparent;
+      }
+
+      .chat-container::-webkit-scrollbar-thumb {
+        background-color: var(--vscode-scrollbarSlider-background);
+        border-radius: 2px;
+      }
+
+      .chat-container::-webkit-scrollbar-thumb:hover {
+        background-color: var(--vscode-scrollbarSlider-hoverBackground);
+      }
+
+      /* Auto-suggest dropdown for @ participants */
+      .participant-suggest {
+        position: absolute;
+        bottom: 100%;
+        left: 0;
+        right: 0;
+        background: var(--vscode-dropdown-background);
+        border: 1px solid var(--vscode-dropdown-border);
+        border-radius: 4px;
+        max-height: 200px;
+        overflow-y: auto;
+        z-index: 1000;
+        display: none;
+      }
+
+      .participant-item {
+        padding: 8px 12px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        border-bottom: 1px solid var(--vscode-widget-border);
+      }
+
+      .participant-item:last-child {
+        border-bottom: none;
+      }
+
+      .participant-item:hover,
+      .participant-item.selected {
+        background-color: var(--vscode-list-hoverBackground);
+      }
+
+      .participant-item.selected {
+        background-color: var(--vscode-list-activeSelectionBackground);
+      }
+
+      .participant-item.selected .participant-name,
+      .participant-item.selected .participant-description {
+        color: var(--vscode-list-activeSelectionForeground);
+      }
+
+      .participant-icon {
+        font-size: 14px;
+      }
+
+      .participant-name {
+        font-weight: 600;
+        color: var(--vscode-foreground);
+      }
+
+      .participant-description {
+        color: var(--vscode-descriptionForeground);
+        font-size: 11px;
+      }
+
+      /* Enhanced autocomplete styles */
+      .participant-item.auto-select-hint .participant-name {
+        color: var(--vscode-textLink-foreground);
+        font-weight: 600;
+      }
+
+      .auto-hint {
+        color: var(--vscode-button-foreground);
+        font-weight: 600;
+        font-style: italic;
+        opacity: 0.8;
+      }
+
+    </style>
+  </head>
+
+  <body>
+    <!-- Chat Header -->
+    <div class="chat-container"
+         id="chatContainer">
+      <div class="empty-state">
+        <div class="empty-icon">🤖</div>
+        <h3>Hi! I'm AIDA</h3>
+        <p>I can help you review code, analyze changes, and more!</p>
+      </div>
+    </div>
+
+    <div class="typing"
+         id="typingIndicator">
+      <span>AIDA is thinking</span>
+      <div class="typing-dots">
+        <div class="typing-dot"></div>
+        <div class="typing-dot"></div>
+        <div class="typing-dot"></div>
+      </div>
+    </div>
+
+    <div class="input-area">
+      <div class="current-file-indicator"
+           id="currentFileIndicator"
+           style="display: none;">
+        <div class="file-icon">📁</div>
+        <div class="file-info">
+          <span class="file-name"
+                id="currentFileName">No file selected</span>
+          <span class="file-label">Current file</span>
+        </div>
+        <button class="remove-file-btn"
+                id="removeFileBtn"
+                title="Clear file context">×</button>
+      </div>
+
+      <div class="attachments-container"
+           id="attachmentsContainer"></div>
+      <div class="input-container">
+        <div class="participant-suggest"
+             id="participantSuggest"></div>
+        <textarea id="msgInput"
+                  class="msg-input"
+                  placeholder="Ask AIDA to help with code, or let Agent automatically solve problems..."
+                  rows="1"></textarea>
+        <button id="sendBtn"
+                class="send-btn">▶</button>
+        <button id="cancelBtn"
+                class="cancel-btn"
+                style="display: none;"
+                title="Stop generation">✖</button>
+      </div>
+
+      <div class="chat-controls">
+        <div class="mode-selector">
+          <button class="mode-button active"
+                  data-mode="ask">
+            <span>💬</span>
+            <span>Ask</span>
+          </button>
+          <!-- <button class="mode-button"
+                  data-mode="agent">
+            <span>🤖</span>
+            <span>Agent</span>
+          </button> -->
+        </div>
+
+        <div class="model-selector"
+             onclick="openModelConfig()">
+          <div class="model-icon">C</div>
+          <span class="model-name"
+                id="modelNameDisplay">Loading...</span>
+          <div class="model-status"
+               title="Model Active"></div>
+        </div>
+      </div>
+    </div>
+
+    <script src="./sidebar-script.js"></script>
+  </body>
+
+</html>

@@ -65,34 +65,74 @@ function initializeReviewAllChanges(context) {
 }
 
 /**
+ * Find git repository root directory
+ * @param {string} startPath - Starting directory path
+ * @returns {string|null} - Git repository root path or null if not found
+ */
+function findGitRepositoryRoot(startPath) {
+    let currentPath = startPath;
+    
+    while (currentPath && currentPath !== path.dirname(currentPath)) {
+        try {
+            const gitPath = path.join(currentPath, '.git');
+            if (fs.existsSync(gitPath)) {
+                console.log(`📁 Found git repository root: ${currentPath}`);
+                return currentPath;
+            }
+        } catch (error) {
+            // Continue searching
+        }
+        currentPath = path.dirname(currentPath);
+    }
+    
+    console.log('❌ Git repository root not found');
+    return null;
+}
+
+/**
  * Get all changed files with their diffs from git
  * @param {object} workspaceFolder - VS Code workspace folder
  * @returns {object} - Result with all file changes
  */
 async function getAllChangedFilesWithDiffs(workspaceFolder) {
     try {
+        // Find git repository root instead of using workspace folder directly
+        const gitRoot = findGitRepositoryRoot(workspaceFolder.uri.fsPath);
+        
+        if (!gitRoot) {
+            return {
+                success: false,
+                message: 'No git repository found in workspace hierarchy'
+            };
+        }
+        
+        console.log(`🔍 Scanning git changes from repository root: ${gitRoot}`);
+        console.log(`📂 Original workspace folder: ${workspaceFolder.uri.fsPath}`);
+        
         // Get list of all changed files
         let changedFiles = [];
         
-        // Get unstaged changes
+        // Get unstaged changes - now using git repository root
         try {
             const unstagedFiles = execSync('git diff --name-only HEAD', { 
-                cwd: workspaceFolder.uri.fsPath,
+                cwd: gitRoot, // ← Fixed: Use git repository root instead of workspace folder
                 encoding: 'utf8' 
             }).trim().split('\n').filter(f => f);
             
+            console.log(`📄 Found ${unstagedFiles.length} unstaged files:`, unstagedFiles);
             changedFiles = [...changedFiles, ...unstagedFiles.map(f => ({ file: f, type: 'unstaged' }))];
         } catch (error) {
             console.log('No unstaged changes found');
         }
         
-        // Get staged changes
+        // Get staged changes - now using git repository root
         try {
             const stagedFiles = execSync('git diff --staged --name-only', { 
-                cwd: workspaceFolder.uri.fsPath,
+                cwd: gitRoot, // ← Fixed: Use git repository root instead of workspace folder
                 encoding: 'utf8' 
             }).trim().split('\n').filter(f => f);
             
+            console.log(`📄 Found ${stagedFiles.length} staged files:`, stagedFiles);
             changedFiles = [...changedFiles, ...stagedFiles.map(f => ({ file: f, type: 'staged' }))];
         } catch (error) {
             console.log('No staged changes found');
@@ -150,13 +190,13 @@ async function getAllChangedFilesWithDiffs(workspaceFolder) {
                 
                 if (types.includes('unstaged')) {
                     fileDiff = execSync(`git diff HEAD -- "${file}"`, { 
-                        cwd: workspaceFolder.uri.fsPath,
+                        cwd: gitRoot, // ← Fixed: Use git repository root
                         encoding: 'utf8' 
                     });
                     diffType = 'unstaged';
                 } else if (types.includes('staged')) {
                     fileDiff = execSync(`git diff --staged -- "${file}"`, { 
-                        cwd: workspaceFolder.uri.fsPath,
+                        cwd: gitRoot, // ← Fixed: Use git repository root
                         encoding: 'utf8' 
                     });
                     diffType = 'staged';

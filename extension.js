@@ -126,10 +126,10 @@ async function setupAzureDevOpsSettings() {
  */
 function activate(context) {
     // console.log('Reload 4');
-    console.log('🤖 AIDA v1.0.6 - AI Development Assistant');
+    console.log('🤖 AIDA v1.0.13 - AI Development Assistant');
     console.log('🚀 AIDA extension is now active!');
     
-    // Store extension path globally for diff module access
+    // Store extension path globally
     global.extensionPath = context.extensionPath;
 
     // Initialize Copilot-Style Sidebar Chat (True GitHub Copilot Experience)
@@ -301,6 +301,29 @@ function activate(context) {
         }
     });
 
+    let reviewAllChangesCommand = vscode.commands.registerCommand('aida.reviewAllChanges', async (uri) => {
+        console.log('🎯 Review All Changes command called', uri);
+        try {
+            // Check if AIDA chat should be used
+            const config = vscode.workspace.getConfiguration('aida');
+            const hasNoGithubCopilot = config.get('hasNoGithubCopilot', false);
+            
+            if (hasNoGithubCopilot || !vscode.extensions.getExtension('GitHub.copilot')?.isActive) {
+                // Use AIDA Copilot-style chat
+                await vscode.commands.executeCommand('aida.reviewAllChangesContext', uri);
+            } else {
+                // Use GitHub Copilot
+                await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
+                await vscode.commands.executeCommand('workbench.action.chat.open', {
+                    query: '@review-all-changes'
+                });
+            }
+        } catch (error) {
+            console.error('Error in reviewAllChanges command:', error);
+            vscode.window.showErrorMessage(`Failed to review all changes: ${error.message}`);
+        }
+    });
+
     // Register AIDA-specific context commands for Copilot-style chat
     let reviewFileContextCommand = vscode.commands.registerCommand('aida.reviewFileContext', async (uri) => {
         console.log('🎯 AIDA Review File Context command called', uri);
@@ -355,6 +378,25 @@ function activate(context) {
         } catch (error) {
             console.error('Error in reviewChangesContext command:', error);
             vscode.window.showErrorMessage('Failed to review changes: ' + error.message);
+        }
+    });
+
+    let reviewAllChangesContextCommand = vscode.commands.registerCommand('aida.reviewAllChangesContext', async (uri) => {
+        console.log('🎯 AIDA Review All Changes Context command called', uri);
+        try {
+            if (!copilotSidebarChat) {
+                vscode.window.showErrorMessage('AIDA Sidebar Chat is not initialized');
+                return;
+            }
+            
+            // Show the sidebar
+            copilotSidebarChat.show();
+            
+            // Send review all changes message
+            await copilotSidebarChat.sendMessage('@review-all-changes');
+        } catch (error) {
+            console.error('Error in reviewAllChangesContext command:', error);
+            vscode.window.showErrorMessage('Failed to review all changes: ' + error.message);
         }
     });
 
@@ -419,7 +461,7 @@ function activate(context) {
                     enableScripts: true,
                     retainContextWhenHidden: true,
                     localResourceRoots: [
-                        vscode.Uri.file(path.join(context.extensionPath, 'monaco-editor'))
+                        vscode.Uri.file(path.join(context.extensionPath, 'node_modules', 'monaco-editor'))
                     ]
                 }
             );
@@ -563,8 +605,10 @@ function activate(context) {
         showFileHelp,
         reviewFileCommand,
         reviewChangesCommand,
+        reviewAllChangesCommand,
         reviewFileContextCommand,
         reviewChangesContextCommand,
+        reviewAllChangesContextCommand,
         reviewChangesParticipant,
         reviewFileParticipant,
         reviewAllChangesParticipant,
@@ -917,7 +961,7 @@ async function getMonacoWebviewContent(diffData, panel, context) {
 
     // Get Monaco Editor URIs
     const monacoUri = panel.webview.asWebviewUri(
-        vscode.Uri.file(path.join(context.extensionPath, 'monaco-editor', 'min', 'vs'))
+        vscode.Uri.file(path.join(context.extensionPath, 'node_modules', 'monaco-editor', 'min', 'vs'))
     );
     
     console.log('📁 Monaco URI:', monacoUri.toString());
@@ -1521,16 +1565,45 @@ async function getMonacoWebviewContent(diffData, panel, context) {
         // Add error handler
         window.addEventListener('error', function(e) {
             console.error('❌ Script error:', e.error, e.filename, e.lineno);
+            showFallbackView();
         });
         
-        require.config({ paths: { vs: '${monacoUri}' } });
+        // Fallback function to show simple diff view
+        function showFallbackView() {
+            console.log('🔄 Loading fallback diff view...');
+            document.getElementById('container').innerHTML = \`
+                <div style="padding: 20px;">
+                    <h3>Simple Diff View (Monaco Editor not available)</h3>
+                    <div style="display: flex; gap: 20px;">
+                        <div style="flex: 1;">
+                            <h4>Original</h4>
+                            <pre style="background: #1e1e1e; padding: 10px; border-radius: 4px; overflow: auto; max-height: 400px;">\${originalContent}</pre>
+                        </div>
+                        <div style="flex: 1;">
+                            <h4>Modified</h4>
+                            <pre style="background: #1e1e1e; padding: 10px; border-radius: 4px; overflow: auto; max-height: 400px;">\${modifiedContent}</pre>
+                        </div>
+                    </div>
+                </div>
+            \`;
+        }
         
-        console.log('⚙️ Require config set, loading Monaco...');
+        // Try to load Monaco with timeout
+        const timeoutId = setTimeout(() => {
+            console.warn('⚠️ Monaco loading timeout, showing fallback view');
+            showFallbackView();
+        }, 5000);
         
-        require(['vs/editor/editor.main'], function() {
-            console.log('✅ Monaco editor loaded successfully');
+        try {
+            require.config({ paths: { vs: '${monacoUri}' } });
             
-            try {
+            console.log('⚙️ Require config set, loading Monaco...');
+            
+            require(['vs/editor/editor.main'], function() {
+                clearTimeout(timeoutId);
+                console.log('✅ Monaco editor loaded successfully');
+                
+                try {
                 // Configure Monaco Editor theme to match VS Code
                 monaco.editor.defineTheme('vs-code-dark', {
                     base: 'vs-dark',
@@ -1938,6 +2011,11 @@ async function getMonacoWebviewContent(diffData, panel, context) {
                 }
             }
         });
+        } catch (error) {
+            clearTimeout(timeoutId);
+            console.error('❌ Error loading Monaco Editor:', error);
+            showFallbackView();
+        }
     </script>
 </body>
 </html>`;
@@ -2126,19 +2204,14 @@ async function getFullFileContentFromAzureDevOps(filePath, diff) {
  * Convert full file content to line format using diff.js for proper alignment
  */
 function convertFullContentToLineFormat(baseContent, targetContent) {
-    // Try to import diff library if available
+    // Import diff library from npm package
     let diff;
     try {
-        const diffPath = path.join(__dirname, 'diff', 'libcjs', 'index.js');
-        console.log('🔍 Trying to load diff from:', diffPath);
-        console.log('🔍 __dirname is:', __dirname);
-        console.log('🔍 File exists:', require('fs').existsSync(diffPath));
-        diff = require(diffPath);
-        console.log('✅ diff module loaded successfully');
+        diff = require('diff');
+        console.log('✅ diff module loaded successfully from npm');
     } catch (error) {
         console.log('❌ diff library not available, using simple reconstruction');
         console.log('❌ diff error:', error.message);
-        console.log('❌ Stack:', error.stack);
         return {
             originalLines: baseContent.split('\n').map((line, i) => ({ content: line, lineNum: i + 1, type: 'context' })),
             modifiedLines: targetContent.split('\n').map((line, i) => ({ content: line, lineNum: i + 1, type: 'context' }))
