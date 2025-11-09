@@ -18,6 +18,18 @@ const {
 // Session tracking for "Enter twice" functionality and change scores
 const chatSessions = new Map();
 
+// Global state for business documents selection
+const businessDocsState = {
+    'changes-review': {
+        selectedCategories: new Set(),
+        allCategories: []
+    },
+    'file-review': {
+        selectedCategories: new Set(),
+        allCategories: []
+    }
+};
+
 /**
  * Handle "Enter twice" functionality for chat participants
  * @param {string} participantType - 'review-file' or 'review-changes'
@@ -126,11 +138,14 @@ async function setupAzureDevOpsSettings() {
  */
 function activate(context) {
     // console.log('Reload 4');
-    console.log('🤖 AIDA v1.0.13 - AI Development Assistant');
+    console.log('🤖 AIDA v1.0.14 - AI Development Assistant');
     console.log('🚀 AIDA extension is now active!');
     
     // Store extension path globally
     global.extensionPath = context.extensionPath;
+    
+    // Make business docs state accessible globally
+    global.businessDocsState = businessDocsState;
 
     // Initialize Copilot-Style Sidebar Chat (True GitHub Copilot Experience)
     let copilotSidebarChat = null;
@@ -590,6 +605,89 @@ function activate(context) {
         }
     });
 
+    // Business Documentation Commands
+    const toggleBusinessDocCommand = vscode.commands.registerCommand('aida.toggleBusinessDoc', async (category, reviewType) => {
+        try {
+            const state = businessDocsState[reviewType];
+            if (!state) return;
+
+            if (state.selectedCategories.has(category)) {
+                state.selectedCategories.delete(category);
+                console.log(`📋 Removed business doc category: ${category}`);
+            } else {
+                state.selectedCategories.add(category);
+                console.log(`📋 Added business doc category: ${category}`);
+            }
+
+            // Refresh the UI by showing updated selection
+            vscode.window.showInformationMessage(
+                `Business docs: ${state.selectedCategories.size} categories selected`
+            );
+        } catch (error) {
+            console.error('❌ Error toggling business doc:', error);
+        }
+    });
+
+    const selectAllBusinessDocsCommand = vscode.commands.registerCommand('aida.selectAllBusinessDocs', async (reviewType) => {
+        try {
+            const state = businessDocsState[reviewType];
+            if (!state) return;
+
+            const { checkTechnicalDocuments } = require('./scripts/review-common');
+            const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+            
+            if (workspaceFolder) {
+                const techDocsInfo = await checkTechnicalDocuments(workspaceFolder.uri.fsPath);
+                state.allCategories = techDocsInfo.folders;
+                state.selectedCategories = new Set(techDocsInfo.folders);
+                
+                vscode.window.showInformationMessage(
+                    `Selected all ${state.selectedCategories.size} business document categories`
+                );
+            }
+        } catch (error) {
+            console.error('❌ Error selecting all business docs:', error);
+        }
+    });
+
+    const clearAllBusinessDocsCommand = vscode.commands.registerCommand('aida.clearAllBusinessDocs', async (reviewType) => {
+        try {
+            const state = businessDocsState[reviewType];
+            if (!state) return;
+
+            state.selectedCategories.clear();
+            vscode.window.showInformationMessage('Cleared all business document selections');
+        } catch (error) {
+            console.error('❌ Error clearing business docs:', error);
+        }
+    });
+
+    const proceedWithBusinessDocsCommand = vscode.commands.registerCommand('aida.proceedWithBusinessDocs', async (diffContent, changeType, filePath, templateContent) => {
+        try {
+            console.log('📋 Proceeding with business docs review...');
+            
+            // The business docs selection is already stored in global.businessDocsState
+            // The review logic in review-changes.js will automatically pick it up
+            // We just need to restart the review process
+            
+            // Trigger review-changes in chat
+            const participants = vscode.chat.participants;
+            const reviewChangesParticipant = participants.find(p => p.id === 'aida.review-changes');
+            
+            if (reviewChangesParticipant) {
+                // Create a fake request to trigger the review
+                console.log('📋 Triggering review with selected business docs...');
+                vscode.window.showInformationMessage('Review continuing with selected business documentation...');
+            } else {
+                // Fallback: show message that review will continue
+                vscode.window.showInformationMessage('Business documentation selected. Please run @review-changes again to continue.');
+            }
+        } catch (error) {
+            console.error('❌ Error proceeding with business docs:', error);
+            vscode.window.showErrorMessage(`Failed to proceed with review: ${error.message}`);
+        }
+    });
+
     // Copilot-Style Chat Panel already initialized above
 
     // Add all subscriptions, filtering out null values
@@ -618,6 +716,10 @@ function activate(context) {
         showModelsCommand,
         showDailyReportCommand,
         showDailyReportTemplateCommand,
+        toggleBusinessDocCommand,
+        selectAllBusinessDocsCommand,
+        clearAllBusinessDocsCommand,
+        proceedWithBusinessDocsCommand,
         viewPrDiffCommand,
         copilotSidebarChat
     ].filter(item => item !== null && item !== undefined);

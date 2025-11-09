@@ -33,20 +33,12 @@ class AidaChatbotService {
      */
     async loadSystemPrompt() {
         const systemPromptPath = path.join(this.context.extensionPath, 'chatbot', 'system_prompt.md');
-        const systemPromptWithVisionPath = path.join(this.context.extensionPath, 'chatbot', 'system_prompt_with_vision.md');
         
         try {
-            // Try to load vision-enhanced prompt first
-            const visionContent = await fs.readFile(systemPromptWithVisionPath, 'utf8');
-            return visionContent;
+            const content = await fs.readFile(systemPromptPath, 'utf8');
+            return content;
         } catch (error) {
-            // Fallback to regular prompt
-            try {
-                const content = await fs.readFile(systemPromptPath, 'utf8');
-                return content;
-            } catch (fallbackError) {
-                throw fallbackError;
-            }
+            throw error;
         }
     }
 

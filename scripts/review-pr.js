@@ -184,22 +184,21 @@ async function showGitHubDiffInWebview(prAnalysis, stream) {
     // Display file links with webview buttons (hover for details)
     stream.markdown('📁 **Files in this GitHub PR:**\n\n');
     
-    fileChanges.forEach(fileChange => {
-        const diffId = `github_${data.id}_${fileChange.path.replace(/[^a-zA-Z0-9]/g, '_')}`;
-        const fileName = fileChange.path.split('/').pop();
+    // Only show first file with custom title
+    if (fileChanges.length > 0) {
+        const firstFile = fileChanges[0];
+        const diffId = `github_${data.id}_${firstFile.path.replace(/[^a-zA-Z0-9]/g, '_')}`;
         
-        // Create compact button: filename (+X/-Y) as button text, full path as tooltip
+        // Create single button with custom title
         stream.button({
             command: 'aida.viewPrDiff',
-            title: `${fileName} (+${fileChange.additions}/-${fileChange.deletions})`,
-            tooltip: `${fileChange.path} | ${fileChange.changeType} | Click to view in Monaco Diff Editor`,
+            title: `🪟 Open Diff Viewer (${fileChanges.length} files)`,
+            tooltip: `View changes in Monaco Diff Editor - ${fileChanges.length} files total`,
             arguments: [diffId]
         });
-        
-        // No additional text below - everything in button
-    });
+    }
 
-    stream.markdown('\n\n💡 **Hover over buttons to see file details**\n\n');
+    stream.markdown('\n\n💡 **Click to explore changes in diff viewer**\n\n');
 }
 
 /**
@@ -253,22 +252,21 @@ async function showGitLabDiffInWebview(mrAnalysis, stream) {
     // Display file links with webview buttons (hover for details)
     stream.markdown('📁 **Files in this GitLab MR:**\n\n');
     
-    fileChanges.forEach(fileChange => {
-        const diffId = `gitlab_${data.id}_${fileChange.path.replace(/[^a-zA-Z0-9]/g, '_')}`;
-        const fileName = fileChange.path.split('/').pop();
+    // Only show first file with custom title
+    if (fileChanges.length > 0) {
+        const firstFile = fileChanges[0];
+        const diffId = `gitlab_${data.id}_${firstFile.path.replace(/[^a-zA-Z0-9]/g, '_')}`;
         
-        // Create compact button: filename (+X/-Y) as button text, full path as tooltip
+        // Create single button with custom title
         stream.button({
             command: 'aida.viewPrDiff',
-            title: `${fileName} (+${fileChange.additions}/-${fileChange.deletions})`,
-            tooltip: `${fileChange.path} | ${fileChange.changeType} | Click to view in Monaco Diff Editor`,
+            title: `🪟 Open Diff Viewer (${fileChanges.length} files)`,
+            tooltip: `View changes in Monaco Diff Editor - ${fileChanges.length} files total`,
             arguments: [diffId]
         });
-        
-        // No additional text below - everything in button
-    });
+    }
 
-    stream.markdown('\n\n💡 **Hover over buttons to see file details**\n\n');
+    stream.markdown('\n\n💡 **Click to explore changes in diff viewer**\n\n');
 }
 
 /**
