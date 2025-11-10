@@ -11,7 +11,8 @@ const {
     displayReviewHeader,
     getUnifiedModel,
     getChecklistStatusIcon,
-    showAvailableModels
+    showAvailableModels,
+    getTechnicalDocDescription
 } = require('./scripts/review-common');
 
 
@@ -138,7 +139,7 @@ async function setupAzureDevOpsSettings() {
  */
 function activate(context) {
     // console.log('Reload 4');
-    console.log('🤖 AIDA v1.0.14 - AI Development Assistant');
+    console.log('🤖 AIDA v1.0.15 - AI Development Assistant');
     console.log('🚀 AIDA extension is now active!');
     
     // Store extension path globally
@@ -688,6 +689,101 @@ function activate(context) {
         }
     });
 
+    // Enhanced Review Commands
+    const showEnhancedReviewOptionsCommand = vscode.commands.registerCommand('aida.showEnhancedReviewOptions', async (filePath) => {
+        try {
+            console.log(`📚 Showing enhanced review options for: ${filePath}`);
+            
+            // Focus chat panel first
+            await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
+            
+            // Create a mock stream for enhanced review options
+            const mockStream = {
+                markdown: (text) => {
+                    // We'll use a webview or notification approach instead
+                    console.log('📚 Enhanced Stream:', text);
+                },
+                button: (cmd) => {
+                    console.log('🔘 Enhanced Button:', cmd);
+                }
+            };
+            
+            // Show enhanced options directly via commands/UI
+            await showEnhancedReviewOptionsInChat(filePath);
+            
+        } catch (error) {
+            console.error('❌ Error showing enhanced options:', error);
+            vscode.window.showErrorMessage(`Failed to show enhanced options: ${error.message}`);
+        }
+    });
+
+    // Helper function to show enhanced options in chat
+    async function showEnhancedReviewOptionsInChat(filePath) {
+        // Import required functions
+        const { getTechnicalDocumentFolders } = require('./scripts/review-changes');
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        
+        if (!workspaceFolder) {
+            vscode.window.showErrorMessage('❌ No workspace found for technical documents');
+            return;
+        }
+        
+        // Get technical document folders
+        const techDocs = await getTechnicalDocumentFolders(workspaceFolder);
+        
+        if (techDocs.length === 0) {
+            vscode.window.showWarningMessage('⚠️ No technical-document folders found. Using Quick Review instead.');
+            // Fallback to quick review
+            await vscode.commands.executeCommand('aida.confirmChangesReview', filePath);
+            return;
+        }
+        
+        // Show selection UI via quick pick
+         const items = [
+            ...techDocs.map(folder => ({
+                label: `📁 ${folder.displayName}`,
+                description: getTechnicalDocDescription(folder.name),
+                detail: `Include ${folder.displayName} documentation in review`,
+                categoryName: folder.name,
+                categoryDisplayName: folder.displayName
+            }))
+        ];
+        
+        
+        const selected = await vscode.window.showQuickPick(items, {
+            placeHolder: `Select technical documentation for enhanced review of ${path.basename(filePath)}`,
+            title: '📚 Enhanced Review Options',
+            canPickMany: true,
+            ignoreFocusOut: false
+        });
+        
+        if (!selected || selected.length === 0) {
+            return; // User cancelled or no selection
+        }
+        
+        // Store selected categories in global state
+        const selectedCategories = selected.map(item => item.categoryName);
+        global.selectedTechnicalDocs = new Set(selectedCategories);
+        
+        // Start enhanced review
+        await vscode.commands.executeCommand('workbench.action.chat.open', {
+            query: `@review-changes ${filePath}`
+        });
+    }
+
+     // Helper function for technical doc descriptions
+    function getTechnicalDocDescription(folderName) {
+        const descriptions = {
+            'billing-rules': '💰 Invoice logic, payment validation, and billing constraints',
+            'data-validation': '🔍 Input validation rules and business constraints',
+            'navigation-rules': '🗺️ Menu access controls and navigation permissions', 
+            'permission-rules': '🔐 User roles, admin permissions, and access control'
+        };
+        
+        return descriptions[folderName] || `📋 ${folderName.replace('-', ' ')} documentation`;
+    }
+
+
     // Copilot-Style Chat Panel already initialized above
 
     // Add all subscriptions, filtering out null values
@@ -720,6 +816,7 @@ function activate(context) {
         selectAllBusinessDocsCommand,
         clearAllBusinessDocsCommand,
         proceedWithBusinessDocsCommand,
+        showEnhancedReviewOptionsCommand,
         viewPrDiffCommand,
         copilotSidebarChat
     ].filter(item => item !== null && item !== undefined);

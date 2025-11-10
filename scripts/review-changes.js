@@ -5,6 +5,84 @@ const { execSync } = require('child_process');
 const { executeAIReview, getUnifiedModel, getChecklistStatusIcon, shouldUseApiKey, displayReviewHeader, loadTemplateWithPriority, displayCommonReviewInfo } = require('./review-common');
 const { autoDetectWorkspace, getReviewTemplateWithDetection, displayDetectionInfo } = require('./language-detection');
 
+// Session tracking for review options (similar to chatSessions in extension.js)
+const reviewOptionsSessions = new Map();
+
+// Make chatSessions available for compatibility
+const chatSessions = reviewOptionsSessions;
+
+/**
+ * Show review options with choice to process without documents
+ * Based on handleEnterTwiceLogic pattern but for review options selection
+ * @param {string} participantType - 'review-changes' 
+ * @param {object} activeEditor - VS Code active editor
+ * @param {object} stream - Chat stream
+ * @param {object} context - Extension context
+ * @param {function} reviewCallback - Function to call when option is selected
+ * @returns {boolean} - true if handled (option selected), false if showing options dialog
+ */
+async function showReviewOptionsWithoutDocs(participantType, activeEditor, stream, context, reviewCallback) {
+    const fileName = path.basename(activeEditor.document.fileName);
+    const sessionKey = `${participantType}-options-${activeEditor.document.fileName}`;
+    
+    // Check if this is the second call (button was clicked)
+    const hasSeenOptions = chatSessions?.has ? chatSessions.has(sessionKey) : false;
+
+    console.log(`🔍 Review options session check: ${sessionKey} = ${hasSeenOptions}`);
+
+    if (hasSeenOptions) {
+        // Second call - button was clicked, proceed with review
+        stream.markdown('🚀 **Starting Quick Review...**\n\n');
+        
+        // Clear session for next time
+        if (chatSessions?.delete) {
+            chatSessions.delete(sessionKey);
+        }
+        
+        // Call review callback directly (without documents)
+        await reviewCallback(false);
+        return true; // Handled - review executed
+    }
+
+    // Always show options for review-changes (no "Enter twice" logic)
+    // First time - show options dialog
+    const emoji = '📋';
+    stream.markdown(`# ${emoji} Review Options for \`${fileName}\`\n\n`);
+    
+    stream.markdown('**Choose how to proceed with the review:**\n\n');
+        
+        // Option 1: Process without documents (default/recommended)
+        stream.markdown('### 🚀 **Quick Review** (Recommended)\n');
+        stream.markdown('- Fast standard code review\n');
+        stream.markdown('- Uses built-in review templates\n');
+        stream.markdown('- No business document integration\n\n');
+        
+        stream.button({
+            command: 'aida.confirmChangesReview',
+            title: '🚀 Start Quick Review',
+            arguments: [activeEditor.document.fileName]
+        });
+        
+        stream.markdown('\n');
+        
+        // Option 2: Process with business documents (future feature)
+        stream.markdown('### 📚 **Enhanced Review** (Coming Soon)\n');
+        stream.markdown('- Includes business rule validation\n');
+        stream.markdown('- Cross-references technical documents\n');
+        stream.markdown('- More comprehensive analysis\n\n');
+        
+        stream.button({
+            command: 'aida.showEnhancedReviewOptions',
+            title: '📚 Start Enhanced Review',
+            arguments: [activeEditor.document.fileName]
+        });
+        
+        stream.markdown('\n\n');
+        stream.markdown('💡 **Choose an option above to start the review**\n');
+        
+        return false; // Not handled - showing options dialog
+}
+
 // Import functions from extension.js
 let handleEnterTwiceLogic;
 let ensureAidaTemplatesForReview;
@@ -38,6 +116,32 @@ function initializeReviewChanges(context) {
             
             const input = request.prompt.trim();
             
+            // Check for enhanced review mode
+            if (input.startsWith('enhanced:')) {
+                const filePath = input.replace('enhanced:', '').trim();
+                console.log(`📚 Enhanced review mode detected for: ${filePath}`);
+                
+                // Get active editor or use provided file path
+                let activeEditor = vscode.window.activeTextEditor;
+                if (filePath && filePath !== activeEditor?.document.fileName) {
+                    // Try to open the specified file
+                    try {
+                        const doc = await vscode.workspace.openTextDocument(filePath);
+                        activeEditor = await vscode.window.showTextDocument(doc);
+                    } catch (error) {
+                        console.error('❌ Could not open file for enhanced review:', error);
+                    }
+                }
+                
+                if (activeEditor) {
+                    await showEnhancedReviewOptions('review-changes', activeEditor, stream, context);
+                    return;
+                } else {
+                    stream.markdown('❌ **No active file for enhanced review**\n\n');
+                    return;
+                }
+            }
+            
             // Improved loop prevention - only prevent if this is a recursive call from the same participant
             if (chatContext.participant && chatContext.participant.id === 'review-changes' && request.prompt.includes('@review-changes')) {
                 stream.markdown('⚠️ **Loop Prevention**: Recursive call detected\n');
@@ -50,25 +154,26 @@ function initializeReviewChanges(context) {
                 // Check if there's an active file to review
                 const activeEditor = vscode.window.activeTextEditor;
                 if (activeEditor) {
-                    // Use shared "Enter twice" logic for confirmation - DISABLED for direct execution
-                    // if (handleEnterTwiceLogic) {
-                    //     const shouldContinue = await handleEnterTwiceLogic(
-                    //         'review-changes', 
-                    //         activeEditor, 
-                    //         stream, 
-                    //         async () => {
-                    //             await aiReviewChanges(activeEditor.document.fileName, stream, null, context, request);
-                    //         }
-                    //     );
-                    //     
-                    //     // If handleEnterTwiceLogic returns true, it handled everything (second enter)
-                    //     // If it returns false, it's showing the confirmation dialog (first enter)
-                    //     return;
-                    // } else {
-                        // Direct call to aiReviewChanges - no confirmation needed
-                        await aiReviewChanges(activeEditor.document.fileName, stream, null, context, request);
+                    // Show review options with process without document choice
+                    const shouldContinue = await showReviewOptionsWithoutDocs(
+                        'review-changes', 
+                        activeEditor, 
+                        stream, 
+                        context,
+                        async (useDocuments) => {
+                            if (useDocuments) {
+                                // TODO: Implement with business documents
+                                stream.markdown('🔧 **Business documents integration coming soon...**\n\n');
+                            }
+                            await aiReviewChanges(activeEditor.document.fileName, stream, null, context, request);
+                        }
+                    );
+                    
+                    // If showReviewOptionsWithoutDocs returns true, it handled everything
+                    // If it returns false, it's showing the options dialog
+                    if (shouldContinue === false) {
                         return;
-                    // }
+                    }
                 } else {
                     stream.markdown('# 🔍 Code Review Assistant\n\n');
                     stream.markdown('Please provide a file path or open a file to review.\n\n');
@@ -786,11 +891,124 @@ function updateChecklistStatuses(analysis) {
     });
 }
 
+// HELPER: Scan technical document folders
+async function getTechnicalDocumentFolders(workspaceFolder) {
+    try {
+        const technicalDocPath = path.join(workspaceFolder.uri.fsPath, 'technical-document');
+        
+        if (!fs.existsSync(technicalDocPath)) {
+            return [];
+        }
+        
+        const subFolders = fs.readdirSync(technicalDocPath, { withFileTypes: true })
+            .filter(dirent => dirent.isDirectory())
+            .map(dirent => ({
+                name: dirent.name,
+                displayName: dirent.name.split('-').map(word => 
+                    word.charAt(0).toUpperCase() + word.slice(1)
+                ).join(' '),
+                path: path.join(technicalDocPath, dirent.name)
+            }));
+        
+        console.log(`📚 Found ${subFolders.length} technical document categories:`, subFolders.map(f => f.name));
+        return subFolders;
+    } catch (error) {
+        console.error('❌ Error scanning technical documents:', error);
+        return [];
+    }
+}
+
+// HELPER: Show Enhanced Review options with technical documents
+async function showEnhancedReviewOptions(participantType, activeEditor, stream, context) {
+    const fileName = path.basename(activeEditor.document.fileName);
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    
+    if (!workspaceFolder) {
+        stream.markdown('❌ **No workspace found for technical documents**\n\n');
+        return false;
+    }
+    
+    // Get technical document folders
+    const techDocs = await getTechnicalDocumentFolders(workspaceFolder);
+    
+    if (techDocs.length === 0) {
+        stream.markdown('⚠️ **No technical-document folders found**\n\n');
+        stream.markdown('Creating fallback to Quick Review...\n\n');
+        // Fallback to quick review
+        stream.button({
+            command: 'aida.confirmChangesReview',
+            title: '🚀 Proceed with Quick Review',
+            arguments: [activeEditor.document.fileName]
+        });
+        return false;
+    }
+    
+    const emoji = '📚';
+    stream.markdown(`# ${emoji} Enhanced Review for \`${fileName}\`\n\n`);
+    stream.markdown('**Select technical documentation categories to include:**\n\n');
+    
+    // Show available categories as buttons
+    techDocs.forEach(folder => {
+        stream.markdown(`### 📁 **${folder.displayName}**\n`);
+        
+        // Try to get description from folder content
+        const description = getTechnicalDocDescription(folder.name);
+        stream.markdown(`${description}\n\n`);
+        
+        stream.button({
+            command: 'aida.reviewWithTechnicalDoc',
+            title: `📚 Include ${folder.displayName}`,
+            arguments: [activeEditor.document.fileName, folder.name, folder.displayName]
+        });
+        
+        stream.markdown('\n');
+    });
+    
+    stream.markdown('---\n\n');
+    
+    // Multiple selection options
+    stream.markdown('**Bulk Actions:**\n\n');
+    
+    stream.button({
+        command: 'aida.reviewWithAllTechnicalDocs',
+        title: '☑️ Include All Categories',
+        arguments: [activeEditor.document.fileName, techDocs.map(f => f.name)]
+    });
+    
+    stream.markdown(' ');
+    
+    stream.button({
+        command: 'aida.confirmChangesReview',
+        title: '🚀 Skip Enhanced - Quick Review',
+        arguments: [activeEditor.document.fileName]
+    });
+    
+    stream.markdown('\n\n');
+    stream.markdown('💡 **Select one or more categories above, or proceed with Quick Review**\n');
+    
+    return false; // Show options dialog
+}
+
+// HELPER: Get description for technical document categories
+function getTechnicalDocDescription(folderName) {
+    const descriptions = {
+        'billing-rules': '💰 Invoice logic, payment validation, and billing constraints',
+        'data-validation': '🔍 Input validation rules and business constraints',
+        'navigation-rules': '🗺️ Menu access controls and navigation permissions', 
+        'permission-rules': '🔐 User roles, admin permissions, and access control'
+    };
+    
+    return descriptions[folderName] || `📋 ${folderName.replace('-', ' ')} documentation`;
+}
+
 module.exports = {
     initializeReviewChanges,
     aiReviewChanges,
     reviewChanges,
     getTargetFileInfo,
     getGitDiffForTarget,
-    handleNoChangesScenario
+    handleNoChangesScenario,
+    showReviewOptionsWithoutDocs,
+    showEnhancedReviewOptions,
+    getTechnicalDocumentFolders
 };
