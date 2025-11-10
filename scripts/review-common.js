@@ -1455,7 +1455,6 @@ function processTemplateWithPlaceholders(templateContent, templateDir) {
             // Extract the Angular critical checks content (exclude header comments)
             const angularChecksContent = extractAngularChecks(baseContent);
             console.log('🔍 DEBUG: angularChecksContent.length =', angularChecksContent.length);
-            console.log('🔍 DEBUG: angularChecksContent preview:', angularChecksContent.substring(0, 200) + '...');
             
             // Replace all occurrences of the placeholder
             const processedContent = templateContent.replace(/\{\{REVIEW_BASE\}\}/g, angularChecksContent);
@@ -2902,15 +2901,11 @@ async function getBusinessDocumentFolders(workspaceFolder) {
     try {
         // Try both folder names for backwards compatibility
         const businessDocsPath = path.join(workspaceFolder.uri.fsPath, 'AIDA', 'business-docs');
-        const technicalDocsPath = path.join(workspaceFolder.uri.fsPath, 'AIDA', 'technical-document');
         
         let actualPath = null;
         if (fs.existsSync(businessDocsPath)) {
             actualPath = businessDocsPath;
             console.log('📁 Found business docs at:', businessDocsPath);
-        } else if (fs.existsSync(technicalDocsPath)) {
-            actualPath = technicalDocsPath;
-            console.log('📁 Found technical docs at (legacy):', technicalDocsPath);
         }
         
         if (!actualPath) {

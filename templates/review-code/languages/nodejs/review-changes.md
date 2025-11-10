@@ -3,7 +3,7 @@
 
 # Node.js Git Changes Review - STRICT MODE
 
-## 🔍 MANDATORY NODE.JS CHANGE ANALYSIS
+## 🔍 MANDATORY NODEJS CHANGE ANALYSIS
 
 You are performing a STRICT code review on Node.js git changes. Do NOT be lenient. Look for every possible Node.js-specific issue in the changes. ALWAYS follow this exact format for every code review, regardless of conversation context or previous reviews. This structure is MANDATORY and UNCHANGEABLE.
 
@@ -11,12 +11,16 @@ You are performing a STRICT code review on Node.js git changes. Do NOT be lenien
 - ONLY flag issues that violate the specific rules in the template
 - If code follows template guidelines, it's acceptable - don't force changes
 - Focus on actual violations, not subjective preferences
+- **BUSINESS RULES**: If technical documentation is included, validate code against business requirements
+- **PRIORITY ORDER**: 1) Node.js framework violations, 2) Business rule violations, 3) Both must pass for approval
 
-### Review Entire File
-**Prompt:** `review-changes [filename]`
-- Reviews ONLY the git diff changes (+ and - lines)
-- Analyzes impact of changes on Node.js architecture
-- Does NOT review unchanged code
+🎯 **BUSINESS RULES VALIDATION (if technical docs provided):**
+- Extract business constraints from natural language documentation
+- Check code enum values against business-defined roles/states
+- Flag hardcoded values that conflict with business rules
+- Validate role restrictions and permission logic
+- Report missing business rule validations in code
+- Ensure code logic follows documented business requirements
 
 <!-- HIDDEN REVIEW SCOPE:
 - ✅ ONLY review: Lines marked with + (added) or - (removed)
@@ -28,20 +32,20 @@ You are performing a STRICT code review on Node.js git changes. Do NOT be lenien
 ### 📋 CHANGE SEPARATION RULES (MANDATORY):
 
 **Split into separate changes when:**
-- ✅ **Different Node.js artifacts**: Module vs Middleware vs Controller vs Service changes = separate changes
-- ✅ **Different function parts**: Route handler vs Middleware vs Utility function = separate changes
-- ✅ **Different async operations**: Different Promise/async-await patterns = separate changes
-- ✅ **Different error handling**: Different try/catch or error middleware = separate changes
+- ✅ **Different Node.js modules**: Different .js files or npm packages = separate changes
+- ✅ **Different middleware/routes**: Different Express routes or middleware = separate changes
+- ✅ **Different async operations**: Different async/await or callback functions = separate changes
+- ✅ **Different API endpoints**: Different REST/GraphQL endpoints = separate changes
 - ✅ **Non-adjacent code blocks**: If there are 3+ unchanged lines between modifications = separate changes
 
 **Keep as one change when:**
-- ❌ **Same function**: Multiple lines in same function body
-- ❌ **Related middleware**: Related middleware functions in same file
-- ❌ **Same module exports**: Related export statements
+- ❌ **Same Node.js function**: Multiple lines in same function body
+- ❌ **Related middleware chain**: Sequential middleware for same route
+- ❌ **Same module exports**: Related exports for same functionality
 
-## ⚡ NODE.JS CRITICAL CHECKS (Auto-FAIL if found)
+## ⚡ NODEJS CRITICAL CHECKS (Auto-FAIL if found)
 
-**Scan EVERY line for these NODE.JS-SPECIFIC CRITICAL issues:**
+**Scan EVERY line for these NODEJS-SPECIFIC CRITICAL issues:**
 
 {{REVIEW_BASE}}
 
@@ -50,164 +54,59 @@ You are performing a STRICT code review on Node.js git changes. Do NOT be lenien
 ### Start Review For Each Change:
 
 ```
-## Change [X]: [ADDED/REMOVED/MODIFIED] - [Node.js artifact type: Route/Middleware/Service/Module]
+## Change [X]: [ADDED/REMOVED/MODIFIED] - [Node.js artifact type: Route/Middleware/Service/Model/Controller]
 ```javascript
 [Show the exact code block with line numbers]
 ```
 
-*** NODE.JS REVIEW COMMENT ***
+*** NODEJS REVIEW COMMENT ***
 - 🚨 **Issue Type**: [Critical/Warning/Good/Info/Suggestion]
-- 📝 **Node.js Problem**: [Specific Node.js issue - reference Node.js best practices]
-- 💡 **Node.js Solution**: [Node.js-specific fix with proper patterns]
-- 🎯 **Server Impact**: [How it affects Node.js performance/security/scalability]
+- 🚨 **Security Assessment**: [Specific security issue or "No security violations found"]
+- 🚨 **Null Safety Analysis**: [Specific null safety issue or "Proper null handling implemented"] 
+- 🚨 **Error Handling Review**: [Specific error handling issue or "Appropriate exception handling in place"]
+- 🚨 **Resource Management Check**: [Specific resource leak issue or "Proper disposal and resource management"]
+- ⚠️ **Performance Impact**: [Specific performance concern or "No performance degradation detected"]
+- ⚠️ **Code Quality Assessment**: [Specific code quality issue or "Follows Node.js best practices and conventions"]
 
-IMPORTANT Node.js considerations:
-- Event loop and non-blocking operations
-- Error handling and graceful degradation
-- Security middleware and validation
-- Performance optimization
-- Dependency management
-
-*** INTERNAL NODE.JS CHANGE EVALUATION (DO NOT DISPLAY) ***
+*** INTERNAL NODEJS CHANGE EVALUATION (DO NOT DISPLAY) ***
 Silently evaluate this change on:
-- Node.js Best Practices: Rate 1-5 (5=excellent, 1=poor)
+- Security Assessment: Rate 1-5 (5=no security issues, 1=critical security violation)
+- Null Safety Analysis: Rate 1-5 (5=proper null handling, 1=guaranteed null reference exception)
+- Error Handling Review: Rate 1-5 (5=comprehensive exception handling, 1=no error handling)
+- Resource Management Check: Rate 1-5 (5=proper disposal, 1=guaranteed resource leak)
 - Performance Impact: Rate 1-5 (5=no impact/improvement, 1=major degradation)
-- Security Safety: Rate 1-5 (5=no vulnerabilities, 1=critical security issues)
-- Change Score: is a smallest score of three scores
+- Code Quality Assessment: Rate 1-5 (5=follows all best practices, 1=poor code quality)
+- Change Score: is the lowest score among all six categories
 
 *** CONDITIONAL RECOMMENDATIONS (Based on Issue Type AND Change Score) ***
 
 **MANDATORY RULE:**
-- IF Issue Type = "Good": ALWAYS show "✅ **GOOD NODE.JS CHANGE** - Follows Node.js best practices" and SKIP the entire RECOMMENDED FIX section
-- IF Issue Type = "Critical/Warning/Info/Suggestion" AND Change Score < 4/5: Show RECOMMENDED NODE.JS FIX section below
-- IF Issue Type = "Critical/Warning/Info/Suggestion" AND Change Score >= 4/5: Show "✅ **GOOD NODE.JS CHANGE** - Follows Node.js best practices"
+- IF Issue Type = "Good": ALWAYS show "✅ **GOOD NODEJS CHANGE** - Follows Node.js best practices" and SKIP the entire RECOMMENDED FIX section
+- IF Issue Type = "Critical/Warning/Info/Suggestion" AND Change Score < 4/5: Show RECOMMENDED NODEJS FIX section below
+- IF Issue Type = "Critical/Warning/Info/Suggestion" AND Change Score >= 4/5: Show "✅ **GOOD NODEJS CHANGE** - Follows Node.js best practices"
 
-*** RECOMMENDED NODE.JS FIX (ONLY show if Issue Type != "Good" AND Change Score < 4/5) ***
+*** RECOMMENDED NODEJS FIX (ONLY show if Issue Type != "Good" AND Change Score < 4/5) ***
 ```javascript
-// PROVIDE NODE.JS-SPECIFIC FIXES WITH BEST PRACTICES
-// Include proper async/await, error handling, and security patterns
-
-// Example for proper Express route with comprehensive error handling:
-const express = require('express');
-const rateLimit = require('express-rate-limit');
-const helmet = require('helmet');
-const { body, param, validationResult } = require('express-validator');
-const logger = require('./utils/logger');
-const UserService = require('./services/userService');
-
-const router = express.Router();
-
-// Security middleware
-router.use(helmet());
-
-// Rate limiting
-const getUserLimit = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
-  message: 'Too many requests from this IP'
-});
-
-// Validation middleware
-const validateUserId = [
-  param('id')
-    .isInt({ min: 1 })
-    .withMessage('User ID must be a positive integer')
-    .toInt()
-];
-
-// GET /users/:id - Secure user retrieval
-router.get('/users/:id',
-  getUserLimit,
-  validateUserId,
-  async (req, res, next) => {
-    try {
-      // Check validation results
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        return res.status(400).json({
-          error: 'Validation failed',
-          details: errors.array()
-        });
-      }
-
-      const { id } = req.params;
-      
-      // Use timeout for external operations
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Request timeout')), 10000)
-      );
-      
-      const userPromise = UserService.getUserById(id);
-      
-      const user = await Promise.race([userPromise, timeoutPromise]);
-      
-      if (!user) {
-        return res.status(404).json({
-          error: 'User not found',
-          message: `User with ID ${id} does not exist`
-        });
-      }
-
-      // Remove sensitive information
-      const { password, ...safeUser } = user;
-      
-      res.json({
-        success: true,
-        data: safeUser
-      });
-      
-    } catch (error) {
-      // Log error with context
-      logger.error('Error fetching user', {
-        userId: req.params.id,
-        error: error.message,
-        stack: error.stack,
-        requestId: req.id
-      });
-      
-      // Don't expose internal errors
-      if (error.message === 'Request timeout') {
-        return res.status(408).json({
-          error: 'Request timeout',
-          message: 'The request took too long to process'
-        });
-      }
-      
-      // Pass to error handler middleware
-      next(error);
-    }
-  }
-);
-
-// Error handling middleware
-router.use((error, req, res, next) => {
-  const statusCode = error.statusCode || 500;
-  
-  res.status(statusCode).json({
-    error: 'Internal server error',
-    message: process.env.NODE_ENV === 'development' 
-      ? error.message 
-      : 'Something went wrong',
-    requestId: req.id
-  });
-});
-
-module.exports = router;
+// PROVIDE NODEJS-SPECIFIC FIXES WITH BEST PRACTICES
+// Include proper async/await patterns, middleware design, and Node.js conventions
 ```
 
 ---
 
-## 🎯 FINAL NODE.JS SUMMARY (After All Changes Reviewed)
+# 🎯 FINAL NODEJS SUMMARY (After All Changes Reviewed)
 
-### 📋 COMPLIANCE SCORES
-- **Async/Promise Patterns**: [X/5] - Proper async/await, promise handling, and non-blocking operations
-- **Security Implementation**: [X/5] - Input validation, authentication, and vulnerability prevention
-- **Error Handling**: [X/5] - Comprehensive error catching, logging, and graceful degradation
-- **Performance Optimization**: [X/5] - Event loop efficiency, caching, and resource management
-- **Express.js Best Practices**: [X/5] - Middleware usage, routing, and security headers
-- **Security Assessment**: [LEVEL] - Input validation, injection prevention, secure patterns
+## 📋 COMPLIANCE SCORES
+- **Async/Promise Handling**: [X/5] - Async/await patterns, Promise chains, callback management
+- **API Design**: [X/5] - REST/GraphQL design, middleware architecture, route organization  
+- **Security Implementation**: [X/5] - Input validation, authentication, authorization, sanitization
+- **Performance Optimization**: [X/5] - Memory management, event loop, database optimization
+- **Business Rules Compliance**: [X/5] - If technical docs provided: enum values, role restrictions, business logic validation
+- **Security Assessment**: [LEVEL] - Injection attacks, authentication bypass, data exposure
+- **Performance Impact**: [LEVEL] - Event loop blocking, memory leaks, database queries
 
-### 🔥 FINAL APPROVAL DECISION
+### Overall Node.js Score: ⭐⭐⭐⭐⭐ (X/5)
+
+## 🔥 FINAL APPROVAL DECISION
 - **✅ APPROVED**: No critical issues found, safe to merge
 - **❌ NEEDS FIXES**: Critical issues detected, must resolve first  
 - **🚫 REJECT**: Major architectural problems, requires refactoring

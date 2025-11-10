@@ -104,6 +104,10 @@ function initializeReviewFile(context) {
 // UNIFIED AI REVIEW FILE FUNCTION
 async function aiReviewFile(input, stream, selectedModel = null, context = null, request = null) {
     try {
+        // Reset business documents selection for each review
+        global.selectedBusinessDocs = null;
+        console.log('🔄 Reset global.selectedBusinessDocs for review-file');
+        
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
         if (!workspaceFolder) {
             stream.markdown('❌ **No workspace folder found**\n\n');

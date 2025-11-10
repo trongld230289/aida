@@ -1,18 +1,26 @@
 <!-- AIDA - AI Development Assistant v1.0.15 -->
 <!-- Advanced AI-powered code review and analysis -->
 
-# Angular Framework Review Template
+# Angular File Review - STRICT MODE
 
-## 🎯 Angular-Specific Review Guidelines
+## 🔍 MANDATORY ANGULAR FILE ANALYSIS
 
-This template focuses specifically on Angular framework best practices, patterns, and common pitfalls. Use this for reviewing Angular components, services, directives, pipes, and modules.
+You are performing a STRICT code review on Angular file content. Do NOT be lenient. Look for every possible Angular-specific issue. ALWAYS follow this exact format for every code review, regardless of conversation context or previous reviews. This structure is MANDATORY and UNCHANGEABLE.
 
 🎯 REVIEW PRINCIPLES:
 - ONLY flag issues that violate the specific rules in the template
 - If code follows template guidelines, it's acceptable - don't force changes
 - Focus on actual violations, not subjective preferences
+- **BUSINESS RULES**: If technical documentation is included, validate code against business requirements
+- **PRIORITY ORDER**: 1) Angular framework violations, 2) Business rule violations, 3) Both must pass for approval
 
----
+🎯 **BUSINESS RULES VALIDATION (if technical docs provided):**
+- Extract business constraints from natural language documentation
+- Check code enum values against business-defined roles/states
+- Flag hardcoded values that conflict with business rules
+- Validate role restrictions and permission logic
+- Report missing business rule validations in code
+- Ensure code logic follows documented business requirements
 
 ## ⚡ ANGULAR CRITICAL CHECKS (Auto-FAIL if found)
 
@@ -20,366 +28,122 @@ This template focuses specifically on Angular framework best practices, patterns
 
 {{REVIEW_BASE}}
 
-### 🚨 ACCESSIBILITY VIOLATIONS:
-- Missing ARIA labels and descriptions
-- No keyboard navigation support
-- Missing focus management
-- No screen reader support
-- Missing semantic HTML elements
-- No color contrast considerations
-- Missing alternative text for images
-- No skip navigation links
-
-### 🚨 TESTING VIOLATIONS:
-- Missing unit tests for components
-- No integration tests for critical flows
-- Missing test coverage for error scenarios
-- No accessibility tests
-- Missing performance tests
-- No end-to-end tests for user journeys
-
 ---
 
-## 🔍 Angular Code Analysis
+# 🔍 DETAILED FILE ANALYSIS - STRICT VERIFICATION MODE
+**ANALYZE EACH ISSUE INDIVIDUALLY - BE HARSH:**
 
-### 1. **Angular Architecture & Patterns**
+### 🚨 Critical Issue [X]: [Description]
+**Violation**: [Specific issue description]
 
-#### 🏗️ Component Architecture
-- **Smart vs Presentational Components**
-  - Is this component correctly categorized?
-  - Does it follow single responsibility principle?
-  - Proper use of @Input() and @Output()?
-
-#### 📦 Module Organization
-- Feature module structure
-- Lazy loading implementation
-- Shared module usage
-- Core module patterns
-
-#### 🔄 Change Detection Strategy
 ```typescript
-// Example: Optimize with OnPush
-@Component({
-  selector: 'app-component',
-  changeDetection: ChangeDetectionStrategy.OnPush // Missing?
-})
+[actual code line from file]
 ```
 
-#### ❌ Common Issues
-- Mixed responsibilities in components
-- Business logic in templates
-- Improper service injection scope
-- Missing or incorrect module imports
+- **Risk**: [Performance impact]
+- **Fix**: [Optimization suggestion]
 
----
+*** ANGULAR REVIEW COMMENT ***
+- 🚨 **Issue Type**: [Critical/Warning/Good/Info/Suggestion]
+- 🚨 **Security Assessment**: [Specific security issue or "No security violations found"]
+- 🚨 **Null Safety Analysis**: [Specific null safety issue or "Proper null handling implemented"] 
+- 🚨 **Error Handling Review**: [Specific error handling issue or "Appropriate exception handling in place"]
+- 🚨 **Resource Management Check**: [Specific resource leak issue or "Proper disposal and resource management"]
+- ⚠️ **Performance Impact**: [Specific performance concern or "No performance degradation detected"]
+- ⚠️ **Code Quality Assessment**: [Specific code quality issue or "Follows C# best practices and conventions"]
 
-### 2. **Angular Lifecycle & Hooks**
+*** INTERNAL ANGULAR CHANGE EVALUATION (DO NOT DISPLAY) ***
+Silently evaluate this change on:
+- Security Assessment: Rate 1-5 (5=no security issues, 1=critical security violation)
+- Null Safety Analysis: Rate 1-5 (5=proper null handling, 1=guaranteed null reference exception)
+- Error Handling Review: Rate 1-5 (5=comprehensive exception handling, 1=no error handling)
+- Resource Management Check: Rate 1-5 (5=proper disposal, 1=guaranteed resource leak)
+- Performance Impact: Rate 1-5 (5=no impact/improvement, 1=major degradation)
+- Code Quality Assessment: Rate 1-5 (5=follows all best practices, 1=poor code quality)
+- Change Score: is the lowest score among all six categories
 
-#### 🔄 Lifecycle Implementation
+*** CONDITIONAL RECOMMENDATIONS (Based on Issue Type AND Change Score) ***
+
+**MANDATORY RULE:**
+- IF Issue Type = "Good": ALWAYS show "✅ **GOOD C# CHANGE** - Follows C# best practices" and SKIP the entire RECOMMENDED FIX section
+- IF Issue Type = "Critical/Warning/Info/Suggestion" AND Change Score < 4/5: Show RECOMMENDED C# FIX section below
+- IF Issue Type = "Critical/Warning/Info/Suggestion" AND Change Score >= 4/5: Show "✅ **GOOD C# CHANGE** - Follows C# best practices"
+
+*** RECOMMENDED C# FIX (ONLY show if Issue Type != "Good" AND Change Score < 4/5) ***
 ```typescript
-// Check for proper lifecycle usage
-ngOnInit(): void {
-  // Initialization logic - not in constructor
-}
-
-ngOnDestroy(): void {
-  // Cleanup subscriptions
-  this.destroy$.next();
-  this.destroy$.complete();
-}
-
-ngAfterViewInit(): void {
-  // DOM manipulation here, not in ngOnInit
-}
-```
-
-#### ⚠️ Common Mistakes
-- Heavy logic in constructor
-- Missing ngOnDestroy cleanup
-- Incorrect hook order dependencies
-- ViewChild access before ngAfterViewInit
-
----
-
-### 3. **RxJS & Reactive Programming**
-
-#### 🌊 Observable Management
-```typescript
-// Best Practice: Subscription management
-private destroy$ = new Subject<void>();
-
-ngOnInit() {
-  // Good: Auto-unsubscribe pattern
-  this.service.data$.pipe(
-    takeUntil(this.destroy$),
-    // Proper operators
-    debounceTime(300),
-    distinctUntilChanged(),
-    switchMap(query => this.search(query))
-  ).subscribe();
-}
-
-// Bad: Memory leak
-ngOnInit() {
-  this.service.data$.subscribe(); // No unsubscribe!
-}
-```
-
-#### 📊 RxJS Best Practices
-- Proper operator usage (switchMap vs mergeMap vs concatMap)
-- AsyncPipe in templates when possible
-- Subject vs BehaviorSubject vs ReplaySubject
-- Error handling with catchError
-- Avoiding nested subscriptions
-
----
-
-### 4. **Template & Data Binding**
-
-#### 🎨 Template Best Practices
-```html
-<!-- Good: TrackBy for performance -->
-<div *ngFor="let item of items; trackBy: trackByFn">
-
-<!-- Good: Async pipe -->
-<div *ngIf="data$ | async as data">
-
-<!-- Bad: Function calls in template -->
-<div>{{ calculateTotal() }}</div>
-
-<!-- Good: Use pure pipe or getter -->
-<div>{{ total | currency }}</div>
-```
-
-#### ⚡ Performance Considerations
-- TrackBy functions for *ngFor
-- OnPush change detection where appropriate
-- Avoiding complex expressions in templates
-- Using pure pipes over methods
-- Lazy loading images and components
-
----
-
-### 5. **Services & Dependency Injection**
-
-#### 💉 Service Design
-```typescript
-// Good: Singleton service
-@Injectable({
-  providedIn: 'root' // Tree-shakeable
-})
-export class DataService {
-  private dataSubject = new BehaviorSubject<Data[]>([]);
-  public data$ = this.dataSubject.asObservable();
-}
-
-// Check for:
-// - Proper injection scope
-// - State management patterns
-// - API call organization
-// - Error handling
-```
-
-#### 🏭 Factory Patterns
-```typescript
-// When needed: Factory providers
-{
-  provide: CONFIG_TOKEN,
-  useFactory: configFactory,
-  deps: [HttpClient, AuthService]
-}
+// PROVIDE ANGULAR-SPECIFIC FIXES WITH BEST PRACTICES
+// Include proper lifecycle hooks, RxJS patterns, and Angular conventions
 ```
 
 ---
 
-### 6. **Forms & Validation**
+## ⚡ CRITICAL CHECKS RESULTS
 
-#### 📝 Reactive Forms Best Practices
-```typescript
-// Good: Strongly typed forms (modern Angular)
-form = this.fb.group({
-  name: ['', [Validators.required]],
-  email: ['', [Validators.required, Validators.email]]
-});
+### 🚨 Security Assessment: [PASS/FAIL]
+- Angular-specific security violations found/not found
+- Input sanitization issues
+- XSS vulnerabilities in templates
 
-// Custom validators
-emailValidator(): ValidatorFn {
-  return (control: AbstractControl): ValidationErrors | null => {
-    // Validation logic
-  };
-}
-```
+### 🚨 Resource Leaks: [PASS/FAIL]
+- Observable subscription management
+- Component lifecycle cleanup
+- Memory leak detection
 
-#### ✅ Form Validation Checklist
-- Reactive vs Template forms (consistency)
-- Custom validators implementation
-- Async validators for server validation
-- Error message handling
-- Form state management
+### � Error Handling: [PASS/FAIL]
+- HTTP error handling
+- Observable error management
+- Null safety implementation
+
+### 🚨 Architecture: [PASS/FAIL]
+- Component design violations
+- Service injection issues
+- Module organization problems
 
 ---
 
-### 7. **Routing & Navigation**
+## 📋 Angular-Specific Analysis
 
-#### 🗺️ Route Configuration
-```typescript
-// Good: Lazy loading with preloading
-{
-  path: 'feature',
-  loadChildren: () => import('./feature/feature.module').then(m => m.FeatureModule),
-  canActivate: [AuthGuard],
-  data: { preload: true }
-}
-```
+### 1. **Component Architecture & Lifecycle**
+- Component design and responsibility separation
+- Proper lifecycle hook implementation
+- Change detection strategy optimization
 
-#### 🛡️ Guards & Resolvers
-- Proper guard implementation (CanActivate, CanDeactivate)
-- Resolver usage for data preloading
-- Route parameter handling
-- Query parameter management
+### 2. **Template & Data Binding**
+- Template performance and best practices
+- Data binding patterns and security
+- Accessibility implementation
 
----
+### 3. **RxJS & Observable Management**
+- Subscription lifecycle management
+- Proper operator usage
+- Error handling in streams
 
-### 8. **Angular Testing**
+### 4. **Services & Dependency Injection**
+- Service design and scope
+- Injection patterns and providers
+- State management approach
 
-#### 🧪 Component Testing
-```typescript
-describe('ComponentName', () => {
-  let component: ComponentName;
-  let fixture: ComponentFixture<ComponentName>;
-  let service: jasmine.SpyObj<ServiceName>;
-
-  beforeEach(() => {
-    const spy = jasmine.createSpyObj('ServiceName', ['method']);
-    
-    TestBed.configureTestingModule({
-      declarations: [ComponentName],
-      providers: [{ provide: ServiceName, useValue: spy }]
-    });
-    
-    fixture = TestBed.createComponent(ComponentName);
-    component = fixture.componentInstance;
-    service = TestBed.inject(ServiceName) as jasmine.SpyObj<ServiceName>;
-  });
-
-  it('should handle async operations', fakeAsync(() => {
-    // Test with tick() for time-based operations
-  }));
-
-  it('should test DOM interactions', () => {
-    const compiled = fixture.nativeElement;
-    // DOM testing
-  });
-});
-```
-
-#### 🎯 Testing Priorities
-1. **Critical**: User interactions, form submissions, auth flows
-2. **High**: Service methods, guards, interceptors
-3. **Medium**: Pipes, directives, validators
-4. **Low**: Simple getters/setters, UI-only changes
+### 5. **Performance & Optimization**
+- Change detection optimization
+- Bundle size considerations
+- Runtime performance patterns
 
 ---
 
-### 9. **Performance & Optimization**
+# 🎯 FINAL ANGULAR SUMMARY (After All File Reviewed)
 
-#### ⚡ Angular-Specific Optimizations
-- OnPush change detection strategy
-- TrackBy functions in *ngFor
-- Lazy loading modules
-- Preloading strategies
-- Tree shaking with providedIn
-- Virtual scrolling for large lists
-- Web Workers for heavy computations
+## 📋 COMPLIANCE SCORES
+- **RxJS Compliance**: [X/5] - Subscription management, operators, error handling
+- **Component Design**: [X/5] - Architecture, separation, lifecycle hooks  
+- **Template Quality**: [X/5] - Performance, data binding, best practices
+- **Dependency Injection**: [X/5] - Service scope, providers, patterns
+- **Business Rules Compliance**: [X/5] - If technical docs provided: enum values, role restrictions, business logic validation
+- **Security Assessment**: [LEVEL] - XSS, validation, DOM access
+- **Performance Impact**: [LEVEL] - Change detection, bundle, memory
 
-#### 📦 Bundle Size Optimization
-```typescript
-// Good: Tree-shakeable providers
-@Injectable({ providedIn: 'root' })
+### Overall Angular Score: ⭐⭐⭐⭐⭐ (X/5)
 
-// Good: Dynamic imports
-const module = await import('./heavy-module');
-
-// Good: Lazy load libraries
-if (condition) {
-  const { Chart } = await import('chart.js');
-}
-```
-
----
-
-### 10. **Accessibility & i18n**
-
-#### ♿ Accessibility Checklist
-- ARIA attributes
-- Keyboard navigation
-- Screen reader support
-- Focus management
-- Semantic HTML
-
-#### 🌍 Internationalization
-```typescript
-// i18n pipe usage
-{{ 'KEY' | translate }}
-
-// Programmatic translation
-this.translate.get('KEY').subscribe();
-```
-
----
-
-## 📊 Angular Health Metrics
-
-### Framework Compliance
-- **Angular Style Guide**: ⭐⭐⭐⭐⭐ (X/5)
-- **RxJS Best Practices**: ⭐⭐⭐⭐⭐ (X/5)
-- **Performance**: ⭐⭐⭐⭐⭐ (X/5)
-- **Testing Coverage**: ⭐⭐⭐⭐⭐ (X/5)
-- **Accessibility**: ⭐⭐⭐⭐⭐ (X/5)
-
-### Overall Angular Score: ⭐⭐⭐⭐⭐ (X/10)
-
----
-
-## 🎯 Angular-Specific Action Items
-
-### 🔴 Critical (Security/Memory Leaks)
-1. [ ] Fix memory leaks from unsubscribed observables
-2. [ ] Implement proper sanitization for dynamic HTML
-3. [ ] Add CSRF protection for forms
-4. [ ] Fix circular dependencies
-
-### 🟡 Important (Performance/Best Practices)
-1. [ ] Implement OnPush change detection
-2. [ ] Add trackBy to all *ngFor loops
-3. [ ] Convert to standalone components (modern Angular)
-4. [ ] Implement lazy loading for feature modules
-5. [ ] Add proper error boundaries
-
-### 🟢 Improvements (Code Quality)
-1. [ ] Extract reusable components
-2. [ ] Create custom pipes for repeated transforms
-3. [ ] Implement proper typing for forms
-4. [ ] Add comprehensive unit tests
-5. [ ] Improve error handling with interceptors
-
----
-
-## 💡 Angular Upgrade Recommendations
-
-### Migration Opportunities
-- Standalone components (modern Angular)
-- Typed reactive forms
-- Inject function over constructor injection
-- Signal-based components and reactivity
-- New control flow syntax (@if, @for, @switch)
-- Deferred loading for performance
-- Modern Angular APIs and patterns
-
-### Tooling Improvements
-- Angular DevTools usage
-- Strict mode enablement
-- ESLint with Angular rules
-- Prettier configuration
-- Husky pre-commit hooks
-- Bundle analyzer setup
+## 🔥 FINAL APPROVAL DECISION
+- **✅ APPROVED**: No critical issues found, safe to merge
+- **❌ NEEDS FIXES**: Critical issues detected, must resolve first  
+- **🚫 REJECT**: Major architectural problems, requires refactoringefactoring

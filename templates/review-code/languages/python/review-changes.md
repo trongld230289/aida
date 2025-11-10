@@ -11,12 +11,16 @@ You are performing a STRICT code review on Python git changes. Do NOT be lenient
 - ONLY flag issues that violate the specific rules in the template
 - If code follows template guidelines, it's acceptable - don't force changes
 - Focus on actual violations, not subjective preferences
+- **BUSINESS RULES**: If technical documentation is included, validate code against business requirements
+- **PRIORITY ORDER**: 1) Python framework violations, 2) Business rule violations, 3) Both must pass for approval
 
-### Review Entire File
-**Prompt:** `review-changes [filename]`
-- Reviews ONLY the git diff changes (+ and - lines)
-- Analyzes impact of changes on Python architecture
-- Does NOT review unchanged code
+🎯 **BUSINESS RULES VALIDATION (if technical docs provided):**
+- Extract business constraints from natural language documentation
+- Check code enum values against business-defined roles/states
+- Flag hardcoded values that conflict with business rules
+- Validate role restrictions and permission logic
+- Report missing business rule validations in code
+- Ensure code logic follows documented business requirements
 
 <!-- HIDDEN REVIEW SCOPE:
 - ✅ ONLY review: Lines marked with + (added) or - (removed)
@@ -28,16 +32,16 @@ You are performing a STRICT code review on Python git changes. Do NOT be lenient
 ### 📋 CHANGE SEPARATION RULES (MANDATORY):
 
 **Split into separate changes when:**
-- ✅ **Different Python artifacts**: Class vs Function vs Module vs Package changes = separate changes
-- ✅ **Different function parts**: Method signature vs Body vs Decorator = separate changes
-- ✅ **Different async operations**: Different async/await patterns = separate changes
-- ✅ **Different exception handling**: Different try/except blocks = separate changes
+- ✅ **Different Python modules**: Different .py files or packages = separate changes
+- ✅ **Different class/function definitions**: Different classes or functions = separate changes
+- ✅ **Different decorators**: Different @property, @staticmethod, @classmethod = separate changes
+- ✅ **Different async operations**: Different async/await functions = separate changes
 - ✅ **Non-adjacent code blocks**: If there are 3+ unchanged lines between modifications = separate changes
 
 **Keep as one change when:**
-- ❌ **Same function**: Multiple lines in same function body
-- ❌ **Related methods**: Related methods in same class
-- ❌ **Same module imports**: Related import statements
+- ❌ **Same Python function**: Multiple lines in same function body
+- ❌ **Related class methods**: Methods in same class for same feature
+- ❌ **Same import section**: Related imports for same functionality
 
 ## ⚡ PYTHON CRITICAL CHECKS (Auto-FAIL if found)
 
@@ -50,30 +54,29 @@ You are performing a STRICT code review on Python git changes. Do NOT be lenient
 ### Start Review For Each Change:
 
 ```
-## Change [X]: [ADDED/REMOVED/MODIFIED] - [Python artifact type: Class/Function/Module/Decorator]
+## Change [X]: [ADDED/REMOVED/MODIFIED] - [Python artifact type: Class/Function/Method/Module/Decorator]
 ```python
 [Show the exact code block with line numbers]
 ```
 
 *** PYTHON REVIEW COMMENT ***
 - 🚨 **Issue Type**: [Critical/Warning/Good/Info/Suggestion]
-- 📝 **Python Problem**: [Specific Python issue - reference Python best practices]
-- 💡 **Python Solution**: [Python-specific fix with proper patterns]
-- 🎯 **Code Impact**: [How it affects Python architecture/performance/maintainability]
-
-IMPORTANT Python considerations:
-- PEP 8 compliance and code style
-- Exception handling patterns
-- Resource management and cleanup
-- Performance optimization
-- Type safety and documentation
+- 🚨 **Security Assessment**: [Specific security issue or "No security violations found"]
+- 🚨 **Null Safety Analysis**: [Specific null safety issue or "Proper null handling implemented"] 
+- 🚨 **Error Handling Review**: [Specific error handling issue or "Appropriate exception handling in place"]
+- 🚨 **Resource Management Check**: [Specific resource leak issue or "Proper disposal and resource management"]
+- ⚠️ **Performance Impact**: [Specific performance concern or "No performance degradation detected"]
+- ⚠️ **Code Quality Assessment**: [Specific code quality issue or "Follows Python best practices and conventions"]
 
 *** INTERNAL PYTHON CHANGE EVALUATION (DO NOT DISPLAY) ***
 Silently evaluate this change on:
-- Python Best Practices: Rate 1-5 (5=excellent, 1=poor)
+- Security Assessment: Rate 1-5 (5=no security issues, 1=critical security violation)
+- Null Safety Analysis: Rate 1-5 (5=proper null handling, 1=guaranteed null reference exception)
+- Error Handling Review: Rate 1-5 (5=comprehensive exception handling, 1=no error handling)
+- Resource Management Check: Rate 1-5 (5=proper disposal, 1=guaranteed resource leak)
 - Performance Impact: Rate 1-5 (5=no impact/improvement, 1=major degradation)
-- Code Safety: Rate 1-5 (5=no security/memory issues, 1=critical vulnerabilities)
-- Change Score: is a smallest score of three scores
+- Code Quality Assessment: Rate 1-5 (5=follows all best practices, 1=poor code quality)
+- Change Score: is the lowest score among all six categories
 
 *** CONDITIONAL RECOMMENDATIONS (Based on Issue Type AND Change Score) ***
 
@@ -85,85 +88,25 @@ Silently evaluate this change on:
 *** RECOMMENDED PYTHON FIX (ONLY show if Issue Type != "Good" AND Change Score < 4/5) ***
 ```python
 # PROVIDE PYTHON-SPECIFIC FIXES WITH BEST PRACTICES
-# Include proper error handling, type hints, and Pythonic patterns
-
-# Example for proper async function with error handling and cleanup:
-import asyncio
-import aiohttp
-import logging
-from typing import Optional, Dict, Any
-from contextlib import asynccontextmanager
-
-logger = logging.getLogger(__name__)
-
-class UserService:
-    def __init__(self, base_url: str, timeout: int = 30):
-        self.base_url = base_url
-        self.timeout = aiohttp.ClientTimeout(total=timeout)
-    
-    @asynccontextmanager
-    async def _get_session(self):
-        """Context manager for HTTP session with proper cleanup."""
-        async with aiohttp.ClientSession(timeout=self.timeout) as session:
-            yield session
-    
-    async def get_user(self, user_id: int) -> Optional[Dict[str, Any]]:
-        """
-        Fetch user data by ID with proper error handling.
-        
-        Args:
-            user_id: The user ID to fetch
-            
-        Returns:
-            User data dictionary or None if not found
-            
-        Raises:
-            ValueError: If user_id is invalid
-            UserServiceError: If API call fails
-        """
-        if not isinstance(user_id, int) or user_id <= 0:
-            raise ValueError(f"Invalid user_id: {user_id}")
-        
-        url = f"{self.base_url}/users/{user_id}"
-        
-        try:
-            async with self._get_session() as session:
-                async with session.get(url) as response:
-                    if response.status == 404:
-                        logger.info(f"User {user_id} not found")
-                        return None
-                    
-                    response.raise_for_status()
-                    return await response.json()
-                    
-        except aiohttp.ClientError as e:
-            logger.error(f"HTTP error fetching user {user_id}: {e}")
-            raise UserServiceError(f"Failed to fetch user {user_id}") from e
-        except asyncio.TimeoutError as e:
-            logger.error(f"Timeout fetching user {user_id}")
-            raise UserServiceError(f"Timeout fetching user {user_id}") from e
-        except Exception as e:
-            logger.error(f"Unexpected error fetching user {user_id}: {e}")
-            raise UserServiceError(f"Unexpected error fetching user {user_id}") from e
-
-class UserServiceError(Exception):
-    """Custom exception for user service errors."""
-    pass
+# Include proper exception handling, type hints, and Pythonic patterns
 ```
 
 ---
 
-## 🎯 FINAL PYTHON SUMMARY (After All Changes Reviewed)
+# 🎯 FINAL PYTHON SUMMARY (After All Changes Reviewed)
 
-### 📋 COMPLIANCE SCORES
-- **PEP 8 Compliance**: [X/5] - Code style, naming conventions, and formatting
-- **Error Handling**: [X/5] - Exception handling, logging, and recovery patterns
-- **Resource Management**: [X/5] - Context managers, cleanup, and memory safety
-- **Type Safety**: [X/5] - Type hints, validation, and documentation
-- **Performance**: [X/5] - Efficiency, data structures, and optimization
-- **Security Assessment**: [LEVEL] - Input validation, injection prevention, secure patterns
+## 📋 COMPLIANCE SCORES
+- **PEP 8 Compliance**: [X/5] - Code style, naming conventions, formatting
+- **Type Safety**: [X/5] - Type hints, mypy compliance, runtime validation  
+- **Exception Handling**: [X/5] - Try-except blocks, custom exceptions, error propagation
+- **Resource Management**: [X/5] - Context managers, file handling, memory management
+- **Business Rules Compliance**: [X/5] - If technical docs provided: enum values, role restrictions, business logic validation
+- **Security Assessment**: [LEVEL] - SQL injection, code injection, input validation
+- **Performance Impact**: [LEVEL] - Algorithm efficiency, memory usage, I/O optimization
 
-### 🔥 FINAL APPROVAL DECISION
+### Overall Python Score: ⭐⭐⭐⭐⭐ (X/5)
+
+## 🔥 FINAL APPROVAL DECISION
 - **✅ APPROVED**: No critical issues found, safe to merge
 - **❌ NEEDS FIXES**: Critical issues detected, must resolve first  
 - **🚫 REJECT**: Major architectural problems, requires refactoring

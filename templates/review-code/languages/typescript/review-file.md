@@ -1,18 +1,26 @@
 <!-- AIDA - AI Development Assistant v1.0.15 -->
 <!-- Advanced AI-powered code review and analysis -->
 
-# TypeScript Framework Review Template
+# TypeScript File Review - STRICT MODE
 
-## 🎯 TypeScript-Specific Review Guidelines
+## 🔍 MANDATORY TYPESCRIPT FILE ANALYSIS
 
-This template focuses specifically on TypeScript framework best practices, patterns, and common pitfalls. Use this for reviewing TypeScript classes, interfaces, types, modules, and configuration files.
+You are performing a STRICT code review on TypeScript file content. Do NOT be lenient. Look for every possible TypeScript-specific issue. ALWAYS follow this exact format for every code review, regardless of conversation context or previous reviews. This structure is MANDATORY and UNCHANGEABLE.
 
 🎯 REVIEW PRINCIPLES:
 - ONLY flag issues that violate the specific rules in the template
 - If code follows template guidelines, it's acceptable - don't force changes
 - Focus on actual violations, not subjective preferences
+- **BUSINESS RULES**: If technical documentation is included, validate code against business requirements
+- **PRIORITY ORDER**: 1) TypeScript framework violations, 2) Business rule violations, 3) Both must pass for approval
 
----
+🎯 **BUSINESS RULES VALIDATION (if technical docs provided):**
+- Extract business constraints from natural language documentation
+- Check code enum values against business-defined roles/states
+- Flag hardcoded values that conflict with business rules
+- Validate role restrictions and permission logic
+- Report missing business rule validations in code
+- Ensure code logic follows documented business requirements
 
 ## ⚡ TYPESCRIPT CRITICAL CHECKS (Auto-FAIL if found)
 
@@ -20,605 +28,122 @@ This template focuses specifically on TypeScript framework best practices, patte
 
 {{REVIEW_BASE}}
 
-### 🚨 CONFIGURATION VIOLATIONS:
-- Missing strict TypeScript configuration
-- Incorrect compiler options for target environment
-- Missing proper linting rules
-- No proper tsconfig.json structure
-- Missing path mapping configuration
-- Incorrect module resolution settings
-- Missing proper build optimization
-- No proper declaration file generation
-- Missing source map configuration
-- Incorrect target/lib configuration
+---
 
-### 🚨 TESTING VIOLATIONS:
-- Missing type definitions for test utilities
-- No type checking in test files
-- Missing proper mock typing
-- Test types not matching implementation
-- Missing integration test typing
-- No type coverage measurement
-- Missing property-based testing for types
-- Test utilities without proper generics
-- Missing assertion typing
-- No proper test data typing
+# 🔍 DETAILED FILE ANALYSIS - STRICT VERIFICATION MODE
+**ANALYZE EACH ISSUE INDIVIDUALLY - BE HARSH:**
+
+### 🚨 Critical Issue [X]: [Description]
+**Violation**: [Specific issue description]
+
+```typescript
+[actual code line from file]
+```
+
+- **Risk**: [Performance impact]
+- **Fix**: [Optimization suggestion]
+
+*** TYPESCRIPT REVIEW COMMENT ***
+- 🚨 **Issue Type**: [Critical/Warning/Good/Info/Suggestion]
+- 🚨 **Security Assessment**: [Specific security issue or "No security violations found"]
+- 🚨 **Null Safety Analysis**: [Specific null safety issue or "Proper null handling implemented"] 
+- 🚨 **Error Handling Review**: [Specific error handling issue or "Appropriate exception handling in place"]
+- 🚨 **Resource Management Check**: [Specific resource leak issue or "Proper disposal and resource management"]
+- ⚠️ **Performance Impact**: [Specific performance concern or "No performance degradation detected"]
+- ⚠️ **Code Quality Assessment**: [Specific code quality issue or "Follows TypeScript best practices and conventions"]
+
+*** INTERNAL TYPESCRIPT CHANGE EVALUATION (DO NOT DISPLAY) ***
+Silently evaluate this change on:
+- Security Assessment: Rate 1-5 (5=no security issues, 1=critical security violation)
+- Null Safety Analysis: Rate 1-5 (5=proper null handling, 1=guaranteed null reference exception)
+- Error Handling Review: Rate 1-5 (5=comprehensive exception handling, 1=no error handling)
+- Resource Management Check: Rate 1-5 (5=proper disposal, 1=guaranteed resource leak)
+- Performance Impact: Rate 1-5 (5=no impact/improvement, 1=major degradation)
+- Code Quality Assessment: Rate 1-5 (5=follows all best practices, 1=poor code quality)
+- Change Score: is the lowest score among all six categories
+
+*** CONDITIONAL RECOMMENDATIONS (Based on Issue Type AND Change Score) ***
+
+**MANDATORY RULE:**
+- IF Issue Type = "Good": ALWAYS show "✅ **GOOD TYPESCRIPT CHANGE** - Follows TypeScript best practices" and SKIP the entire RECOMMENDED FIX section
+- IF Issue Type = "Critical/Warning/Info/Suggestion" AND Change Score < 4/5: Show RECOMMENDED TYPESCRIPT FIX section below
+- IF Issue Type = "Critical/Warning/Info/Suggestion" AND Change Score >= 4/5: Show "✅ **GOOD TYPESCRIPT CHANGE** - Follows TypeScript best practices"
+
+*** RECOMMENDED TYPESCRIPT FIX (ONLY show if Issue Type != "Good" AND Change Score < 4/5) ***
+```typescript
+// PROVIDE TYPESCRIPT-SPECIFIC FIXES WITH BEST PRACTICES
+// Include proper type annotations, generics, interfaces, and modern TypeScript patterns
+```
 
 ---
 
-## 🔍 TypeScript Code Analysis
+## ⚡ CRITICAL CHECKS RESULTS
+
+### 🚨 Security Assessment: [PASS/FAIL]
+- TypeScript-specific security violations found/not found
+- Type safety enforcement issues
+- Runtime validation gaps
+
+### 🚨 Resource Leaks: [PASS/FAIL]
+- Generic constraint violations
+- Type inference issues
+- Interface design problems
+
+### 🚨 Error Handling: [PASS/FAIL]
+- Type-safe error handling patterns
+- Custom error type implementation
+- Async/await type annotations
+
+### 🚨 Architecture: [PASS/FAIL]
+- Interface segregation violations
+- Generic abuse or misuse
+- Module organization issues
+
+---
+
+## 📋 TypeScript-Specific Analysis
 
 ### 1. **Type System & Safety**
-
-#### 🏗️ Type Definitions
-- **Strong Typing**
-  - Are all functions properly typed?
-  - Appropriate use of generics?
-  - Proper interface vs type alias usage?
-
-#### 📦 Type Organization
-- Logical type hierarchy
-- Proper module organization
-- Interface segregation
-- Type reusability patterns
-
-#### 🔄 Generic Programming
-```typescript
-// Example: Proper generic usage
-interface Repository<T extends BaseEntity> {
-  findById(id: string): Promise<T | null>;
-  save(entity: T): Promise<T>;
-  delete(id: string): Promise<void>;
-}
-
-class UserRepository implements Repository<User> {
-  async findById(id: string): Promise<User | null> {
-    // Implementation with proper typing
-  }
-}
-```
-
-#### ❌ Common Issues
-- Overuse of `any` type
-- Missing generic constraints
-- Incorrect type assertions
-- Poor interface design
-
----
+- Proper type annotations and inference
+- Generic constraints and usage
+- Interface vs type alias decisions
 
 ### 2. **Advanced Type Patterns**
+- Utility types and mapped types
+- Conditional types and template literals
+- Discriminated unions and pattern matching
 
-#### 🎯 Utility Types
-```typescript
-// Best Practice: Leverage utility types
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  password: string;
-}
+### 3. **Module Organization**
+- Import/export patterns
+- Declaration merging usage
+- Namespace organization
 
-// Good: Using utility types
-type PublicUser = Omit<User, 'password'>;
-type UserUpdate = Partial<Pick<User, 'name' | 'email'>>;
-type CreateUser = Omit<User, 'id'>;
+### 4. **Generic Programming**
+- Type parameter constraints
+- Variance and type relationships
+- Higher-order type functions
 
-// Good: Branded types for type safety
-type UserId = string & { readonly brand: unique symbol };
-type Email = string & { readonly brand: unique symbol };
-
-function getUserById(id: UserId): Promise<User | null> {
-  // Type-safe ID usage
-}
-```
-
-#### 🔒 Type Guards & Narrowing
-```typescript
-// Best Practice: Type guards
-function isUser(obj: unknown): obj is User {
-  return typeof obj === 'object' && 
-         obj !== null && 
-         'id' in obj && 
-         'name' in obj && 
-         'email' in obj;
-}
-
-// Good: Discriminated unions
-type ApiResponse<T> = 
-  | { success: true; data: T }
-  | { success: false; error: string };
-
-function handleResponse<T>(response: ApiResponse<T>): T {
-  if (response.success) {
-    return response.data; // TypeScript knows this is safe
-  }
-  throw new Error(response.error);
-}
-```
+### 5. **Configuration & Tooling**
+- Strict TypeScript settings
+- Compiler options optimization
+- Integration with build tools
 
 ---
 
-### 3. **Async Programming & Promises**
+# 🎯 FINAL TYPESCRIPT SUMMARY (After All File Reviewed)
 
-#### ⚡ Async Best Practices
-```typescript
-// Best Practice: Proper async typing
-async function fetchUserData(id: UserId): Promise<Result<User, ApiError>> {
-  try {
-    const response = await fetch(`/api/users/${id}`);
-    
-    if (!response.ok) {
-      return Result.error(new ApiError('Failed to fetch user'));
-    }
-    
-    const userData = await response.json();
-    
-    if (!isUser(userData)) {
-      return Result.error(new ApiError('Invalid user data'));
-    }
-    
-    return Result.success(userData);
-  } catch (error) {
-    return Result.error(new ApiError('Network error', error));
-  }
-}
+## 📋 COMPLIANCE SCORES
+- **Type Safety**: [X/5] - Proper type annotations, generic constraints, and strict mode compliance
+- **Interface Design**: [X/5] - Well-defined interfaces, proper inheritance, and composition patterns
+- **Generic Usage**: [X/5] - Appropriate constraints, type inference, and reusability
+- **Module Organization**: [X/5] - Proper imports/exports, namespace usage, and dependency management
+- **Business Rules Compliance**: [X/5] - If technical docs provided: enum values, role restrictions, business logic validation
+- **Security Assessment**: [LEVEL] - Type safety enforcement, runtime validation, secure patterns
+- **Performance Impact**: [LEVEL] - Compilation efficiency, runtime performance, memory usage
 
-// Good: Result type for error handling
-class Result<T, E = Error> {
-  constructor(
-    private readonly _success: boolean,
-    private readonly _value?: T,
-    private readonly _error?: E
-  ) {}
-  
-  static success<T>(value: T): Result<T> {
-    return new Result(true, value);
-  }
-  
-  static error<E>(error: E): Result<never, E> {
-    return new Result(false, undefined, error);
-  }
-  
-  get isSuccess(): boolean { return this._success; }
-  get value(): T { 
-    if (!this._success) throw new Error('Cannot access value of failed result');
-    return this._value!; 
-  }
-  get error(): E { 
-    if (this._success) throw new Error('Cannot access error of successful result');
-    return this._error!; 
-  }
-}
-```
+### Overall TypeScript Score: ⭐⭐⭐⭐⭐ (X/5)
 
-#### 🚨 Async Anti-patterns
-- Promise constructor anti-patterns
-- Missing proper error typing
-- Unhandled promise rejections
-- Race conditions without proper typing
-
----
-
-### 4. **Module Design & Organization**
-
-#### 📦 Module Structure
-```typescript
-// Good: Proper module exports
-// user.types.ts
-export interface User {
-  id: UserId;
-  name: string;
-  email: Email;
-}
-
-export type CreateUserRequest = Omit<User, 'id'>;
-export type UpdateUserRequest = Partial<Pick<User, 'name' | 'email'>>;
-
-// user.service.ts
-export class UserService {
-  constructor(private readonly repository: Repository<User>) {}
-  
-  async createUser(request: CreateUserRequest): Promise<Result<User, ValidationError>> {
-    // Implementation
-  }
-}
-
-// index.ts (barrel export)
-export * from './user.types';
-export * from './user.service';
-export { UserRepository } from './user.repository';
-```
-
-#### 🏭 Dependency Injection
-```typescript
-// Good: Type-safe dependency injection
-interface ServiceContainer {
-  userService: UserService;
-  orderService: OrderService;
-  emailService: EmailService;
-}
-
-class DIContainer implements ServiceContainer {
-  private _userService?: UserService;
-  private _orderService?: OrderService;
-  private _emailService?: EmailService;
-  
-  get userService(): UserService {
-    if (!this._userService) {
-      this._userService = new UserService(this.userRepository);
-    }
-    return this._userService;
-  }
-  
-  // Other services...
-}
-```
-
----
-
-### 5. **Error Handling & Validation**
-
-#### 🛡️ Type-Safe Error Handling
-```typescript
-// Best Practice: Custom error types
-abstract class AppError extends Error {
-  abstract readonly code: string;
-  abstract readonly statusCode: number;
-}
-
-class ValidationError extends AppError {
-  readonly code = 'VALIDATION_ERROR';
-  readonly statusCode = 400;
-  
-  constructor(
-    message: string,
-    public readonly field: string,
-    public readonly value: unknown
-  ) {
-    super(message);
-  }
-}
-
-class NotFoundError extends AppError {
-  readonly code = 'NOT_FOUND';
-  readonly statusCode = 404;
-}
-
-// Good: Error handling with proper typing
-async function validateAndCreateUser(data: unknown): Promise<Result<User, ValidationError[]>> {
-  const errors: ValidationError[] = [];
-  
-  if (typeof data !== 'object' || data === null) {
-    errors.push(new ValidationError('Data must be an object', 'root', data));
-    return Result.error(errors);
-  }
-  
-  // Type-safe validation...
-  
-  if (errors.length > 0) {
-    return Result.error(errors);
-  }
-  
-  return Result.success(data as User);
-}
-```
-
-#### ✅ Validation Patterns
-- Runtime type validation
-- Schema validation with proper typing
-- Custom validation decorators
-- Error aggregation patterns
-
----
-
-### 6. **Configuration & Environment**
-
-#### ⚙️ Type-Safe Configuration
-```typescript
-// Good: Environment configuration with types
-interface AppConfig {
-  readonly port: number;
-  readonly database: {
-    readonly host: string;
-    readonly port: number;
-    readonly name: string;
-  };
-  readonly auth: {
-    readonly jwtSecret: string;
-    readonly tokenExpiry: number;
-  };
-}
-
-// Good: Configuration validation
-function loadConfig(): AppConfig {
-  const config = {
-    port: parseInt(process.env.PORT || '3000', 10),
-    database: {
-      host: process.env.DB_HOST || 'localhost',
-      port: parseInt(process.env.DB_PORT || '5432', 10),
-      name: process.env.DB_NAME || 'app',
-    },
-    auth: {
-      jwtSecret: process.env.JWT_SECRET || (() => {
-        throw new Error('JWT_SECRET is required');
-      })(),
-      tokenExpiry: parseInt(process.env.TOKEN_EXPIRY || '3600', 10),
-    },
-  };
-  
-  // Validate configuration
-  validateConfig(config);
-  
-  return config;
-}
-```
-
----
-
-### 7. **Testing & Type Coverage**
-
-#### 🧪 Type-Safe Testing
-```typescript
-// Good: Typed test utilities
-interface TestUser {
-  id: UserId;
-  name: string;
-  email: Email;
-}
-
-class UserTestFactory {
-  static create(overrides: Partial<TestUser> = {}): TestUser {
-    return {
-      id: 'user-123' as UserId,
-      name: 'Test User',
-      email: 'test@example.com' as Email,
-      ...overrides,
-    };
-  }
-}
-
-// Good: Type-safe mocking
-interface MockUserRepository extends Repository<User> {
-  findById: jest.MockedFunction<Repository<User>['findById']>;
-  save: jest.MockedFunction<Repository<User>['save']>;
-}
-
-describe('UserService', () => {
-  let userService: UserService;
-  let mockRepository: MockUserRepository;
-  
-  beforeEach(() => {
-    mockRepository = {
-      findById: jest.fn(),
-      save: jest.fn(),
-      delete: jest.fn(),
-    };
-    
-    userService = new UserService(mockRepository);
-  });
-  
-  it('should create user with proper typing', async () => {
-    const createRequest: CreateUserRequest = {
-      name: 'John Doe',
-      email: 'john@example.com' as Email,
-    };
-    
-    const expectedUser = UserTestFactory.create();
-    mockRepository.save.mockResolvedValue(expectedUser);
-    
-    const result = await userService.createUser(createRequest);
-    
-    expect(result.isSuccess).toBe(true);
-    expect(result.value).toEqual(expectedUser);
-  });
-});
-```
-
----
-
-### 8. **Performance & Optimization**
-
-#### ⚡ Type-Level Performance
-```typescript
-// Good: Efficient type patterns
-// Use readonly for immutable data
-interface ReadonlyUser {
-  readonly id: UserId;
-  readonly name: string;
-  readonly email: Email;
-  readonly createdAt: Date;
-}
-
-// Good: Lazy loading with proper typing
-class LazyLoader<T> {
-  private _value?: T;
-  private _loaded = false;
-  
-  constructor(private readonly loader: () => Promise<T>) {}
-  
-  async getValue(): Promise<T> {
-    if (!this._loaded) {
-      this._value = await this.loader();
-      this._loaded = true;
-    }
-    return this._value!;
-  }
-}
-
-// Good: Memoization with proper typing
-function memoize<TArgs extends unknown[], TReturn>(
-  fn: (...args: TArgs) => TReturn
-): (...args: TArgs) => TReturn {
-  const cache = new Map<string, TReturn>();
-  
-  return (...args: TArgs): TReturn => {
-    const key = JSON.stringify(args);
-    
-    if (cache.has(key)) {
-      return cache.get(key)!;
-    }
-    
-    const result = fn(...args);
-    cache.set(key, result);
-    return result;
-  };
-}
-```
-
----
-
-### 9. **Build & Tooling Configuration**
-
-#### 🔧 TypeScript Configuration
-```json
-// tsconfig.json - Best practices
-{
-  "compilerOptions": {
-    "target": "ES2022",
-    "lib": ["ES2022", "DOM"],
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "strict": true,
-    "noUncheckedIndexedAccess": true,
-    "exactOptionalPropertyTypes": true,
-    "noImplicitReturns": true,
-    "noFallthroughCasesInSwitch": true,
-    "noImplicitOverride": true,
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true,
-    "removeComments": false,
-    "importHelpers": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true,
-    "allowSyntheticDefaultImports": true,
-    "esModuleInterop": true,
-    "experimentalDecorators": true,
-    "emitDecoratorMetadata": true,
-    "baseUrl": ".",
-    "paths": {
-      "@/*": ["src/*"],
-      "@/types/*": ["src/types/*"]
-    }
-  },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "**/*.spec.ts"]
-}
-```
-
----
-
-### 10. **Advanced Patterns & Best Practices**
-
-#### 🎯 Design Patterns
-```typescript
-// Good: Builder pattern with proper typing
-class UserBuilder {
-  private user: Partial<User> = {};
-  
-  setName(name: string): this {
-    this.user.name = name;
-    return this;
-  }
-  
-  setEmail(email: Email): this {
-    this.user.email = email;
-    return this;
-  }
-  
-  build(): User {
-    if (!this.user.name || !this.user.email) {
-      throw new Error('Missing required fields');
-    }
-    
-    return {
-      id: generateId() as UserId,
-      name: this.user.name,
-      email: this.user.email,
-    };
-  }
-}
-
-// Good: Observer pattern with proper typing
-interface Observer<T> {
-  update(data: T): void;
-}
-
-class Observable<T> {
-  private observers: Observer<T>[] = [];
-  
-  subscribe(observer: Observer<T>): () => void {
-    this.observers.push(observer);
-    
-    return () => {
-      const index = this.observers.indexOf(observer);
-      if (index > -1) {
-        this.observers.splice(index, 1);
-      }
-    };
-  }
-  
-  notify(data: T): void {
-    this.observers.forEach(observer => observer.update(data));
-  }
-}
-```
-
----
-
-## 📊 TypeScript Health Metrics
-
-### Framework Compliance
-- **Type Safety**: ⭐⭐⭐⭐⭐ (X/5)
-- **Module Design**: ⭐⭐⭐⭐⭐ (X/5)
-- **Error Handling**: ⭐⭐⭐⭐⭐ (X/5)
-- **Performance**: ⭐⭐⭐⭐⭐ (X/5)
-- **Testing**: ⭐⭐⭐⭐⭐ (X/5)
-
-### Overall TypeScript Score: ⭐⭐⭐⭐⭐ (X/10)
-
----
-
-## 🎯 TypeScript-Specific Action Items
-
-### 🔴 Critical (Type Safety/Memory)
-1. [ ] Fix all `any` types with proper type definitions
-2. [ ] Add missing type annotations for all functions
-3. [ ] Implement proper error handling with typed errors
-4. [ ] Fix async operations without proper error handling
-5. [ ] Add type guards for runtime validation
-
-### 🟡 Important (Performance/Best Practices)
-1. [ ] Implement proper generic constraints
-2. [ ] Add utility types for better type reusability
-3. [ ] Optimize module imports and exports
-4. [ ] Add proper TypeScript configuration
-5. [ ] Implement branded types for type safety
-
-### 🟢 Improvements (Code Quality)
-1. [ ] Add comprehensive type documentation
-2. [ ] Implement advanced type patterns
-3. [ ] Add type coverage measurement
-4. [ ] Improve test type safety
-5. [ ] Add proper build optimization
-
----
-
-## 💡 TypeScript Upgrade Recommendations
-
-### Migration Opportunities
-- Modern TypeScript features (template literal types, conditional types)
-- Strict configuration options for better type safety
-- Advanced utility types and mapped types
-- Type-only imports for better tree-shaking
-- Branded types for domain modeling
-- Result/Either patterns for error handling
-
-### Tooling Improvements
-- Type coverage measurement tools
-- Advanced linting rules for TypeScript
-- Type-aware bundling optimization
-- Source map debugging setup
-- Declaration file generation
-- Type testing with dtslint or similar tools
+## 🔥 FINAL APPROVAL DECISION
+- **✅ APPROVED**: No critical issues found, safe to merge
+- **❌ NEEDS FIXES**: Critical issues detected, must resolve first  
+- **🚫 REJECT**: Major architectural problems, requires refactoring

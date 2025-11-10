@@ -59,6 +59,15 @@
 - Missing ConfigureAwait(false) in libraries
 - Controller methods without proper HTTP verbs
 
+### 🚨 CODE QUALITY & MAINTAINABILITY VIOLATIONS:
+- Hardcoded strings for roles, error messages, or business values
+- Magic numbers without named constants
+- String comparisons without constants/enums
+- Repeated string literals across files
+- Missing centralized configuration for business values
+- Hardcoded URLs or API endpoints
+- Business logic constants scattered in components
+
 ### 🚨 PERFORMANCE VIOLATIONS:
 - String concatenation in loops
 - Missing StringBuilder usage

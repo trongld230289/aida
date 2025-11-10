@@ -55,6 +55,15 @@
 - Thread pools not managed correctly
 - Cache not bounded or cleared
 
+### 🚨 CODE QUALITY & MAINTAINABILITY VIOLATIONS:
+- Hardcoded strings for roles, error messages, or business values
+- Magic numbers without named constants
+- String comparisons without constants/enums
+- Repeated string literals across files
+- Missing centralized configuration for business values
+- Hardcoded URLs or API endpoints
+- Business logic constants scattered in components
+
 ### 🚨 PERFORMANCE VIOLATIONS:
 - Inefficient algorithms with poor time complexity
 - Database queries in loops (N+1 problem)

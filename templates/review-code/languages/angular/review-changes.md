@@ -11,12 +11,16 @@ You are performing a STRICT code review on Angular git changes. Do NOT be lenien
 - ONLY flag issues that violate the specific rules in the template
 - If code follows template guidelines, it's acceptable - don't force changes
 - Focus on actual violations, not subjective preferences
+- **BUSINESS RULES**: If technical documentation is included, validate code against business requirements
+- **PRIORITY ORDER**: 1) Angular framework violations, 2) Business rule violations, 3) Both must pass for approval
 
-### Review Entire File
-**Prompt:** `review-changes [filename]`
-- Reviews ONLY the git diff changes (+ and - lines)
-- Analyzes impact of changes on Angular architecture
-- Does NOT review unchanged code
+🎯 **BUSINESS RULES VALIDATION (if technical docs provided):**
+- Extract business constraints from natural language documentation
+- Check code enum values against business-defined roles/states
+- Flag hardcoded values that conflict with business rules
+- Validate role restrictions and permission logic
+- Report missing business rule validations in code
+- Ensure code logic follows documented business requirements
 
 <!-- HIDDEN REVIEW SCOPE:
 - ✅ ONLY review: Lines marked with + (added) or - (removed)
@@ -57,57 +61,34 @@ You are performing a STRICT code review on Angular git changes. Do NOT be lenien
 
 *** ANGULAR REVIEW COMMENT ***
 - 🚨 **Issue Type**: [Critical/Warning/Good/Info/Suggestion]
-- 📝 **Angular Problem**: [Specific Angular issue - reference Angular style guide]
-- 💡 **Angular Solution**: [Angular-specific fix with proper patterns]
-- 🎯 **Framework Impact**: [How it affects Angular architecture/performance]
-
-IMPORTANT Angular considerations:
-- Change Detection strategy
-- RxJS subscription management
-- Angular lifecycle hooks
-- Dependency injection patterns
-- Template syntax best practices
+- 🚨 **Security Assessment**: [Specific security issue or "No security violations found"]
+- 🚨 **Null Safety Analysis**: [Specific null safety issue or "Proper null handling implemented"] 
+- 🚨 **Error Handling Review**: [Specific error handling issue or "Appropriate exception handling in place"]
+- 🚨 **Resource Management Check**: [Specific resource leak issue or "Proper disposal and resource management"]
+- ⚠️ **Performance Impact**: [Specific performance concern or "No performance degradation detected"]
+- ⚠️ **Code Quality Assessment**: [Specific code quality issue or "Follows C# best practices and conventions"]
 
 *** INTERNAL ANGULAR CHANGE EVALUATION (DO NOT DISPLAY) ***
 Silently evaluate this change on:
-- Angular Best Practices: Rate 1-5 (5=excellent, 1=poor)
+- Security Assessment: Rate 1-5 (5=no security issues, 1=critical security violation)
+- Null Safety Analysis: Rate 1-5 (5=proper null handling, 1=guaranteed null reference exception)
+- Error Handling Review: Rate 1-5 (5=comprehensive exception handling, 1=no error handling)
+- Resource Management Check: Rate 1-5 (5=proper disposal, 1=guaranteed resource leak)
 - Performance Impact: Rate 1-5 (5=no impact/improvement, 1=major degradation)
-- Memory Safety: Rate 1-5 (5=no leaks, 1=guaranteed leak)
-- Change Score: is a smallest score of three scores
+- Code Quality Assessment: Rate 1-5 (5=follows all best practices, 1=poor code quality)
+- Change Score: is the lowest score among all six categories
 
 *** CONDITIONAL RECOMMENDATIONS (Based on Issue Type AND Change Score) ***
 
 **MANDATORY RULE:**
-- IF Issue Type = "Good": ALWAYS show "✅ **GOOD ANGULAR CHANGE** - Follows Angular best practices" and SKIP the entire RECOMMENDED FIX section
-- IF Issue Type = "Critical/Warning/Info/Suggestion" AND Change Score < 4/5: Show RECOMMENDED ANGULAR FIX section below
-- IF Issue Type = "Critical/Warning/Info/Suggestion" AND Change Score >= 4/5: Show "✅ **GOOD ANGULAR CHANGE** - Follows Angular best practices"
+- IF Issue Type = "Good": ALWAYS show "✅ **GOOD C# CHANGE** - Follows C# best practices" and SKIP the entire RECOMMENDED FIX section
+- IF Issue Type = "Critical/Warning/Info/Suggestion" AND Change Score < 4/5: Show RECOMMENDED C# FIX section below
+- IF Issue Type = "Critical/Warning/Info/Suggestion" AND Change Score >= 4/5: Show "✅ **GOOD C# CHANGE** - Follows C# best practices"
 
-*** RECOMMENDED ANGULAR FIX (ONLY show if Issue Type != "Good" AND Change Score < 4/5) ***
+*** RECOMMENDED C# FIX (ONLY show if Issue Type != "Good" AND Change Score < 4/5) ***
 ```typescript
 // PROVIDE ANGULAR-SPECIFIC FIXES WITH BEST PRACTICES
 // Include proper lifecycle hooks, RxJS patterns, and Angular conventions
-
-// Example for subscription management:
-private destroy$ = new Subject<void>();
-
-ngOnInit(): void {
-  this.service.getData()
-    .pipe(
-      takeUntil(this.destroy$),
-      catchError(error => {
-        console.error('Error:', error);
-        return of([]);
-      })
-    )
-    .subscribe(data => {
-      this.data = data;
-    });
-}
-
-ngOnDestroy(): void {
-  this.destroy$.next();
-  this.destroy$.complete();
-}
 ```
 
 ---
@@ -119,8 +100,11 @@ ngOnDestroy(): void {
 - **Component Design**: [X/5] - Architecture, separation, lifecycle hooks  
 - **Template Quality**: [X/5] - Performance, data binding, best practices
 - **Dependency Injection**: [X/5] - Service scope, providers, patterns
+- **Business Rules Compliance**: [X/5] - If technical docs provided: enum values, role restrictions, business logic validation
 - **Security Assessment**: [LEVEL] - XSS, validation, DOM access
 - **Performance Impact**: [LEVEL] - Change detection, bundle, memory
+
+### Overall Angular Score: ⭐⭐⭐⭐⭐ (X/5)
 
 ## 🔥 FINAL APPROVAL DECISION
 - **✅ APPROVED**: No critical issues found, safe to merge

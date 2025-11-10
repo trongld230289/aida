@@ -11,12 +11,16 @@ You are performing a STRICT code review on Go git changes. Do NOT be lenient. Lo
 - ONLY flag issues that violate the specific rules in the template
 - If code follows template guidelines, it's acceptable - don't force changes
 - Focus on actual violations, not subjective preferences
+- **BUSINESS RULES**: If technical documentation is included, validate code against business requirements
+- **PRIORITY ORDER**: 1) Go framework violations, 2) Business rule violations, 3) Both must pass for approval
 
-### Review Entire File
-**Prompt:** `review-changes [filename]`
-- Reviews ONLY the git diff changes (+ and - lines)
-- Analyzes impact of changes on Go architecture
-- Does NOT review unchanged code
+🎯 **BUSINESS RULES VALIDATION (if technical docs provided):**
+- Extract business constraints from natural language documentation
+- Check code enum values against business-defined roles/states
+- Flag hardcoded values that conflict with business rules
+- Validate role restrictions and permission logic
+- Report missing business rule validations in code
+- Ensure code logic follows documented business requirements
 
 <!-- HIDDEN REVIEW SCOPE:
 - ✅ ONLY review: Lines marked with + (added) or - (removed)
@@ -28,16 +32,16 @@ You are performing a STRICT code review on Go git changes. Do NOT be lenient. Lo
 ### 📋 CHANGE SEPARATION RULES (MANDATORY):
 
 **Split into separate changes when:**
-- ✅ **Different Go artifacts**: Package vs Struct vs Interface vs Function changes = separate changes
-- ✅ **Different function parts**: Function signature vs Body vs Method receiver = separate changes
-- ✅ **Different goroutine operations**: Different concurrency patterns = separate changes
-- ✅ **Different error handling**: Different error return patterns = separate changes
+- ✅ **Different Go packages**: Different package declarations or imports = separate changes
+- ✅ **Different struct/interface definitions**: Different types or methods = separate changes
+- ✅ **Different goroutine operations**: Different go routines or channel operations = separate changes
+- ✅ **Different HTTP handlers**: Different HTTP routes or middleware = separate changes
 - ✅ **Non-adjacent code blocks**: If there are 3+ unchanged lines between modifications = separate changes
 
 **Keep as one change when:**
-- ❌ **Same function**: Multiple lines in same function body
-- ❌ **Related methods**: Related methods on same struct
-- ❌ **Same package imports**: Related import statements
+- ❌ **Same Go function**: Multiple lines in same function body
+- ❌ **Related struct methods**: Methods on same struct for same feature
+- ❌ **Same package imports**: Related imports for same functionality
 
 ## ⚡ GO CRITICAL CHECKS (Auto-FAIL if found)
 
@@ -50,30 +54,29 @@ You are performing a STRICT code review on Go git changes. Do NOT be lenient. Lo
 ### Start Review For Each Change:
 
 ```
-## Change [X]: [ADDED/REMOVED/MODIFIED] - [Go artifact type: Package/Struct/Interface/Function/Handler]
+## Change [X]: [ADDED/REMOVED/MODIFIED] - [Go artifact type: Package/Struct/Interface/Function/Method/Handler]
 ```go
 [Show the exact code block with line numbers]
 ```
 
 *** GO REVIEW COMMENT ***
 - 🚨 **Issue Type**: [Critical/Warning/Good/Info/Suggestion]
-- 📝 **Go Problem**: [Specific Go issue - reference Go best practices]
-- 💡 **Go Solution**: [Go-specific fix with proper patterns]
-- 🎯 **Code Impact**: [How it affects Go performance/concurrency/maintainability]
-
-IMPORTANT Go considerations:
-- Concurrency safety and goroutine management
-- Error handling and context propagation
-- Memory efficiency and resource cleanup
-- Interface design and composition
-- Idiomatic Go patterns
+- 🚨 **Security Assessment**: [Specific security issue or "No security violations found"]
+- 🚨 **Null Safety Analysis**: [Specific null safety issue or "Proper null handling implemented"] 
+- 🚨 **Error Handling Review**: [Specific error handling issue or "Appropriate exception handling in place"]
+- 🚨 **Resource Management Check**: [Specific resource leak issue or "Proper disposal and resource management"]
+- ⚠️ **Performance Impact**: [Specific performance concern or "No performance degradation detected"]
+- ⚠️ **Code Quality Assessment**: [Specific code quality issue or "Follows Go best practices and conventions"]
 
 *** INTERNAL GO CHANGE EVALUATION (DO NOT DISPLAY) ***
 Silently evaluate this change on:
-- Go Best Practices: Rate 1-5 (5=excellent, 1=poor)
+- Security Assessment: Rate 1-5 (5=no security issues, 1=critical security violation)
+- Null Safety Analysis: Rate 1-5 (5=proper null handling, 1=guaranteed null reference exception)
+- Error Handling Review: Rate 1-5 (5=comprehensive exception handling, 1=no error handling)
+- Resource Management Check: Rate 1-5 (5=proper disposal, 1=guaranteed resource leak)
 - Performance Impact: Rate 1-5 (5=no impact/improvement, 1=major degradation)
-- Concurrency Safety: Rate 1-5 (5=no race conditions, 1=critical concurrency issues)
-- Change Score: is a smallest score of three scores
+- Code Quality Assessment: Rate 1-5 (5=follows all best practices, 1=poor code quality)
+- Change Score: is the lowest score among all six categories
 
 *** CONDITIONAL RECOMMENDATIONS (Based on Issue Type AND Change Score) ***
 
@@ -85,146 +88,25 @@ Silently evaluate this change on:
 *** RECOMMENDED GO FIX (ONLY show if Issue Type != "Good" AND Change Score < 4/5) ***
 ```go
 // PROVIDE GO-SPECIFIC FIXES WITH BEST PRACTICES
-// Include proper error handling, concurrency, and idiomatic patterns
-
-// Example for proper HTTP handler with comprehensive error handling:
-package main
-
-import (
-    "context"
-    "encoding/json"
-    "fmt"
-    "log"
-    "net/http"
-    "strconv"
-    "time"
-    
-    "github.com/gorilla/mux"
-)
-
-// User represents a user entity
-type User struct {
-    ID    int    `json:"id"`
-    Name  string `json:"name"`
-    Email string `json:"email"`
-}
-
-// UserService handles user operations
-type UserService struct {
-    timeout time.Duration
-    logger  *log.Logger
-}
-
-// NewUserService creates a new user service
-func NewUserService(timeout time.Duration, logger *log.Logger) *UserService {
-    return &UserService{
-        timeout: timeout,
-        logger:  logger,
-    }
-}
-
-// GetUserHandler handles GET /users/{id} requests
-func (s *UserService) GetUserHandler(w http.ResponseWriter, r *http.Request) {
-    // Set response headers
-    w.Header().Set("Content-Type", "application/json")
-    
-    // Extract and validate user ID
-    vars := mux.Vars(r)
-    userIDStr, exists := vars["id"]
-    if !exists {
-        s.writeErrorResponse(w, http.StatusBadRequest, "missing user ID")
-        return
-    }
-    
-    userID, err := strconv.Atoi(userIDStr)
-    if err != nil || userID <= 0 {
-        s.writeErrorResponse(w, http.StatusBadRequest, "invalid user ID")
-        return
-    }
-    
-    // Create context with timeout
-    ctx, cancel := context.WithTimeout(r.Context(), s.timeout)
-    defer cancel()
-    
-    // Fetch user with proper error handling
-    user, err := s.getUserByID(ctx, userID)
-    if err != nil {
-        s.logger.Printf("Error fetching user %d: %v", userID, err)
-        
-        switch err {
-        case ErrUserNotFound:
-            s.writeErrorResponse(w, http.StatusNotFound, "user not found")
-        case context.DeadlineExceeded:
-            s.writeErrorResponse(w, http.StatusRequestTimeout, "request timeout")
-        default:
-            s.writeErrorResponse(w, http.StatusInternalServerError, "internal server error")
-        }
-        return
-    }
-    
-    // Marshal and send response
-    if err := json.NewEncoder(w).Encode(map[string]interface{}{
-        "success": true,
-        "data":    user,
-    }); err != nil {
-        s.logger.Printf("Error encoding response for user %d: %v", userID, err)
-        s.writeErrorResponse(w, http.StatusInternalServerError, "encoding error")
-    }
-}
-
-// Custom error types
-var (
-    ErrUserNotFound = fmt.Errorf("user not found")
-)
-
-// getUserByID fetches a user by ID with proper context handling
-func (s *UserService) getUserByID(ctx context.Context, id int) (*User, error) {
-    // Simulate database operation with context
-    select {
-    case <-ctx.Done():
-        return nil, ctx.Err()
-    case <-time.After(100 * time.Millisecond):
-        // Simulate successful fetch
-        if id == 999 {
-            return nil, ErrUserNotFound
-        }
-        
-        return &User{
-            ID:    id,
-            Name:  fmt.Sprintf("User %d", id),
-            Email: fmt.Sprintf("user%d@example.com", id),
-        }, nil
-    }
-}
-
-// writeErrorResponse writes a consistent error response
-func (s *UserService) writeErrorResponse(w http.ResponseWriter, statusCode int, message string) {
-    w.WriteHeader(statusCode)
-    
-    response := map[string]interface{}{
-        "success": false,
-        "error":   message,
-    }
-    
-    if err := json.NewEncoder(w).Encode(response); err != nil {
-        s.logger.Printf("Error encoding error response: %v", err)
-    }
-}
+// Include proper error handling, goroutines, and Go conventions
 ```
 
 ---
 
-## 🎯 FINAL GO SUMMARY (After All Changes Reviewed)
+# 🎯 FINAL GO SUMMARY (After All Changes Reviewed)
 
-### 📋 COMPLIANCE SCORES
-- **Concurrency Safety**: [X/5] - Goroutines, channels, mutex usage, and race condition prevention
-- **Error Handling**: [X/5] - Proper error returns, wrapping, and context propagation
-- **Resource Management**: [X/5] - Defer usage, connection pooling, and cleanup patterns
-- **Code Idioms**: [X/5] - Go conventions, interface design, and package organization
-- **Performance**: [X/5] - Memory efficiency, garbage collection, and optimization
-- **Security Assessment**: [LEVEL] - Input validation, injection prevention, secure patterns
+## 📋 COMPLIANCE SCORES
+- **Error Handling**: [X/5] - Proper error handling, error wrapping, panic recovery
+- **Concurrency**: [X/5] - Goroutines, channels, sync primitives, race conditions  
+- **Memory Management**: [X/5] - Garbage collection optimization, memory leaks, resource cleanup
+- **Interface Design**: [X/5] - Interface segregation, composition, type assertions
+- **Business Rules Compliance**: [X/5] - If technical docs provided: enum values, role restrictions, business logic validation
+- **Security Assessment**: [LEVEL] - Input validation, SQL injection, authentication
+- **Performance Impact**: [LEVEL] - Algorithm efficiency, goroutine management, memory usage
 
-### 🔥 FINAL APPROVAL DECISION
+### Overall Go Score: ⭐⭐⭐⭐⭐ (X/5)
+
+## 🔥 FINAL APPROVAL DECISION
 - **✅ APPROVED**: No critical issues found, safe to merge
 - **❌ NEEDS FIXES**: Critical issues detected, must resolve first  
 - **🚫 REJECT**: Major architectural problems, requires refactoring

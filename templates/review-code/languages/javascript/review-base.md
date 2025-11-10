@@ -69,6 +69,15 @@
 - Not using modern array methods
 - Missing proper error handling with try/catch
 
+### 🚨 CODE QUALITY & MAINTAINABILITY VIOLATIONS:
+- Hardcoded strings for roles, error messages, or business values
+- Magic numbers without named constants
+- String comparisons without constants/enums
+- Repeated string literals across files
+- Missing centralized configuration for business values
+- Hardcoded URLs or API endpoints
+- Business logic constants scattered in components
+
 ### 🚨 TYPE SAFETY VIOLATIONS:
 - Missing type checking for function parameters
 - Unsafe type coercion (== instead of ===)

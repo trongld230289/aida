@@ -44,8 +44,36 @@ async function showReviewOptionsWithoutDocs(participantType, activeEditor, strea
         return true; // Handled - review executed
     }
 
-    // Always show options for review-changes (no "Enter twice" logic)
-    // First time - show options dialog
+    // First check if business documents exist before showing any options
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    let hasBusinessDocs = false;
+    
+    if (workspaceFolder) {
+        try {
+            const businessDocs = await getBusinessDocumentFolders(workspaceFolder);
+            hasBusinessDocs = businessDocs && businessDocs.length > 0;
+        } catch (error) {
+            console.log('❌ Error checking business documents:', error.message);
+            hasBusinessDocs = false;
+        }
+    }
+    
+    // If no business documents, execute Quick Review immediately
+    if (!hasBusinessDocs) {
+        console.log('📋 No business documents found - executing Quick Review automatically');
+        stream.markdown('🚀 **Starting Quick Review automatically** (no business documents found)\n\n');
+        
+        // Clear session for next time
+        if (chatSessions?.delete) {
+            chatSessions.delete(sessionKey);
+        }
+        
+        // Call review callback directly (without documents)
+        await reviewCallback(false);
+        return true; // Handled - review executed
+    }
+    
+    // Only show options dialog if business documents exist
     const emoji = '📋';
     stream.markdown(`# ${emoji} Review Options for \`${fileName}\`\n\n`);
     
@@ -65,38 +93,19 @@ async function showReviewOptionsWithoutDocs(participantType, activeEditor, strea
         
         stream.markdown('\n');
         
-        // Check if business documents exist before showing Enhanced Review option
-        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-        let hasBusinessDocs = false;
+        // Show Enhanced Review option since business documents exist
+        stream.markdown('### 📚 **Enhanced Review**\n');
+        stream.markdown('- Includes business rule validation\n');
+        stream.markdown('- Cross-references business documents\n');
+        stream.markdown('- More comprehensive analysis\n\n');
         
-        if (workspaceFolder) {
-            try {
-                const businessDocs = await getBusinessDocumentFolders(workspaceFolder);
-                hasBusinessDocs = businessDocs && businessDocs.length > 0;
-            } catch (error) {
-                console.log('❌ Error checking business documents:', error.message);
-                hasBusinessDocs = false;
-            }
-        }
+        stream.button({
+            command: 'aida.showEnhancedReviewOptions',
+            title: '📚 Start Enhanced Review',
+            arguments: [activeEditor.document.fileName]
+        });
         
-        // Only show Enhanced Review if business documents exist
-        if (hasBusinessDocs) {
-            // Option 2: Process with business documents
-            stream.markdown('### 📚 **Enhanced Review**\n');
-            stream.markdown('- Includes business rule validation\n');
-            stream.markdown('- Cross-references business documents\n');
-            stream.markdown('- More comprehensive analysis\n\n');
-            
-            stream.button({
-                command: 'aida.showEnhancedReviewOptions',
-                title: '📚 Start Enhanced Review',
-                arguments: [activeEditor.document.fileName]
-            });
-            
-            stream.markdown('\n');
-        }
-        
-        stream.markdown('\n');
+        stream.markdown('\n\n');
         stream.markdown('💡 **Choose an option above to start the review**\n');
         
         return false; // Not handled - showing options dialog
@@ -168,39 +177,37 @@ function initializeReviewChanges(context) {
                 return;
             }
             
-            // Ensure we always provide some response
-            if (!input || input.length === 0) {
-                // Check if there's an active file to review
-                const activeEditor = vscode.window.activeTextEditor;
-                if (activeEditor) {
-                    // Show review options with process without document choice
-                    const shouldContinue = await showReviewOptionsWithoutDocs(
-                        'review-changes', 
-                        activeEditor, 
-                        stream, 
-                        context,
-                        async (useDocuments) => {
-                            if (useDocuments) {
-                                // TODO: Implement with business documents
-                                stream.markdown('🔧 **Business documents integration coming soon...**\n\n');
-                            }
-                            await aiReviewChanges(activeEditor.document.fileName, stream, null, context, request);
+            // Always show review options for any review-changes call
+            const activeEditor = vscode.window.activeTextEditor;
+            if (activeEditor) {
+                // Show review options with process without document choice
+                const shouldContinue = await showReviewOptionsWithoutDocs(
+                    'review-changes', 
+                    activeEditor, 
+                    stream, 
+                    context,
+                    async (useDocuments) => {
+                        if (useDocuments) {
+                            // TODO: Implement with business documents
+                            stream.markdown('🔧 **Business documents integration coming soon...**\n\n');
                         }
-                    );
-                    
-                    // If showReviewOptionsWithoutDocs returns true, it handled everything
-                    // If it returns false, it's showing the options dialog
-                    if (shouldContinue === false) {
-                        return;
+                        const targetInput = input || activeEditor.document.fileName;
+                        await aiReviewChanges(targetInput, stream, null, context, request);
                     }
-                } else {
-                    stream.markdown('# 🔍 Code Review Assistant\n\n');
-                    stream.markdown('Please provide a file path or open a file to review.\n\n');
-                    stream.markdown('**Examples:**\n');
-                    stream.markdown('- `@review-changes` - Review current git changes\n');
-                    stream.markdown('- `@review-changes src/app/component.ts` - Review specific file\n');
+                );
+                
+                // If showReviewOptionsWithoutDocs returns true, it handled everything
+                // If it returns false, it's showing the options dialog
+                if (shouldContinue === false) {
                     return;
                 }
+            } else {
+                stream.markdown('# 🔍 Code Review Assistant\n\n');
+                stream.markdown('Please provide a file path or open a file to review.\n\n');
+                stream.markdown('**Examples:**\n');
+                stream.markdown('- `@review-changes` - Review current git changes\n');
+                stream.markdown('- `@review-changes src/app/component.ts` - Review specific file\n');
+                return;
             }
             
             // Use unified AI review changes function
@@ -538,24 +545,9 @@ async function reviewChanges(diffContent, stream, changeType, selectedModel = nu
     
     // Inject git diff into template at the appropriate location
     let finalContent = templateContent;
-    
-    // Find a good insertion point in the template (before the security overview section)
-    const insertionPoint = finalContent.indexOf('## 🔍 SPECIFIC RULES VIOLATED');
-    
-    if (insertionPoint !== -1) {
-        // Insert git diff before the rules section
-        const beforeContent = finalContent.substring(0, insertionPoint);
-        const afterContent = finalContent.substring(insertionPoint);
-        
-        finalContent = beforeContent + 
-                      '## GIT DIFF TO REVIEW\n\n' +
-                      '```diff\n' + diffContent + '\n```\n\n' +
-                      '---\n\n' +
-                      afterContent;
-    } else {
-        // Fallback: add at the end
-        finalContent += '\n\n## GIT DIFF TO REVIEW\n\n```diff\n' + diffContent + '\n```\n';
-    }
+    finalContent += '\n\n## GIT DIFF TO REVIEW\n\n```diff\n' + diffContent + '\n```\n';
+    finalContent += '\n```\n\n';
+    finalContent += '**Instructions:** Please analyze the diff above...';
     
     try {
         // Use unified model detection (same as review-file)

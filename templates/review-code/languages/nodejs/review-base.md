@@ -57,6 +57,15 @@
 - Missing pagination for large datasets
 - Blocking CPU-intensive operations
 
+### 🚨 CODE QUALITY & MAINTAINABILITY VIOLATIONS:
+- Hardcoded strings for roles, error messages, or business values
+- Magic numbers without named constants
+- String comparisons without constants/enums
+- Repeated string literals across files
+- Missing centralized configuration for business values
+- Hardcoded URLs or API endpoints
+- Business logic constants scattered in components
+
 ### 🚨 EXPRESS.JS VIOLATIONS:
 - Missing helmet security middleware
 - Improper route parameter validation

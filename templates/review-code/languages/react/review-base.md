@@ -67,6 +67,15 @@
 - Prop drilling instead of proper state management
 - Overly complex component state
 
+### 🚨 CODE QUALITY & MAINTAINABILITY VIOLATIONS:
+- Hardcoded strings for roles, error messages, or business values
+- Magic numbers without named constants
+- String comparisons without constants/enums
+- Repeated string literals across files
+- Missing centralized configuration for business values
+- Hardcoded URLs or API endpoints
+- Business logic constants scattered in components
+
 ### 🚨 ASYNC OPERATIONS VIOLATIONS:
 - Missing error handling for API calls
 - Race conditions in useEffect

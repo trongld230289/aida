@@ -11,12 +11,16 @@ You are performing a STRICT code review on React git changes. Do NOT be lenient.
 - ONLY flag issues that violate the specific rules in the template
 - If code follows template guidelines, it's acceptable - don't force changes
 - Focus on actual violations, not subjective preferences
+- **BUSINESS RULES**: If technical documentation is included, validate code against business requirements
+- **PRIORITY ORDER**: 1) React framework violations, 2) Business rule violations, 3) Both must pass for approval
 
-### Review Entire File
-**Prompt:** `review-changes [filename]`
-- Reviews ONLY the git diff changes (+ and - lines)
-- Analyzes impact of changes on React architecture
-- Does NOT review unchanged code
+🎯 **BUSINESS RULES VALIDATION (if technical docs provided):**
+- Extract business constraints from natural language documentation
+- Check code enum values against business-defined roles/states
+- Flag hardcoded values that conflict with business rules
+- Validate role restrictions and permission logic
+- Report missing business rule validations in code
+- Ensure code logic follows documented business requirements
 
 <!-- HIDDEN REVIEW SCOPE:
 - ✅ ONLY review: Lines marked with + (added) or - (removed)
@@ -29,15 +33,15 @@ You are performing a STRICT code review on React git changes. Do NOT be lenient.
 
 **Split into separate changes when:**
 - ✅ **Different React artifacts**: Component vs Hook vs Context vs Utility changes = separate changes
-- ✅ **Different component parts**: JSX vs useEffect vs useState = separate changes
-- ✅ **Different hooks**: Different hook declarations or implementations = separate changes
-- ✅ **Different event handlers**: Different onClick, onChange, onSubmit = separate changes
+- ✅ **Different lifecycle hooks**: useEffect vs useMemo vs useCallback = separate changes
+- ✅ **Different JSX sections**: Form vs List vs Navigation = separate changes
+- ✅ **Different state operations**: Different useState/useReducer calls = separate changes
 - ✅ **Non-adjacent code blocks**: If there are 3+ unchanged lines between modifications = separate changes
 
 **Keep as one change when:**
-- ❌ **Same component function**: Multiple lines in same component body
-- ❌ **Related hooks**: Related useState and useEffect in same component
-- ❌ **Same JSX block**: Related JSX elements and attributes
+- ❌ **Same React hook**: Multiple lines in same useEffect/useState
+- ❌ **Related JSX elements**: Related HTML elements for same feature
+- ❌ **Same component logic**: Related props and state for same feature
 
 ## ⚡ REACT CRITICAL CHECKS (Auto-FAIL if found)
 
@@ -50,30 +54,29 @@ You are performing a STRICT code review on React git changes. Do NOT be lenient.
 ### Start Review For Each Change:
 
 ```
-## Change [X]: [ADDED/REMOVED/MODIFIED] - [React artifact type: Component/Hook/Context/Handler]
-```jsx
+## Change [X]: [ADDED/REMOVED/MODIFIED] - [React artifact type: Component/Hook/Context/Util/Test]
+```javascript
 [Show the exact code block with line numbers]
 ```
 
 *** REACT REVIEW COMMENT ***
 - 🚨 **Issue Type**: [Critical/Warning/Good/Info/Suggestion]
-- 📝 **React Problem**: [Specific React issue - reference React best practices]
-- 💡 **React Solution**: [React-specific fix with proper patterns]
-- 🎯 **Component Impact**: [How it affects React rendering/performance/accessibility]
-
-IMPORTANT React considerations:
-- Hooks dependencies and lifecycle
-- Component re-rendering optimization
-- Memory management and cleanup
-- Accessibility compliance
-- Performance implications
+- 🚨 **Security Assessment**: [Specific security issue or "No security violations found"]
+- 🚨 **Null Safety Analysis**: [Specific null safety issue or "Proper null handling implemented"] 
+- 🚨 **Error Handling Review**: [Specific error handling issue or "Appropriate exception handling in place"]
+- 🚨 **Resource Management Check**: [Specific resource leak issue or "Proper disposal and resource management"]
+- ⚠️ **Performance Impact**: [Specific performance concern or "No performance degradation detected"]
+- ⚠️ **Code Quality Assessment**: [Specific code quality issue or "Follows React best practices and conventions"]
 
 *** INTERNAL REACT CHANGE EVALUATION (DO NOT DISPLAY) ***
 Silently evaluate this change on:
-- React Best Practices: Rate 1-5 (5=excellent, 1=poor)
+- Security Assessment: Rate 1-5 (5=no security issues, 1=critical security violation)
+- Null Safety Analysis: Rate 1-5 (5=proper null handling, 1=guaranteed null reference exception)
+- Error Handling Review: Rate 1-5 (5=comprehensive exception handling, 1=no error handling)
+- Resource Management Check: Rate 1-5 (5=proper disposal, 1=guaranteed resource leak)
 - Performance Impact: Rate 1-5 (5=no impact/improvement, 1=major degradation)
-- Accessibility: Rate 1-5 (5=fully accessible, 1=accessibility violations)
-- Change Score: is a smallest score of three scores
+- Code Quality Assessment: Rate 1-5 (5=follows all best practices, 1=poor code quality)
+- Change Score: is the lowest score among all six categories
 
 *** CONDITIONAL RECOMMENDATIONS (Based on Issue Type AND Change Score) ***
 
@@ -83,76 +86,27 @@ Silently evaluate this change on:
 - IF Issue Type = "Critical/Warning/Info/Suggestion" AND Change Score >= 4/5: Show "✅ **GOOD REACT CHANGE** - Follows React best practices"
 
 *** RECOMMENDED REACT FIX (ONLY show if Issue Type != "Good" AND Change Score < 4/5) ***
-```jsx
+```javascript
 // PROVIDE REACT-SPECIFIC FIXES WITH BEST PRACTICES
-// Include proper hooks, error boundaries, and performance optimizations
-
-// Example for proper useEffect with cleanup and error handling:
-const UserProfile = ({ userId }) => {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    const abortController = new AbortController();
-    
-    const fetchUser = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        
-        const response = await fetch(`/api/users/${userId}`, {
-          signal: abortController.signal
-        });
-        
-        if (!response.ok) {
-          throw new Error(`Failed to fetch user: ${response.status}`);
-        }
-        
-        const userData = await response.json();
-        setUser(userData);
-      } catch (err) {
-        if (err.name !== 'AbortError') {
-          setError(err.message);
-        }
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchUser();
-
-    return () => {
-      abortController.abort();
-    };
-  }, [userId]);
-
-  if (loading) return <div aria-live="polite">Loading...</div>;
-  if (error) return <div role="alert">Error: {error}</div>;
-  if (!user) return <div>No user found</div>;
-
-  return (
-    <div role="main" aria-labelledby="user-heading">
-      <h1 id="user-heading">{user.name}</h1>
-      <p>{user.email}</p>
-    </div>
-  );
-};
+// Include proper hooks patterns, performance optimization, and React conventions
 ```
 
 ---
 
-## 🎯 FINAL REACT SUMMARY (After All Changes Reviewed)
+# 🎯 FINAL REACT SUMMARY (After All Changes Reviewed)
 
-### 📋 COMPLIANCE SCORES
-- **Hooks Implementation**: [X/5] - Proper dependencies, cleanup, and lifecycle
-- **Component Architecture**: [X/5] - Composition, reusability, and separation of concerns
-- **Performance Optimization**: [X/5] - Memoization, lazy loading, and efficient rendering
-- **Accessibility (a11y)**: [X/5] - ARIA attributes, semantic HTML, keyboard navigation
-- **Error Handling**: [X/5] - Error boundaries, async error handling, user feedback
-- **Security Assessment**: [LEVEL] - XSS prevention, input validation, secure patterns
+## 📋 COMPLIANCE SCORES
+- **Hooks Compliance**: [X/5] - Proper hook usage, dependency arrays, custom hooks
+- **Component Design**: [X/5] - Architecture, props, state management, reusability  
+- **Performance**: [X/5] - Memoization, re-renders, bundle size, lazy loading
+- **State Management**: [X/5] - Local state, context, reducers, data flow
+- **Business Rules Compliance**: [X/5] - If technical docs provided: enum values, role restrictions, business logic validation
+- **Security Assessment**: [LEVEL] - XSS, input validation, data sanitization
+- **Performance Impact**: [LEVEL] - Re-renders, memory usage, bundle optimization
 
-### 🔥 FINAL APPROVAL DECISION
+### Overall React Score: ⭐⭐⭐⭐⭐ (X/5)
+
+## 🔥 FINAL APPROVAL DECISION
 - **✅ APPROVED**: No critical issues found, safe to merge
 - **❌ NEEDS FIXES**: Critical issues detected, must resolve first  
 - **🚫 REJECT**: Major architectural problems, requires refactoring

@@ -57,6 +57,15 @@
 - Missing proper slice capacity management
 - Unsafe pointer operations
 
+### 🚨 CODE QUALITY & MAINTAINABILITY VIOLATIONS:
+- Hardcoded strings for roles, error messages, or business values
+- Magic numbers without named constants
+- String comparisons without constants/enums
+- Repeated string literals across files
+- Missing centralized configuration for business values
+- Hardcoded URLs or API endpoints
+- Business logic constants scattered in components
+
 ### 🚨 HTTP & API VIOLATIONS:
 - Missing request timeout configuration
 - Improper HTTP status code usage

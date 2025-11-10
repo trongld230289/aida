@@ -133,6 +133,33 @@ try {
     };
 }
 
+/**
+ * Clear PR diff cache for a specific provider and PR ID
+ * This prevents file count discrepancy when reviewing the same PR multiple times
+ * @param {string} provider - Provider name ('github', 'gitlab', 'azure')
+ * @param {string} prId - Pull Request ID
+ */
+function clearPrDiffCache(provider, prId) {
+    if (!global.prDiffCache) {
+        global.prDiffCache = {};
+        return;
+    }
+
+    const prefix = `${provider}_${prId}_`;
+    const keysToDelete = Object.keys(global.prDiffCache).filter(key => key.startsWith(prefix));
+    
+    if (keysToDelete.length > 0) {
+        console.log(`🧹 Clearing ${keysToDelete.length} cached entries for ${provider} PR ${prId}:`);
+        keysToDelete.forEach(key => {
+            console.log(`  ❌ Removing: ${key}`);
+            delete global.prDiffCache[key];
+        });
+        console.log(`✅ Cache cleared for ${provider} PR ${prId}`);
+    } else {
+        console.log(`💡 No cached entries found for ${provider} PR ${prId}`);
+    }
+}
+
 
 /**
  * FUNCTION B - Handle GitHub PR diffs and show in webview
@@ -155,6 +182,9 @@ async function showGitHubDiffInWebview(prAnalysis, stream) {
     if (!global.prDiffCache) {
         global.prDiffCache = {};
     }
+
+    // Clear existing cache entries for this GitHub PR to prevent file count discrepancy
+    clearPrDiffCache('github', data.id);
 
     stream.markdown('🐙 **GitHub Diff Webview Display**\n\n');
     
@@ -223,6 +253,9 @@ async function showGitLabDiffInWebview(mrAnalysis, stream) {
         global.prDiffCache = {};
     }
 
+    // Clear existing cache entries for this GitLab MR to prevent file count discrepancy
+    clearPrDiffCache('gitlab', data.id);
+
     stream.markdown('🦊 **GitLab Diff Webview Display**\n\n');
     
     // Cache all GitLab file changes for webview access
@@ -290,6 +323,9 @@ async function showAzureDevOpsDiffInWebview(prAnalysis, stream) {
     if (!global.prDiffCache) {
         global.prDiffCache = {};
     }
+
+    // Clear existing cache entries for this Azure DevOps PR to prevent file count discrepancy
+    clearPrDiffCache('azure', data.id);
 
     // 🚀 Cache Azure DevOps API credentials and PR metadata for full content retrieval
     const config = vscode.workspace.getConfiguration('aida');
@@ -419,6 +455,10 @@ function initializePrReview(extensionContext) {
  */
 async function handleReviewPr(request, context, stream, token) {
     try {
+        // Reset business documents selection for each review
+        global.selectedBusinessDocs = null;
+        console.log('🔄 Reset global.selectedBusinessDocs for review-pr');
+        
         const userMessage = request.prompt;
 
         // Parse repo URL and detect type

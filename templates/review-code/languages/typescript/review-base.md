@@ -57,6 +57,15 @@
 - Missing proper module documentation
 - Modules not following single responsibility
 
+### 🚨 CODE QUALITY & MAINTAINABILITY VIOLATIONS:
+- Hardcoded strings for roles, error messages, or business values
+- Magic numbers without named constants
+- String comparisons without constants/enums
+- Repeated string literals across files
+- Missing centralized configuration for business values
+- Hardcoded URLs or API endpoints
+- Business logic constants scattered in components
+
 ### 🚨 INTERFACE/TYPE VIOLATIONS:
 - Interfaces with too many optional properties
 - Missing readonly modifiers where appropriate
