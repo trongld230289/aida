@@ -743,7 +743,6 @@ function activate(context) {
         showModelsCommand,
         showDailyReportCommand,
         showDailyReportTemplateCommand,
-        toggleBusinessDocCommand,
         selectAllBusinessDocsCommand,
         clearAllBusinessDocsCommand,
         proceedWithBusinessDocsCommand,
