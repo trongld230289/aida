@@ -2788,6 +2788,66 @@ function loadBaseTemplate(mainTemplatePath, baseFileName) {
 }
 
 /**
+ * Build business documents content from selected categories
+ * @param {Array} selectedBusinessDocs - Array of selected business document objects
+ * @returns {string} - Formatted business documents content
+ */
+function buildBusinessDocsContent(selectedBusinessDocs) {
+    if (!selectedBusinessDocs || selectedBusinessDocs.length === 0) {
+        console.log('📚 No business documents selected');
+        return '';
+    }
+
+    console.log(`📚 Building business docs content from ${selectedBusinessDocs.length} categories...`);
+    
+    let docsContent = `## 📚 Business Rules & Documentation\n\n`;
+    
+    selectedBusinessDocs.forEach(category => {
+        console.log(`📁 Processing category: ${category.displayName} (${category.path})`);
+        
+        docsContent += `### ${category.displayName}\n\n`;
+        
+        try {
+            // Get all markdown files in the category folder
+            const files = fs.readdirSync(category.path, { withFileTypes: true })
+                .filter(file => file.isFile() && file.name.endsWith('.md'))
+                .map(file => ({
+                    name: file.name,
+                    path: path.join(category.path, file.name)
+                }));
+            
+            console.log(`📄 Found ${files.length} markdown files in ${category.name}`);
+            
+            files.forEach(file => {
+                try {
+                    const fileContent = fs.readFileSync(file.path, 'utf8');
+                    const fileName = file.name.replace('.md', '').replace(/-/g, ' ');
+                    const titleCase = fileName.charAt(0).toUpperCase() + fileName.slice(1);
+                    
+                    docsContent += `#### ${titleCase}\n\n`;
+                    docsContent += fileContent;
+                    docsContent += '\n\n';
+                    
+                    console.log(`📄 Loaded ${file.name}: ${fileContent.substring(0, 50)}...`);
+                } catch (fileError) {
+                    console.error(`❌ Error reading file ${file.path}:`, fileError.message);
+                }
+            });
+            
+        } catch (folderError) {
+            console.error(`❌ Error reading folder ${category.path}:`, folderError.message);
+        }
+        
+        docsContent += '---\n\n';
+    });
+    
+    console.log(`✅ Built business docs content (${docsContent.length} chars)`);
+    console.log(`📄 Content preview: ${docsContent.substring(0, 100)}...`);
+    
+    return docsContent;
+}
+
+/**
  * Process template content with placeholder replacement
  * @param {string} content - Template content
  * @param {string} mainTemplatePath - Path to main template (for finding base templates)
@@ -2805,11 +2865,25 @@ function processTemplateContent(content, mainTemplatePath, placeholder = '{{REVI
     
     console.log(`✅ Found ${placeholder} placeholder, loading base content...`);
     
-    const baseContent = loadBaseTemplate(mainTemplatePath, baseFileName);
+    let baseContent = loadBaseTemplate(mainTemplatePath, baseFileName);
     
     if (baseContent) {
+        // Check if we have selected business documents
+        if (global.selectedBusinessDocs && global.selectedBusinessDocs.length > 0) {
+            console.log('📚 Business documents selected, building enhanced base content...');
+            const businessDocsContent = buildBusinessDocsContent(global.selectedBusinessDocs);
+            
+            if (businessDocsContent) {
+                // Prepend technical docs to base content
+                baseContent = businessDocsContent + '\n\n' + baseContent;
+                console.log(`📄 Enhanced businessDocsContent preview: ${businessDocsContent}`);
+            }
+        } else {
+            console.log('📋 No business documents selected, using original base content');
+        }
+        
         const processedContent = content.replace(new RegExp(placeholder.replace(/[{}]/g, '\\$&'), 'g'), baseContent);
-        console.log(`🔧 Replaced ${placeholder} with base content (final length: ${processedContent.length} chars)`);
+        console.log(`🔧 Replaced ${placeholder} with enhanced base content (final length: ${processedContent.length} chars)`);
         return processedContent;
     } else {
         console.log(`⚠️ Base template not found, keeping ${placeholder} placeholder as-is`);
@@ -2818,31 +2892,44 @@ function processTemplateContent(content, mainTemplatePath, placeholder = '{{REVI
 }
 
 /**
- * HELPER: Scan technical document folders
+ * HELPER: Scan business document folders
  * @param {vscode.WorkspaceFolder} workspaceFolder - The workspace folder to scan
- * @returns {Array} Array of technical document folder objects with enhanced path info
+ * @returns {Array} Array of business document folder objects with enhanced path info
  */
-async function getTechnicalDocumentFolders(workspaceFolder) {
+async function getBusinessDocumentFolders(workspaceFolder) {
+    console.log('🔍 getBusinessDocumentFolders called with workspaceFolder:', workspaceFolder?.uri?.fsPath);
+    
     try {
-        const technicalDocPath = path.join(workspaceFolder.uri.fsPath, 'AIDA', 'technical-document');
+        // Try both folder names for backwards compatibility
+        const businessDocsPath = path.join(workspaceFolder.uri.fsPath, 'AIDA', 'business-docs');
+        const technicalDocsPath = path.join(workspaceFolder.uri.fsPath, 'AIDA', 'technical-document');
         
-        if (!fs.existsSync(technicalDocPath)) {
-            console.log(`📁 Technical document path not found: ${technicalDocPath}`);
+        let actualPath = null;
+        if (fs.existsSync(businessDocsPath)) {
+            actualPath = businessDocsPath;
+            console.log('📁 Found business docs at:', businessDocsPath);
+        } else if (fs.existsSync(technicalDocsPath)) {
+            actualPath = technicalDocsPath;
+            console.log('📁 Found technical docs at (legacy):', technicalDocsPath);
+        }
+        
+        if (!actualPath) {
+            console.log(`📁 Business document path not found at either: ${businessDocsPath} or ${technicalDocsPath}`);
             return [];
         }
         
-        const subFolders = fs.readdirSync(technicalDocPath, { withFileTypes: true })
+        const subFolders = fs.readdirSync(actualPath, { withFileTypes: true })
             .filter(dirent => dirent.isDirectory())
             .map(dirent => {
-                const folderPath = path.join(technicalDocPath, dirent.name);
+                const folderPath = path.join(actualPath, dirent.name);
                 return {
                     name: dirent.name,
                     displayName: dirent.name.split('-').map(word => 
                         word.charAt(0).toUpperCase() + word.slice(1)
                     ).join(' '),
                     path: folderPath,
-                    relativePath: `AIDA/technical-document/${dirent.name}`,
-                    basePath: technicalDocPath,
+                    relativePath: `AIDA/business-docs/${dirent.name}`,
+                    basePath: actualPath,
                     workspacePath: workspaceFolder.uri.fsPath,
                     // Helper methods for getting files
                     getFiles: () => {
@@ -2852,7 +2939,7 @@ async function getTechnicalDocumentFolders(workspaceFolder) {
                                 .map(file => ({
                                     name: file.name,
                                     path: path.join(folderPath, file.name),
-                                    relativePath: `AIDA/technical-document/${dirent.name}/${file.name}`
+                                    relativePath: `AIDA/business-docs/${dirent.name}/${file.name}`
                                 }));
                         } catch (error) {
                             console.error(`❌ Error reading files in ${folderPath}:`, error);
@@ -2865,10 +2952,10 @@ async function getTechnicalDocumentFolders(workspaceFolder) {
                 };
             });
         
-        console.log(`📚 Found ${subFolders.length} technical document categories:`, subFolders.map(f => f.name));
+        console.log(`📚 Found ${subFolders.length} business document categories:`, subFolders.map(f => f.name));
         return subFolders;
     } catch (error) {
-        console.error('❌ Error scanning technical documents:', error);
+        console.error('❌ Error scanning business documents:', error);
         return [];
     }
 }
@@ -2910,5 +2997,6 @@ module.exports = {
     processTemplateWithPlaceholders,
     loadBaseTemplate,
     processTemplateContent,
-    getTechnicalDocumentFolders
+    getBusinessDocumentFolders,
+    buildBusinessDocsContent
 };

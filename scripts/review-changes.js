@@ -2,7 +2,7 @@ const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
-const { executeAIReview, getUnifiedModel, getChecklistStatusIcon, shouldUseApiKey, displayReviewHeader, loadTemplateWithPriority, displayCommonReviewInfo, getTechnicalDocumentFolders } = require('./review-common');
+const { executeAIReview, getUnifiedModel, getChecklistStatusIcon, shouldUseApiKey, displayReviewHeader, loadTemplateWithPriority, displayCommonReviewInfo, getBusinessDocumentFolders } = require('./review-common');
 const { autoDetectWorkspace, getReviewTemplateWithDetection, displayDetectionInfo } = require('./language-detection');
 
 // Session tracking for review options (similar to chatSessions in extension.js)
@@ -65,26 +65,26 @@ async function showReviewOptionsWithoutDocs(participantType, activeEditor, strea
         
         stream.markdown('\n');
         
-        // Check if technical documents exist before showing Enhanced Review option
+        // Check if business documents exist before showing Enhanced Review option
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-        let hasTechnicalDocs = false;
+        let hasBusinessDocs = false;
         
         if (workspaceFolder) {
             try {
-                const techDocs = await getTechnicalDocumentFolders(workspaceFolder);
-                hasTechnicalDocs = techDocs && techDocs.length > 0;
+                const businessDocs = await getBusinessDocumentFolders(workspaceFolder);
+                hasBusinessDocs = businessDocs && businessDocs.length > 0;
             } catch (error) {
-                console.log('❌ Error checking technical documents:', error.message);
-                hasTechnicalDocs = false;
+                console.log('❌ Error checking business documents:', error.message);
+                hasBusinessDocs = false;
             }
         }
         
-        // Only show Enhanced Review if technical documents exist
-        if (hasTechnicalDocs) {
+        // Only show Enhanced Review if business documents exist
+        if (hasBusinessDocs) {
             // Option 2: Process with business documents
             stream.markdown('### 📚 **Enhanced Review**\n');
             stream.markdown('- Includes business rule validation\n');
-            stream.markdown('- Cross-references technical documents\n');
+            stream.markdown('- Cross-references business documents\n');
             stream.markdown('- More comprehensive analysis\n\n');
             
             stream.button({
@@ -910,21 +910,21 @@ function updateChecklistStatuses(analysis) {
     });
 }
 
-// HELPER: Show Enhanced Review options with technical documents
+// HELPER: Show Enhanced Review options with business documents
 async function showEnhancedReviewOptions(participantType, activeEditor, stream, context) {
     const fileName = path.basename(activeEditor.document.fileName);
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
     
     if (!workspaceFolder) {
-        stream.markdown('❌ **No workspace found for technical documents**\n\n');
+        stream.markdown('❌ **No workspace found for business documents**\n\n');
         return false;
     }
     
-    // Get technical document folders
-    const techDocs = await getTechnicalDocumentFolders(workspaceFolder);
+    // Get business document folders
+    const businessDocs = await getBusinessDocumentFolders(workspaceFolder);
     
-    if (techDocs.length === 0) {
-        stream.markdown('⚠️ **No technical-document folders found**\n\n');
+    if (businessDocs.length === 0) {
+        stream.markdown('⚠️ **No business-docs folders found**\n\n');
         stream.markdown('Creating fallback to Quick Review...\n\n');
         // Fallback to quick review
         stream.button({
@@ -937,14 +937,14 @@ async function showEnhancedReviewOptions(participantType, activeEditor, stream, 
     
     const emoji = '📚';
     stream.markdown(`# ${emoji} Enhanced Review for \`${fileName}\`\n\n`);
-    stream.markdown('**Select technical documentation categories to include:**\n\n');
+    stream.markdown('**Select business documentation categories to include:**\n\n');
     
     // Show available categories as buttons
-    techDocs.forEach(folder => {
+    businessDocs.forEach(folder => {
         stream.markdown(`### 📁 **${folder.displayName}**\n`);
         
         // Try to get description from folder content
-        const description = getTechnicalDocDescription(folder.name);
+        const description = getBusinessDocDescription(folder.name);
         stream.markdown(`${description}\n\n`);
         
         stream.button({
@@ -964,7 +964,7 @@ async function showEnhancedReviewOptions(participantType, activeEditor, stream, 
     stream.button({
         command: 'aida.reviewWithAllTechnicalDocs',
         title: '☑️ Include All Categories',
-        arguments: [activeEditor.document.fileName, techDocs.map(f => f.name)]
+        arguments: [activeEditor.document.fileName, businessDocs.map(f => f.name)]
     });
     
     stream.markdown(' ');
@@ -981,8 +981,8 @@ async function showEnhancedReviewOptions(participantType, activeEditor, stream, 
     return false; // Show options dialog
 }
 
-// HELPER: Get description for technical document categories
-function getTechnicalDocDescription(folderName) {
+// HELPER: Get description for business document categories
+function getBusinessDocDescription(folderName) {
     const descriptions = {
         'billing-rules': '💰 Invoice logic, payment validation, and billing constraints',
         'data-validation': '🔍 Input validation rules and business constraints',

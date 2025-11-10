@@ -12,7 +12,7 @@ const {
     getUnifiedModel,
     getChecklistStatusIcon,
     showAvailableModels,
-    getTechnicalDocumentFolders
+    getBusinessDocumentFolders
 } = require('./scripts/review-common');
 
 
@@ -636,19 +636,19 @@ function activate(context) {
 
     // Helper function to show enhanced options in chat
     async function showEnhancedReviewOptionsInChat(filePath) {
-        // Import required functions - getTechnicalDocumentFolders now available from import
+        // Import required functions - getBusinessDocumentFolders now available from import
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
         
         if (!workspaceFolder) {
-            vscode.window.showErrorMessage('❌ No workspace found for technical documents');
+            vscode.window.showErrorMessage('❌ No workspace found for business documents');
             return;
         }
         
-        // Get technical document folders
-        const techDocs = await getTechnicalDocumentFolders(workspaceFolder);
+        // Get business document folders
+        const businessDocs = await getBusinessDocumentFolders(workspaceFolder);
         
-        if (techDocs.length === 0) {
-            vscode.window.showInformationMessage('⚠️ No technical-document folders found for enhanced review.');
+        if (businessDocs.length === 0) {
+            vscode.window.showInformationMessage('⚠️ No business-docs folders found for enhanced review.');
             return; // Exit without showing any UI
         }
         
@@ -678,7 +678,7 @@ function activate(context) {
         
         // Show selection UI via quick pick
          const items = [
-            ...techDocs.map(folder => ({
+            ...businessDocs.map(folder => ({
                 label: `📁 ${folder.displayName}`,
                 description: generateDescription(folder),
                 detail: `Include ${folder.displayName} documentation in review`,
@@ -688,7 +688,7 @@ function activate(context) {
         ];
         
         const selected = await vscode.window.showQuickPick(items, {
-            placeHolder: `Select technical documentation for enhanced review of ${path.basename(filePath)}`,
+            placeHolder: `Select business documentation for enhanced review of ${path.basename(filePath)}`,
             title: '📚 Enhanced Review Options',
             canPickMany: true,
             ignoreFocusOut: false
@@ -698,10 +698,17 @@ function activate(context) {
             return; // User cancelled or no selection
         }
         
-        // Store selected categories in global state
-        const selectedCategories = selected.map(item => item.categoryName);
-        global.selectedTechnicalDocs = new Set(selectedCategories);
-        
+        // Store selected categories with paths in global state
+        const selectedCategories = selected.map(item => ({
+            name: item.categoryName,
+            displayName: item.categoryDisplayName,
+            path: businessDocs.find(folder => folder.name === item.categoryName)?.path,
+            relativePath: businessDocs.find(folder => folder.name === item.categoryName)?.relativePath
+        }));
+        global.selectedBusinessDocs = selectedCategories;
+
+        console.log('✅ Selected business document categories for enhanced review:', selectedCategories);
+
         // Start enhanced review
         await vscode.commands.executeCommand('workbench.action.chat.open', {
             query: `@review-changes ${filePath}`
