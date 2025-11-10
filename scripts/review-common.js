@@ -2817,6 +2817,62 @@ function processTemplateContent(content, mainTemplatePath, placeholder = '{{REVI
     }
 }
 
+/**
+ * HELPER: Scan technical document folders
+ * @param {vscode.WorkspaceFolder} workspaceFolder - The workspace folder to scan
+ * @returns {Array} Array of technical document folder objects with enhanced path info
+ */
+async function getTechnicalDocumentFolders(workspaceFolder) {
+    try {
+        const technicalDocPath = path.join(workspaceFolder.uri.fsPath, 'AIDA', 'technical-document');
+        
+        if (!fs.existsSync(technicalDocPath)) {
+            console.log(`📁 Technical document path not found: ${technicalDocPath}`);
+            return [];
+        }
+        
+        const subFolders = fs.readdirSync(technicalDocPath, { withFileTypes: true })
+            .filter(dirent => dirent.isDirectory())
+            .map(dirent => {
+                const folderPath = path.join(technicalDocPath, dirent.name);
+                return {
+                    name: dirent.name,
+                    displayName: dirent.name.split('-').map(word => 
+                        word.charAt(0).toUpperCase() + word.slice(1)
+                    ).join(' '),
+                    path: folderPath,
+                    relativePath: `AIDA/technical-document/${dirent.name}`,
+                    basePath: technicalDocPath,
+                    workspacePath: workspaceFolder.uri.fsPath,
+                    // Helper methods for getting files
+                    getFiles: () => {
+                        try {
+                            return fs.readdirSync(folderPath, { withFileTypes: true })
+                                .filter(file => file.isFile() && file.name.endsWith('.md'))
+                                .map(file => ({
+                                    name: file.name,
+                                    path: path.join(folderPath, file.name),
+                                    relativePath: `AIDA/technical-document/${dirent.name}/${file.name}`
+                                }));
+                        } catch (error) {
+                            console.error(`❌ Error reading files in ${folderPath}:`, error);
+                            return [];
+                        }
+                    },
+                    getMarkdownFiles: function() {
+                        return this.getFiles();
+                    }
+                };
+            });
+        
+        console.log(`📚 Found ${subFolders.length} technical document categories:`, subFolders.map(f => f.name));
+        return subFolders;
+    } catch (error) {
+        console.error('❌ Error scanning technical documents:', error);
+        return [];
+    }
+}
+
 module.exports = {
     executeAIReview,
     executeAIReviewWithApiKey,
@@ -2853,5 +2909,6 @@ module.exports = {
     displayCommonReviewInfo,
     processTemplateWithPlaceholders,
     loadBaseTemplate,
-    processTemplateContent
+    processTemplateContent,
+    getTechnicalDocumentFolders
 };

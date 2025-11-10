@@ -2,7 +2,7 @@ const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
-const { executeAIReview, getUnifiedModel, getChecklistStatusIcon, shouldUseApiKey, displayReviewHeader, loadTemplateWithPriority, displayCommonReviewInfo } = require('./review-common');
+const { executeAIReview, getUnifiedModel, getChecklistStatusIcon, shouldUseApiKey, displayReviewHeader, loadTemplateWithPriority, displayCommonReviewInfo, getTechnicalDocumentFolders } = require('./review-common');
 const { autoDetectWorkspace, getReviewTemplateWithDetection, displayDetectionInfo } = require('./language-detection');
 
 // Session tracking for review options (similar to chatSessions in extension.js)
@@ -65,19 +65,38 @@ async function showReviewOptionsWithoutDocs(participantType, activeEditor, strea
         
         stream.markdown('\n');
         
-        // Option 2: Process with business documents (future feature)
-        stream.markdown('### 📚 **Enhanced Review** (Coming Soon)\n');
-        stream.markdown('- Includes business rule validation\n');
-        stream.markdown('- Cross-references technical documents\n');
-        stream.markdown('- More comprehensive analysis\n\n');
+        // Check if technical documents exist before showing Enhanced Review option
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        let hasTechnicalDocs = false;
         
-        stream.button({
-            command: 'aida.showEnhancedReviewOptions',
-            title: '📚 Start Enhanced Review',
-            arguments: [activeEditor.document.fileName]
-        });
+        if (workspaceFolder) {
+            try {
+                const techDocs = await getTechnicalDocumentFolders(workspaceFolder);
+                hasTechnicalDocs = techDocs && techDocs.length > 0;
+            } catch (error) {
+                console.log('❌ Error checking technical documents:', error.message);
+                hasTechnicalDocs = false;
+            }
+        }
         
-        stream.markdown('\n\n');
+        // Only show Enhanced Review if technical documents exist
+        if (hasTechnicalDocs) {
+            // Option 2: Process with business documents
+            stream.markdown('### 📚 **Enhanced Review**\n');
+            stream.markdown('- Includes business rule validation\n');
+            stream.markdown('- Cross-references technical documents\n');
+            stream.markdown('- More comprehensive analysis\n\n');
+            
+            stream.button({
+                command: 'aida.showEnhancedReviewOptions',
+                title: '📚 Start Enhanced Review',
+                arguments: [activeEditor.document.fileName]
+            });
+            
+            stream.markdown('\n');
+        }
+        
+        stream.markdown('\n');
         stream.markdown('💡 **Choose an option above to start the review**\n');
         
         return false; // Not handled - showing options dialog
@@ -891,33 +910,6 @@ function updateChecklistStatuses(analysis) {
     });
 }
 
-// HELPER: Scan technical document folders
-async function getTechnicalDocumentFolders(workspaceFolder) {
-    try {
-        const technicalDocPath = path.join(workspaceFolder.uri.fsPath, 'technical-document');
-        
-        if (!fs.existsSync(technicalDocPath)) {
-            return [];
-        }
-        
-        const subFolders = fs.readdirSync(technicalDocPath, { withFileTypes: true })
-            .filter(dirent => dirent.isDirectory())
-            .map(dirent => ({
-                name: dirent.name,
-                displayName: dirent.name.split('-').map(word => 
-                    word.charAt(0).toUpperCase() + word.slice(1)
-                ).join(' '),
-                path: path.join(technicalDocPath, dirent.name)
-            }));
-        
-        console.log(`📚 Found ${subFolders.length} technical document categories:`, subFolders.map(f => f.name));
-        return subFolders;
-    } catch (error) {
-        console.error('❌ Error scanning technical documents:', error);
-        return [];
-    }
-}
-
 // HELPER: Show Enhanced Review options with technical documents
 async function showEnhancedReviewOptions(participantType, activeEditor, stream, context) {
     const fileName = path.basename(activeEditor.document.fileName);
@@ -1009,6 +1001,5 @@ module.exports = {
     getGitDiffForTarget,
     handleNoChangesScenario,
     showReviewOptionsWithoutDocs,
-    showEnhancedReviewOptions,
-    getTechnicalDocumentFolders
+    showEnhancedReviewOptions
 };

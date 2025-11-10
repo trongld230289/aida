@@ -12,7 +12,7 @@ const {
     getUnifiedModel,
     getChecklistStatusIcon,
     showAvailableModels,
-    getTechnicalDocDescription
+    getTechnicalDocumentFolders
 } = require('./scripts/review-common');
 
 
@@ -636,8 +636,7 @@ function activate(context) {
 
     // Helper function to show enhanced options in chat
     async function showEnhancedReviewOptionsInChat(filePath) {
-        // Import required functions
-        const { getTechnicalDocumentFolders } = require('./scripts/review-changes');
+        // Import required functions - getTechnicalDocumentFolders now available from import
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
         
         if (!workspaceFolder) {
@@ -649,23 +648,44 @@ function activate(context) {
         const techDocs = await getTechnicalDocumentFolders(workspaceFolder);
         
         if (techDocs.length === 0) {
-            vscode.window.showWarningMessage('⚠️ No technical-document folders found. Using Quick Review instead.');
-            // Fallback to quick review
-            await vscode.commands.executeCommand('aida.confirmChangesReview', filePath);
-            return;
+            vscode.window.showInformationMessage('⚠️ No technical-document folders found for enhanced review.');
+            return; // Exit without showing any UI
+        }
+        
+        // Generate description for each folder using the enhanced getFiles method
+        function generateDescription(folder) {
+            try {
+                const files = folder.getFiles();
+                if (files.length === 0) {
+                    return `: 📋 (no documents)`;
+                }
+                
+                // Extract titles from first few files for preview
+                const previewFiles = files.slice(0, 3);
+                const titles = previewFiles.map(file => {
+                    const fileName = file.name.replace('.md', '').replace(/-/g, ' ');
+                    return fileName.charAt(0).toUpperCase() + fileName.slice(1);
+                });
+                
+                const titlesList = titles.join(', ');
+                const moreText = files.length > 3 ? ` (+${files.length - 3} more)` : '';
+                return `: 📋 ${titlesList}${moreText}`;
+            } catch (error) {
+                console.log(`❌ Error generating description for ${folder.name}:`, error.message);
+                return `📋 ${folder.displayName}`;
+            }
         }
         
         // Show selection UI via quick pick
          const items = [
             ...techDocs.map(folder => ({
                 label: `📁 ${folder.displayName}`,
-                description: getTechnicalDocDescription(folder.name),
+                description: generateDescription(folder),
                 detail: `Include ${folder.displayName} documentation in review`,
                 categoryName: folder.name,
                 categoryDisplayName: folder.displayName
             }))
         ];
-        
         
         const selected = await vscode.window.showQuickPick(items, {
             placeHolder: `Select technical documentation for enhanced review of ${path.basename(filePath)}`,
@@ -687,19 +707,6 @@ function activate(context) {
             query: `@review-changes ${filePath}`
         });
     }
-
-     // Helper function for technical doc descriptions
-    function getTechnicalDocDescription(folderName) {
-        const descriptions = {
-            'billing-rules': '💰 Invoice logic, payment validation, and billing constraints',
-            'data-validation': '🔍 Input validation rules and business constraints',
-            'navigation-rules': '🗺️ Menu access controls and navigation permissions', 
-            'permission-rules': '🔐 User roles, admin permissions, and access control'
-        };
-        
-        return descriptions[folderName] || `📋 ${folderName.replace('-', ' ')} documentation`;
-    }
-
 
     // Copilot-Style Chat Panel already initialized above
 
