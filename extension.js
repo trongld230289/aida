@@ -198,7 +198,7 @@ function activate(context) {
 
     let confirmChangesReview = vscode.commands.registerCommand('aida.confirmChangesReview', async (filePath) => {
         // Set the session flag to indicate the user confirmed (simulate second enter)
-        const sessionKey = `review-changes-${filePath}`;
+        const sessionKey = `review-changes-options-${filePath}`;
         chatSessions.set(sessionKey, true);
         console.log(`🔍 Confirmation button clicked - Session set: ${sessionKey} = true`);
 
@@ -211,7 +211,7 @@ function activate(context) {
 
     let confirmFileReview = vscode.commands.registerCommand('aida.confirmFileReview', async (filePath) => {
         // Set the session flag to indicate the user confirmed (simulate second enter)
-        const sessionKey = `review-file-${filePath}`;
+        const sessionKey = `review-file-options-${filePath}`;
         chatSessions.set(sessionKey, true);
         console.log(`📁 Confirmation button clicked - Session set: ${sessionKey} = true`);
 
@@ -711,7 +711,7 @@ function activate(context) {
 
         // Start enhanced review
         await vscode.commands.executeCommand('workbench.action.chat.open', {
-            query: `@review-changes ${filePath}`
+            query: `@review-changes ${filePath} --confirm-enhanced`
         });
     }
 
@@ -2585,5 +2585,6 @@ module.exports = {
     ensureAidaTemplatesForReview,  // Export for review commands (replaces checkAndInitializeTemplates)
     handleSyncTemplates,  // Export for sync command
     createAidaTemplateStructure,  // Export for sync-review-templates
-    syncNewLanguageTemplates  // Export for sync-review-templates
+    syncNewLanguageTemplates,  // Export for sync-review-templates
+    chatSessions  // Export chatSessions for session tracking in review scripts
 };

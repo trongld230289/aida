@@ -48,34 +48,8 @@ function initializeReviewFile(context) {
             if (!input || input.length === 0) {
                 // Check if there's an active file to review
                 const activeEditor = vscode.window.activeTextEditor;
-                if (activeEditor) {
-                    // Use shared "Enter twice" logic for confirmation - DISABLED for direct execution
-                    // if (handleEnterTwiceLogic) {
-                    //     const shouldContinue = await handleEnterTwiceLogic(
-                    //         'review-file', 
-                    //         activeEditor, 
-                    //         stream, 
-                    //         async () => {
-                    //             await aiReviewFile(activeEditor.document.fileName, stream, request.model, context, request);
-                    //         }
-                    //     );
-                    //     
-                    //     // If handleEnterTwiceLogic returns true, it handled everything (second enter)
-                    //     // If it returns false, it's showing the confirmation dialog (first enter)
-                    //     return;
-                    // } else {
-                        // Direct call to aiReviewFile - no confirmation needed
-                        await aiReviewFile(activeEditor.document.fileName, stream, request.model, context, request);
-                        return;
-                    // }
-                } else {
-                    stream.markdown('# 📁 File Review Assistant\n\n');
-                    stream.markdown('Please provide a file path or open a file to review.\n\n');
-                    stream.markdown('**Examples:**\n');
-                    stream.markdown('- `@review-file` - Review currently active file\n');
-                    stream.markdown('- `@review-file src/app/component.ts` - Review specific file\n');
-                    return;
-                }
+                await aiReviewFile(activeEditor.document.fileName, stream, request.model, context, request);
+                return;
             }
             
             // Use unified AI review file function

@@ -5,25 +5,39 @@ const { execSync } = require('child_process');
 const { executeAIReview, getUnifiedModel, getChecklistStatusIcon, shouldUseApiKey, displayReviewHeader, loadTemplateWithPriority, displayCommonReviewInfo, getBusinessDocumentFolders } = require('./review-common');
 const { autoDetectWorkspace, getReviewTemplateWithDetection, displayDetectionInfo } = require('./language-detection');
 
-// Session tracking for review options (similar to chatSessions in extension.js)
-const reviewOptionsSessions = new Map();
-
-// Make chatSessions available for compatibility
-const chatSessions = reviewOptionsSessions;
+// Import chatSessions from extension.js for session tracking
+let chatSessions;
+try {
+    const extensionModule = require('../extension');
+    chatSessions = extensionModule.chatSessions;
+    console.log('✅ Successfully imported chatSessions from extension.js:', typeof chatSessions, chatSessions ? chatSessions.constructor.name : 'null');
+} catch (error) {
+    console.warn('⚠️ Could not import chatSessions from extension.js, creating fallback:', error.message);
+    chatSessions = new Map();
+}
 
 /**
  * Show review options with choice to process without documents
  * Based on handleEnterTwiceLogic pattern but for review options selection
  * @param {string} participantType - 'review-changes' 
- * @param {object} activeEditor - VS Code active editor
+ * @param {string} targetInput - Target file path (from input or active editor)
  * @param {object} stream - Chat stream
  * @param {object} context - Extension context
  * @param {function} reviewCallback - Function to call when option is selected
  * @returns {boolean} - true if handled (option selected), false if showing options dialog
  */
-async function showReviewOptionsWithoutDocs(participantType, activeEditor, stream, context, reviewCallback) {
-    const fileName = path.basename(activeEditor.document.fileName);
-    const sessionKey = `${participantType}-options-${activeEditor.document.fileName}`;
+async function showReviewOptionsWithoutDocs(participantType, targetInput, stream, context, reviewCallback) {
+    // Add input validation
+    if (!targetInput) {
+        stream.markdown('❌ **No file specified for review**\n\n');
+        stream.markdown('💡 **Tips:**\n');
+        stream.markdown('- Open a file in the editor\n');
+        stream.markdown('- Provide a specific file path\n');
+        return false;
+    }
+    
+    const fileName = path.basename(targetInput);
+    const sessionKey = `${participantType}-options-${targetInput}`;
     
     // Check if this is the second call (button was clicked)
     const hasSeenOptions = chatSessions?.has ? chatSessions.has(sessionKey) : false;
@@ -88,7 +102,7 @@ async function showReviewOptionsWithoutDocs(participantType, activeEditor, strea
         stream.button({
             command: 'aida.confirmChangesReview',
             title: '🚀 Start Quick Review',
-            arguments: [activeEditor.document.fileName]
+            arguments: [targetInput]
         });
         
         stream.markdown('\n');
@@ -99,10 +113,11 @@ async function showReviewOptionsWithoutDocs(participantType, activeEditor, strea
         stream.markdown('- Cross-references business documents\n');
         stream.markdown('- More comprehensive analysis\n\n');
         
+        // Use command to show enhanced review options with business document selection
         stream.button({
             command: 'aida.showEnhancedReviewOptions',
             title: '📚 Start Enhanced Review',
-            arguments: [activeEditor.document.fileName]
+            arguments: [targetInput]
         });
         
         stream.markdown('\n\n');
@@ -111,7 +126,7 @@ async function showReviewOptionsWithoutDocs(participantType, activeEditor, strea
         return false; // Not handled - showing options dialog
 }
 
-// Import functions from extension.js
+// Import additional functions from extension.js
 let handleEnterTwiceLogic;
 let ensureAidaTemplatesForReview;
 try {
@@ -119,7 +134,7 @@ try {
     handleEnterTwiceLogic = extensionModule.handleEnterTwiceLogic;
     ensureAidaTemplatesForReview = extensionModule.ensureAidaTemplatesForReview;
 } catch (error) {
-    console.log('⚠️ Could not import functions from extension.js');
+    console.log('⚠️ Could not import additional functions from extension.js');
 }
 
 /**
@@ -144,54 +159,33 @@ function initializeReviewChanges(context) {
             
             const input = request.prompt.trim();
             
-            // Check for enhanced review mode
-            if (input.startsWith('enhanced:')) {
-                const filePath = input.replace('enhanced:', '').trim();
-                console.log(`📚 Enhanced review mode detected for: ${filePath}`);
+            // Check for Enhanced Review confirmation flag
+            if (input.includes('--confirm-enhanced')) {
+                const filePath = input.replace(/--confirm-enhanced/, '').replace(/@review-changes/, '').trim();
+                console.log(`🎯 Enhanced Review confirmation detected for: ${filePath}`);
                 
-                // Get active editor or use provided file path
-                let activeEditor = vscode.window.activeTextEditor;
-                if (filePath && filePath !== activeEditor?.document.fileName) {
-                    // Try to open the specified file
-                    try {
-                        const doc = await vscode.workspace.openTextDocument(filePath);
-                        activeEditor = await vscode.window.showTextDocument(doc);
-                    } catch (error) {
-                        console.error('❌ Could not open file for enhanced review:', error);
-                    }
-                }
-                
-                if (activeEditor) {
-                    await showEnhancedReviewOptions('review-changes', activeEditor, stream, context);
-                    return;
-                } else {
-                    stream.markdown('❌ **No active file for enhanced review**\n\n');
-                    return;
-                }
-            }
-            
-            // Improved loop prevention - only prevent if this is a recursive call from the same participant
-            if (chatContext.participant && chatContext.participant.id === 'review-changes' && request.prompt.includes('@review-changes')) {
-                stream.markdown('⚠️ **Loop Prevention**: Recursive call detected\n');
-                stream.markdown('💡 **Use direct commands instead**: Review your git changes or files\n');
+                // Execute Enhanced Review directly with aiReviewChanges
+                await aiReviewChanges(filePath, stream, null, context, request);
                 return;
             }
             
-            // Always show review options for any review-changes call
+            // Get active editor first to avoid reference errors
             const activeEditor = vscode.window.activeTextEditor;
+            const targetInput = input || (activeEditor ? activeEditor.document.fileName : null);
+            
+            // Always show review options for any review-changes call
             if (activeEditor) {
                 // Show review options with process without document choice
                 const shouldContinue = await showReviewOptionsWithoutDocs(
                     'review-changes', 
-                    activeEditor, 
+                    targetInput, 
                     stream, 
                     context,
                     async (useDocuments) => {
-                        if (useDocuments) {
+                         if (useDocuments) {
                             // TODO: Implement with business documents
                             stream.markdown('🔧 **Business documents integration coming soon...**\n\n');
                         }
-                        const targetInput = input || activeEditor.document.fileName;
                         await aiReviewChanges(targetInput, stream, null, context, request);
                     }
                 );
