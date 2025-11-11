@@ -125,20 +125,20 @@ class ChatbotContextEngine {
             };
         }
 
-        if (input.images && input.images.length > 0) {
-            // OCR processing for images
-            const ocrText = await this.extractTextFromImages(input.images);
-            const combinedText = `${input.text || ''} ${ocrText}`.trim();
+        // if (input.images && input.images.length > 0) {
+        //     // OCR processing for images
+        //     const ocrText = await this.extractTextFromImages(input.images);
+        //     const combinedText = `${input.text || ''} ${ocrText}`.trim();
             
-            return {
-                type: 'multimodal',
-                originalText: input.text || '',
-                ocrText: ocrText,
-                cleanText: this.preprocessText(combinedText),
-                language: this.languageDetector.detect(combinedText),
-                hasImages: true
-            };
-        }
+        //     return {
+        //         type: 'multimodal',
+        //         originalText: input.text || '',
+        //         ocrText: ocrText,
+        //         cleanText: this.preprocessText(combinedText),
+        //         language: this.languageDetector.detect(combinedText),
+        //         hasImages: true
+        //     };
+        // }
 
         return {
             type: 'text',
