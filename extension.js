@@ -1162,8 +1162,12 @@ async function getMonacoWebviewContent(diffData, panel, context) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy" 
           content="default-src 'none'; 
-                   script-src ${panel.webview.cspSource} 'unsafe-inline'; 
-                   style-src ${panel.webview.cspSource} 'unsafe-inline';">
+                   script-src ${panel.webview.cspSource} 'unsafe-inline' 'unsafe-eval'; 
+                   style-src ${panel.webview.cspSource} 'unsafe-inline';
+                   font-src ${panel.webview.cspSource} data:;
+                   img-src ${panel.webview.cspSource} data:;
+                   worker-src blob: data: ${panel.webview.cspSource};
+                   connect-src ${panel.webview.cspSource};">
     <title>Monaco Diff View: ${escapeHtml(filePath)}</title>
     <style>
         body {

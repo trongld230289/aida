@@ -394,9 +394,6 @@ async function showAzureDevOpsDiffInWebview(prAnalysis, stream) {
     stream.markdown('\n\n💡 **Click to explore changes in diff viewer**\n\n');
 }
 
-// Global configuration variables
-const isShowSummaryOfChanges = false;
-
 // Helper function to count diff lines accurately (matches Azure DevOps)
 function countDiffLines(diffContent) {
     const lines = diffContent.split('\n');
@@ -1157,6 +1154,18 @@ async function getFileContent(organization, project, repository, filePath, commi
 
         if (response.success && response.data) {
             console.log(`✅ Got file content: ${response.data.length} chars`);
+            
+            // Debug indentation in API response
+            const lines = response.data.split('\n');
+            console.log(`📊 DEBUG API CONTENT - Total lines: ${lines.length}`);
+            console.log(`📊 First 5 lines analysis:`);
+            for (let i = 0; i < Math.min(5, lines.length); i++) {
+                const line = lines[i];
+                const leadingSpaces = line.match(/^ */)[0].length;
+                const leadingTabs = line.match(/^\t*/)[0].length;
+                console.log(`📊 Line ${i + 1}: spaces=${leadingSpaces}, tabs=${leadingTabs}, content="${line.substring(0, 50)}"`);
+            }
+            
             return response.data;
         }
 
@@ -1233,70 +1242,11 @@ function generateUnifiedDiff(filePath, baseContent, targetContent, changeType) {
     // File edit - sử dụng diff library
     const patches = Diff.createPatch(filePath, baseContent, targetContent, '', '', {
         context: 3, // Giống Azure DevOps (3 context lines)
-        ignoreWhitespace: true, // 🔧 Ignore whitespace-only changes
+        ignoreWhitespace: false, // 🔧 KEEP whitespace and indentation!
         newlineIsToken: false   // Don't treat newlines as separate tokens
     });
     
     return patches;
-}
-
-/**
- * Generate minimal diff for AI analysis (Azure DevOps optimized)
- * Only includes actual changes without excessive context
- */
-function generateDiffOnly(filePath, baseContent, targetContent, changeType) {
-    if (changeType === 'add') {
-        // New file - show summary only
-        const lines = targetContent.split('\n');
-        return `diff --git a/${filePath} b/${filePath}\nnew file mode 100644\n+++ b/${filePath}\n@@ -0,0 +1,${lines.length} @@\n[New file: ${lines.length} lines added]`;
-    }
-    
-    if (changeType === 'delete') {
-        // Deleted file - show summary only
-        const lines = baseContent.split('\n');
-        return `diff --git a/${filePath} b/${filePath}\ndeleted file mode 100644\n--- a/${filePath}\n+++ /dev/null\n@@ -1,${lines.length} +0,0 @@\n[Deleted file: ${lines.length} lines removed]`;
-    }
-    
-    // File edit - extract only key changes
-    const baseLines = baseContent.split('\n');
-    const targetLines = targetContent.split('\n');
-    
-    // Use diff library with minimal context
-    const patches = Diff.createPatch(filePath, baseContent, targetContent, '', '', {
-        context: 1, // Minimal context (only 1 line before/after)
-        ignoreWhitespace: true,
-        newlineIsToken: false
-    });
-    
-    // Extract only changed hunks, limit size
-    const hunkRegex = /@@ -(\d+),(\d+) \+(\d+),(\d+) @@([^@]*?)(?=@@|$)/g;
-    const hunks = [];
-    let match;
-    let totalChanges = 0;
-    
-    while ((match = hunkRegex.exec(patches)) !== null && hunks.length < 3) { // Max 3 hunks
-        const hunkContent = match[5].trim();
-        const changeLines = hunkContent.split('\n').filter(line => 
-            line.startsWith('+') || line.startsWith('-')
-        );
-        
-        if (changeLines.length > 0 && changeLines.length <= 15) { // Max 15 changes per hunk
-            totalChanges += changeLines.length;
-            if (totalChanges <= 30) { // Total limit 30 change lines
-                hunks.push(`@@ -${match[1]},${match[2]} +${match[3]},${match[4]} @@\n${changeLines.slice(0, 10).join('\n')}`);
-            }
-        }
-    }
-    
-    if (hunks.length > 0) {
-        return `diff --git a/${filePath} b/${filePath}\n--- a/${filePath}\n+++ b/${filePath}\n${hunks.join('\n\n')}`;
-    }
-    
-    // Fallback: show change summary
-    const addedLines = Math.max(0, targetLines.length - baseLines.length);
-    const removedLines = Math.max(0, baseLines.length - targetLines.length);
-    
-    return `diff --git a/${filePath} b/${filePath}\n--- a/${filePath}\n+++ b/${filePath}\n@@ changes summary @@\n[Modified file: +${addedLines}/-${removedLines} lines]`;
 }
 
 /**
