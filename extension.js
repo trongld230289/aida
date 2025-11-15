@@ -197,10 +197,10 @@ function activate(context) {
     });
 
     let confirmChangesReview = vscode.commands.registerCommand('aida.confirmChangesReview', async (filePath) => {
-        // Set the session flag to indicate the user confirmed (simulate second enter)
-        const sessionKey = `review-changes-options-${filePath}`;
-        chatSessions.set(sessionKey, true);
-        console.log(`🔍 Confirmation button clicked - Session set: ${sessionKey} = true`);
+        // Simple logic - set Quick Review mode
+        global.selectedBusinessDocs = [];
+        console.log('🚀 Quick Review button clicked - set global.selectedBusinessDocs = []');
+        console.log('🔍 DEBUG: filePath received =', filePath);
 
         // Keep the review in GitHub Copilot Chat (original behavior)
         await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
@@ -611,31 +611,19 @@ function activate(context) {
         try {
             console.log(`📚 Showing enhanced review options for: ${filePath}`);
             
-            // Focus chat panel first
-            await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
-            
-            // Create a mock stream for enhanced review options
-            const mockStream = {
-                markdown: (text) => {
-                    // We'll use a webview or notification approach instead
-                    console.log('📚 Enhanced Stream:', text);
-                },
-                button: (cmd) => {
-                    console.log('🔘 Enhanced Button:', cmd);
-                }
-            };
-            
-            // Show enhanced options directly via commands/UI
+            // Show QuickPick first to select business documents
             await showEnhancedReviewOptionsInChat(filePath);
             
         } catch (error) {
-            console.error('❌ Error showing enhanced options:', error);
+            console.error('❌ Error showing enhanced review options:', error);
             vscode.window.showErrorMessage(`Failed to show enhanced options: ${error.message}`);
         }
     });
 
     // Helper function to show enhanced options in chat
     async function showEnhancedReviewOptionsInChat(filePath) {
+        console.log('🔍 DEBUG: showEnhancedReviewOptionsInChat called with filePath =', filePath);
+        
         // Import required functions - getBusinessDocumentFolders now available from import
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
         
@@ -705,13 +693,20 @@ function activate(context) {
             path: businessDocs.find(folder => folder.name === item.categoryName)?.path,
             relativePath: businessDocs.find(folder => folder.name === item.categoryName)?.relativePath
         }));
-        global.selectedBusinessDocs = selectedCategories;
 
         console.log('✅ Selected business document categories for enhanced review:', selectedCategories);
 
-        // Start enhanced review
+        // Simple global state - only one key!
+        global.selectedBusinessDocs = selectedCategories;
+        console.log('🎯 Set global.selectedBusinessDocs for Enhanced Review:', selectedCategories);
+
+        // Start enhanced review with original filePath
+        console.log('🔍 DEBUG: About to submit chat with filePath =', filePath);
+        await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
+        const chatText = `@review-changes ${filePath}`;
+        console.log('🔍 DEBUG: Chat text =', chatText);
         await vscode.commands.executeCommand('workbench.action.chat.open', {
-            query: `@review-changes ${filePath} --confirm-enhanced`
+            query: chatText
         });
     }
 
@@ -743,9 +738,6 @@ function activate(context) {
         showModelsCommand,
         showDailyReportCommand,
         showDailyReportTemplateCommand,
-        selectAllBusinessDocsCommand,
-        clearAllBusinessDocsCommand,
-        proceedWithBusinessDocsCommand,
         showEnhancedReviewOptionsCommand,
         viewPrDiffCommand,
         copilotSidebarChat

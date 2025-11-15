@@ -452,9 +452,6 @@ function initializePrReview(extensionContext) {
  */
 async function handleReviewPr(request, context, stream, token) {
     try {
-        // Reset business documents selection for each review
-        global.selectedBusinessDocs = null;
-        console.log('🔄 Reset global.selectedBusinessDocs for review-pr');
         
         const userMessage = request.prompt;
 

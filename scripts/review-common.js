@@ -2883,11 +2883,22 @@ function processTemplateContent(content, mainTemplatePath, placeholder = '{{REVI
         
         const processedContent = content.replace(new RegExp(placeholder.replace(/[{}]/g, '\\$&'), 'g'), baseContent);
         console.log(`🔧 Replaced ${placeholder} with enhanced base content (final length: ${processedContent.length} chars)`);
+        
+        // Always cleanup business docs state after processing template
+        global.selectedBusinessDocs = null;
+        console.log('🧹 Template processed - cleanup: global.selectedBusinessDocs = null');
+        
         return processedContent;
     } else {
         console.log(`⚠️ Base template not found, keeping ${placeholder} placeholder as-is`);
+        
+        // Cleanup even when no base template
+        global.selectedBusinessDocs = null;
+        console.log('🧹 No template - cleanup: global.selectedBusinessDocs = null');
+        
         return content;
     }
+    
 }
 
 /**

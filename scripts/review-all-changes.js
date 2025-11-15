@@ -294,9 +294,6 @@ async function handleNoAllChangesScenario(stream, message) {
  */
 async function aiReviewAllChanges(input, stream, selectedModel = null, context = null, request = null) {
     try {
-        // Reset business documents selection for each review
-        global.selectedBusinessDocs = null;
-        console.log('🔄 Reset global.selectedBusinessDocs for review-all-changes');
         
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
         if (!workspaceFolder) {

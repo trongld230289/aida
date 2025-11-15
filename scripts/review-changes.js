@@ -37,26 +37,8 @@ async function showReviewOptionsWithoutDocs(participantType, targetInput, stream
     }
     
     const fileName = path.basename(targetInput);
-    const sessionKey = `${participantType}-options-${targetInput}`;
-    
-    // Check if this is the second call (button was clicked)
-    const hasSeenOptions = chatSessions?.has ? chatSessions.has(sessionKey) : false;
-
-    console.log(`🔍 Review options session check: ${sessionKey} = ${hasSeenOptions}`);
-
-    if (hasSeenOptions) {
-        // Second call - button was clicked, proceed with review
-        stream.markdown('🚀 **Starting Quick Review...**\n\n');
-        
-        // Clear session for next time
-        if (chatSessions?.delete) {
-            chatSessions.delete(sessionKey);
-        }
-        
-        // Call review callback directly (without documents)
-        await reviewCallback(false);
-        return true; // Handled - review executed
-    }
+    // Simple logic - always show options first time
+    console.log(`🔍 Review options for: ${targetInput}`);
 
     // First check if business documents exist before showing any options
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
@@ -77,10 +59,8 @@ async function showReviewOptionsWithoutDocs(participantType, targetInput, stream
         console.log('📋 No business documents found - executing Quick Review automatically');
         stream.markdown('🚀 **Starting Quick Review automatically** (no business documents found)\n\n');
         
-        // Clear session for next time
-        if (chatSessions?.delete) {
-            chatSessions.delete(sessionKey);
-        }
+        // Set Quick Review mode
+        global.selectedBusinessDocs = [];
         
         // Call review callback directly (without documents)
         await reviewCallback(false);
@@ -158,23 +138,26 @@ function initializeReviewChanges(context) {
             console.log('📥 Request.model?.id:', request.model?.id);
             
             const input = request.prompt.trim();
-            
-            // Check for Enhanced Review confirmation flag
-            if (input.includes('--confirm-enhanced')) {
-                const filePath = input.replace(/--confirm-enhanced/, '').replace(/@review-changes/, '').trim();
-                console.log(`🎯 Enhanced Review confirmation detected for: ${filePath}`);
-                
-                // Execute Enhanced Review directly with aiReviewChanges
-                await aiReviewChanges(filePath, stream, null, context, request);
-                return;
-            }
+            console.log('🔍 DEBUG: request.prompt =', `"${request.prompt}"`);
+            console.log('🔍 DEBUG: input =', `"${input}"`);
             
             // Get active editor first to avoid reference errors
             const activeEditor = vscode.window.activeTextEditor;
+            console.log('🔍 DEBUG: activeEditor.document.fileName =', activeEditor?.document?.fileName);
             const targetInput = input || (activeEditor ? activeEditor.document.fileName : null);
+            console.log('🔍 DEBUG: targetInput =', `"${targetInput}"`);
             
-            // Always show review options for any review-changes call
-            if (activeEditor) {
+            // Simple check - only one key! (after targetInput is defined)
+            if (global.selectedBusinessDocs) {
+                console.log('🎯 Enhanced/Quick Review detected:', global.selectedBusinessDocs);
+                
+                // Execute review and cleanup
+                await aiReviewChanges(targetInput, stream, null, context, request);
+                return;
+            }
+            
+            // Show review options if we have a target file to review
+            if (targetInput) {
                 // Show review options with process without document choice
                 const shouldContinue = await showReviewOptionsWithoutDocs(
                     'review-changes', 
@@ -482,7 +465,7 @@ async function aiReviewChanges(input, stream, selectedModel = null, context = nu
         stream.markdown('- Check if VS Code has proper workspace access\n');
         stream.markdown('- Restart VS Code if issues persist\n');
         console.error('AI Review Changes error:', error);
-    }
+    } 
 }
 
 // SIMPLIFIED: Direct template-based approach without command conflicts
