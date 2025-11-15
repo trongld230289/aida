@@ -926,6 +926,7 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
                     let diffContent = '';
                     let additions = 0;
                     let deletions = 0;
+                    let fileSourceContent = null; // Declare outside try block for new files
 
                     if (baseCommit && sourceCommit) {
                         try {
@@ -937,6 +938,9 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
                             // Get file content from both commits
                             const baseContent = await getFileContent(organization, project, repository, filePath, baseCommit, token);
                             const sourceContent = await getFileContent(organization, project, repository, filePath, sourceCommit, token);
+                            
+                            // Store source content for new files
+                            fileSourceContent = sourceContent;
 
                             console.log(`📊 Content retrieved:`);
                             console.log(`  Base content (merge base): ${baseContent ? baseContent.length + ' chars' : 'NULL'}`);
@@ -966,7 +970,8 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
                         diffContent = `diff --git a/${filePath} b/${filePath}\n[Missing commit information]`;
                     }
 
-                    return {
+                    // For new files (add/new), store full content for detailed review (like review-file.js)
+                    const fileObj = {
                         path: filePath,
                         changeType: change.changeType?.toLowerCase() || 'edit',
                         sourceCommit: baseCommit?.substring(0, 7) || 'target',
@@ -975,6 +980,25 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
                         deletions: deletions,
                         diffContent: diffContent
                     };
+                    
+                    // Store full content for new files (needed for typescript code block injection)
+                    const changeTypeLower = (change.changeType || '').toLowerCase();
+                    const isAddType = (changeTypeLower === 'add' || changeTypeLower === 'added' || changeTypeLower === 'new');
+                    
+                    console.log(`🔍 [DEBUG] File ${filePath}:`);
+                    console.log(`   - changeType="${change.changeType}" (lowercase="${changeTypeLower}")`);
+                    console.log(`   - isAddType=${isAddType}`);
+                    console.log(`   - fileSourceContent=${fileSourceContent ? fileSourceContent.length + ' chars' : 'NULL'}`);
+                    console.log(`   - Will store fullContent? ${isAddType && fileSourceContent ? 'YES ✅' : 'NO ❌'}`);
+                    
+                    if (isAddType && fileSourceContent) {
+                        fileObj.fullContent = fileSourceContent;
+                        console.log(`💾 ✅ STORED fullContent for new file ${filePath}: ${fileSourceContent.length} chars`);
+                    } else {
+                        console.log(`⚠️ NOT storing fullContent for ${filePath}: isAddType=${isAddType}, hasContent=${!!fileSourceContent}`);
+                    }
+                    
+                    return fileObj;
                 }));
 
                 console.log(`✅ Processed ${fileChanges.length} files with PR-specific changes`);
@@ -2118,13 +2142,49 @@ async function performQuickReviewWithAI(stream, prData, request, diffContent, or
     // Clean up any old diff placeholder and inject diff at end of template
     let processedTemplate = templateContent.replace(/```diff[\s\S]*?\{\{FINAL_DIFF_CONTENT\}\}[\s\S]*?```/g, '');
     
-    // Inject diff content at the end of template
+    // Inject content at the end of template - SEPARATED by file type (like performQuickReview)
     processedTemplate += '\n\n---\n\n';
-    processedTemplate += '## PULL REQUEST DIFF TO REVIEW\n\n';
-    processedTemplate += '```diff\n';
-    processedTemplate += diffContent;
-    processedTemplate += '\n```\n\n';
-    processedTemplate += '**Instructions:** Please analyze the diff above using the strict review framework provided in this template.\n';
+    processedTemplate += '## PULL REQUEST CHANGES TO REVIEW\n\n';
+    
+    // Separate files by change type for better analysis
+    const modifiedFiles = prData.fileChanges?.filter(f => {
+        const changeType = (f.changeType || '').toLowerCase();
+        return (changeType === 'edit' || changeType === 'modify' || changeType === 'modified') || !f.fullContent;
+    }) || [];
+    const newFiles = prData.fileChanges?.filter(f => {
+        const changeType = (f.changeType || '').toLowerCase();
+        const isNewFile = (changeType === 'add' || changeType === 'added' || changeType === 'new') && f.fullContent;
+        console.log(`🔍 [FILTER] File ${f.path}: changeType="${changeType}", hasFullContent=${!!f.fullContent}, isNewFile=${isNewFile}`);
+        return isNewFile;
+    }) || [];
+    
+    console.log(`📊 [FILTER RESULT] Total files: ${prData.fileChanges?.length}, Modified: ${modifiedFiles.length}, New: ${newFiles.length}`);
+    if (newFiles.length > 0) {
+        console.log(`✅ New files to inject as fullContent:`, newFiles.map(f => f.path));
+    }
+    
+    // 1. Inject modified files as DIFF (like before)
+    if (modifiedFiles.length > 0 || diffContent) {
+        processedTemplate += '### GIT DIFF TO REVIEW\n\n';
+        processedTemplate += '```diff\n';
+        processedTemplate += diffContent;
+        processedTemplate += '\n```\n\n';
+    }
+    
+    // 2. Inject new files as FULL CONTENT with proper language (like review-file.js)
+    if (newFiles.length > 0) {
+        processedTemplate += '## FILE CONTENT TO REVIEW\n\n';
+        newFiles.forEach((file, index) => {
+            // Hardcode typescript for consistency with review-file.js
+            console.log(`📄 [USE] Injecting fullContent for new file: ${file.path} (${file.fullContent?.length || 0} chars)`);
+            processedTemplate += `#### File ${index + 1}: \`${file.path}\` (+${file.additions} lines)\n\n`;
+            processedTemplate += `\`\`\`typescript\n`;
+            processedTemplate += file.fullContent || '';
+            processedTemplate += '\n```\n\n';
+        });
+    }
+    
+    processedTemplate += '**Instructions:** Please analyze ALL changes above (both diffs and new files) using the strict review framework provided in this template.\n';
 
     try {
         // Get unified model using shared function with request
@@ -2516,13 +2576,49 @@ async function performQuickReview(stream, prAnalysis) {
         // Clean up old diff placeholder and inject at end of template
         let reviewPrompt = templateContent.replace(/```diff[\s\S]*?\{\{FINAL_DIFF_CONTENT\}\}[\s\S]*?```/g, '');
         
-        // Inject diff content at the end of template
+        // Inject content at the end of template - SEPARATED by file type
         reviewPrompt += '\n\n---\n\n';
-        reviewPrompt += '## PULL REQUEST DIFF TO REVIEW\n\n';
-        reviewPrompt += '```diff\n';
-        reviewPrompt += (data.finalDiff || '');
-        reviewPrompt += '\n```\n\n';
-        reviewPrompt += '**Instructions:** Please analyze the diff above using the strict review framework provided in this template.\n';
+        reviewPrompt += '## PULL REQUEST CHANGES TO REVIEW\n\n';
+        
+        // Separate files by change type for better analysis
+        const modifiedFiles = data.fileChanges?.filter(f => {
+            const changeType = (f.changeType || '').toLowerCase();
+            return (changeType === 'edit' || changeType === 'modify' || changeType === 'modified') || !f.fullContent;
+        }) || [];
+        const newFiles = data.fileChanges?.filter(f => {
+            const changeType = (f.changeType || '').toLowerCase();
+            const isNewFile = (changeType === 'add' || changeType === 'added' || changeType === 'new') && f.fullContent;
+            console.log(`🔍 [FILTER] File ${f.path}: changeType="${changeType}", hasFullContent=${!!f.fullContent}, isNewFile=${isNewFile}`);
+            return isNewFile;
+        }) || [];
+        
+        console.log(`📊 [FILTER RESULT] Total files: ${data.fileChanges?.length}, Modified: ${modifiedFiles.length}, New: ${newFiles.length}`);
+        if (newFiles.length > 0) {
+            console.log(`✅ New files to inject as fullContent:`, newFiles.map(f => f.path));
+        }
+        
+        // 1. Inject modified files as DIFF (like before)
+        if (modifiedFiles.length > 0 || data.finalDiff) {
+            reviewPrompt += '### GIT DIFF TO REVIEW\n\n';
+            reviewPrompt += '```diff\n';
+            reviewPrompt += (data.finalDiff || '');
+            reviewPrompt += '\n```\n\n';
+        }
+        
+        // 2. Inject new files as FULL CONTENT with proper language (like review-file.js)
+        if (newFiles.length > 0) {
+            reviewPrompt += '## FILE CONTENT TO REVIEW\n\n';
+            newFiles.forEach((file, index) => {
+                // Hardcode typescript for consistency with review-file.js
+                console.log(`📄 [USE] Injecting fullContent for new file: ${file.path} (${file.fullContent?.length || 0} chars)`);
+                reviewPrompt += `#### File ${index + 1}: \`${file.path}\` (+${file.additions} lines)\n\n`;
+                reviewPrompt += `\`\`\`typescript\n`;
+                reviewPrompt += file.fullContent || '';
+                reviewPrompt += '\n```\n\n';
+            });
+        }
+        
+        reviewPrompt += '**Instructions:** Please analyze ALL changes above (both diffs and new files) using the strict review framework provided in this template.\n\n';
 
         // Add file information if available
         if (data.fileChanges && data.fileChanges.length > 0) {
