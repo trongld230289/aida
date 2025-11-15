@@ -45,50 +45,8 @@ function initializeReviewChanges(context) {
             const input = request.prompt.trim();
             const targetInput = input || (activeEditor ? activeEditor.document.fileName : null);
             
-            // Simple check - only one key! (after targetInput is defined)
-            if (global.selectedBusinessDocs) {
-                // Execute review and cleanup
-                await aiReviewChanges(targetInput, stream, null, context, request);
-                return;
-            }
-            
-            // Show review options if we have a target file to review
-            if (targetInput) {
-                // Show review options using generic function
-                const shouldContinue = await showReviewOptions(
-                    targetInput, 
-                    stream, 
-                    {
-                        quickCommand: 'aida.confirmChangesReview',
-                        enhancedCommand: 'aida.showEnhancedReviewOptions',
-                        reviewType: 'Changes',
-                        chatCommand: 'review-changes'
-                    },
-                    async (useDocuments) => {
-                         if (useDocuments) {
-                            // TODO: Implement with business documents
-                            stream.markdown('🔧 **Business documents integration coming soon...**\n\n');
-                        }
-                        await aiReviewChanges(targetInput, stream, null, context, request);
-                    }
-                );
-                
-                // If showReviewOptions returns true, it handled everything
-                // If it returns false, it's showing the options dialog
-                if (shouldContinue === false) {
-                    return;
-                }
-            } else {
-                stream.markdown('# 🔍 Code Review Assistant\n\n');
-                stream.markdown('Please provide a file path or open a file to review.\n\n');
-                stream.markdown('**Examples:**\n');
-                stream.markdown('- `@review-changes` - Review current git changes\n');
-                stream.markdown('- `@review-changes src/app/component.ts` - Review specific file\n');
-                return;
-            }
-            
-            // Use unified AI review changes function
-            await aiReviewChanges(input, stream, null, context, request);
+            // Use reusable review changes logic (for AIDA Chatbot reuse)
+            await processReviewChanges(targetInput, stream, context, request);
             
         } catch (error) {
             stream.markdown(`❌ Error: ${error.message}\n\n`);
@@ -102,8 +60,70 @@ function initializeReviewChanges(context) {
 
     return {
         reviewChangesParticipant,
-        aiReviewChanges
+        aiReviewChanges,
+        processReviewChanges // Export for AIDA Chatbot reuse
     };
+}
+
+/**
+ * Process review changes logic - Reusable for AIDA Chatbot
+ * @param {string} targetInput - File path or null for auto-detection
+ * @param {object} stream - Chat stream
+ * @param {object} context - Extension context
+ * @param {object} request - Chat request object
+ */
+async function processReviewChanges(targetInput, stream, context = null, request = null) {
+    try {
+        // Simple check - only one key! (after targetInput is defined)
+        if (global.selectedBusinessDocs) {
+            console.log('🎯 Enhanced/Quick Changes Review detected:', global.selectedBusinessDocs);
+            // Execute review and cleanup
+            await aiReviewChanges(targetInput, stream, null, context, request);
+            return;
+        }
+        
+        // Show review options if we have a target file to review
+        if (targetInput) {
+            // Show review options using generic function
+            const shouldContinue = await showReviewOptions(
+                targetInput, 
+                stream, 
+                {
+                    quickCommand: 'aida.confirmChangesReview',
+                    enhancedCommand: 'aida.showEnhancedReviewOptions',
+                    reviewType: 'Changes',
+                    chatCommand: 'review-changes'
+                },
+                async (useDocuments) => {
+                     if (useDocuments) {
+                        // TODO: Implement with business documents
+                        stream.markdown('🔧 **Business documents integration coming soon...**\n\n');
+                    }
+                    await aiReviewChanges(targetInput, stream, null, context, request);
+                }
+            );
+            
+            // If showReviewOptions returns true, it handled everything
+            // If it returns false, it's showing the options dialog
+            if (shouldContinue === false) {
+                return;
+            }
+        } else {
+            stream.markdown('# 🔍 Code Review Assistant\n\n');
+            stream.markdown('Please provide a file path or open a file to review.\n\n');
+            stream.markdown('**Examples:**\n');
+            stream.markdown('- `@review-changes` - Review current git changes\n');
+            stream.markdown('- `@review-changes src/app/component.ts` - Review specific file\n');
+            return;
+        }
+        
+        // Use unified AI review changes function
+        await aiReviewChanges(targetInput, stream, null, context, request);
+        
+    } catch (error) {
+        stream.markdown(`❌ **Review processing failed:** ${error.message}\n\n`);
+        console.error('Process Review Changes error:', error);
+    }
 }
 
 // HELPER: Get target file information from input
@@ -869,5 +889,6 @@ module.exports = {
     getTargetFileInfo,
     getGitDiffForTarget,
     handleNoChangesScenario,
-    showEnhancedReviewOptions
+    showEnhancedReviewOptions,
+    processReviewChanges
 };

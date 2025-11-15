@@ -448,6 +448,94 @@ function initializePrReview(extensionContext) {
 }
 
 /**
+ * Process PR review with review options (for AIDA Chatbot reuse)
+ * @param {string} userMessage - User input message with PR URL
+ * @param {object} stream - Chat stream object
+ */
+async function processReviewPr(userMessage, stream) {
+    console.log('🔄 processReviewPr: Starting PR review with options');
+    
+    // Parse repo URL and detect type
+    let prId = null;
+    let repoType = null;
+    let organization = null;
+    let project = null;
+    let repository = null;
+    let owner = null;
+    let repo = null;
+    let originalUrl = null;
+
+    // GitHub URL pattern: https://github.com/{owner}/{repo}/pull/{id}
+    const githubUrlPattern = /https:\/\/github\.com\/([^\/]+)\/([^\/]+)\/pull\/(\d+)/i;
+    const githubMatch = userMessage.match(githubUrlPattern);
+
+    // Azure DevOps URL pattern: https://dev.azure.com/{org}/{project}/_git/{repo}/pullrequest/{id}
+    const azureUrlPattern = /https:\/\/dev\.azure\.com\/([^\/]+)\/([^\/]+)\/_git\/([^\/]+)\/pullrequest\/(\d+)/i;
+    const azureMatch = userMessage.match(azureUrlPattern);
+
+    // GitLab URL pattern: https://gitlab.com/{owner}/{repo}/-/merge_requests/{id}
+    const gitlabUrlPattern = /https:\/\/([^\/]+)\/([^\/]+)\/([^\/]+)\/-\/merge_requests\/(\d+)/i;
+    const gitlabMatch = userMessage.match(gitlabUrlPattern);
+
+    if (githubMatch) {
+        repoType = 'github';
+        owner = githubMatch[1];
+        repo = githubMatch[2];
+        prId = githubMatch[3];
+        originalUrl = githubMatch[0];
+    } else if (azureMatch) {
+        repoType = 'azure';
+        organization = azureMatch[1];
+        project = azureMatch[2];
+        repository = azureMatch[3];
+        prId = azureMatch[4];
+        originalUrl = azureMatch[0];
+    } else if (gitlabMatch) {
+        repoType = 'gitlab';
+        // For GitLab, owner and repo extraction
+        owner = gitlabMatch[2];
+        repo = gitlabMatch[3];
+        prId = gitlabMatch[4];
+        originalUrl = gitlabMatch[0];
+    }
+
+    // Check for global selectedBusinessDocs (unified pattern with other review modules)
+    if (global.selectedBusinessDocs) {
+        console.log('🎯 Enhanced/Quick PR Review detected:', global.selectedBusinessDocs);
+        
+        // Execute review directly
+        await processPrReview(userMessage, repoType, prId, owner, repo, organization, project, repository, originalUrl, stream, null);
+        return;
+    }
+
+    // Show review options (Quick Review vs Enhanced Review) if PR URL detected
+    if (prId) {
+        const shouldContinue = await showReviewOptions(
+            userMessage, 
+            stream,
+            {
+                chatCommand: 'review-pr'
+            },
+            async (useDocuments) => {
+                if (useDocuments) {
+                    // TODO: Implement with business documents
+                    stream.markdown('🔧 **Business documents integration coming soon...**\n\n');
+                }
+                await processPrReview(userMessage, repoType, prId, owner, repo, organization, project, repository, originalUrl, stream, null);
+            }
+        );
+        
+        // If showReviewOptions returns false, it's showing the options dialog
+        if (shouldContinue === false) {
+            return;
+        }
+    }
+
+    // Continue with normal PR processing
+    await processPrReview(userMessage, repoType, prId, owner, repo, organization, project, repository, originalUrl, stream, null);
+}
+
+/**
  * Handle PR review chat participant
  */
 async function handleReviewPr(request, context, stream, token) {
@@ -2830,5 +2918,6 @@ module.exports = {
     makeGitLabRequest,            // GitLab API request helper
     showGitHubDiffInWebview,      // Function B - GitHub diff webview
     showGitLabDiffInWebview,      // Function C - GitLab diff webview
-    showAzureDevOpsDiffInWebview  // Function A - Azure DevOps diff webview
+    showAzureDevOpsDiffInWebview, // Function A - Azure DevOps diff webview
+    processReviewPr               // AIDA Chatbot reusable function
 };

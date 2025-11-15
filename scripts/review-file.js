@@ -118,6 +118,74 @@ function initializeReviewFile(context) {
     };
 }
 
+// Reusable function for AIDA Chatbot integration (similar to review-changes)
+async function processReviewFile(input, stream) {
+    console.log('🎯 processReviewFile called with input:', input);
+    
+    // Get target input (file path or active editor)
+    const activeEditor = vscode.window.activeTextEditor;
+    const targetInput = input || (activeEditor ? activeEditor.document.fileName : null);
+    
+    // Simple check - only one key! (global variable check)
+    if (global.selectedBusinessDocs) {
+        console.log('🎯 Enhanced/Quick File Review detected:', global.selectedBusinessDocs);
+        
+        // Execute review directly
+        await aiReviewFile(targetInput, stream, null, null, {
+            model: null,
+            prompt: input
+        });
+        return;
+    }
+    
+    // Show review options if we have a target file to review
+    if (targetInput) {
+        // Show review options using generic function
+        const shouldContinue = await showReviewOptions(
+            targetInput, 
+            stream, 
+            {
+                quickCommand: 'aida.confirmChangesReview', // Reuse same command as review-changes
+                enhancedCommand: 'aida.showEnhancedReviewOptions',
+                reviewType: 'File',
+                chatCommand: 'review-file'
+            },
+            async (useDocuments) => {
+                 if (useDocuments) {
+                    // TODO: Implement with business documents
+                    stream.markdown('🔧 **Business documents integration coming soon...**\n\n');
+                }
+                await aiReviewFile(targetInput, stream, null, null, {
+                    model: null,
+                    prompt: input
+                });
+            }
+        );
+        
+        // If showReviewOptions returns true, it handled everything
+        if (shouldContinue) {
+            return;
+        }
+        // If it returns false, it's showing the options dialog
+        if (shouldContinue === false) {
+            return;
+        }
+    } else {
+        stream.markdown('# 🔍 File Review Assistant\n\n');
+        stream.markdown('Please provide a file path or open a file to review.\n\n');
+        stream.markdown('**Examples:**\n');
+        stream.markdown('- `@review-file` - Review current active file\n');
+        stream.markdown('- `@review-file src/app/component.ts` - Review specific file\n');
+        return;
+    }
+    
+    // Use unified AI review file function (fallback if showReviewOptions doesn't handle)
+    await aiReviewFile(targetInput, stream, null, null, {
+        model: null,
+        prompt: input
+    });
+}
+
 // UNIFIED AI REVIEW FILE FUNCTION
 async function aiReviewFile(input, stream, selectedModel = null, context = null, request = null) {
     try {
@@ -507,5 +575,6 @@ module.exports = {
     analyzeCodeSection,
     reviewFile,
     performBasicFileAnalysis,
-    getTargetFileInfoForReview
+    getTargetFileInfoForReview,
+    processReviewFile
 };

@@ -112,6 +112,65 @@ function initializeReviewAllChanges(context) {
 }
 
 /**
+ * Process review all changes with review options (for AIDA Chatbot reuse)
+ * @param {string} input - User input message
+ * @param {object} stream - Chat stream object
+ */
+async function processReviewAllChanges(input, stream) {
+    console.log('🔍 processReviewAllChanges: Starting review all changes with options');
+    
+    // Check for global selectedBusinessDocs (unified pattern with review-file, review-changes, review-pr)
+    if (global.selectedBusinessDocs) {
+        console.log('🎯 Enhanced/Quick All Changes Review detected:', global.selectedBusinessDocs);
+        
+        // Execute review directly
+        await aiReviewAllChanges(input, stream, null, null, null);
+        return;
+    }
+    
+    // Get workspace folder and check for changes first
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    if (!workspaceFolder) {
+        stream.markdown('❌ **No workspace folder found**\n\n');
+        await aiReviewAllChanges(input, stream, null, null, null);
+        return;
+    }
+    
+    // Quick check for changes to show appropriate options
+    const allChangesResult = await getAllChangedFilesWithDiffs(workspaceFolder);
+    
+    if (!allChangesResult.success) {
+        // No changes found, use normal flow
+        await aiReviewAllChanges(input, stream, null, null, null);
+        return;
+    }
+    
+    // Show review options (Quick Review vs Enhanced Review)
+    const shouldContinue = await showReviewOptions(
+        `${allChangesResult.totalFiles} changed files`, 
+        stream,
+        {
+            chatCommand: 'review-all-changes'
+        },
+        async (useDocuments) => {
+            if (useDocuments) {
+                // TODO: Implement with business documents
+                stream.markdown('🔧 **Business documents integration coming soon...**\n\n');
+            }
+            await aiReviewAllChanges(input, stream, null, null, null);
+        }
+    );
+    
+    // If showReviewOptions returns false, it's showing the options dialog
+    if (shouldContinue === false) {
+        return;
+    }
+    
+    // Continue with normal processing (fallback)
+    await aiReviewAllChanges(input, stream, null, null, null);
+}
+
+/**
  * Find git repository root directory
  * @param {string} startPath - Starting directory path
  * @returns {string|null} - Git repository root path or null if not found
@@ -871,5 +930,6 @@ module.exports = {
     aiReviewAllChanges,
     reviewAllChanges,
     getAllChangedFilesWithDiffs,
-    handleNoAllChangesScenario
+    handleNoAllChangesScenario,
+    processReviewAllChanges
 };

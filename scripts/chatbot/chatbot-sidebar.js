@@ -2711,7 +2711,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
                         await this.ensureAidaTemplatesExist();
                         
                         const reviewFileModule = require('../review-file.js');
-                        await reviewFileModule.aiReviewFile(messageWithoutParticipant, mockStream, null, this.context);
+                        await reviewFileModule.processReviewFile(messageWithoutParticipant, mockStream);
                         return result || '✅ **File Review Complete**\n\nCode analysis completed.';
                     } catch (error) {
                         console.error('❌ AIDA Chat review-file error:', error);
@@ -2726,7 +2726,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
                         await this.ensureAidaTemplatesExist();
                         
                         const reviewChangesModule = require('../review-changes.js');
-                        await reviewChangesModule.aiReviewChanges(messageWithoutParticipant, mockStream, null, this.context);
+                        await reviewChangesModule.processReviewChanges(messageWithoutParticipant, mockStream);
                         return result || '✅ **Changes Review Complete**\n\nGit changes analysis completed.';
                     } catch (error) {
                         console.error('❌ AIDA Chat review-changes error:', error);
@@ -2741,7 +2741,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
                         await this.ensureAidaTemplatesExist();
                         
                         const reviewAllChangesModule = require('../review-all-changes.js');
-                        await reviewAllChangesModule.aiReviewAllChanges(messageWithoutParticipant, mockStream, null, this.context);
+                        await reviewAllChangesModule.processReviewAllChanges(messageWithoutParticipant, mockStream);
                         return result || '✅ **All Changes Review Complete**\n\nWorkspace git changes analysis completed.';
                     } catch (error) {
                         console.error('❌ AIDA Chat review-all-changes error:', error);
@@ -2756,8 +2756,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
                         await this.ensureAidaTemplatesExist();
 
                         const reviewPRModule = require('../review-pr.js');
-                        // handleReviewPr expects: (request, context, stream, token)
-                        await reviewPRModule.handleReviewPr(mockContext, this.context, mockStream, null);
+                        await reviewPRModule.processReviewPr(messageWithoutParticipant, mockStream);
                         return result || '✅ **PR Review Complete**\n\nPull request analysis completed.';
                     } catch (error) {
                         console.error('❌ AIDA Chat review-pr error:', error);
