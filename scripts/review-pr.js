@@ -510,25 +510,68 @@ async function processReviewPr(userMessage, stream) {
 
     // Show review options (Quick Review vs Enhanced Review) if PR URL detected
     if (prId) {
-        const shouldContinue = await showReviewOptions(
-            userMessage, 
-            stream,
-            {
-                chatCommand: 'review-pr'
-            },
-            async (useDocuments) => {
-                if (useDocuments) {
-                    // TODO: Implement with business documents
-                    stream.markdown('🔧 **Business documents integration coming soon...**\n\n');
-                }
-                await processPrReview(userMessage, repoType, prId, owner, repo, organization, project, repository, originalUrl, stream, null);
-            }
-        );
+        // Check if business documents exist for Enhanced Review option
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        let hasBusinessDocs = false;
         
-        // If showReviewOptions returns false, it's showing the options dialog
-        if (shouldContinue === false) {
+        if (workspaceFolder) {
+            try {
+                const { getBusinessDocumentFolders } = require('./review-common');
+                const businessDocs = await getBusinessDocumentFolders(workspaceFolder);
+                hasBusinessDocs = businessDocs && businessDocs.length > 0;
+            } catch (error) {
+                console.log('❌ Error checking business documents:', error.message);
+                hasBusinessDocs = false;
+            }
+        }
+        
+        // If no business documents, execute Quick Review immediately
+        if (!hasBusinessDocs) {
+            console.log('📋 No business documents found - executing Quick Review automatically');
+            stream.markdown('� **Starting Quick Review automatically** (no business documents found)\n\n');
+            
+            // Set Quick Review mode
+            global.selectedBusinessDocs = [];
+            
+            await processPrReview(userMessage, repoType, prId, owner, repo, organization, project, repository, originalUrl, stream, null);
             return;
         }
+        
+        // Show options only if business documents exist
+        const fileName = prId;
+        stream.markdown(`# 📋 Review Options for PR \`${fileName}\`\n\n`);
+        stream.markdown('**Choose how to proceed with the review:**\n\n');
+            
+        // Option 1: Quick Review (default/recommended)
+        stream.markdown('### 🚀 **Quick Review** (Recommended)\n');
+        stream.markdown('- Fast standard code review\n');
+        stream.markdown('- Uses built-in review templates\n');
+        stream.markdown('- No business document integration\n\n');
+        
+        stream.button({
+            command: 'aida.confirmReviewDocs',
+            title: '🚀 Start Quick Review',
+            arguments: [userMessage, 'review-pr']
+        });
+        
+        stream.markdown('\n');
+        
+        // Option 2: Enhanced Review (with business docs)
+        stream.markdown('### 📚 **Enhanced Review**\n');
+        stream.markdown('- Includes business rule validation\n');
+        stream.markdown('- Cross-references business documents\n');
+        stream.markdown('- More comprehensive analysis\n\n');
+        
+        stream.button({
+            command: 'aida.showEnhancedReviewOptions',
+            title: '📚 Start Enhanced Review',
+            arguments: [userMessage, 'review-pr']
+        });
+        
+        stream.markdown('\n\n');
+        stream.markdown('💡 **Choose an option above to start the review**\n');
+        
+        return; // Show options dialog
     }
 
     // Continue with normal PR processing
@@ -644,25 +687,68 @@ async function handleReviewPr(request, context, stream, token) {
 
         // Show review options (Quick Review vs Enhanced Review)
         if (prId) {
-            const shouldContinue = await showReviewOptions(
-                userMessage, 
-                stream,
-                {
-                    chatCommand: 'review-pr'
-                },
-                async (useDocuments) => {
-                    if (useDocuments) {
-                        // TODO: Implement with business documents
-                        stream.markdown('🔧 **Business documents integration coming soon...**\n\n');
-                    }
-                    await processPrReview(userMessage, repoType, prId, owner, repo, organization, project, repository, originalUrl, stream, context);
-                }
-            );
+            // Check if business documents exist for Enhanced Review option
+            const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+            let hasBusinessDocs = false;
             
-            // If showReviewOptions returns false, it's showing the options dialog
-            if (shouldContinue === false) {
+            if (workspaceFolder) {
+                try {
+                    const { getBusinessDocumentFolders } = require('./review-common');
+                    const businessDocs = await getBusinessDocumentFolders(workspaceFolder);
+                    hasBusinessDocs = businessDocs && businessDocs.length > 0;
+                } catch (error) {
+                    console.log('❌ Error checking business documents:', error.message);
+                    hasBusinessDocs = false;
+                }
+            }
+            
+            // If no business documents, execute Quick Review immediately
+            if (!hasBusinessDocs) {
+                console.log('📋 No business documents found - executing Quick Review automatically');
+                stream.markdown('� **Starting Quick Review automatically** (no business documents found)\n\n');
+                
+                // Set Quick Review mode
+                global.selectedBusinessDocs = [];
+                
+                await processPrReview(userMessage, repoType, prId, owner, repo, organization, project, repository, originalUrl, stream, context);
                 return;
             }
+            
+            // Show options only if business documents exist
+            const fileName = prId;
+            stream.markdown(`# 📋 Review Options for PR \`${fileName}\`\n\n`);
+            stream.markdown('**Choose how to proceed with the review:**\n\n');
+                
+            // Option 1: Quick Review (default/recommended)
+            stream.markdown('### 🚀 **Quick Review** (Recommended)\n');
+            stream.markdown('- Fast standard code review\n');
+            stream.markdown('- Uses built-in review templates\n');
+            stream.markdown('- No business document integration\n\n');
+            
+            stream.button({
+                command: 'aida.confirmReviewDocs',
+                title: '🚀 Start Quick Review',
+                arguments: [userMessage, 'review-pr']
+            });
+            
+            stream.markdown('\n');
+            
+            // Option 2: Enhanced Review (with business docs)
+            stream.markdown('### 📚 **Enhanced Review**\n');
+            stream.markdown('- Includes business rule validation\n');
+            stream.markdown('- Cross-references business documents\n');
+            stream.markdown('- More comprehensive analysis\n\n');
+            
+            stream.button({
+                command: 'aida.showEnhancedReviewOptions',
+                title: '📚 Start Enhanced Review',
+                arguments: [userMessage, 'review-pr']
+            });
+            
+            stream.markdown('\n\n');
+            stream.markdown('💡 **Choose an option above to start the review**\n');
+            
+            return; // Show options dialog
         }
 
         // Continue with normal PR processing

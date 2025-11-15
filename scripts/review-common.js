@@ -1753,8 +1753,10 @@ async function getUnifiedModel(stream, requestedModel = null, chatContext = null
  * @param {string} filePath - Path to the file being reviewed
  * @param {number|null} diffLength - Length of diff content (for changes review)
  * @param {string|null} templatePath - Path to the template being used
+ * @param {string|null} templateSource - Source of template
+ * @param {array|null} businessDocs - Business documents used in review (optional)
  */
-function displayReviewHeader(stream, reviewType, filePath, diffLength = null, templatePath = null, templateSource = null) {
+function displayReviewHeader(stream, reviewType, filePath, diffLength = null, templatePath = null, templateSource = null, businessDocs = null) {
     const path = require('path');
     const fileName = path.basename(filePath);
     const fullPath = filePath;
@@ -1765,6 +1767,57 @@ function displayReviewHeader(stream, reviewType, filePath, diffLength = null, te
     if (diffLength !== null) {
         stream.markdown(`📄 **Diff Length:** ${diffLength} characters\n`);
     }
+    
+    // Display business documents if selected
+    displayDocumentReviewHeader(stream);
+}
+
+function displayDocumentReviewHeader(stream)
+{
+    const path = require('path');
+    
+    // Display business documents if selected
+    if (global.selectedBusinessDocs && global.selectedBusinessDocs.length > 0) {
+        stream.markdown(`📋 **Enhanced Review Mode - Business Documents:**\n\n`);
+        
+        // Debug logging
+        console.log('🔍 Debug selectedBusinessDocs:', global.selectedBusinessDocs);
+        
+        global.selectedBusinessDocs.forEach((doc, index) => {
+            console.log(`🔍 Debug doc ${index}:`, doc, 'Type:', typeof doc);
+            
+            // Handle different types of doc entries
+            let docName, docPath;
+            
+            if (typeof doc === 'string') {
+                // Direct string path
+                docName = path.basename(doc);
+                docPath = doc.replace(/\\/g, '/');
+            } else if (doc && typeof doc === 'object' && doc.path) {
+                // Object with path property
+                docName = path.basename(doc.path);
+                docPath = doc.path.replace(/\\/g, '/');
+            } else if (doc && typeof doc === 'object' && doc.name) {
+                // Object with name property
+                docName = doc.name;
+                docPath = doc.displayName || doc.relativePath || doc.name;
+            } else {
+                // Invalid entry
+                console.warn('⚠️ Invalid business document entry:', doc);
+                stream.markdown(`${index + 1}. Invalid document entry (type: ${typeof doc})\n`);
+                return;
+            }
+            
+            stream.markdown(`${index + 1}. \`${docName}\` - \`${docPath}\`\n`);
+        });
+        stream.markdown(`\n`);
+    } else {
+        stream.markdown(`⚡ **Quick Review Mode** - No business documents selected\n\n`);
+    }
+    
+    // Cleanup business documents state after display
+    global.selectedBusinessDocs = null;
+    console.log('🧹 displayCommonReviewInfo - cleanup: global.selectedBusinessDocs = null');
 }
 
 /**
@@ -2751,6 +2804,9 @@ function displayCommonReviewInfo(stream, reviewType, filePath, options = {}) {
         const unit = options.lengthType === 'changes' ? '' : ' characters';
         stream.markdown(`${icon} **${label}:** ${options.length}${unit}\n\n`);
     }
+    
+    // Display business documents if selected
+    displayDocumentReviewHeader(stream);
 }
 
 /**
@@ -2883,19 +2939,9 @@ function processTemplateContent(content, mainTemplatePath, placeholder = '{{REVI
         
         const processedContent = content.replace(new RegExp(placeholder.replace(/[{}]/g, '\\$&'), 'g'), baseContent);
         console.log(`🔧 Replaced ${placeholder} with enhanced base content (final length: ${processedContent.length} chars)`);
-        
-        // Always cleanup business docs state after processing template
-        global.selectedBusinessDocs = null;
-        console.log('🧹 Template processed - cleanup: global.selectedBusinessDocs = null');
-        
         return processedContent;
     } else {
         console.log(`⚠️ Base template not found, keeping ${placeholder} placeholder as-is`);
-        
-        // Cleanup even when no base template
-        global.selectedBusinessDocs = null;
-        console.log('🧹 No template - cleanup: global.selectedBusinessDocs = null');
-        
         return content;
     }
     
@@ -2994,7 +3040,7 @@ async function showReviewOptions(targetInput, stream, options = {}, reviewCallba
     
     // Default options
     const config = {
-        quickCommand: options.quickCommand || 'aida.confirmChangesReview',
+        quickCommand: options.quickCommand || 'aida.confirmReviewDocs',
         enhancedCommand: options.enhancedCommand || 'aida.showEnhancedReviewOptions',
         reviewType: options.reviewType || 'Changes',
         ...options

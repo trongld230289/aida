@@ -89,7 +89,7 @@ async function processReviewChanges(targetInput, stream, context = null, request
                 targetInput, 
                 stream, 
                 {
-                    quickCommand: 'aida.confirmChangesReview',
+                    quickCommand: 'aida.confirmReviewDocs',
                     enhancedCommand: 'aida.showEnhancedReviewOptions',
                     reviewType: 'Changes',
                     chatCommand: 'review-changes'
@@ -817,7 +817,7 @@ async function showEnhancedReviewOptions(participantType, activeEditor, stream, 
         stream.markdown('Creating fallback to Quick Review...\n\n');
         // Fallback to quick review
         stream.button({
-            command: 'aida.confirmChangesReview',
+            command: 'aida.confirmReviewDocs',
             title: '🚀 Proceed with Quick Review',
             arguments: [activeEditor.document.fileName]
         });
@@ -859,7 +859,7 @@ async function showEnhancedReviewOptions(participantType, activeEditor, stream, 
     stream.markdown(' ');
     
     stream.button({
-        command: 'aida.confirmChangesReview',
+        command: 'aida.confirmReviewDocs',
         title: '🚀 Skip Enhanced - Quick Review',
         arguments: [activeEditor.document.fileName]
     });

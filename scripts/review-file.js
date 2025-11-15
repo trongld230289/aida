@@ -64,7 +64,7 @@ function initializeReviewFile(context) {
                     targetInput, 
                     stream, 
                     {
-                        quickCommand: 'aida.confirmChangesReview', // Reuse same command as review-changes
+                        quickCommand: 'aida.confirmReviewDocs', // Reuse same command as review-changes
                         enhancedCommand: 'aida.showEnhancedReviewOptions',
                         reviewType: 'File',
                         chatCommand: 'review-file'
@@ -145,7 +145,7 @@ async function processReviewFile(input, stream) {
             targetInput, 
             stream, 
             {
-                quickCommand: 'aida.confirmChangesReview', // Reuse same command as review-changes
+                quickCommand: 'aida.confirmReviewDocs', // Reuse same command as review-changes
                 enhancedCommand: 'aida.showEnhancedReviewOptions',
                 reviewType: 'File',
                 chatCommand: 'review-file'

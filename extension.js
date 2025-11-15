@@ -69,7 +69,6 @@ async function handleEnterTwiceLogic(participantType, activeEditor, stream, auto
 
     const emoji = participantType === 'review-file' ? '📁' : '🔍';
     const title = participantType === 'review-file' ? 'File Review Assistant' : 'Code Review Assistant';
-    const confirmCommand = participantType === 'review-file' ? 'aida.confirmFileReview' : 'aida.confirmChangesReview';
     const helpCommand = participantType === 'review-file' ? 'aida.showFileHelp' : 'aida.showChangesHelp';
     const buttonText = participantType === 'review-file' ? `✅ Yes, review file ${fileName}` : `✅ Yes, review changes in ${fileName}`;
     const questionText = participantType === 'review-file' ?
@@ -78,13 +77,6 @@ async function handleEnterTwiceLogic(participantType, activeEditor, stream, auto
 
     stream.markdown(`# ${emoji} ${title}\n\n`);
     stream.markdown(`**Current file:** \`${fileName}\`\n\n`);
-
-    // Create Yes/No buttons for confirmation
-    stream.button({
-        command: confirmCommand,
-        title: buttonText,
-        arguments: [activeEditor.document.fileName]
-    });
 
     stream.markdown('\n');
 
@@ -196,7 +188,7 @@ function activate(context) {
         await setupAzureDevOpsSettings();
     });
 
-    let confirmChangesReview = vscode.commands.registerCommand('aida.confirmChangesReview', async (filePath, chatCommand = 'review-changes') => {
+    let confirmReviewDocs = vscode.commands.registerCommand('aida.confirmReviewDocs', async (filePath, chatCommand = 'review-changes') => {
         // Simple logic - set Quick Review mode (unified for both changes and file review)
         global.selectedBusinessDocs = [];
         console.log(`🚀 Quick Review button clicked - set global.selectedBusinessDocs = [] (command: ${chatCommand})`);
@@ -685,29 +677,35 @@ function activate(context) {
         ];
         
         const selected = await vscode.window.showQuickPick(items, {
-            placeHolder: `Select business documentation for enhanced review of ${path.basename(filePath)}`,
+            placeHolder: `📚 Select business docs for enhanced review, or select none for quick review of ${path.basename(filePath)}`,
             title: titleText,
             canPickMany: true,
             ignoreFocusOut: false
         });
         
-        if (!selected || selected.length === 0) {
-            return; // User cancelled or no selection
+        if (!selected) {
+            return; // User cancelled (pressed Escape)
         }
         
-        // Store selected categories with paths in global state
-        const selectedCategories = selected.map(item => ({
-            name: item.categoryName,
-            displayName: item.categoryDisplayName,
-            path: businessDocs.find(folder => folder.name === item.categoryName)?.path,
-            relativePath: businessDocs.find(folder => folder.name === item.categoryName)?.relativePath
-        }));
+        // Allow empty selection - means Quick Review without business docs
+        let selectedCategories = [];
+        if (selected.length > 0) {
+            // User selected some business docs - Enhanced Review
+            selectedCategories = selected.map(item => ({
+                name: item.categoryName,
+                displayName: item.categoryDisplayName,
+                path: businessDocs.find(folder => folder.name === item.categoryName)?.path,
+                relativePath: businessDocs.find(folder => folder.name === item.categoryName)?.relativePath
+            }));
+            console.log(`✅ Selected business document categories for enhanced ${reviewDisplayName}:`, selectedCategories);
+        } else {
+            // User selected nothing - Quick Review mode
+            console.log(`🚀 No business documents selected - Quick ${reviewDisplayName} mode`);
+        }
 
-        console.log(`✅ Selected business document categories for enhanced ${reviewDisplayName}:`, selectedCategories);
-
-        // Simple global state - only one key!
+        // Store selected categories (empty array = Quick Review, populated array = Enhanced Review)
         global.selectedBusinessDocs = selectedCategories;
-        console.log(`🎯 Set global.selectedBusinessDocs for Enhanced ${chatCommand} Review:`, selectedCategories);
+        console.log(`🎯 Set global.selectedBusinessDocs for ${selectedCategories.length > 0 ? 'Enhanced' : 'Quick'} ${chatCommand} Review:`, selectedCategories);
 
         // Check if user is currently in AIDA Sidebar Chat or Copilot Chat
         const aidaSidebarActive = copilotSidebarChat?.webviewView?.visible;
@@ -745,7 +743,7 @@ function activate(context) {
         openSettingsSidebarCommand,
         closeChatSidebarCommand,
         setupAzureDevOps,
-        confirmChangesReview,
+        confirmReviewDocs,
         showChangesHelp,
         showFileHelp,
         reviewFileCommand,
@@ -1033,7 +1031,13 @@ async function getMonacoWebviewContent(diffData, panel, context) {
             };
         });
         
-        console.log('📁 Found', allFiles.length, 'files in PR, current file index:', currentFileIndex);
+        // Sort files alphabetically by path (A-Z)
+        allFiles.sort((a, b) => a.path.localeCompare(b.path));
+        
+        // Recalculate currentFileIndex after sorting
+        currentFileIndex = allFiles.findIndex(file => file.active);
+        
+        console.log('📁 Found', allFiles.length, 'files in PR, sorted A-Z, current file index:', currentFileIndex);
         
         // Background preloading of next few files (async, non-blocking)
         if (allFiles.length > 1) {
