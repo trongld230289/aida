@@ -1,7 +1,7 @@
 const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
-const { executeAIReview, getUnifiedModel, shouldUseApiKey, displayReviewHeader, loadTemplateWithPriority, displayCommonReviewInfo } = require('./review-common');
+const { executeAIReview, getUnifiedModel, shouldUseApiKey, displayReviewHeader, loadTemplateWithPriority, displayCommonReviewInfo, showReviewOptions } = require('./review-common');
 const { autoDetectWorkspace, displayDetectionInfo, getLanguageFromExtension } = require('./language-detection');
 
 // Import functions from extension.js
@@ -44,16 +44,59 @@ function initializeReviewFile(context) {
                 return;
             }
             
-            // Ensure we always provide some response
-            if (!input || input.length === 0) {
-                // Check if there's an active file to review
-                const activeEditor = vscode.window.activeTextEditor;
-                await aiReviewFile(activeEditor.document.fileName, stream, request.model, context, request);
+            // Get target input (file path or active editor)
+            const activeEditor = vscode.window.activeTextEditor;
+            const targetInput = input || (activeEditor ? activeEditor.document.fileName : null);
+            
+            // Simple check - only one key! (after targetInput is defined)
+            if (global.selectedBusinessDocs) {
+                console.log('🎯 Enhanced/Quick File Review detected:', global.selectedBusinessDocs);
+                
+                // Execute review directly
+                await aiReviewFile(targetInput, stream, request.model, context, request);
                 return;
             }
             
-            // Use unified AI review file function
-            await aiReviewFile(input, stream, request.model, context, request);
+            // Show review options if we have a target file to review
+            if (targetInput) {
+                // Show review options using generic function
+                const shouldContinue = await showReviewOptions(
+                    targetInput, 
+                    stream, 
+                    {
+                        quickCommand: 'aida.confirmChangesReview', // Reuse same command as review-changes
+                        enhancedCommand: 'aida.showEnhancedReviewOptions',
+                        reviewType: 'File',
+                        chatCommand: 'review-file'
+                    },
+                    async (useDocuments) => {
+                         if (useDocuments) {
+                            // TODO: Implement with business documents
+                            stream.markdown('🔧 **Business documents integration coming soon...**\n\n');
+                        }
+                        await aiReviewFile(targetInput, stream, request.model, context, request);
+                    }
+                );
+                
+                // If showReviewOptions returns true, it handled everything
+                if (shouldContinue) {
+                    return;
+                }
+                // If it returns false, it's showing the options dialog
+                if (shouldContinue === false) {
+                    return;
+                }
+            } else {
+                stream.markdown('# 🔍 File Review Assistant\n\n');
+                stream.markdown('Please provide a file path or open a file to review.\n\n');
+                stream.markdown('**Examples:**\n');
+                stream.markdown('- `@review-file` - Review current active file\n');
+                stream.markdown('- `@review-file src/app/component.ts` - Review specific file\n');
+                return;
+            }
+            
+            // Use unified AI review file function (fallback if showReviewOptions doesn't handle)
+            await aiReviewFile(targetInput, stream, request.model, context, request);
             
         } catch (error) {
             stream.markdown(`❌ Error: ${error.message}\n\n`);
@@ -78,10 +121,6 @@ function initializeReviewFile(context) {
 // UNIFIED AI REVIEW FILE FUNCTION
 async function aiReviewFile(input, stream, selectedModel = null, context = null, request = null) {
     try {
-        // Reset business documents selection for each review
-        global.selectedBusinessDocs = null;
-        console.log('🔄 Reset global.selectedBusinessDocs for review-file');
-        
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
         if (!workspaceFolder) {
             stream.markdown('❌ **No workspace folder found**\n\n');

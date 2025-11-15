@@ -2,7 +2,7 @@ const vscode = require('vscode');
 const path = require('path');
 const https = require('https');
 const { execSync } = require('child_process');
-const { getUnifiedModel, executeAIReview, shouldUseApiKey, processTemplateContent } = require('./review-common');
+const { getUnifiedModel, executeAIReview, shouldUseApiKey, processTemplateContent, showReviewOptions } = require('./review-common');
 const { detectFromPRFiles, getReviewTemplateWithDetection, displayDetectionInfo } = require('./language-detection');
 
 // Import functions from extension.js
@@ -545,9 +545,55 @@ async function handleReviewPr(request, context, stream, token) {
             return;
         }
 
+        // Check for global selectedBusinessDocs (like review-file.js)
+        if (global.selectedBusinessDocs) {
+            console.log('🎯 Enhanced/Quick PR Review detected:', global.selectedBusinessDocs);
+            
+            // Execute review directly
+            await processPrReview(userMessage, repoType, prId, owner, repo, organization, project, repository, originalUrl, stream, context);
+            return;
+        }
+
+        // Show review options (Quick Review vs Enhanced Review)
+        if (prId) {
+            const shouldContinue = await showReviewOptions(
+                userMessage, 
+                stream,
+                {
+                    chatCommand: 'review-pr'
+                },
+                async (useDocuments) => {
+                    if (useDocuments) {
+                        // TODO: Implement with business documents
+                        stream.markdown('🔧 **Business documents integration coming soon...**\n\n');
+                    }
+                    await processPrReview(userMessage, repoType, prId, owner, repo, organization, project, repository, originalUrl, stream, context);
+                }
+            );
+            
+            // If showReviewOptions returns false, it's showing the options dialog
+            if (shouldContinue === false) {
+                return;
+            }
+        }
+
+        // Continue with normal PR processing
+        await processPrReview(userMessage, repoType, prId, owner, repo, organization, project, repository, originalUrl, stream, context);
+
+    } catch (error) {
+        stream.markdown('❌ **Unexpected Error**\n\n');
+        stream.markdown(`Details: ${error.message}\n\n`);
+        stream.markdown('Please try again or check the extension logs.');
+    }
+}
+
+/**
+ * Process PR review logic (extracted from handleReviewPr)
+ */
+async function processPrReview(userMessage, repoType, prId, owner, repo, organization, project, repository, originalUrl, stream, context) {
+    try {
         // Display repo info based on type
         if (repoType === 'github') {
-            stream.markdown('� **Analyzing GitHub PR...**\n\n');
             stream.markdown(`🐙 **Repository**: ${owner}/${repo}\n`);
             stream.markdown(`📋 **PR**: #${prId}\n`);
             stream.markdown('⏳ **Fetching from GitHub API...**\n\n');
@@ -621,16 +667,6 @@ async function handleReviewPr(request, context, stream, token) {
                 stream.markdown(`🌿 **Merging**: \`${data.sourceBranch}\` → \`${data.targetBranch}\`\n\n`);
             }
             
-            // Import and use common review info display
-            // const { displayCommonReviewInfo } = require('./review-common');
-            // const displayName = repoType === 'github' ? `${owner}/${repo}` : 
-            //                    repoType === 'gitlab' ? `${owner}/${repo}` : 
-            //                    repository || `PR #${prId}`;
-            // displayCommonReviewInfo(stream, 'PR Review', displayName, {
-            //     length: data.fileChanges ? data.fileChanges.length : 0,
-            //     lengthType: 'changes'
-            // });
-            
             // Debug file changes for GitHub
             if (repoType === 'github' && data.fileChanges) {
                 console.log(`🐙 DEBUG: GitHub file changes:`, data.fileChanges.map(f => ({
@@ -648,12 +684,12 @@ async function handleReviewPr(request, context, stream, token) {
         await displayPrReviewResults(stream, prAnalysis);
 
         // Add quick review option with original URL
-        await addQuickReviewOption(stream, prAnalysis, request, originalUrl);
+        await addQuickReviewOption(stream, prAnalysis, context, originalUrl);
 
     } catch (error) {
-        stream.markdown('❌ **Unexpected Error**\n\n');
+        stream.markdown('❌ **Unexpected Error in PR Processing**\n\n');
         stream.markdown(`Details: ${error.message}\n\n`);
-        stream.markdown('Please try again or check the extension logs.');
+        console.error('Process PR Review error:', error);
     }
 }
 

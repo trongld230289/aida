@@ -2966,6 +2966,118 @@ async function getBusinessDocumentFolders(workspaceFolder) {
     }
 }
 
+/**
+ * Show review options (Quick Review and Enhanced Review if business docs exist)
+ * Generic function that works for all review types
+ * @param {string} targetInput - Target file path (from input or active editor)
+ * @param {object} stream - Chat stream
+ * @param {object} options - Configuration options
+ * @param {string} options.quickCommand - Command for Quick Review button
+ * @param {string} options.enhancedCommand - Command for Enhanced Review button
+ * @param {Array} options.enhancedCommandArgs - Optional arguments for Enhanced Review command
+ * @param {string} options.reviewType - Type of review (Changes, File, PR)
+ * @param {function} reviewCallback - Function to call for immediate Quick Review (when no business docs)
+ * @returns {boolean} - true if handled (option selected), false if showing options dialog
+ */
+async function showReviewOptions(targetInput, stream, options = {}, reviewCallback = null) {
+    const vscode = require('vscode');
+    const path = require('path');
+    
+    // Add input validation
+    if (!targetInput) {
+        stream.markdown('❌ **No file specified for review**\n\n');
+        stream.markdown('💡 **Tips:**\n');
+        stream.markdown('- Open a file in the editor\n');
+        stream.markdown('- Provide a specific file path\n');
+        return false;
+    }
+    
+    // Default options
+    const config = {
+        quickCommand: options.quickCommand || 'aida.confirmChangesReview',
+        enhancedCommand: options.enhancedCommand || 'aida.showEnhancedReviewOptions',
+        reviewType: options.reviewType || 'Changes',
+        ...options
+    };
+    
+    const fileName = path.basename(targetInput);
+    console.log(`🔍 ${config.reviewType} review options for: ${targetInput}`);
+
+    // First check if business documents exist before showing any options
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    let hasBusinessDocs = false;
+    
+    if (workspaceFolder) {
+        try {
+            const businessDocs = await getBusinessDocumentFolders(workspaceFolder);
+            hasBusinessDocs = businessDocs && businessDocs.length > 0;
+        } catch (error) {
+            console.log('❌ Error checking business documents:', error.message);
+            hasBusinessDocs = false;
+        }
+    }
+    
+    // If no business documents, execute Quick Review immediately
+    if (!hasBusinessDocs) {
+        console.log('📋 No business documents found - executing Quick Review automatically');
+        stream.markdown('🚀 **Starting Quick Review automatically** (no business documents found)\n\n');
+        
+        // Set Quick Review mode
+        global.selectedBusinessDocs = [];
+        
+        // Call review callback directly if provided
+        if (reviewCallback) {
+            await reviewCallback(false);
+            return true; // Handled - review executed
+        }
+        
+        // Otherwise show manual button
+        stream.button({
+            command: config.quickCommand,
+            title: '🚀 Start Quick Review',
+            arguments: [targetInput, config.chatCommand || 'review-changes'] // Pass chat command name
+        });
+        return false;
+    }
+    
+    // Only show options dialog if business documents exist
+    const emoji = '📋';
+    stream.markdown(`# ${emoji} Review Options for \`${fileName}\`\n\n`);
+    
+    stream.markdown('**Choose how to proceed with the review:**\n\n');
+        
+    // Option 1: Quick Review (default/recommended)
+    stream.markdown('### 🚀 **Quick Review** (Recommended)\n');
+    stream.markdown('- Fast standard code review\n');
+    stream.markdown('- Uses built-in review templates\n');
+    stream.markdown('- No business document integration\n\n');
+    
+    stream.button({
+        command: config.quickCommand,
+        title: '🚀 Start Quick Review',
+        arguments: [targetInput, config.chatCommand || 'review-changes'] // Pass chat command name
+    });
+    
+    stream.markdown('\n');
+    
+    // Option 2: Enhanced Review (with business docs)
+    stream.markdown('### 📚 **Enhanced Review**\n');
+    stream.markdown('- Includes business rule validation\n');
+    stream.markdown('- Cross-references business documents\n');
+    stream.markdown('- More comprehensive analysis\n\n');
+    
+    stream.button({
+        command: config.enhancedCommand,
+        title: '📚 Start Enhanced Review',
+        arguments: [targetInput, config.chatCommand || 'review-changes']
+    });
+    
+    stream.markdown('\n\n');
+    stream.markdown('💡 **Choose an option above to start the review**\n');
+    
+    return false; // Not handled - showing options dialog
+}
+
 module.exports = {
     executeAIReview,
     executeAIReviewWithApiKey,
@@ -3004,5 +3116,6 @@ module.exports = {
     loadBaseTemplate,
     processTemplateContent,
     getBusinessDocumentFolders,
-    buildBusinessDocsContent
+    buildBusinessDocsContent,
+    showReviewOptions
 };

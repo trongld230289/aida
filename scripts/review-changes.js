@@ -2,7 +2,7 @@ const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
-const { executeAIReview, getUnifiedModel, getChecklistStatusIcon, shouldUseApiKey, displayReviewHeader, loadTemplateWithPriority, displayCommonReviewInfo, getBusinessDocumentFolders } = require('./review-common');
+const { executeAIReview, getUnifiedModel, getChecklistStatusIcon, shouldUseApiKey, displayReviewHeader, loadTemplateWithPriority, displayCommonReviewInfo, getBusinessDocumentFolders, showReviewOptions } = require('./review-common');
 const { autoDetectWorkspace, getReviewTemplateWithDetection, displayDetectionInfo } = require('./language-detection');
 
 // Import chatSessions from extension.js for session tracking
@@ -14,96 +14,6 @@ try {
 } catch (error) {
     console.warn('⚠️ Could not import chatSessions from extension.js, creating fallback:', error.message);
     chatSessions = new Map();
-}
-
-/**
- * Show review options with choice to process without documents
- * Based on handleEnterTwiceLogic pattern but for review options selection
- * @param {string} participantType - 'review-changes' 
- * @param {string} targetInput - Target file path (from input or active editor)
- * @param {object} stream - Chat stream
- * @param {object} context - Extension context
- * @param {function} reviewCallback - Function to call when option is selected
- * @returns {boolean} - true if handled (option selected), false if showing options dialog
- */
-async function showReviewOptionsWithoutDocs(participantType, targetInput, stream, context, reviewCallback) {
-    // Add input validation
-    if (!targetInput) {
-        stream.markdown('❌ **No file specified for review**\n\n');
-        stream.markdown('💡 **Tips:**\n');
-        stream.markdown('- Open a file in the editor\n');
-        stream.markdown('- Provide a specific file path\n');
-        return false;
-    }
-    
-    const fileName = path.basename(targetInput);
-    // Simple logic - always show options first time
-    console.log(`🔍 Review options for: ${targetInput}`);
-
-    // First check if business documents exist before showing any options
-    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-    let hasBusinessDocs = false;
-    
-    if (workspaceFolder) {
-        try {
-            const businessDocs = await getBusinessDocumentFolders(workspaceFolder);
-            hasBusinessDocs = businessDocs && businessDocs.length > 0;
-        } catch (error) {
-            console.log('❌ Error checking business documents:', error.message);
-            hasBusinessDocs = false;
-        }
-    }
-    
-    // If no business documents, execute Quick Review immediately
-    if (!hasBusinessDocs) {
-        console.log('📋 No business documents found - executing Quick Review automatically');
-        stream.markdown('🚀 **Starting Quick Review automatically** (no business documents found)\n\n');
-        
-        // Set Quick Review mode
-        global.selectedBusinessDocs = [];
-        
-        // Call review callback directly (without documents)
-        await reviewCallback(false);
-        return true; // Handled - review executed
-    }
-    
-    // Only show options dialog if business documents exist
-    const emoji = '📋';
-    stream.markdown(`# ${emoji} Review Options for \`${fileName}\`\n\n`);
-    
-    stream.markdown('**Choose how to proceed with the review:**\n\n');
-        
-        // Option 1: Process without documents (default/recommended)
-        stream.markdown('### 🚀 **Quick Review** (Recommended)\n');
-        stream.markdown('- Fast standard code review\n');
-        stream.markdown('- Uses built-in review templates\n');
-        stream.markdown('- No business document integration\n\n');
-        
-        stream.button({
-            command: 'aida.confirmChangesReview',
-            title: '🚀 Start Quick Review',
-            arguments: [targetInput]
-        });
-        
-        stream.markdown('\n');
-        
-        // Show Enhanced Review option since business documents exist
-        stream.markdown('### 📚 **Enhanced Review**\n');
-        stream.markdown('- Includes business rule validation\n');
-        stream.markdown('- Cross-references business documents\n');
-        stream.markdown('- More comprehensive analysis\n\n');
-        
-        // Use command to show enhanced review options with business document selection
-        stream.button({
-            command: 'aida.showEnhancedReviewOptions',
-            title: '📚 Start Enhanced Review',
-            arguments: [targetInput]
-        });
-        
-        stream.markdown('\n\n');
-        stream.markdown('💡 **Choose an option above to start the review**\n');
-        
-        return false; // Not handled - showing options dialog
 }
 
 // Import additional functions from extension.js
@@ -131,26 +41,12 @@ function initializeReviewChanges(context) {
                 await ensureAidaTemplatesForReview(context);
             }
             
-            console.log('🎯 review-changes participant called');
-            console.log('📥 Request object:', request);
-            console.log('📥 Request.model:', request.model);
-            console.log('📥 Request.model?.family:', request.model?.family);
-            console.log('📥 Request.model?.id:', request.model?.id);
-            
-            const input = request.prompt.trim();
-            console.log('🔍 DEBUG: request.prompt =', `"${request.prompt}"`);
-            console.log('🔍 DEBUG: input =', `"${input}"`);
-            
-            // Get active editor first to avoid reference errors
             const activeEditor = vscode.window.activeTextEditor;
-            console.log('🔍 DEBUG: activeEditor.document.fileName =', activeEditor?.document?.fileName);
+            const input = request.prompt.trim();
             const targetInput = input || (activeEditor ? activeEditor.document.fileName : null);
-            console.log('🔍 DEBUG: targetInput =', `"${targetInput}"`);
             
             // Simple check - only one key! (after targetInput is defined)
             if (global.selectedBusinessDocs) {
-                console.log('🎯 Enhanced/Quick Review detected:', global.selectedBusinessDocs);
-                
                 // Execute review and cleanup
                 await aiReviewChanges(targetInput, stream, null, context, request);
                 return;
@@ -158,12 +54,16 @@ function initializeReviewChanges(context) {
             
             // Show review options if we have a target file to review
             if (targetInput) {
-                // Show review options with process without document choice
-                const shouldContinue = await showReviewOptionsWithoutDocs(
-                    'review-changes', 
+                // Show review options using generic function
+                const shouldContinue = await showReviewOptions(
                     targetInput, 
                     stream, 
-                    context,
+                    {
+                        quickCommand: 'aida.confirmChangesReview',
+                        enhancedCommand: 'aida.showEnhancedReviewOptions',
+                        reviewType: 'Changes',
+                        chatCommand: 'review-changes'
+                    },
                     async (useDocuments) => {
                          if (useDocuments) {
                             // TODO: Implement with business documents
@@ -173,7 +73,7 @@ function initializeReviewChanges(context) {
                     }
                 );
                 
-                // If showReviewOptionsWithoutDocs returns true, it handled everything
+                // If showReviewOptions returns true, it handled everything
                 // If it returns false, it's showing the options dialog
                 if (shouldContinue === false) {
                     return;
@@ -969,6 +869,5 @@ module.exports = {
     getTargetFileInfo,
     getGitDiffForTarget,
     handleNoChangesScenario,
-    showReviewOptionsWithoutDocs,
     showEnhancedReviewOptions
 };

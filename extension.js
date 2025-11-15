@@ -196,31 +196,19 @@ function activate(context) {
         await setupAzureDevOpsSettings();
     });
 
-    let confirmChangesReview = vscode.commands.registerCommand('aida.confirmChangesReview', async (filePath) => {
-        // Simple logic - set Quick Review mode
+    let confirmChangesReview = vscode.commands.registerCommand('aida.confirmChangesReview', async (filePath, chatCommand = 'review-changes') => {
+        // Simple logic - set Quick Review mode (unified for both changes and file review)
         global.selectedBusinessDocs = [];
-        console.log('🚀 Quick Review button clicked - set global.selectedBusinessDocs = []');
+        console.log(`🚀 Quick Review button clicked - set global.selectedBusinessDocs = [] (command: ${chatCommand})`);
         console.log('🔍 DEBUG: filePath received =', filePath);
 
         // Keep the review in GitHub Copilot Chat (original behavior)
         await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
         await vscode.commands.executeCommand('workbench.action.chat.open', {
-            query: `@review-changes ${filePath}`
+            query: `@${chatCommand} ${filePath}` // Auto-prepend @ symbol
         });
     });
 
-    let confirmFileReview = vscode.commands.registerCommand('aida.confirmFileReview', async (filePath) => {
-        // Set the session flag to indicate the user confirmed (simulate second enter)
-        const sessionKey = `review-file-options-${filePath}`;
-        chatSessions.set(sessionKey, true);
-        console.log(`📁 Confirmation button clicked - Session set: ${sessionKey} = true`);
-
-        // Keep the review in GitHub Copilot Chat (original behavior)
-        await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
-        await vscode.commands.executeCommand('workbench.action.chat.open', {
-            query: `@review-file ${filePath}`
-        });
-    });
 
     let showChangesHelp = vscode.commands.registerCommand('aida.showChangesHelp', async () => {
         vscode.window.showInformationMessage(
@@ -606,13 +594,13 @@ function activate(context) {
         }
     });
 
-    // Enhanced Review Commands
-    const showEnhancedReviewOptionsCommand = vscode.commands.registerCommand('aida.showEnhancedReviewOptions', async (filePath) => {
+    // Enhanced Review Commands (Unified)
+    const showEnhancedReviewOptionsCommand = vscode.commands.registerCommand('aida.showEnhancedReviewOptions', async (filePath, chatCommand = 'review-changes') => {
         try {
-            console.log(`📚 Showing enhanced review options for: ${filePath}`);
+            console.log(`📚 Showing enhanced review options for: ${filePath}, command: ${chatCommand}`);
             
             // Show QuickPick first to select business documents
-            await showEnhancedReviewOptionsInChat(filePath);
+            await showEnhancedReviewOptionsInChat(filePath, chatCommand);
             
         } catch (error) {
             console.error('❌ Error showing enhanced review options:', error);
@@ -620,11 +608,11 @@ function activate(context) {
         }
     });
 
-    // Helper function to show enhanced options in chat
-    async function showEnhancedReviewOptionsInChat(filePath) {
-        console.log('🔍 DEBUG: showEnhancedReviewOptionsInChat called with filePath =', filePath);
+    // Unified helper function to show enhanced options in chat
+    async function showEnhancedReviewOptionsInChat(filePath, chatCommand = 'review-changes') {
+        console.log(`🔍 DEBUG: showEnhancedReviewOptionsInChat called with filePath = ${filePath}, chatCommand = ${chatCommand}`);
+        console.log(`🔍 DEBUG: typeof filePath = ${typeof filePath}, filePath exists = ${filePath ? 'yes' : 'no'}`);
         
-        // Import required functions - getBusinessDocumentFolders now available from import
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
         
         if (!workspaceFolder) {
@@ -664,12 +652,16 @@ function activate(context) {
             }
         }
         
+        // Customize UI based on chat command
+        const reviewDisplayName = chatCommand === 'review-file' ? 'file review' : 'review';
+        const titleText = chatCommand === 'review-file' ? '📚 Enhanced File Review Options' : '📚 Enhanced Review Options';
+        
         // Show selection UI via quick pick
-         const items = [
+        const items = [
             ...businessDocs.map(folder => ({
                 label: `📁 ${folder.displayName}`,
                 description: generateDescription(folder),
-                detail: `Include ${folder.displayName} documentation in review`,
+                detail: `Include ${folder.displayName} documentation in ${reviewDisplayName}`,
                 categoryName: folder.name,
                 categoryDisplayName: folder.displayName
             }))
@@ -677,7 +669,7 @@ function activate(context) {
         
         const selected = await vscode.window.showQuickPick(items, {
             placeHolder: `Select business documentation for enhanced review of ${path.basename(filePath)}`,
-            title: '📚 Enhanced Review Options',
+            title: titleText,
             canPickMany: true,
             ignoreFocusOut: false
         });
@@ -694,17 +686,22 @@ function activate(context) {
             relativePath: businessDocs.find(folder => folder.name === item.categoryName)?.relativePath
         }));
 
-        console.log('✅ Selected business document categories for enhanced review:', selectedCategories);
+        console.log(`✅ Selected business document categories for enhanced ${reviewDisplayName}:`, selectedCategories);
 
         // Simple global state - only one key!
         global.selectedBusinessDocs = selectedCategories;
-        console.log('🎯 Set global.selectedBusinessDocs for Enhanced Review:', selectedCategories);
+        console.log(`🎯 Set global.selectedBusinessDocs for Enhanced ${chatCommand} Review:`, selectedCategories);
 
-        // Start enhanced review with original filePath
+        // Start enhanced review with original filePath using chat command
         console.log('🔍 DEBUG: About to submit chat with filePath =', filePath);
+        console.log('🔍 DEBUG: typeof filePath =', typeof filePath, 'length =', filePath?.length);
         await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
-        const chatText = `@review-changes ${filePath}`;
-        console.log('🔍 DEBUG: Chat text =', chatText);
+        
+        // Use chatCommand directly - no more IF statements!
+        const chatText = `@${chatCommand} ${filePath}`;
+        console.log(`🔍 DEBUG: ${chatCommand} chat text =`, chatText);
+        console.log(`🔍 DEBUG: Final chatText length =`, chatText.length);
+        
         await vscode.commands.executeCommand('workbench.action.chat.open', {
             query: chatText
         });
@@ -720,7 +717,6 @@ function activate(context) {
         closeChatSidebarCommand,
         setupAzureDevOps,
         confirmChangesReview,
-        confirmFileReview,
         showChangesHelp,
         showFileHelp,
         reviewFileCommand,
