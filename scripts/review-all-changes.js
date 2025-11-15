@@ -2,7 +2,7 @@ const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
-const { executeAIReview, getUnifiedModel, getChecklistStatusIcon, shouldUseApiKey, displayReviewHeader, loadTemplateWithPriority, displayCommonReviewInfo } = require('./review-common');
+const { executeAIReview, getUnifiedModel, getChecklistStatusIcon, shouldUseApiKey, displayReviewHeader, loadTemplateWithPriority, displayCommonReviewInfo, showReviewOptions } = require('./review-common');
 const { autoDetectWorkspace, getReviewTemplateWithDetection, displayDetectionInfo } = require('./language-detection');
 
 // Import functions from extension.js
@@ -45,7 +45,54 @@ function initializeReviewAllChanges(context) {
                 return;
             }
             
-            // Use unified AI review all changes function
+            // Check for global selectedBusinessDocs (like review-file.js, review-pr.js, review-changes.js)
+            if (global.selectedBusinessDocs) {
+                console.log('🎯 Enhanced/Quick All Changes Review detected:', global.selectedBusinessDocs);
+                
+                // Execute review directly
+                await aiReviewAllChanges(input, stream, null, context, request);
+                return;
+            }
+            
+            // Get workspace folder and check for changes first
+            const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+            if (!workspaceFolder) {
+                stream.markdown('❌ **No workspace folder found**\n\n');
+                await aiReviewAllChanges(input, stream, null, context, request);
+                return;
+            }
+            
+            // Quick check for changes to show appropriate options
+            const allChangesResult = await getAllChangedFilesWithDiffs(workspaceFolder);
+            
+            if (!allChangesResult.success) {
+                // No changes found, use normal flow
+                await aiReviewAllChanges(input, stream, null, context, request);
+                return;
+            }
+            
+            // Show review options (Quick Review vs Enhanced Review)
+            const shouldContinue = await showReviewOptions(
+                `${allChangesResult.totalFiles} changed files`, 
+                stream,
+                {
+                    chatCommand: 'review-all-changes'
+                },
+                async (useDocuments) => {
+                    if (useDocuments) {
+                        // TODO: Implement with business documents
+                        stream.markdown('🔧 **Business documents integration coming soon...**\n\n');
+                    }
+                    await aiReviewAllChanges(input, stream, null, context, request);
+                }
+            );
+            
+            // If showReviewOptions returns false, it's showing the options dialog
+            if (shouldContinue === false) {
+                return;
+            }
+            
+            // Continue with normal processing (fallback)
             await aiReviewAllChanges(input, stream, null, context, request);
             
         } catch (error) {
