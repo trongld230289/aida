@@ -202,11 +202,28 @@ function activate(context) {
         console.log(`🚀 Quick Review button clicked - set global.selectedBusinessDocs = [] (command: ${chatCommand})`);
         console.log('🔍 DEBUG: filePath received =', filePath);
 
-        // Keep the review in GitHub Copilot Chat (original behavior)
-        await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
-        await vscode.commands.executeCommand('workbench.action.chat.open', {
-            query: `@${chatCommand} ${filePath}` // Auto-prepend @ symbol
-        });
+        // Check if user is currently in AIDA Sidebar Chat or Copilot Chat
+        const activeView = vscode.window.activeTextEditor?.document.uri.scheme;
+        console.log('🔍 Active view scheme:', activeView);
+        
+        // Try to detect if AIDA sidebar is visible/active
+        const aidaSidebarActive = copilotSidebarChat?.webviewView?.visible;
+        console.log('📱 AIDA Sidebar active:', aidaSidebarActive);
+        
+        if (aidaSidebarActive && copilotSidebarChat) {
+            // User is in AIDA chatbot - send message directly to AIDA
+            console.log('🤖 Redirecting to AIDA Chatbot');
+            copilotSidebarChat.show();
+            const message = `@${chatCommand} ${filePath}`;
+            await copilotSidebarChat.sendMessage(message);
+        } else {
+            // Keep the review in GitHub Copilot Chat (original behavior)  
+            console.log('💬 Redirecting to GitHub Copilot Chat');
+            await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
+            await vscode.commands.executeCommand('workbench.action.chat.open', {
+                query: `@${chatCommand} ${filePath}` // Auto-prepend @ symbol
+            });
+        }
     });
 
 
@@ -692,19 +709,31 @@ function activate(context) {
         global.selectedBusinessDocs = selectedCategories;
         console.log(`🎯 Set global.selectedBusinessDocs for Enhanced ${chatCommand} Review:`, selectedCategories);
 
+        // Check if user is currently in AIDA Sidebar Chat or Copilot Chat
+        const aidaSidebarActive = copilotSidebarChat?.webviewView?.visible;
+        console.log('📱 AIDA Sidebar active:', aidaSidebarActive);
+        
         // Start enhanced review with original filePath using chat command
         console.log('🔍 DEBUG: About to submit chat with filePath =', filePath);
         console.log('🔍 DEBUG: typeof filePath =', typeof filePath, 'length =', filePath?.length);
-        await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
         
-        // Use chatCommand directly - no more IF statements!
         const chatText = `@${chatCommand} ${filePath}`;
         console.log(`🔍 DEBUG: ${chatCommand} chat text =`, chatText);
         console.log(`🔍 DEBUG: Final chatText length =`, chatText.length);
         
-        await vscode.commands.executeCommand('workbench.action.chat.open', {
-            query: chatText
-        });
+        if (aidaSidebarActive && copilotSidebarChat) {
+            // User is in AIDA chatbot - send message directly to AIDA
+            console.log('🤖 Redirecting Enhanced Review to AIDA Chatbot');
+            copilotSidebarChat.show();
+            await copilotSidebarChat.sendMessage(chatText);
+        } else {
+            // Keep the review in GitHub Copilot Chat (original behavior)
+            console.log('💬 Redirecting Enhanced Review to GitHub Copilot Chat');
+            await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
+            await vscode.commands.executeCommand('workbench.action.chat.open', {
+                query: chatText
+            });
+        }
     }
 
     // Copilot-Style Chat Panel already initialized above
@@ -2058,6 +2087,13 @@ async function getMonacoWebviewContent(diffData, panel, context) {
                                     filePath: filePath
                                 });
                                 console.log('📤 Sent message to VS Code to load file:', filePath);
+                                
+                                // Store reference to current active item and loading spinner for VS Code response
+                                window.currentLoadingContext = {
+                                    filePath: filePath,
+                                    activeItem: this,
+                                    loadingSpinner: loadingSpinner
+                                };
                             } else {
                                 // Fallback for testing
                                 console.warn('⚠️ VS Code API not available, simulating file load');
@@ -2071,23 +2107,108 @@ async function getMonacoWebviewContent(diffData, panel, context) {
                 });
             });
             
+            // Listen for messages from VS Code extension
+            if (window.acquireVsCodeApi) {
+                window.addEventListener('message', function(event) {
+                    const message = event.data;
+                    
+                    if (message.type === 'fileLoaded') {
+                        console.log('📦 Received file content from VS Code:', message.filePath);
+                        
+                        // Get the stored loading context
+                        const context = window.currentLoadingContext;
+                        if (context && context.filePath === message.filePath) {
+                            // Remove loading spinner
+                            if (context.loadingSpinner && context.loadingSpinner.parentNode) {
+                                context.loadingSpinner.parentNode.removeChild(context.loadingSpinner);
+                            }
+                            
+                            // Active state is already set, just update content
+                            // Update header to show currently viewing file
+                            const filePathElement = document.querySelector('.file-path');
+                            if (filePathElement) {
+                                filePathElement.innerHTML = '🚀 Monaco Diff View: ' + message.filePath;
+                            }
+                            
+                            // Update file stats if provided
+                            if (message.fileStats) {
+                                const fileStats = document.querySelector('.file-stats');
+                                if (fileStats) {
+                                    fileStats.innerHTML = \`
+                                        <span class="stats-badge badge-type">\${message.fileStats.changeType}</span>
+                                        <span class="stats-badge badge-add">+\${message.fileStats.additions}</span>
+                                        <span class="stats-badge badge-remove">-\${message.fileStats.deletions}</span>
+                                        <span style="margin-left: 10px; color: var(--vscode-descriptionForeground);">Language: \${message.fileStats.language}</span>
+                                    \`;
+                                }
+                            }
+                            
+                            // Clear the loading context
+                            window.currentLoadingContext = null;
+                            
+                            console.log('✅ File loaded and UI updated, active state preserved');
+                        }
+                    }
+                });
+            }
+            
             // Simulate file loading for testing
-            function simulateFileLoad(filePath, clickedItem, loadingOverlay) {
+            function simulateFileLoad(filePath, clickedItem, loadingSpinner) {
                 setTimeout(() => {
                     // Remove loading spinner only
                     if (loadingSpinner && loadingSpinner.parentNode) {
                         loadingSpinner.parentNode.removeChild(loadingSpinner);
                     }
                     
-                    // Update header
+                    // Keep the clicked item active - DON'T reset active state
+                    // The active state was already set when user clicked the item
+                    
+                    // Update header to show currently viewing file
                     const filePathElement = document.querySelector('.file-path');
                     if (filePathElement) {
-                        filePathElement.innerHTML = '� Monaco Diff View: ' + filePath;
+                        filePathElement.innerHTML = '🚀 Monaco Diff View: ' + filePath;
                     }
                     
-                    console.log('✅ File loaded successfully (simulated):', filePath);
+                    // Also update the file stats in header if available
+                    const fileFromCache = getFileStatsFromCache(filePath);
+                    if (fileFromCache) {
+                        const fileStats = document.querySelector('.file-stats');
+                        if (fileStats) {
+                            const changeType = fileFromCache.changeType || 'modified';
+                            const additions = fileFromCache.additions || 0;
+                            const deletions = fileFromCache.deletions || 0;
+                            
+                            fileStats.innerHTML = \`
+                                <span class="stats-badge badge-type">\${changeType}</span>
+                                <span class="stats-badge badge-add">+\${additions}</span>
+                                <span class="stats-badge badge-remove">-\${deletions}</span>
+                                <span style="margin-left: 10px; color: var(--vscode-descriptionForeground);">Language: \${getLanguageFromPath(filePath)}</span>
+                            \`;
+                        }
+                    }
+                    
+                    console.log('✅ File loaded successfully (simulated), active state preserved:', filePath);
                     
                 }, 800); // Faster loading time
+            }
+            
+            // Helper function to get file stats from cache
+            function getFileStatsFromCache(filePath) {
+                // This would be populated from the allFiles data passed to webview
+                const allFilesList = ${JSON.stringify(allFiles)};
+                return allFilesList.find(file => file.path === filePath);
+            }
+            
+            // Helper function to get language from file path
+            function getLanguageFromPath(filePath) {
+                const ext = filePath.split('.').pop().toLowerCase();
+                const langMap = {
+                    'js': 'javascript', 'jsx': 'javascript', 'ts': 'typescript', 'tsx': 'typescript',
+                    'py': 'python', 'java': 'java', 'cs': 'csharp', 'cpp': 'cpp', 'c': 'c',
+                    'php': 'php', 'rb': 'ruby', 'go': 'go', 'rs': 'rust', 'swift': 'swift',
+                    'html': 'html', 'css': 'css', 'json': 'json', 'xml': 'xml'
+                };
+                return langMap[ext] || 'plaintext';
             }
 
             // Resize handle functionality
