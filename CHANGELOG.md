@@ -1,9 +1,111 @@
 # Changelog
 
-All notable changes to **AIDA - AI Development Assistant** will be documented in this file.
+All notable changes to the "AIDA - AI Development Assistant" extension will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.15/),
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.27/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.0.27] - 2025-11-20
+
+### Added
+- Enhanced PR review filtering system with reusable `filterReviewableFiles()` function
+- Dual file array support: `fileChanges` (all files for Monaco diff view) and `reviewableFileChanges` (filtered for AI review)
+- Auto-filtering of Migration Designer files (*.Designer.cs) across Azure DevOps, GitHub, and GitLab
+- Consistent logging and statistics across all PR providers
+
+### Improved
+- Monaco diff view now displays ALL files for complete context
+- AI review analysis focuses only on relevant files (excludes auto-generated)
+- Refactored duplicate filter code into centralized function
+- Better extensibility for adding new filter patterns in the future
+
+### Fixed
+- Token limit analysis with proper soft/hard limit warnings for Copilot API
+- Removed duplicate `performQuickReview` function to clean up codebase
+
+## [1.0.26] - 2025-11-20
+
+### 🔧 PR Review Improvements
+
+#### ✨ Added
+- **🚫 Smart File Filtering**: Added ability to exclude auto-generated files from AI review context
+  - Migration Designer.cs files are now automatically ignored during PR reviews
+  - Reduces AI context size and focuses review on meaningful code changes
+  - Files still appear in diff display for full transparency
+  - Extensible pattern matching for future auto-generated file types
+
+#### 🛠️ Enhanced
+- **📊 Better Logging**: Improved transparency with detailed file filtering logs
+- **🎯 Focused AI Analysis**: AI now only analyzes files that provide review value
+- **⚡ Performance**: Reduced token usage by filtering out boilerplate code
+
+## [1.0.25] - 2025-11-18
+
+### 🚀 New Features & GitLab Support Enhancement
+
+#### ✨ Added
+- **🦊 Enhanced GitLab Support**: Improved GitLab merge request URL pattern recognition
+  - Support for nested namespaces like `d365ai/xyz/sample-project/middleware-service`
+  - Fixed regex pattern to handle complex GitLab project structures
+  - Better parsing of GitLab namespace/project hierarchies
+- **🔧 PR Review Improvements**: Enhanced pull request analysis for GitLab
+- **🛠️ Bug Fixes**: Resolved GitLab URL parsing issues
+
+#### 🔧 Enhanced
+- **🌐 Multi-level Namespace Support**: GitLab projects with multiple namespace levels now properly recognized
+- **📋 Better URL Parsing**: More robust URL pattern matching for various GitLab instances
+- **🎯 Improved Detection**: Enhanced project structure detection for nested GitLab namespaces
+
+## [1.0.22] - 2025-11-17
+
+### 🚀 New Features & Cross-IDE Support
+
+#### ✨ Added
+- **🖥️ Cursor IDE Support**: Full compatibility with Cursor IDE alongside VS Code
+  - Works seamlessly with Cursor's AI-powered development environment
+  - All AIDA features available in both VS Code and Cursor IDE
+  - Cross-IDE template and configuration synchronization
+- **📚 Enhanced Documentation**: Updated review documents with Cursor IDE integration
+- **🔧 Cross-Platform Compatibility**: Improved extension compatibility across different IDE environments
+- **🤖 Enhanced AIDA Chatbot**: Better integration with Cursor's AI features when available
+- **🎯 Universal Commands**: All AIDA commands work identically in both VS Code and Cursor
+
+#### 🔧 Enhanced
+- **📋 Package Description**: Updated to highlight dual IDE support
+- **🏷️ Version Badges**: Added Cursor IDE compatibility badge to documentation
+- **📝 Installation Guide**: Updated installation instructions for both IDEs
+- **⚙️ Configuration Examples**: Enhanced setup examples for Cursor IDE users
+
+#### 🔄 Improved
+- **🔗 Cross-IDE Integration**: Seamless experience across VS Code and Cursor environments
+- **📊 Performance**: Optimized for both traditional VS Code and AI-enhanced Cursor workflows
+- **🛠️ Development Workflow**: Enhanced development experience for users switching between IDEs
+
+#### 🐛 Fixed
+- **🔧 IDE Detection**: Improved detection and adaptation to different IDE environments
+- **📋 Command Registration**: Ensured all commands work properly in both VS Code and Cursor
+- **⚡ Extension Loading**: Optimized extension loading for different IDE architectures
+
+## [1.0.17] - 2025-11-11
+
+### 🚀 New Features & Enhancements
+
+#### ✨ Added
+- **🔧 Version Update**: Updated extension to version 1.0.17
+- **📋 Package Management**: Updated package.json and package-lock.json to latest version
+- **📚 Documentation**: Updated README.md with latest version references
+- **🔄 Stability Improvements**: Enhanced extension stability and performance
+- **🛠️ Development Workflow**: Improved development and build processes
+
+#### 🔧 Changed
+- **📦 Extension Package**: Updated all version references across extension files
+- **🏷️ Version Badge**: Updated version badge in README from 1.0.15 to 1.0.17
+- **📝 Installation Guide**: Updated VSIX installation command with new version
+
+#### 🐛 Fixed
+- **🔧 Version Consistency**: Ensured all version references are consistent across files
+- **📋 Package Dependencies**: Updated package lock file to match new version
+- **📚 Documentation Accuracy**: Fixed any outdated version references in documentation
 
 ## [1.0.15] - 2025-11-06
 

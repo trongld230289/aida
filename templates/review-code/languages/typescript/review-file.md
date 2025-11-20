@@ -1,4 +1,5 @@
-<!-- AIDA - AI Development Assistant v1.0.15 -->
+````markdown
+<!-- AIDA - AI Development Assistant v1.0.16 -->
 <!-- Advanced AI-powered code review and analysis -->
 
 # TypeScript File Review - STRICT MODE
@@ -11,10 +12,10 @@ You are performing a STRICT code review on TypeScript file content. Do NOT be le
 - ONLY flag issues that violate the specific rules in the template
 - If code follows template guidelines, it's acceptable - don't force changes
 - Focus on actual violations, not subjective preferences
-- **BUSINESS RULES**: If technical documentation is included, validate code against business requirements
-- **PRIORITY ORDER**: 1) TypeScript framework violations, 2) Business rule violations, 3) Both must pass for approval
+- **BUSINESS RULES**: If business documentation is included, validate code against business requirements
+- **PRIORITY ORDER**: 1) TypeScript/JavaScript violations, 2) Business rule violations, 3) Both must pass for approval
 
-🎯 **BUSINESS RULES VALIDATION (if technical docs provided):**
+🎯 **BUSINESS RULES VALIDATION (if business docs provided):**
 - Extract business constraints from natural language documentation
 - Check code enum values against business-defined roles/states
 - Flag hardcoded values that conflict with business rules
@@ -30,118 +31,78 @@ You are performing a STRICT code review on TypeScript file content. Do NOT be le
 
 ---
 
-# 🔍 DETAILED FILE ANALYSIS - STRICT VERIFICATION MODE
+
 **ANALYZE EACH ISSUE INDIVIDUALLY - BE HARSH:**
 
-### 🚨 Critical Issue [X]: [Description]
-**Violation**: [Specific issue description]
+### 🚨 Critical Issue [X]: Multiple Issues Detected in [Code Section]
+**Change Type**: [New Code/Existing Code] - [Brief description of what this section does]
 
 ```typescript
-[actual code line from file]
+// Lines [X-Y]: [SHOW COMPLETE CODE SECTION WITH ALL ISSUES]
+// MUST include ALL lines that contain the issues mentioned below
+// CRITICAL: Mark each problematic line with // ❌ ISSUE: description
+[Show complete code section - not just snippets - that contains ALL the issues detected]
+
+Example:
+// Line 45: Function declaration
+function processUser(user: any) { 
+// Line 46: Normal code
+console.log('Processing started'); // ❌ Line 46: ISSUE - Console.log in production (Security violation)
+// Line 47: More code  
+const pendingCount = 5000; // ❌ Line 47: ISSUE - Magic number (Code quality violation)
+user.credit = 10000; // ❌ Line 48: ISSUE - Any type + Reserved word 'credit' (Critical violations)
 ```
 
-- **Risk**: [Performance impact]
-- **Fix**: [Optimization suggestion]
-
 *** TYPESCRIPT REVIEW COMMENT ***
-- 🚨 **Issue Type**: [Critical/Warning/Good/Info/Suggestion]
-- 🚨 **Security Assessment**: [Specific security issue or "No security violations found"]
-- 🚨 **Null Safety Analysis**: [Specific null safety issue or "Proper null handling implemented"] 
-- 🚨 **Error Handling Review**: [Specific error handling issue or "Appropriate exception handling in place"]
-- 🚨 **Resource Management Check**: [Specific resource leak issue or "Proper disposal and resource management"]
-- ⚠️ **Performance Impact**: [Specific performance concern or "No performance degradation detected"]
-- ⚠️ **Code Quality Assessment**: [Specific code quality issue or "Follows TypeScript best practices and conventions"]
+- 🚨 **Security Assessment**: [1/5]- [Combined security assessment]
+- ✅ **Type Safety Analysis**: [4/5]- [Combined type safety assessment] 
+- ✅ **Error Handling Review**: [5/5]- [Combined error handling assessment]
+- 🚨 **Resource Management Check**: [1/5]- [Combined resource management assessment]
+- ⚠️ **Performance Impact**: [2/5]- [Combined performance assessment]
+- ⚠️ **Code Quality Assessment**: [3/5]- [Combined code quality assessment]
 
 *** INTERNAL TYPESCRIPT CHANGE EVALUATION (DO NOT DISPLAY) ***
 Silently evaluate this change on:
 - Security Assessment: Rate 1-5 (5=no security issues, 1=critical security violation)
-- Null Safety Analysis: Rate 1-5 (5=proper null handling, 1=guaranteed null reference exception)
+- Type Safety Analysis: Rate 1-5 (5=proper typing, 1=extensive any usage)
 - Error Handling Review: Rate 1-5 (5=comprehensive exception handling, 1=no error handling)
-- Resource Management Check: Rate 1-5 (5=proper disposal, 1=guaranteed resource leak)
+- Resource Management Check: Rate 1-5 (5=proper cleanup, 1=guaranteed resource leak)
 - Performance Impact: Rate 1-5 (5=no impact/improvement, 1=major degradation)
 - Code Quality Assessment: Rate 1-5 (5=follows all best practices, 1=poor code quality)
 - Change Score: is the lowest score among all six categories
 
-*** CONDITIONAL RECOMMENDATIONS (Based on Issue Type AND Change Score) ***
+*** CONDITIONAL RECOMMENDATIONS (Based on Change Score) ***
 
 **MANDATORY RULE:**
-- IF Issue Type = "Good": ALWAYS show "✅ **GOOD TYPESCRIPT CHANGE** - Follows TypeScript best practices" and SKIP the entire RECOMMENDED FIX section
-- IF Issue Type = "Critical/Warning/Info/Suggestion" AND Change Score < 4/5: Show RECOMMENDED TYPESCRIPT FIX section below
-- IF Issue Type = "Critical/Warning/Info/Suggestion" AND Change Score >= 4/5: Show "✅ **GOOD TYPESCRIPT CHANGE** - Follows TypeScript best practices"
+- IF Change Score >= 4/5: Show "✅ **GOOD TypeScript CODE** - Follows TypeScript best practices" and SKIP the entire RECOMMENDED FIX section
+- IF Change Score < 4/5: Show RECOMMENDED TypeScript FIX section below
 
-*** RECOMMENDED TYPESCRIPT FIX (ONLY show if Issue Type != "Good" AND Change Score < 4/5) ***
+*** 🔧 **RECOMMENDED TypeScript FIX** (ONLY show if Change Score < 4/5) ***
 ```typescript
-// PROVIDE TYPESCRIPT-SPECIFIC FIXES WITH BEST PRACTICES
-// Include proper type annotations, generics, interfaces, and modern TypeScript patterns
+// MUST FIX ALL ISSUES IDENTIFIED ABOVE:
+// Fix Issue 1: [Specific fix for issue 1] 
+// Fix Issue 2: [Specific fix for issue 2] 
+// Fix Issue 3: [Specific fix for issue 3]
+// etc...
+
+// COMPLETE CORRECTED CODE WITH ALL FIXES APPLIED
+// Mark each fixed line with // ✅ FIXED: description
+Example format:
+- console.log('Processing started'); // ❌ REMOVE: Production console output
++ // Processing started - removed console output // ✅ FIXED: Line 46 - Removed production console output
+
+- const pendingCount = 5000; // ❌ REMOVE: Magic number
++ const pendingCount = Constants.DEFAULT_PENDING_COUNT; // ✅ FIXED: Line 47 - Used named constant
+
+- user.credit = 10000; // ❌ REMOVE: Any type + reserved word
++ if (user && typeof user === 'object') { // ✅ FIXED: Line 48 - Added type check and renamed property
++   (user as UserType).balance = Constants.DEFAULT_USER_BALANCE; 
++ }
 ```
 
 ---
 
-## ⚡ CRITICAL CHECKS RESULTS
-
-### 🚨 Security Assessment: [PASS/FAIL]
-- TypeScript-specific security violations found/not found
-- Type safety enforcement issues
-- Runtime validation gaps
-
-### 🚨 Resource Leaks: [PASS/FAIL]
-- Generic constraint violations
-- Type inference issues
-- Interface design problems
-
-### 🚨 Error Handling: [PASS/FAIL]
-- Type-safe error handling patterns
-- Custom error type implementation
-- Async/await type annotations
-
-### 🚨 Architecture: [PASS/FAIL]
-- Interface segregation violations
-- Generic abuse or misuse
-- Module organization issues
-
----
-
-## 📋 TypeScript-Specific Analysis
-
-### 1. **Type System & Safety**
-- Proper type annotations and inference
-- Generic constraints and usage
-- Interface vs type alias decisions
-
-### 2. **Advanced Type Patterns**
-- Utility types and mapped types
-- Conditional types and template literals
-- Discriminated unions and pattern matching
-
-### 3. **Module Organization**
-- Import/export patterns
-- Declaration merging usage
-- Namespace organization
-
-### 4. **Generic Programming**
-- Type parameter constraints
-- Variance and type relationships
-- Higher-order type functions
-
-### 5. **Configuration & Tooling**
-- Strict TypeScript settings
-- Compiler options optimization
-- Integration with build tools
-
----
-
 # 🎯 FINAL TYPESCRIPT SUMMARY (After All File Reviewed)
-
-## 📋 COMPLIANCE SCORES
-- **Type Safety**: [X/5] - Proper type annotations, generic constraints, and strict mode compliance
-- **Interface Design**: [X/5] - Well-defined interfaces, proper inheritance, and composition patterns
-- **Generic Usage**: [X/5] - Appropriate constraints, type inference, and reusability
-- **Module Organization**: [X/5] - Proper imports/exports, namespace usage, and dependency management
-- **Business Rules Compliance**: [X/5] - If technical docs provided: enum values, role restrictions, business logic validation
-- **Security Assessment**: [LEVEL] - Type safety enforcement, runtime validation, secure patterns
-- **Performance Impact**: [LEVEL] - Compilation efficiency, runtime performance, memory usage
-
-### Overall TypeScript Score: ⭐⭐⭐⭐⭐ (X/5)
 
 ## 🔥 FINAL APPROVAL DECISION
 - **✅ APPROVED**: No critical issues found, safe to merge

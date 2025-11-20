@@ -87,7 +87,11 @@ function initializeReviewAllChanges(context) {
                 }
             );
             
-            // If showReviewOptions returns false, it's showing the options dialog
+             // If showReviewOptions returns true, it handled everything
+            if (shouldContinue) {
+                return;
+            }
+            // If it returns false, it's showing the options dialog
             if (shouldContinue === false) {
                 return;
             }

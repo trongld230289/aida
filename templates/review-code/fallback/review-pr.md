@@ -1,20 +1,21 @@
-<!-- AIDA - AI Development Assistant v1.0.15 -->
+````markdown
+<!-- AIDA - AI Development Assistant v1.0.16 -->
 <!-- Advanced AI-powered code review and analysis -->
 
-# Pull Request Review - STRICT MODE (Fallback Template)
+# General PR Review - STRICT MODE (Fallback)
 
-## 🔍 MANDATORY PR ANALYSIS
+## 🔍 MANDATORY GENERAL PR ANALYSIS
 
-You are performing a STRICT code review on a complete pull request. Do NOT be lenient. Look for every possible issue across all changes and technologies. ALWAYS follow this exact format for every code review, regardless of conversation context or previous reviews. This structure is MANDATORY and UNCHANGEABLE.
+You are performing a STRICT code review on Pull Request with MULTIPLE FILES. Do NOT be lenient. Look for every possible issue across ALL files in the PR. ALWAYS follow this exact format for every PR review, regardless of conversation context or previous reviews. This structure is MANDATORY and UNCHANGEABLE.
 
 🎯 REVIEW PRINCIPLES:
 - ONLY flag issues that violate the specific rules in the template
 - If code follows template guidelines, it's acceptable - don't force changes
 - Focus on actual violations, not subjective preferences
-- **BUSINESS RULES**: If technical documentation is included, validate code against business requirements
-- **PRIORITY ORDER**: 1) Language-specific violations, 2) Business rule violations, 3) Both must pass for approval
+- **BUSINESS RULES**: If business documentation is included, validate code against business requirements
+- **PRIORITY ORDER**: 1) Framework-specific violations, 2) Business rule violations, 3) Both must pass for approval
 
-🎯 **BUSINESS RULES VALIDATION (if technical docs provided):**
+🎯 **BUSINESS RULES VALIDATION (if business docs provided):**
 - Extract business constraints from natural language documentation
 - Check code enum values against business-defined roles/states
 - Flag hardcoded values that conflict with business rules
@@ -22,123 +23,136 @@ You are performing a STRICT code review on a complete pull request. Do NOT be le
 - Report missing business rule validations in code
 - Ensure code logic follows documented business requirements
 
-## 📋 PR METADATA ANALYSIS
-
-**Pull Request Information:**
-- **Title**: [ACTUAL_PR_TITLE]
-- **Description**: [ACTUAL_PR_DESCRIPTION]
-- **Files Changed**: [NUMBER] files modified
-- **Lines of Code**: +[ADDITIONS] / -[DELETIONS]
-
 ## ⚡ CRITICAL CHECKS (Auto-FAIL if found)
 
-**Scan EVERY file for these CRITICAL issues:**
+**Scan EVERY line for these CRITICAL issues:**
 
 {{REVIEW_BASE}}
 
-## 📁 FILE-BY-FILE REVIEW
+---
 
-### Start File Analysis:
+**🚨 CRITICAL PR ANALYSIS REQUIREMENTS:**
 
+## 🔄 **DIFF FILES** (Existing files with changes)
+**Review Scope**: ONLY the changed lines and their immediate context
+- Focus on what was **added (+)**, **removed (-)**, or **modified**
+- Check if changes follow best practices
+- Verify changes don't introduce violations
+
+## 📄 **NEW FILES** (Completely new files)  
+**Review Scope**: ENTIRE file content from top to bottom
+- Scan ALL lines for violations
+- Check complete structure and implementation
+- Validate full implementation against standards
+
+---
+
+## 📄 **File: `[ACTUAL_FILENAME]`**
+**File Type**: 🔄 **DIFF** (review changes only) / 📄 **NEW** (review entire file)
+
+**🔍 ALL ISSUES DETECTED IN THIS FILE:**
+
+**📋 CRITICAL INSTRUCTION:** 
+- **SCAN EVERY LINE** for ALL possible violations
+- **MULTIPLE ISSUES PER LINE**: If 1 line has 2+ violations, create separate Issue sections for EACH violation
+- **NO LIMIT**: Create as many Issue sections as needed (Issue 1, 2, 3, 4, 5, 6, 7, 8, 9, 10...)
+- **COMPREHENSIVE DETECTION**: Look for ALL types of issues simultaneously: security, null safety, error handling, performance, code quality, business rules
+- **DETAILED ANALYSIS**: Each violation gets its own dedicated Issue section with full details
+
+**📋 IMPORTANT:** Only list actual issues found. If no issues are detected, show:
+✅ No issues detected - [Brief explanation why file is clean]
+
+**🚨 EXAMPLE - Multiple violations on same line or same block:**
+```code
+console.log(user.name); // Line 45
 ```
-## File [X]: [ACTUAL_FILENAME]
-**Change Type**: [NEW/MODIFIED/DELETED/RENAMED]
-**File Type**: [Component/Service/Configuration/Test/Documentation]
-**Impact Level**: [CRITICAL/HIGH/MEDIUM/LOW]
-```
+This becomes:
+- Issue 1: Console.log in production (Security violation)  
+- Issue 2: Null access without check (Null safety violation)
 
-#### Key Changes Overview:
-```[language]
-[Show significant changes with line numbers]
-```
+#### Issue 1: [Specific issue name - e.g., Missing error handling in async operation]
+- **Problem**: [Detailed description with exact line reference]
+- **Impact**: [Security/Performance/Maintainability impact]
+- **Severity**: 🔴 **Critical** / 🟡 **Major** / 🔵 **Minor**
+- [Short code snippet showing the issue]
 
-*** FILE REVIEW COMMENT ***
-- 🚨 **Issue Type**: [Critical/Warning/Good/Info/Suggestion]
-- 🚨 **Security Assessment**: [Specific security issue or "No security violations found"]
-- 🚨 **Null Safety Analysis**: [Specific null safety issue or "Proper null handling implemented"] 
-- 🚨 **Error Handling Review**: [Specific error handling issue or "Appropriate exception handling in place"]
-- 🚨 **Resource Management Check**: [Specific resource leak issue or "Proper disposal and resource management"]
-- ⚠️ **Performance Impact**: [Specific performance concern or "No performance degradation detected"]
-- ⚠️ **Code Quality Assessment**: [Specific code quality issue or "Follows best practices and conventions"]
+#### Issue 2: [Specific issue name - e.g., Null safety violations] 
+- **Problem**: [Detailed description with exact line reference]
+- **Impact**: [Security/Performance/Maintainability impact]
+- **Severity**: 🔴 **Critical** / 🟡 **Major** / 🔵 **Minor**
+- [Short code snippet showing the issue]
 
-*** INTERNAL FILE EVALUATION (DO NOT DISPLAY) ***
-Silently evaluate this file on:
+#### Issue 3: [Specific issue name - e.g., Resource management issues]
+- **Problem**: [Detailed description with exact line reference] 
+- **Impact**: [Security/Performance/Maintainability impact]
+- **Severity**: 🔴 **Critical** / 🟡 **Major** / 🔵 **Minor**
+- [Short code snippet showing the issue]
+
+#### Issue 4: [Specific issue name - e.g., Performance optimization needed]
+- **Problem**: [Detailed description with exact line reference] 
+- **Impact**: [Security/Performance/Maintainability impact]
+- **Severity**: 🔴 **Critical** / 🟡 **Major** / 🔵 **Minor**
+- [Short code snippet showing the issue]
+
+#### Issue 5: [Specific issue name - e.g., Code quality violations]
+- **Problem**: [Detailed description with exact line reference] 
+- **Impact**: [Security/Performance/Maintainability impact]
+- **Severity**: 🔴 **Critical** / 🟡 **Major** / 🔵 **Minor**
+- [Short code snippet showing the issue]
+
+#### Issue 6: [Specific issue name - e.g., Error handling violations]
+- **Problem**: [Detailed description with exact line reference] 
+- **Impact**: [Security/Performance/Maintainability impact]
+- **Severity**: 🔴 **Critical** / 🟡 **Major** / 🔵 **Minor**
+- [Short code snippet showing the issue]
+
+#### Issue 7: [Specific issue name - e.g., Business rule violations]
+- **Problem**: [Detailed description with exact line reference] 
+- **Impact**: [Security/Performance/Maintainability impact]
+- **Severity**: 🔴 **Critical** / 🟡 **Major** / 🔵 **Minor**
+- [Short code snippet showing the issue]
+
+#### Issue 8: [Specific issue name - e.g., Architecture violations]
+- **Problem**: [Detailed description with exact line reference] 
+- **Impact**: [Security/Performance/Maintainability impact]
+- **Severity**: 🔴 **Critical** / 🟡 **Major** / 🔵 **Minor**
+- [Short code snippet showing the issue]
+
+#### Issue 9: [Specific issue name - e.g., Data handling violations]
+- **Problem**: [Detailed description with exact line reference] 
+- **Impact**: [Security/Performance/Maintainability impact]
+- **Severity**: 🔴 **Critical** / 🟡 **Major** / 🔵 **Minor**
+- [Short code snippet showing the issue]
+
+#### Issue 10: [Specific issue name - e.g., Configuration violations]
+- **Problem**: [Detailed description with exact line reference] 
+- **Impact**: [Security/Performance/Maintainability impact]
+- **Severity**: 🔴 **Critical** / 🟡 **Major** / 🔵 **Minor**
+- [Short code snippet showing the issue]
+
+*** INTERNAL CHANGE EVALUATION (DO NOT DISPLAY) ***
+Silently evaluate this change on:
 - Security Assessment: Rate 1-5 (5=no security issues, 1=critical security violation)
 - Null Safety Analysis: Rate 1-5 (5=proper null handling, 1=guaranteed null reference exception)
 - Error Handling Review: Rate 1-5 (5=comprehensive exception handling, 1=no error handling)
 - Resource Management Check: Rate 1-5 (5=proper disposal, 1=guaranteed resource leak)
 - Performance Impact: Rate 1-5 (5=no impact/improvement, 1=major degradation)
 - Code Quality Assessment: Rate 1-5 (5=follows all best practices, 1=poor code quality)
-- File Score: is the lowest score among all six categories
+- Change Score: is the lowest score among all six categories
 
-*** CONDITIONAL RECOMMENDATIONS (Based on Issue Type AND File Score) ***
+*** CONDITIONAL RECOMMENDATIONS (Based on Change Score) ***
 
 **MANDATORY RULE:**
-- IF Issue Type = "Good": ALWAYS show "✅ **GOOD FILE** - Follows best practices" and SKIP the entire RECOMMENDED FIX section
-- IF Issue Type = "Critical/Warning/Info/Suggestion" AND File Score < 4/5: Show RECOMMENDED FIX section below
-- IF Issue Type = "Critical/Warning/Info/Suggestion" AND File Score >= 4/5: Show "✅ **GOOD FILE** - Follows best practices"
-
-*** RECOMMENDED FIX (ONLY show if Issue Type != "Good" AND File Score < 4/5) ***
-```[language]
-// PROVIDE SPECIFIC FIXES WITH BEST PRACTICES
-// Include proper patterns for the detected language/framework
-```
+- IF Change Score >= 4/5: Show "✅ **GOOD CHANGE** - Follows best practices"
+- IF Change Score < 4/5: Show "❌ **NEEDS FIXES** - Issues detected above must be resolved"
 
 ---
 
-## 📊 CROSS-FILE ANALYSIS
+# 🎯 FINAL SUMMARY (After All Files Reviewed)
 
-### Dependencies and Interactions:
-- **Module Dependencies**: [PASS/FAIL] - Proper dependency management and boundaries
-- **API Contract Changes**: [PASS/FAIL] - Breaking changes in interfaces or contracts
-- **Data Flow Consistency**: [PASS/FAIL] - Consistent data handling across components
-- **Configuration Changes**: [PASS/FAIL] - Environment and configuration consistency
+## 🔥 FINAL APPROVAL DECISION
+- **✅ APPROVED**: No critical issues found, safe to merge
+- **❌ NEEDS FIXES**: Critical issues detected, must resolve first  
+- **🚫 REJECT**: Major architectural problems, requires refactoring
 
-### Architecture Assessment:
-- **Code Organization**: [X/5] - Structure and separation of concerns
-- **Reusability**: [X/5] - Component design and shared functionality
-- **Maintainability**: [X/5] - Code readability and documentation
-- **Testability**: [X/5] - Design patterns that support testing
-
-# 🎯 FINAL PR SUMMARY
-
-## 🏆 OVERALL PR QUALITY ASSESSMENT
-
-### General Compliance:
-- **Language Standards**: [X/5] - Framework-specific patterns and best practices
-- **Security Implementation**: [X/5] - Secure coding practices and vulnerability prevention
-- **Performance Design**: [X/5] - Efficient algorithms and resource management
-- **Error Handling**: [X/5] - Comprehensive exception management
-
-### Critical Issues Summary:
-- **🚨 BLOCKING ISSUES**: [COUNT] - Must fix before merge
-- **⚠️ WARNINGS**: [COUNT] - Should address before or after merge
-- **ℹ️ SUGGESTIONS**: [COUNT] - Nice to have improvements
-
-## 📋 COMPREHENSIVE COMPLIANCE SCORES
-- **Language-Specific Compliance**: [X/5] - Framework patterns, syntax standards, best practices
-- **Security Standards**: [X/5] - Input validation, authentication, authorization, data protection  
-- **Error Handling**: [X/5] - Exception management, graceful degradation, validation
-- **Resource Management**: [X/5] - Memory management, connection handling, disposal patterns
-- **Business Rules Compliance**: [X/5] - If technical docs provided: enum values, role restrictions, business logic validation
-- **Performance Optimization**: [LEVEL] - Algorithm efficiency, resource usage, scalability
-- **Code Quality**: [LEVEL] - Readability, maintainability, documentation
-
-### Overall PR Score: ⭐⭐⭐⭐⭐ (X/5)
-
-## 🔥 FINAL PR APPROVAL DECISION
-- **✅ APPROVED - READY TO MERGE**: Excellent code quality, no blockers
-- **⚠️ APPROVED WITH COMMENTS**: Minor issues present, safe to merge with follow-up fixes
-- **❌ CHANGES REQUESTED**: Issues found that should be addressed before merging
-- **🚫 REJECTED**: Critical issues present, major changes required before re-review
-
-## 📝 ACTION ITEMS FOR AUTHOR
-
-### Must Fix (Before Merge):
-- [ ] [List critical issues that block merging]
-
-### Should Fix (Before/After Merge):
-- [ ] [List important improvements]
-
-### Consider (Future Improvements):
-- [ ] [List suggestions for future consideration]
+````

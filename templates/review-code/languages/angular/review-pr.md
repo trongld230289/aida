@@ -1,20 +1,20 @@
-<!-- AIDA - AI Development Assistant v1.0.15 -->
+<!-- AIDA - AI Development Assistant v1.0.16 -->
 <!-- Advanced AI-powered code review and analysis -->
 
-# Quick PR Review - STRICT MODE
+# Angular PR Review - STRICT MODE
 
-## 🔍 MANDATORY CODE ANALYSIS
+## 🔍 MANDATORY ANGULAR PR ANALYSIS
 
-You are performing a STRICT code review on Angular git changes. Do NOT be lenient. Look for every possible Angular-specific issue in the changes. ALWAYS follow this exact format for every code review, regardless of conversation context or previous reviews. This structure is MANDATORY and UNCHANGEABLE.
+You are performing a STRICT code review on Angular Pull Request with MULTIPLE FILES. Do NOT be lenient. Look for every possible Angular-specific issue across ALL files in the PR. ALWAYS follow this exact format for every PR review, regardless of conversation context or previous reviews. This structure is MANDATORY and UNCHANGEABLE.
 
 🎯 REVIEW PRINCIPLES:
 - ONLY flag issues that violate the specific rules in the template
 - If code follows template guidelines, it's acceptable - don't force changes
 - Focus on actual violations, not subjective preferences
-- **BUSINESS RULES**: If technical documentation is included, validate code against business requirements
+- **BUSINESS RULES**: If business documentation is included, validate code against business requirements
 - **PRIORITY ORDER**: 1) Angular framework violations, 2) Business rule violations, 3) Both must pass for approval
 
-🎯 **BUSINESS RULES VALIDATION (if technical docs provided):**
+🎯 **BUSINESS RULES VALIDATION (if business docs provided):**
 - Extract business constraints from natural language documentation
 - Check code enum values against business-defined roles/states
 - Flag hardcoded values that conflict with business rules
@@ -22,48 +22,112 @@ You are performing a STRICT code review on Angular git changes. Do NOT be lenien
 - Report missing business rule validations in code
 - Ensure code logic follows documented business requirements
 
-### 📋 CHANGE SEPARATION RULES (MANDATORY):
+## ⚡ ANGULAR CRITICAL CHECKS (Auto-FAIL if found)
 
-**Split into separate changes when:**
-- ✅ **Different Angular artifacts**: Component vs Service vs Directive changes = separate changes
-- ✅ **Different lifecycle hooks**: ngOnInit vs ngOnDestroy vs ngAfterViewInit = separate changes
-- ✅ **Different template sections**: Form vs List vs Navigation = separate changes
-- ✅ **Different RxJS operations**: Different observable streams = separate changes
-- ✅ **Non-adjacent code blocks**: If there are 3+ unchanged lines between modifications = separate changes
-
-**Keep as one change when:**
-- ❌ **Same Angular method**: Multiple lines in same lifecycle hook
-- ❌ **Related RxJS chain**: Operators in same pipe chain
-- ❌ **Same template binding**: Related HTML and logic for same feature
-
-## ⚡ CRITICAL CHECKS (Auto-FAIL if found)
-
-**Scan EVERY line for these CRITICAL issues:**
+**Scan EVERY line for these ANGULAR-SPECIFIC CRITICAL issues:**
 
 {{REVIEW_BASE}}
 
-# 🔍 DETAILED FILE ANALYSIS - STRICT VERIFICATION MODE
-**ANALYZE EACH FILE INDIVIDUALLY - BE HARSH:**
-## 📄 File: [ACTUAL_FILENAME_FROM_DIFF]
+---
 
-### 🚨 Critical Issue [X]: [Description]
-**Violation**: [Specific issue description]
+**🚨 CRITICAL PR ANALYSIS REQUIREMENTS:**
 
+## 🔄 **DIFF FILES** (Existing files with changes)
+**Review Scope**: ONLY the changed lines and their immediate context
+- Focus on what was **added (+)**, **removed (-)**, or **modified**
+- Check if changes follow Angular best practices
+- Verify changes don't introduce violations
+
+## 📄 **NEW FILES** (Completely new files)  
+**Review Scope**: ENTIRE file content from top to bottom
+- Scan ALL lines for Angular violations
+- Check complete component/service/template structure
+- Validate full implementation against Angular standards
+
+---
+
+## 📄 **File: `[ACTUAL_FILENAME]`**
+**File Type**: 🔄 **DIFF** (review changes only) / 📄 **NEW** (review entire file)
+
+**🔍 ALL ISSUES DETECTED IN THIS FILE:**
+
+**📋 CRITICAL INSTRUCTION:** 
+- **SCAN EVERY LINE** for ALL possible violations
+- **MULTIPLE ISSUES PER LINE**: If 1 line has 2+ violations, create separate Issue sections for EACH violation
+- **NO LIMIT**: Create as many Issue sections as needed (Issue 1, 2, 3, 4, 5, 6, 7, 8, 9, 10...)
+- **COMPREHENSIVE DETECTION**: Look for ALL types of issues simultaneously: security, null safety, error handling, performance, code quality, business rules
+- **DETAILED ANALYSIS**: Each violation gets its own dedicated Issue section with full details
+
+**📋 IMPORTANT:** Only list actual issues found. If no issues are detected, show:
+✅ No issues detected - [Brief explanation why file is clean]
+
+**🚨 EXAMPLE - Multiple violations on same line or same block:**
 ```typescript
-[actual code line from diff]
+console.log(user.name); // Line 45
 ```
+This becomes:
+- Issue 1: Console.log in production (Security violation)  
+- Issue 2: Null access without check (Null safety violation)
 
-- **Risk**: [Performance impact]
-- **Fix**: [Optimization suggestion]
+#### Issue 1: [Specific issue name - e.g., Missing error handling in observable]
+- **Problem**: [Detailed description with exact line reference]
+- **Impact**: [Security/Performance/Maintainability impact]
+- **Severity**: 🔴 **Critical** / 🟡 **Major** / 🔵 **Minor**
+- [Short code snippet showing the issue]
 
-*** ANGULAR REVIEW COMMENT ***
-- 🚨 **Issue Type**: [Critical/Warning/Good/Info/Suggestion]
-- 🚨 **Security Assessment**: [Specific security issue or "No security violations found"]
-- 🚨 **Null Safety Analysis**: [Specific null safety issue or "Proper null handling implemented"] 
-- 🚨 **Error Handling Review**: [Specific error handling issue or "Appropriate exception handling in place"]
-- 🚨 **Resource Management Check**: [Specific resource leak issue or "Proper disposal and resource management"]
-- ⚠️ **Performance Impact**: [Specific performance concern or "No performance degradation detected"]
-- ⚠️ **Code Quality Assessment**: [Specific code quality issue or "Follows C# best practices and conventions"]
+#### Issue 2: [Specific issue name - e.g., Null safety violations] 
+- **Problem**: [Detailed description with exact line reference]
+- **Impact**: [Security/Performance/Maintainability impact]
+- **Severity**: 🔴 **Critical** / 🟡 **Major** / 🔵 **Minor**
+- [Short code snippet showing the issue]
+
+#### Issue 3: [Specific issue name - e.g., Resource management issues]
+- **Problem**: [Detailed description with exact line reference] 
+- **Impact**: [Security/Performance/Maintainability impact]
+- **Severity**: 🔴 **Critical** / 🟡 **Major** / 🔵 **Minor**
+- [Short code snippet showing the issue]
+
+#### Issue 4: [Specific issue name - e.g., Performance optimization needed]
+- **Problem**: [Detailed description with exact line reference] 
+- **Impact**: [Security/Performance/Maintainability impact]
+- **Severity**: 🔴 **Critical** / 🟡 **Major** / 🔵 **Minor**
+- [Short code snippet showing the issue]
+
+#### Issue 5: [Specific issue name - e.g., Code quality violations]
+- **Problem**: [Detailed description with exact line reference] 
+- **Impact**: [Security/Performance/Maintainability impact]
+- **Severity**: 🔴 **Critical** / 🟡 **Major** / 🔵 **Minor**
+- [Short code snippet showing the issue]
+
+#### Issue 6: [Specific issue name - e.g., Error handling violations]
+- **Problem**: [Detailed description with exact line reference] 
+- **Impact**: [Security/Performance/Maintainability impact]
+- **Severity**: 🔴 **Critical** / 🟡 **Major** / 🔵 **Minor**
+- [Short code snippet showing the issue]
+
+#### Issue 7: [Specific issue name - e.g., Business rule violations]
+- **Problem**: [Detailed description with exact line reference] 
+- **Impact**: [Security/Performance/Maintainability impact]
+- **Severity**: 🔴 **Critical** / 🟡 **Major** / 🔵 **Minor**
+- [Short code snippet showing the issue]
+
+#### Issue 8: [Specific issue name - e.g., Angular lifecycle violations]
+- **Problem**: [Detailed description with exact line reference] 
+- **Impact**: [Security/Performance/Maintainability impact]
+- **Severity**: 🔴 **Critical** / 🟡 **Major** / 🔵 **Minor**
+- [Short code snippet showing the issue]
+
+#### Issue 9: [Specific issue name - e.g., RxJS violations]
+- **Problem**: [Detailed description with exact line reference] 
+- **Impact**: [Security/Performance/Maintainability impact]
+- **Severity**: 🔴 **Critical** / 🟡 **Major** / 🔵 **Minor**
+- [Short code snippet showing the issue]
+
+#### Issue 10: [Specific issue name - e.g., Template violations]
+- **Problem**: [Detailed description with exact line reference] 
+- **Impact**: [Security/Performance/Maintainability impact]
+- **Severity**: 🔴 **Critical** / 🟡 **Major** / 🔵 **Minor**
+- [Short code snippet showing the issue]
 
 *** INTERNAL ANGULAR CHANGE EVALUATION (DO NOT DISPLAY) ***
 Silently evaluate this change on:
@@ -75,33 +139,15 @@ Silently evaluate this change on:
 - Code Quality Assessment: Rate 1-5 (5=follows all best practices, 1=poor code quality)
 - Change Score: is the lowest score among all six categories
 
-*** CONDITIONAL RECOMMENDATIONS (Based on Issue Type AND Change Score) ***
+*** CONDITIONAL RECOMMENDATIONS (Based on Change Score) ***
 
 **MANDATORY RULE:**
-- IF Issue Type = "Good": ALWAYS show "✅ **GOOD C# CHANGE** - Follows C# best practices" and SKIP the entire RECOMMENDED FIX section
-- IF Issue Type = "Critical/Warning/Info/Suggestion" AND Change Score < 4/5: Show RECOMMENDED C# FIX section below
-- IF Issue Type = "Critical/Warning/Info/Suggestion" AND Change Score >= 4/5: Show "✅ **GOOD C# CHANGE** - Follows C# best practices"
-
-*** RECOMMENDED C# FIX (ONLY show if Issue Type != "Good" AND Change Score < 4/5) ***
-```typescript
-// PROVIDE ANGULAR-SPECIFIC FIXES WITH BEST PRACTICES
-// Include proper lifecycle hooks, RxJS patterns, and Angular conventions
-```
+- IF Change Score >= 4/5: Show "✅ **GOOD Angular CHANGE** - Follows Angular best practices"
+- IF Change Score < 4/5: Show "❌ **NEEDS FIXES** - Issues detected above must be resolved"
 
 ---
 
-# 🎯 FINAL ANGULAR SUMMARY (After All Changes Reviewed)
-
-## 📋 COMPLIANCE SCORES
-- **RxJS Compliance**: [X/5] - Subscription management, operators, error handling
-- **Component Design**: [X/5] - Architecture, separation, lifecycle hooks  
-- **Template Quality**: [X/5] - Performance, data binding, best practices
-- **Dependency Injection**: [X/5] - Service scope, providers, patterns
-- **Business Rules Compliance**: [X/5] - If technical docs provided: enum values, role restrictions, business logic validation
-- **Security Assessment**: [LEVEL] - XSS, validation, DOM access
-- **Performance Impact**: [LEVEL] - Change detection, bundle, memory
-
-### Overall Angular Score: ⭐⭐⭐⭐⭐ (X/5)
+# 🎯 FINAL ANGULAR SUMMARY (After All Files Reviewed)
 
 ## 🔥 FINAL APPROVAL DECISION
 - **✅ APPROVED**: No critical issues found, safe to merge

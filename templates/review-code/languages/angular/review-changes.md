@@ -1,4 +1,4 @@
-<!-- AIDA - AI Development Assistant v1.0.15 -->
+<!-- AIDA - AI Development Assistant v1.0.16 -->
 <!-- Advanced AI-powered code review and analysis -->
 
 # Angular Git Changes Review - STRICT MODE
@@ -11,37 +11,16 @@ You are performing a STRICT code review on Angular git changes. Do NOT be lenien
 - ONLY flag issues that violate the specific rules in the template
 - If code follows template guidelines, it's acceptable - don't force changes
 - Focus on actual violations, not subjective preferences
-- **BUSINESS RULES**: If technical documentation is included, validate code against business requirements
-- **PRIORITY ORDER**: 1) Angular framework violations, 2) Business rule violations, 3) Both must pass for approval
+- **BUSINESS RULES**: If business documentation is included, validate code against business requirements
+- **PRIORITY ORDER**: 1) Angular framework violations , 2) Business rule violations, 3) Both must pass for approval
 
-🎯 **BUSINESS RULES VALIDATION (if technical docs provided):**
+🎯 **BUSINESS RULES VALIDATION (if business docs provided):**
 - Extract business constraints from natural language documentation
 - Check code enum values against business-defined roles/states
 - Flag hardcoded values that conflict with business rules
 - Validate role restrictions and permission logic
 - Report missing business rule validations in code
 - Ensure code logic follows documented business requirements
-
-<!-- HIDDEN REVIEW SCOPE:
-- ✅ ONLY review: Lines marked with + (added) or - (removed)
-- ❌ DO NOT review: Unchanged context lines (no + or - marker)
-- ❌ DO NOT suggest: Improvements to existing unchanged code
-- ✅ DO focus on: How changes impact Angular architecture
--->
-
-### 📋 CHANGE SEPARATION RULES (MANDATORY):
-
-**Split into separate changes when:**
-- ✅ **Different Angular artifacts**: Component vs Service vs Directive changes = separate changes
-- ✅ **Different lifecycle hooks**: ngOnInit vs ngOnDestroy vs ngAfterViewInit = separate changes
-- ✅ **Different template sections**: Form vs List vs Navigation = separate changes
-- ✅ **Different RxJS operations**: Different observable streams = separate changes
-- ✅ **Non-adjacent code blocks**: If there are 3+ unchanged lines between modifications = separate changes
-
-**Keep as one change when:**
-- ❌ **Same Angular method**: Multiple lines in same lifecycle hook
-- ❌ **Related RxJS chain**: Operators in same pipe chain
-- ❌ **Same template binding**: Related HTML and logic for same feature
 
 ## ⚡ ANGULAR CRITICAL CHECKS (Auto-FAIL if found)
 
@@ -51,58 +30,47 @@ You are performing a STRICT code review on Angular git changes. Do NOT be lenien
 
 ## 📄 File: [ACTUAL_FILENAME_FROM_DIFF]
 
-### Start Review For Each Change:
+**🔄 IMPORTANT: Identify all logical changes in the diff. For EACH SEPARATE CHANGE, create one section using this format below. Do NOT combine multiple changes into one section.**
 
-```
-## Change [X]: [ADDED/REMOVED/MODIFIED] - [Angular artifact type: Component/Service/Directive/Pipe/Module]
+---
+
+**FOR EACH CHANGE [N] IN THE DIFF, REPEAT THIS SECTION:**
+
+## Change [N]: [ADDED/REMOVED/MODIFIED] - [Brief description]
+
+### 🚨 Critical Issue [N]: Issues Detected in This Specific Change
+
 ```typescript
-[Show the exact code block with line numbers]
+[Show code for this specific change only with contains ALL the issues detected]
+
+Example:
+// Line 45: Imported but not used
+import { Subject } from 'rxjs';
+// Line 45: Normal code
+console.log('Navigation started'); // ❌ Line 46: ISSUE - Console.log in production (Security violation)
+// Line 47: More code
+this.pendingBillingCount = 5000; // ❌ Line 60: ISSUE - Magic number (Code quality violation)
+this.user.credit = 10000; // ❌ Line 62: ISSUE - Null access + Reserved word 'credit' (Critical violations)
 ```
 
 *** ANGULAR REVIEW COMMENT ***
-- 🚨 **Issue Type**: [Critical/Warning/Good/Info/Suggestion]
-- 🚨 **Security Assessment**: [Specific security issue or "No security violations found"]
-- 🚨 **Null Safety Analysis**: [Specific null safety issue or "Proper null handling implemented"] 
-- 🚨 **Error Handling Review**: [Specific error handling issue or "Appropriate exception handling in place"]
-- 🚨 **Resource Management Check**: [Specific resource leak issue or "Proper disposal and resource management"]
-- ⚠️ **Performance Impact**: [Specific performance concern or "No performance degradation detected"]
-- ⚠️ **Code Quality Assessment**: [Specific code quality issue or "Follows C# best practices and conventions"]
+- **Security**: [X/5] - **Code Quality**: [X/5] - **Performance**: [X/5]  
+- **Null Safety**: [X/5] - **Error Handling**: [X/5] - **Resource Mgmt**: [X/5]
 
-*** INTERNAL ANGULAR CHANGE EVALUATION (DO NOT DISPLAY) ***
-Silently evaluate this change on:
-- Security Assessment: Rate 1-5 (5=no security issues, 1=critical security violation)
-- Null Safety Analysis: Rate 1-5 (5=proper null handling, 1=guaranteed null reference exception)
-- Error Handling Review: Rate 1-5 (5=comprehensive exception handling, 1=no error handling)
-- Resource Management Check: Rate 1-5 (5=proper disposal, 1=guaranteed resource leak)
-- Performance Impact: Rate 1-5 (5=no impact/improvement, 1=major degradation)
-- Code Quality Assessment: Rate 1-5 (5=follows all best practices, 1=poor code quality)
-- Change Score: is the lowest score among all six categories
+**Change Score: [X/5]** (lowest of above)
 
-*** CONDITIONAL RECOMMENDATIONS (Based on Issue Type AND Change Score) ***
+*** CONDITIONAL RECOMMENDATIONS ***
+- IF Score >= 4/5: "✅ **GOOD Angular CHANGE**" (skip fix section)
+- IF Score < 4/5: Show fix section below
 
-**MANDATORY RULE:**
-- IF Issue Type = "Good": ALWAYS show "✅ **GOOD C# CHANGE** - Follows C# best practices" and SKIP the entire RECOMMENDED FIX section
-- IF Issue Type = "Critical/Warning/Info/Suggestion" AND Change Score < 4/5: Show RECOMMENDED C# FIX section below
-- IF Issue Type = "Critical/Warning/Info/Suggestion" AND Change Score >= 4/5: Show "✅ **GOOD C# CHANGE** - Follows C# best practices"
-
-*** RECOMMENDED C# FIX (ONLY show if Issue Type != "Good" AND Change Score < 4/5) ***
+*** 🔧 **RECOMMENDED FIX** (only if score < 4/5) ***
 ```typescript
-// PROVIDE ANGULAR-SPECIFIC FIXES WITH BEST PRACTICES
-// Include proper lifecycle hooks, RxJS patterns, and Angular conventions
+[Corrected code for this specific change only]
 ```
 
 ---
 
 # 🎯 FINAL ANGULAR SUMMARY (After All Changes Reviewed)
-
-## 📋 COMPLIANCE SCORES
-- **RxJS Compliance**: [X/5] - Subscription management, operators, error handling
-- **Component Design**: [X/5] - Architecture, separation, lifecycle hooks  
-- **Template Quality**: [X/5] - Performance, data binding, best practices
-- **Dependency Injection**: [X/5] - Service scope, providers, patterns
-- **Business Rules Compliance**: [X/5] - If technical docs provided: enum values, role restrictions, business logic validation
-- **Security Assessment**: [LEVEL] - XSS, validation, DOM access
-- **Performance Impact**: [LEVEL] - Change detection, bundle, memory
 
 ### Overall Angular Score: ⭐⭐⭐⭐⭐ (X/5)
 

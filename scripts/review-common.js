@@ -702,7 +702,7 @@ async function executeAIReviewWithApiKey(userPrompt, stream, reviewType, attempt
         // Use the shared callAI function
         const defaultOptions = {
             temperature: 0.1,
-            max_tokens: 4000,
+            max_tokens: 8000, // Increased for comprehensive reviews - Claude 4 max is 8192
             stream: true, // Enable streaming for better UX
             response_format: undefined // Remove JSON format for reviews
         };
@@ -1058,7 +1058,7 @@ async function callAI(systemPrompt, userPrompt, options = {}, images = [], abort
     
     const defaultOptions = {
         temperature: 0.1,
-        max_tokens: 4000,
+        max_tokens: 8000, // Increased for comprehensive analysis - Claude 4 max is 8192
         response_format: { type: "json_object" },
         ...options
     };
@@ -1301,6 +1301,26 @@ async function executeAIReviewWithCopilot(userPrompt, model, stream, reviewType 
         // Calculate input tokens and estimated cost (for final summary only)
         const inputTokens = estimateTokenCount(userPrompt);
         const messages = [vscode.LanguageModelChatMessage.User(userPrompt)];
+        
+        // 📊 TOKEN ANALYSIS - Log detailed token information
+        console.log(`📊 Token Analysis for ${model.family}:`);
+        console.log(`   📤 Input tokens: ${inputTokens.toLocaleString()}`);
+        console.log(`   📏 Prompt length: ${userPrompt.length.toLocaleString()} characters`);
+        console.log(`   📋 Model: ${model.family} (${model.id})`);
+        
+        // ⚠️ TOKEN WARNING SYSTEM
+        const COPILOT_SOFT_LIMIT = 25000;  // Warning threshold
+        const COPILOT_HARD_LIMIT = 32000;  // Likely failure point
+        
+        if (inputTokens > COPILOT_HARD_LIMIT) {
+            console.warn(`🚨 CRITICAL: Token count ${inputTokens} exceeds hard limit ${COPILOT_HARD_LIMIT}!`);
+            console.warn(`   ❌ This request will likely FAIL with "Message exceeds token limit"`);
+        } else if (inputTokens > COPILOT_SOFT_LIMIT) {
+            console.warn(`⚠️ WARNING: Token count ${inputTokens} approaching limit (${Math.round(inputTokens/COPILOT_HARD_LIMIT*100)}% of ${COPILOT_HARD_LIMIT})`);
+            console.warn(`   🔥 Risk of "Message exceeds token limit" error`);
+        } else {
+            console.log(`✅ Token count OK: ${inputTokens} / ${COPILOT_HARD_LIMIT} (${Math.round(inputTokens/COPILOT_HARD_LIMIT*100)}%)`);
+        }
         
         console.log(`📤 Copilot mode - Attempt ${attemptCount + 1}: Sending request to model:`, model.family);
         
@@ -2929,7 +2949,7 @@ function processTemplateContent(content, mainTemplatePath, placeholder = '{{REVI
             const businessDocsContent = buildBusinessDocsContent(global.selectedBusinessDocs);
             
             if (businessDocsContent) {
-                // Prepend technical docs to base content
+                // Prepend business docs to base content
                 baseContent = businessDocsContent + '\n\n' + baseContent;
                 console.log(`📄 Enhanced businessDocsContent preview: ${businessDocsContent}`);
             }

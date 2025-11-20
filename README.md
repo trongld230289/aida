@@ -1,18 +1,20 @@
 # 🤖 AIDA - AI Development Assistant
 
-**Advanced AI Development Assistant with AIDA Chatbot for VS Code**
+**Advanced AI Development Assistant with AIDA Chatbot for VS Code and Cursor IDE**
 
-> Transform your development workflow with AIDA - Your intelligent coding companion featuring built-in chatbot, support for your own AI API (OpenAI/Claude), and comprehensive development tools. No GitHub Copilot required!
+> Transform your development workflow with AIDA - Your intelligent coding companion featuring built-in chatbot, support for your own AI API (OpenAI/Claude), and comprehensive development tools. Compatible with both VS Code and Cursor IDE. No GitHub Copilot required!
 
-[![Version](https://img.shields.io/badge/version-1.0.15-blue.svg)](https://marketplace.visualstudio.com/items?itemName=trongld232.aida-dev)
+[![Version](https://img.shields.io/badge/version-1.0.27-blue.svg)](https://marketplace.visualstudio.com/items?itemName=trongld232.aida-dev)
 [![VS Code](https://img.shields.io/badge/VS%20Code-1.90+-green.svg)](https://code.visualstudio.com/)
+[![Cursor IDE](https://img.shields.io/badge/Cursor%20IDE-Compatible-brightgreen.svg)](https://cursor.sh/)
 [![License](https://img.shields.io/badge/license-MIT-orange.svg)](LICENSE)
 
 ## 🌟 What is AIDA?
 
-**AIDA (AI Development Assistant)** is an intelligent VS Code extension that acts as your personal development companion. It features a built-in AIDA Chatbot and supports your own AI API keys, giving you flexibility to use OpenAI, Claude, or GitHub Copilot:
+**AIDA (AI Development Assistant)** is an intelligent VS Code and Cursor IDE extension that acts as your personal development companion. It features a built-in AIDA Chatbot and supports your own AI API keys, giving you flexibility to use OpenAI, Claude, or GitHub Copilot:
 
 - 🤖 **AIDA Chatbot** - Built-in chat interface with image support and conversation history
+- 🖥️ **Cross-IDE Support** - Works seamlessly with both VS Code and Cursor IDE
 - 🔧 **Flexible AI Integration** - Use your own OpenAI/Claude API or GitHub Copilot
 - 🔍 **Intelligent Code Review** - AI-powered analysis with framework-specific insights
 - 🚀 **Smart PR Analysis** - Cross-platform support for GitHub, GitLab, and Azure DevOps
@@ -64,11 +66,11 @@
 ## 🚀 Quick Start
 ### 1. Installation
 ```bash
-# Install from VS Code Marketplace
+# Install from VS Code/Cursor Marketplace
 ext install trongld232.aida-dev
 
 # Or install from VSIX
-code --install-extension aida-dev-1.0.12.vsix
+code --install-extension aida-dev-1.0.27.vsix
 ```
 ### 2. User Cases
 #### 1. With Github Copilot
@@ -221,7 +223,7 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 ## 📚 Documentation
 
 - **[User Guide](https://github.com/trongld230289/aida/blob/main/docs/USER_GUIDE.md)** - Complete guide to using AIDA with step-by-step tutorials, chat commands, and best practices
-- **[API Reference](https://github.com/trongld230289/aida/blob/main/docs/API.md)** - Technical documentation for developers, configuration options, and programmatic integration
+- **[API Reference](https://github.com/trongld230289/aida/blob/main/docs/API.md)** - business documentation for developers, configuration options, and programmatic integration
 - **[Template Guide](https://github.com/trongld230289/aida/blob/main/docs/TEMPLATES.md)** - Create and customize code review templates for your team's coding standards
 - **[Troubleshooting](https://github.com/trongld230289/aida/blob/main/docs/TROUBLESHOOTING.md)** - Quick solutions to common issues, debugging tips, and getting help
 

@@ -1,8 +1,8 @@
 {
   "name": "aida-dev",
   "displayName": "AIDA - AI Development Assistant",
-  "description": "Advanced AI Development Assistant with intelligent code review, PR analysis, project scanning, and AIDA Chatbot. Use your own AI API (OpenAI/Claude) or GitHub Copilot. Complete development workflows for TypeScript, JavaScript, Python, C#, and more.",
-  "version": "1.0.15",
+  "description": "Advanced AI Development Assistant with intelligent code review, PR analysis, project scanning, and AIDA Chatbot. Use your own AI API (OpenAI/Claude) or GitHub Copilot. Complete development workflows for TypeScript, JavaScript, Python, C#, and more. Now with Cursor IDE support!",
+  "version": "1.0.27",
   "publisher": "trongld232",
   "icon": "icons/extension-icon.png",
   "author": {

@@ -2,9 +2,10 @@
 <!-- PLACEHOLDER: {{REVIEW_BASE}} -->
 
 ## 🔥 MANDATORY PROJECT RULES - MUST CHECK FIRST:
+<!-- - **🚫 CRITICAL**: Never use `credit` as variable/property name (e.g., `let credit`, `obj.credit = value`) - reserved for business logic -->
+<!-- - **🚫 CRITICAL**: Never use `isSuccess` as variable name - reserved for business logic -->
 <!-- ADD PROJECT-SPECIFIC RULES HERE - These will be checked alongside Angular rules -->
 <!-- Additional project rules can be added here:
-- **🚫 CRITICAL**: Never use `isSuccess` as variable name - reserved for business logic
 -->
 
 ### 🚨 SECURITY VIOLATIONS:
@@ -64,6 +65,13 @@
 - Missing centralized configuration for business values
 - Hardcoded URLs or API endpoints
 - Business logic constants scattered in components
+- Unused imports in TypeScript files
+- Unused variables and methods
+- Unused injected services in constructor
+- Dead code (unreachable code blocks)
+- Unused component inputs/outputs
+- Unused CSS classes and styles
+- Redundant or duplicate code blocks
 
 ### 🚨 PERFORMANCE VIOLATIONS:
 - Missing trackBy in *ngFor

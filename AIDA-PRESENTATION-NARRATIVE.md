@@ -512,7 +512,7 @@
 #### **Concept:**
 - **AIDA có thể tạo repo riêng** cho documentation
 - **All roles có thể contribute** documents:
-  - 👨‍💻 **Developers**: Code standards, technical docs
+  - 👨‍💻 **Developers**: Code standards, business docs
   - 👨‍💼 **Product Managers**: Requirements, specifications  
   - 👨‍🎨 **Designers**: UI/UX guidelines, design systems
   - 🧪 **QA Engineers**: Test cases, quality standards

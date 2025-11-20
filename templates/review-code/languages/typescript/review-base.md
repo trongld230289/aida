@@ -1,103 +1,118 @@
-<!-- AIDA - Typescript Review Base Template -->
+<!-- AIDA - TypeScript Review Base Template -->
 <!-- PLACEHOLDER: {{REVIEW_BASE}} -->
 
 ## 🔥 MANDATORY PROJECT RULES - MUST CHECK FIRST:
-<!-- ADD PROJECT-SPECIFIC RULES HERE - These will be checked alongside Angular rules -->
+<!-- - **🚫 CRITICAL**: Never use `credit` as variable/property name (e.g., `let credit`, `obj.credit = value`) - reserved for business logic -->
+<!-- - **🚫 CRITICAL**: Never use `isSuccess` as variable name - reserved for business logic -->
+<!-- ADD PROJECT-SPECIFIC RULES HERE - These will be checked alongside TypeScript rules -->
 <!-- Additional project rules can be added here:
-- **🚫 CRITICAL**: Never use `isSuccess` as variable name - reserved for business logic
 -->
 
 ### 🚨 SECURITY VIOLATIONS:
-- Hardcoded passwords, API keys, tokens, secrets
-- Unsafe eval() or Function() constructor usage
-- XSS vulnerabilities from unescaped user input
-- Command injection through child_process
-- Path traversal vulnerabilities in file operations
-- Missing input validation and sanitization
-- Unsafe regular expressions (ReDoS)
-- Exposed sensitive data in logs/errors
-- Missing authentication/authorization checks
-- Unsafe file upload handling
-- Insecure random number generation
-- Missing CSRF protection for web applications
+- Hardcoded passwords, API keys, tokens, secrets in code
+- SQL injection vulnerabilities (dynamic query construction)
+- XSS vulnerabilities (innerHTML without sanitization)
+- Unsafe file operations, path traversal
+- Authentication/authorization bypasses
+- eval() or Function() constructor usage
+- HTTP instead of HTTPS endpoints
+- No input validation/sanitization
+- Unsafe HTML rendering without sanitization
+- Missing CSRF protection
+- Weak cryptographic implementations
+- Direct DOM manipulation without validation
 
-### 🚨 TYPE SAFETY VIOLATIONS:
-- Excessive use of `any` type without justification
-- Missing type annotations for function parameters
-- Missing return type annotations for functions
-- Incorrect use of type assertions (`as` keyword)
-- Missing generic type parameters where needed
-- Type definitions that don't match runtime behavior
-- Missing null/undefined handling in strict mode
-- Unsafe type casting without proper validation
-- Missing discriminated union patterns
-- Type guards not properly implemented
+### 🚨 RESOURCE LEAKS & MEMORY VIOLATIONS:
+- Event listeners without cleanup
+- Intervals/timeouts without clearInterval/clearTimeout
+- Promises without proper cleanup
+- Memory leaks from closures
+- Unclosed file streams/connections
+- WebSocket connections not properly closed
+- Observable subscriptions without unsubscription
+- Service worker registrations without cleanup
 
-### 🚨 ASYNC/PROMISE VIOLATIONS:
-- Missing await for async operations
-- Unhandled promise rejections
-- Promise constructor anti-patterns
-- Mixing async/await with .then/.catch incorrectly
-- Missing error handling in async operations
-- Race conditions in async operations
-- Missing timeout handling for async operations
-- Fire-and-forget async operations without error handling
-- Async operations without proper cancellation
-- Missing proper typing for async functions
+### 🚨 NULL SAFETY & ERROR HANDLING VIOLATIONS:
+- Property access without null/undefined checks (`obj.property` without `obj?.property`)
+- Array access without bounds checks (`arr[0]` without `arr?.length`)
+- Function calls on potentially null/undefined objects
+- Missing null/undefined guards
+- try blocks without catch
+- Promise rejections without .catch() or try/catch
+- Async/await without proper error handling
+- Network requests without error callbacks
+- Missing input parameter validation
+- Non-null assertion (!) without proper validation
 
-### 🚨 MODULE DESIGN VIOLATIONS:
-- Circular imports between modules
-- Missing proper module exports
-- Default exports when named exports are better
-- Modules with too many exports (>20)
-- Missing barrel exports (index.ts files)
-- Incorrect import/export patterns
-- Missing dependency injection patterns
-- Global namespace pollution
-- Missing proper module documentation
-- Modules not following single responsibility
+### 🚨 TYPESCRIPT ARCHITECTURE VIOLATIONS:
+- Using `any` type extensively without justification
+- Missing type definitions for function parameters/returns
+- Incorrect generic type constraints
+- Interface vs type usage inconsistencies
+- Missing readonly modifiers for immutable data
+- Circular type dependencies
+- Improper union/intersection type usage
+- Missing strict null checks compliance
+- Explicit any casting without validation
 
 ### 🚨 CODE QUALITY & MAINTAINABILITY VIOLATIONS:
-- Hardcoded strings for roles, error messages, or business values
+- Hardcoded strings for configuration values
 - Magic numbers without named constants
-- String comparisons without constants/enums
+- String comparisons without proper methods
 - Repeated string literals across files
-- Missing centralized configuration for business values
+- Missing centralized configuration
 - Hardcoded URLs or API endpoints
-- Business logic constants scattered in components
-
-### 🚨 INTERFACE/TYPE VIOLATIONS:
-- Interfaces with too many optional properties
-- Missing readonly modifiers where appropriate
-- Incorrect use of interface vs type alias
-- Missing proper inheritance patterns
-- Interface segregation principle violations
-- Missing generic constraints where needed
-- Incorrect use of mapped types
-- Missing utility type usage (Partial, Pick, etc.)
-- Type definitions not matching actual usage
-- Missing branded types for type safety
-
-### 🚨 ERROR HANDLING VIOLATIONS:
-- Try-catch blocks without proper error typing
-- Generic Error catching without specific handling
-- Missing error boundaries for modules
-- Error handling that breaks type safety
-- Missing custom error types
-- Not using Result/Either patterns for error handling
-- Missing error logging with proper context
-- Exception handling that masks real errors
-- Missing validation with proper error messages
-- Error propagation without proper typing
+- Business logic constants scattered in files
+- Unused imports and variables
+- Dead code (unreachable code blocks)
+- Inconsistent naming conventions (camelCase/PascalCase)
+- Missing JSDoc for public APIs
 
 ### 🚨 PERFORMANCE VIOLATIONS:
-- Inefficient type checking patterns
-- Missing readonly for immutable data
-- Excessive object creation in hot paths
-- Missing lazy loading for heavy modules
-- Inefficient algorithm implementations
+- Inefficient array operations (nested loops, repeated finds)
 - Missing memoization for expensive computations
-- Synchronous operations blocking execution
-- Missing proper tree-shaking configuration
-- Large bundle sizes without optimization
-- Missing dead code elimination
+- Synchronous operations blocking event loop
+- Large object allocations in loops
+- Inefficient regular expressions
+- Memory-intensive string concatenation
+- Missing lazy loading for large modules
+- Blocking operations on main thread
+- Heavy DOM manipulations without batching
+
+### 🚨 ASYNC/PROMISE VIOLATIONS:
+- Missing await keywords for Promise-returning functions
+- Promise constructor anti-pattern (unnecessary wrapping)
+- Mixing callbacks with Promises/async-await
+- Promise chains that could use async/await
+- Not returning promises from functions
+- Race conditions in async code
+- Missing Promise.all() for parallel operations
+- Unhandled promise rejections
+
+### 🚨 NODE.JS VIOLATIONS (if applicable):
+- Missing error handling for file operations
+- Unclosed database connections
+- Memory leaks from event emitters
+- Process.exit() without cleanup
+- Missing graceful shutdown handling
+- Synchronous file operations on main thread
+- Unbounded memory usage
+- Missing environment variable validation
+
+### 🚨 BROWSER/CLIENT VIOLATIONS:
+- Missing feature detection for browser APIs
+- Memory leaks from DOM event listeners
+- Inefficient CSS selector queries
+- Missing viewport meta tag considerations
+- Local storage usage without error handling
+- Missing browser compatibility checks
+- Improper window.postMessage usage
+
+### 🚨 TYPESCRIPT/JAVASCRIPT VIOLATIONS:
+- console.log in production code
+- debugger statements
+- Global variable declarations
+- == instead of === comparisons
+- Missing semicolons (if required by style guide)
+- Improper this binding in callbacks
+- Variable hoisting issues

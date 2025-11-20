@@ -1,113 +1,107 @@
-<!-- AIDA - Fallback Review Base Template -->
+```markdown
+<!-- AIDA - General Review Base Template (Fallback) -->
 <!-- PLACEHOLDER: {{REVIEW_BASE}} -->
 
 ## 🔥 MANDATORY PROJECT RULES - MUST CHECK FIRST:
-<!-- ADD PROJECT-SPECIFIC RULES HERE - These will be checked alongside Angular rules -->
+- **🚫 CRITICAL**: Never use `credit` as variable/property name (e.g., `let credit`, `obj.credit = value`) - reserved for business logic
+<!-- - **🚫 CRITICAL**: Never use `isSuccess` as variable name - reserved for business logic -->
+<!-- ADD PROJECT-SPECIFIC RULES HERE - These will be checked alongside general rules -->
 <!-- Additional project rules can be added here:
-- **🚫 CRITICAL**: Never use `isSuccess` as variable name - reserved for business logic
 -->
 
 ### 🚨 SECURITY VIOLATIONS:
-- Hardcoded passwords, API keys, or sensitive credentials
-- SQL injection vulnerabilities in database queries
-- Command injection through system calls with user input
-- Path traversal vulnerabilities in file operations
-- XSS vulnerabilities through unsanitized user input
-- CSRF protection missing for state-changing operations
-- Insecure random number generation for security purposes
-- Weak cryptographic algorithms or implementations
-- Unvalidated redirects and forwards
-- Sensitive data logged in plain text
+- Hardcoded passwords, API keys, tokens, secrets
+- SQL injection vulnerabilities (dynamic SQL construction)
+- XSS vulnerabilities (unescaped user input)
+- Unsafe file operations, path traversal
+- Authentication/authorization bypasses
+- Unsafe dynamic content rendering
+- HTTP instead of HTTPS endpoints
+- No input validation/sanitization
+- Unsafe third-party library usage
+- Missing CSRF protection
+- Direct system command execution
+- Unsafe deserialization
 
-### 🚨 INPUT VALIDATION VIOLATIONS:
-- User input not validated before processing
-- File uploads without proper validation
-- Missing size limits on input data
-- Unsafe deserialization of untrusted data
-- Regular expressions vulnerable to ReDoS attacks
-- Missing encoding/escaping of output data
-- Buffer overflow vulnerabilities
-- Integer overflow/underflow not handled
-- Type confusion vulnerabilities
-- Missing boundary checks
+### 🚨 RESOURCE LEAKS & MEMORY VIOLATIONS:
+- Database connections without cleanup
+- File handles without proper closure
+- Event listeners without cleanup
+- Timers without cleanup
+- Memory leaks from unmanaged objects
+- Resource-intensive operations without disposal
+- Infinite loops or recursion
+- Large object allocations without cleanup
 
-### 🚨 ERROR HANDLING VIOLATIONS:
-- Errors silently ignored or swallowed
-- Sensitive information exposed in error messages
-- Stack traces exposed to end users
-- Missing error recovery mechanisms
-- Inconsistent error handling patterns
-- Errors not properly logged for debugging
-- Exception handling missing for critical operations
-- Resource cleanup not performed on errors
-- Error states not tested
-- Cascading failures not prevented
+### 🚨 NULL SAFETY & ERROR HANDLING VIOLATIONS:
+- `.` access without null checks (`obj.property` without null guards)
+- Array access without bounds checking
+- Function calls without existence validation
+- Untyped variables without proper validation
+- Missing null/undefined guards
+- `try` blocks without `catch`
+- Promise/async operations without error handling
+- Network calls without error callbacks
+- Missing error handling in critical paths
+- Silent error swallowing
+- No error logging or monitoring
 
-### 🚨 RESOURCE MANAGEMENT VIOLATIONS:
-- Memory leaks from unreleased resources
-- File handles not properly closed
-- Network connections not cleaned up
-- Database connections not returned to pool
-- Infinite loops or unbounded recursion
-- Large objects not disposed properly
-- Event listeners not removed
-- Timers/intervals not cleared
-- Thread pools not managed correctly
-- Cache not bounded or cleared
+### 🚨 CODE ARCHITECTURE VIOLATIONS:
+- Missing separation of concerns
+- Business logic mixed with presentation
+- Large functions/classes (>500 lines)
+- Tight coupling between components
+- Circular dependencies
+- Missing abstraction layers
+- Violation of SOLID principles
+- Inappropriate design patterns usage
+- Poor module organization
+- Missing interface definitions
 
 ### 🚨 CODE QUALITY & MAINTAINABILITY VIOLATIONS:
-- Hardcoded strings for roles, error messages, or business values
+- Hardcoded strings for configuration or business values
 - Magic numbers without named constants
 - String comparisons without constants/enums
-- Repeated string literals across files
-- Missing centralized configuration for business values
-- Hardcoded URLs or API endpoints
-- Business logic constants scattered in components
+- Repeated code blocks (DRY violations)
+- Missing centralized configuration
+- Hardcoded URLs or endpoints
+- Business logic constants scattered across files
+- Unused imports, variables, and functions
+- Dead code (unreachable code blocks)
+- Inconsistent naming conventions
+- Redundant or duplicate code blocks
+- Missing documentation for complex logic
 
 ### 🚨 PERFORMANCE VIOLATIONS:
-- Inefficient algorithms with poor time complexity
-- Database queries in loops (N+1 problem)
-- Blocking operations on main execution thread
-- Large data structures loaded entirely into memory
-- Expensive operations without caching
-- Redundant computations not optimized
-- Missing indexes for database queries
-- Uncompressed large data transfers
-- Synchronous I/O operations blocking flow
-- Resource-intensive operations without throttling
+- Inefficient algorithms or data structures
+- Unnecessary loops or iterations
+- Missing caching mechanisms
+- Synchronous operations blocking execution
+- Heavy computations in frequently called methods
+- Unnecessary data fetching or processing
+- Missing pagination for large datasets
+- Resource-intensive operations on main thread
+- Inefficient database queries
+- Missing optimization for frequently used operations
 
-### 🚨 CONCURRENCY VIOLATIONS:
-- Race conditions in shared data access
-- Deadlocks from improper lock ordering
-- Thread safety violations in shared code
-- Atomic operations not used where needed
-- Shared mutable state without synchronization
-- Lock contention causing performance issues
-- Resource starvation scenarios
-- Producer-consumer imbalances
-- Missing timeout handling in locks
-- Concurrent modification exceptions
+### 🚨 DATA HANDLING VIOLATIONS:
+- Missing data validation
+- Unsafe data transformations
+- No data sanitization
+- Missing data encryption for sensitive information
+- Improper data storage practices
+- No data backup or recovery mechanisms
+- Missing audit trails for critical operations
+- Inadequate data access controls
 
-### 🚨 DATA INTEGRITY VIOLATIONS:
-- Data validation missing at boundaries
-- Inconsistent data states allowed
-- Missing transaction boundaries
-- Data corruption not detected
-- Backup and recovery not implemented
-- Data retention policies not enforced
-- Audit trails missing for critical operations
-- Data synchronization issues
-- Referential integrity not maintained
-- Data versioning conflicts not handled
+### 🚨 GENERAL PROGRAMMING VIOLATIONS:
+- `console.log` or debug statements in production code
+- `debugger` statements
+- Global variables usage
+- Magic numbers without constants
+- Hardcoded environment-specific values
+- Missing proper logging mechanisms
+- No proper configuration management
+- Violation of coding standards and conventions
 
-### 🚨 CODE QUALITY VIOLATIONS:
-- Functions exceeding reasonable complexity limits
-- Code duplication without abstraction
-- Magic numbers and strings without constants
-- Inconsistent naming conventions
-- Missing documentation for complex logic
-- Dead code not removed
-- Commented-out code committed
-- TODO/FIXME comments for critical issues
-- Tight coupling between modules
-- Circular dependencies
+```

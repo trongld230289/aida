@@ -1,91 +1,130 @@
-<!-- AIDA - Javascript Review Base Template -->
+<!-- AIDA - JavaScript Review Base Template -->
 <!-- PLACEHOLDER: {{REVIEW_BASE}} -->
 
 ## 🔥 MANDATORY PROJECT RULES - MUST CHECK FIRST:
-<!-- ADD PROJECT-SPECIFIC RULES HERE - These will be checked alongside Angular rules -->
+<!-- - **🚫 CRITICAL**: Never use `credit` as variable/property name (e.g., `let credit`, `obj.credit = value`) - reserved for business logic -->
+<!-- - **🚫 CRITICAL**: Never use `isSuccess` as variable name - reserved for business logic -->
+<!-- ADD PROJECT-SPECIFIC RULES HERE - These will be checked alongside JavaScript rules -->
 <!-- Additional project rules can be added here:
-- **🚫 CRITICAL**: Never use `isSuccess` as variable name - reserved for business logic
 -->
 
 ### 🚨 SECURITY VIOLATIONS:
-- Use of eval() with user input
-- innerHTML with unescaped user content (XSS)
-- Missing input validation and sanitization
-- Hardcoded API keys, secrets, credentials
-- Unsafe regular expressions (ReDoS)
-- Missing CSRF protection in AJAX calls
-- Unsafe use of document.write()
-- Missing Content Security Policy considerations
+- Hardcoded passwords, API keys, tokens, secrets in code
+- SQL injection vulnerabilities (dynamic query construction)
+- XSS vulnerabilities (innerHTML without sanitization)
+- Unsafe file operations, path traversal
+- Authentication/authorization bypasses
+- eval() or Function() constructor usage
+- HTTP instead of HTTPS endpoints
+- No input validation/sanitization
+- Unsafe HTML rendering without sanitization
+- Missing CSRF protection
+- Weak cryptographic implementations
+- Direct DOM manipulation without validation
+
+### 🚨 RESOURCE LEAKS & MEMORY VIOLATIONS:
+- Event listeners without cleanup (addEventListener without removeEventListener)
+- Intervals/timeouts without clearInterval/clearTimeout
+- Promises without proper cleanup
+- Memory leaks from closures retaining large objects
+- Unclosed file streams/connections (Node.js)
+- WebSocket connections not properly closed
+- Global variable pollution
+- Circular references causing memory leaks
+
+### 🚨 NULL SAFETY & ERROR HANDLING VIOLATIONS:
+- Property access without null/undefined checks (`obj.property` without `obj && obj.property`)
+- Array access without bounds checks (`arr[0]` without `arr && arr.length`)
+- Function calls on potentially null/undefined objects
+- Missing null/undefined guards
+- try blocks without catch
+- Promise rejections without .catch() or try/catch
+- Async/await without proper error handling
+- Network requests without error callbacks
+- Missing input parameter validation
+- Accessing properties on undefined variables
+
+### 🚨 JAVASCRIPT ARCHITECTURE VIOLATIONS:
+- Global scope pollution (variables declared without var/let/const)
+- Missing strict mode ('use strict')
+- Incorrect variable scoping (var vs let/const)
+- Missing module pattern or proper exports/imports
+- Improper this binding in callbacks
+- Closure memory leaks
 - Prototype pollution vulnerabilities
-- Unsafe dynamic imports or require()
-- Missing authentication checks on client-side
-- Exposed sensitive data in localStorage/sessionStorage
-
-### 🚨 ASYNC/PROMISE VIOLATIONS:
-- Unhandled promise rejections
-- Missing async/await error handling
-- Callback hell patterns
-- Race conditions in async operations
-- Missing Promise.all() for concurrent operations
-- Memory leaks from unresolved promises
-- Missing timeout handling for async operations
-- Improper error propagation in promise chains
-- Blocking main thread with synchronous operations
-- Missing cancellation for async operations
-
-### 🚨 MEMORY & PERFORMANCE VIOLATIONS:
-- Memory leaks from event listeners not removed
-- Inefficient DOM manipulation patterns
-- Missing debouncing/throttling for frequent events
-- Large object creation in loops
-- Missing lazy loading for heavy resources
-- Inefficient array/object operations
-- Missing caching for expensive computations
-- Blocking rendering with heavy JavaScript
-- Missing virtual scrolling for large lists
-- Inefficient string concatenation
-
-### 🚨 DOM & EVENT VIOLATIONS:
-- Direct DOM manipulation without framework patterns
-- Missing event delegation for dynamic content
-- Event listeners not properly removed
-- Missing passive event listeners for performance
-- Unsafe use of document.getElementById without checks
-- Missing input validation for form elements
-- Improper focus management
-- Missing accessibility attributes
-- Memory leaks from circular references
-- Missing error boundaries for UI components
-
-### 🚨 ES6+ & MODERN JS VIOLATIONS:
-- Using var instead of let/const
-- Missing proper module imports/exports
-- Improper arrow function usage
-- Missing template literals for string interpolation
-- Not using destructuring where appropriate
-- Missing default parameters
-- Improper use of spread operator
-- Missing proper class syntax
-- Not using modern array methods
-- Missing proper error handling with try/catch
+- Missing proper error boundaries
 
 ### 🚨 CODE QUALITY & MAINTAINABILITY VIOLATIONS:
-- Hardcoded strings for roles, error messages, or business values
+- Hardcoded strings for configuration values
 - Magic numbers without named constants
-- String comparisons without constants/enums
-- Repeated string literals across files
-- Missing centralized configuration for business values
+- == instead of === (loose equality)
+- String comparisons without proper methods
+- Repeated code blocks across files
+- Missing centralized configuration
 - Hardcoded URLs or API endpoints
-- Business logic constants scattered in components
+- Business logic constants scattered in files
+- Unused variables and functions
+- Dead code (unreachable code blocks)
+- Inconsistent naming conventions
+- Missing comments for complex logic
 
-### 🚨 TYPE SAFETY VIOLATIONS:
-- Missing type checking for function parameters
-- Unsafe type coercion (== instead of ===)
-- Missing null/undefined checks
-- Improper use of typeof operator
-- Missing input validation
-- Unsafe array/object access
-- Missing proper error objects
-- Type confusion in conditional statements
-- Missing validation for external API responses
-- Unsafe JSON parsing without try/catch
+### 🚨 PERFORMANCE VIOLATIONS:
+- Inefficient array operations (nested loops, repeated finds)
+- Missing optimization for expensive computations
+- Synchronous operations blocking event loop (Node.js)
+- Large object allocations in loops
+- Inefficient regular expressions
+- Memory-intensive string concatenation
+- Missing lazy loading for large modules
+- Blocking operations on main thread
+- Heavy DOM manipulations without batching (browser)
+
+### 🚨 ASYNC/PROMISE VIOLATIONS:
+- Callback hell instead of Promises/async-await
+- Promise constructor anti-pattern (unnecessary wrapping)
+- Mixing callbacks with Promises
+- Not returning promises from functions
+- Race conditions in async code
+- Missing Promise.all() for parallel operations
+- Unhandled promise rejections
+- Blocking async operations with synchronous calls
+
+### 🚨 NODE.JS VIOLATIONS (if applicable):
+- Missing error handling for file operations
+- Unclosed database connections
+- Memory leaks from event emitters
+- process.exit() without cleanup
+- Missing graceful shutdown handling
+- Synchronous file operations on main thread
+- Unbounded memory usage
+- Missing environment variable validation
+- Security vulnerabilities (prototype pollution, etc.)
+
+### 🚨 BROWSER/CLIENT VIOLATIONS:
+- Missing feature detection for browser APIs
+- Memory leaks from DOM event listeners
+- Inefficient CSS selector queries
+- Missing viewport meta tag considerations
+- localStorage usage without error handling
+- Missing browser compatibility checks
+- Improper window.postMessage usage
+- Cross-origin issues without proper handling
+
+### 🚨 ES6+ VIOLATIONS:
+- Using var instead of let/const
+- Missing arrow function optimizations
+- Not using destructuring where appropriate
+- Improper template literal usage
+- Missing default parameters
+- Not using spread operator for array operations
+- Incorrect import/export statements
+- Missing async/await for Promise handling
+
+### 🚨 GENERAL JAVASCRIPT VIOLATIONS:
+- console.log in production code
+- debugger statements
+- Global variable declarations without proper scope
+- Variable hoisting issues
+- Missing semicolons (if required by style guide)
+- Type coercion issues (implicit conversions)
+- Improper object/array comparisons

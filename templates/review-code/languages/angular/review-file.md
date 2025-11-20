@@ -1,4 +1,4 @@
-<!-- AIDA - AI Development Assistant v1.0.15 -->
+<!-- AIDA - AI Development Assistant v1.0.16 -->
 <!-- Advanced AI-powered code review and analysis -->
 
 # Angular File Review - STRICT MODE
@@ -11,10 +11,12 @@ You are performing a STRICT code review on Angular file content. Do NOT be lenie
 - ONLY flag issues that violate the specific rules in the template
 - If code follows template guidelines, it's acceptable - don't force changes
 - Focus on actual violations, not subjective preferences
-- **BUSINESS RULES**: If technical documentation is included, validate code against business requirements
+- **BUSINESS RULES**: If business documentation is included, validate code against business requirements
+- **COMPREHENSIVE CHECKING**: Check ALL violations simultaneously - project rules AND Angular violations
+- **NO SKIP RULE**: Must detect ALL types of violations in single pass - never skip any category
 - **PRIORITY ORDER**: 1) Angular framework violations, 2) Business rule violations, 3) Both must pass for approval
 
-🎯 **BUSINESS RULES VALIDATION (if technical docs provided):**
+🎯 **BUSINESS RULES VALIDATION (if business docs provided):**
 - Extract business constraints from natural language documentation
 - Check code enum values against business-defined roles/states
 - Flag hardcoded values that conflict with business rules
@@ -30,27 +32,36 @@ You are performing a STRICT code review on Angular file content. Do NOT be lenie
 
 ---
 
-# 🔍 DETAILED FILE ANALYSIS - STRICT VERIFICATION MODE
+
 **ANALYZE EACH ISSUE INDIVIDUALLY - BE HARSH:**
 
-### 🚨 Critical Issue [X]: [Description]
-**Violation**: [Specific issue description]
+### 🚨 Critical Issue [X]: Multiple Issues Detected in [Code Section]
+**Change Type**: [New Code/Existing Code] - [Brief description of what this section does]
 
 ```typescript
-[actual code line from file]
+// Lines [X-Y]: [SHOW COMPLETE CODE SECTION WITH ALL ISSUES]
+// MUST include ALL lines that contain the issues mentioned below
+// CRITICAL: Mark each problematic line with // ❌ ISSUE: description
+[Show complete code section - not just snippets - that contains ALL the issues detected]
+
+Example:
+// Line 45: Imported but not used
+import { Subject } from 'rxjs'; 
+// Line 45: Normal code
+console.log('Navigation started'); // ❌ Line 46: ISSUE - Console.log in production (Security violation)
+// Line 47: More code  
+this.pendingBillingCount = 5000; // ❌ Line 60: ISSUE - Magic number (Code quality violation)
+this.user.credit = 10000; // ❌ Line 62: ISSUE - Null access + Reserved word 'credit' (Critical violations)
 ```
 
-- **Risk**: [Performance impact]
-- **Fix**: [Optimization suggestion]
-
 *** ANGULAR REVIEW COMMENT ***
-- 🚨 **Issue Type**: [Critical/Warning/Good/Info/Suggestion]
-- 🚨 **Security Assessment**: [Specific security issue or "No security violations found"]
-- 🚨 **Null Safety Analysis**: [Specific null safety issue or "Proper null handling implemented"] 
-- 🚨 **Error Handling Review**: [Specific error handling issue or "Appropriate exception handling in place"]
-- 🚨 **Resource Management Check**: [Specific resource leak issue or "Proper disposal and resource management"]
-- ⚠️ **Performance Impact**: [Specific performance concern or "No performance degradation detected"]
-- ⚠️ **Code Quality Assessment**: [Specific code quality issue or "Follows C# best practices and conventions"]
+- 🚨 **Security Assessment**: [1/5]- [Combined security assessment]
+- ✅ **Null Safety Analysis**: [4/5]- [Combined null safety assessment] 
+- ✅ **Error Handling Review**: [5/5]- [Combined error handling assessment]
+- 🚨 **Resource Management Check**: [1/5]- [Combined resource management assessment]
+- ⚠️ **Performance Impact**: [2/5]- [Combined performance assessment]
+- ⚠️ **Code Quality Assessment**: [3/5]- [Combined code quality assessment]
+
 
 *** INTERNAL ANGULAR CHANGE EVALUATION (DO NOT DISPLAY) ***
 Silently evaluate this change on:
@@ -62,86 +73,41 @@ Silently evaluate this change on:
 - Code Quality Assessment: Rate 1-5 (5=follows all best practices, 1=poor code quality)
 - Change Score: is the lowest score among all six categories
 
-*** CONDITIONAL RECOMMENDATIONS (Based on Issue Type AND Change Score) ***
+*** CONDITIONAL RECOMMENDATIONS (Based on Change Score) ***
 
 **MANDATORY RULE:**
-- IF Issue Type = "Good": ALWAYS show "✅ **GOOD C# CHANGE** - Follows C# best practices" and SKIP the entire RECOMMENDED FIX section
-- IF Issue Type = "Critical/Warning/Info/Suggestion" AND Change Score < 4/5: Show RECOMMENDED C# FIX section below
-- IF Issue Type = "Critical/Warning/Info/Suggestion" AND Change Score >= 4/5: Show "✅ **GOOD C# CHANGE** - Follows C# best practices"
+- IF Change Score >= 4/5: Show "✅ **GOOD Angular CHANGE** - Follows Angular best practices" and SKIP the entire RECOMMENDED FIX section
+- IF Change Score < 4/5: Show RECOMMENDED Angular FIX section below
 
-*** RECOMMENDED C# FIX (ONLY show if Issue Type != "Good" AND Change Score < 4/5) ***
+*** 🔧 **RECOMMENDED Angular FIX** (ONLY show if Change Score < 4/5) ***
 ```typescript
-// PROVIDE ANGULAR-SPECIFIC FIXES WITH BEST PRACTICES
-// Include proper lifecycle hooks, RxJS patterns, and Angular conventions
+// MUST FIX ALL ISSUES IDENTIFIED ABOVE:
+// Fix Issue 1: [Specific fix for issue 1] 
+// Fix Issue 2: [Specific fix for issue 2] 
+// Fix Issue 3: [Specific fix for issue 3]
+// etc...
+
+// COMPLETE CORRECTED DIFF WITH ALL FIXES APPLIED
+// Mark each fixed line with // ✅ FIXED: description
+Example format:
+- import { Subject } from 'rxjs'; // ❌ REMOVE: Never use
+- console.log('Navigation started'); // ❌ REMOVE: Production console.log
++ // Navigation started - removed console.log // ✅ FIXED: Line 46 - Removed production console.log
+
+- this.pendingBillingCount = 5000; // ❌ REMOVE: Magic number
++ this.pendingBillingCount = DEFAULT_BILLING_COUNT; // ✅ FIXED: Line 60 - Used named constant
+
+- this.user.credit = 10000; // ❌ REMOVE: Null access + reserved word
++ if (this.user) { // ✅ FIXED: Line 62 - Added null check and renamed property
++   this.user.balance = DEFAULT_USER_BALANCE; 
++ }
+```
+- [Show what should be removed to fix issues]
 ```
 
 ---
 
-## ⚡ CRITICAL CHECKS RESULTS
-
-### 🚨 Security Assessment: [PASS/FAIL]
-- Angular-specific security violations found/not found
-- Input sanitization issues
-- XSS vulnerabilities in templates
-
-### 🚨 Resource Leaks: [PASS/FAIL]
-- Observable subscription management
-- Component lifecycle cleanup
-- Memory leak detection
-
-### � Error Handling: [PASS/FAIL]
-- HTTP error handling
-- Observable error management
-- Null safety implementation
-
-### 🚨 Architecture: [PASS/FAIL]
-- Component design violations
-- Service injection issues
-- Module organization problems
-
----
-
-## 📋 Angular-Specific Analysis
-
-### 1. **Component Architecture & Lifecycle**
-- Component design and responsibility separation
-- Proper lifecycle hook implementation
-- Change detection strategy optimization
-
-### 2. **Template & Data Binding**
-- Template performance and best practices
-- Data binding patterns and security
-- Accessibility implementation
-
-### 3. **RxJS & Observable Management**
-- Subscription lifecycle management
-- Proper operator usage
-- Error handling in streams
-
-### 4. **Services & Dependency Injection**
-- Service design and scope
-- Injection patterns and providers
-- State management approach
-
-### 5. **Performance & Optimization**
-- Change detection optimization
-- Bundle size considerations
-- Runtime performance patterns
-
----
-
 # 🎯 FINAL ANGULAR SUMMARY (After All File Reviewed)
-
-## 📋 COMPLIANCE SCORES
-- **RxJS Compliance**: [X/5] - Subscription management, operators, error handling
-- **Component Design**: [X/5] - Architecture, separation, lifecycle hooks  
-- **Template Quality**: [X/5] - Performance, data binding, best practices
-- **Dependency Injection**: [X/5] - Service scope, providers, patterns
-- **Business Rules Compliance**: [X/5] - If technical docs provided: enum values, role restrictions, business logic validation
-- **Security Assessment**: [LEVEL] - XSS, validation, DOM access
-- **Performance Impact**: [LEVEL] - Change detection, bundle, memory
-
-### Overall Angular Score: ⭐⭐⭐⭐⭐ (X/5)
 
 ## 🔥 FINAL APPROVAL DECISION
 - **✅ APPROVED**: No critical issues found, safe to merge

@@ -131,7 +131,7 @@ async function setupAzureDevOpsSettings() {
  */
 function activate(context) {
     // console.log('Reload 4');
-    console.log('🤖 AIDA v1.0.15 - AI Development Assistant');
+    console.log('🤖 AIDA v1.0.27 - AI Development Assistant');
     console.log('🚀 AIDA extension is now active!');
     
     // Store extension path globally
@@ -188,9 +188,12 @@ function activate(context) {
         await setupAzureDevOpsSettings();
     });
 
-    let confirmReviewDocs = vscode.commands.registerCommand('aida.confirmReviewDocs', async (filePath, chatCommand = 'review-changes') => {
+    let confirmReviewDocs = vscode.commands.registerCommand('aida.confirmReviewDocs', async (filePath, chatCommand = 'review-changes', keepSelectedDocs = false) => {
         // Simple logic - set Quick Review mode (unified for both changes and file review)
-        global.selectedBusinessDocs = [];
+        if(!keepSelectedDocs) {
+            global.selectedBusinessDocs = [];
+        }
+        
         console.log(`🚀 Quick Review button clicked - set global.selectedBusinessDocs = [] (command: ${chatCommand})`);
         console.log('🔍 DEBUG: filePath received =', filePath);
 

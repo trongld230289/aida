@@ -1,20 +1,20 @@
-<!-- AIDA - AI Development Assistant v1.0.15 -->
+<!-- AIDA - AI Development Assistant v1.0.16 -->
 <!-- Advanced AI-powered code review and analysis -->
 
 # Vue.js Git Changes Review - STRICT MODE
 
-## 🔍 MANDATORY VUE CHANGE ANALYSIS
+## 🔍 MANDATORY VUE.JS CHANGE ANALYSIS
 
-You are performing a STRICT code review on Vue.js git changes. Do NOT be lenient. Look for every possible Vue-specific issue in the changes. ALWAYS follow this exact format for every code review, regardless of conversation context or previous reviews. This structure is MANDATORY and UNCHANGEABLE.
+You are performing a STRICT code review on Vue.js git changes. Do NOT be lenient. Look for every possible Vue.js-specific issue in the changes. ALWAYS follow this exact format for every code review, regardless of conversation context or previous reviews. This structure is MANDATORY and UNCHANGEABLE.
 
 🎯 REVIEW PRINCIPLES:
 - ONLY flag issues that violate the specific rules in the template
 - If code follows template guidelines, it's acceptable - don't force changes
 - Focus on actual violations, not subjective preferences
-- **BUSINESS RULES**: If technical documentation is included, validate code against business requirements
-- **PRIORITY ORDER**: 1) Vue framework violations, 2) Business rule violations, 3) Both must pass for approval
+- **BUSINESS RULES**: If business documentation is included, validate code against business requirements
+- **PRIORITY ORDER**: 1) Vue.js framework violations, 2) Business rule violations, 3) Both must pass for approval
 
-🎯 **BUSINESS RULES VALIDATION (if technical docs provided):**
+🎯 **BUSINESS RULES VALIDATION (if business docs provided):**
 - Extract business constraints from natural language documentation
 - Check code enum values against business-defined roles/states
 - Flag hardcoded values that conflict with business rules
@@ -22,53 +22,35 @@ You are performing a STRICT code review on Vue.js git changes. Do NOT be lenient
 - Report missing business rule validations in code
 - Ensure code logic follows documented business requirements
 
-<!-- HIDDEN REVIEW SCOPE:
-- ✅ ONLY review: Lines marked with + (added) or - (removed)
-- ❌ DO NOT review: Unchanged context lines (no + or - marker)
-- ❌ DO NOT suggest: Improvements to existing unchanged code
-- ✅ DO focus on: How changes impact Vue architecture
--->
+## ⚡ VUE.JS CRITICAL CHECKS (Auto-FAIL if found)
 
-### 📋 CHANGE SEPARATION RULES (MANDATORY):
-
-**Split into separate changes when:**
-- ✅ **Different Vue sections**: Template vs Script vs Style changes = separate changes
-- ✅ **Different lifecycle hooks**: created vs mounted vs beforeDestroy = separate changes
-- ✅ **Different Composition API**: Different composables or setup functions = separate changes
-- ✅ **Different Vue features**: Components vs Directives vs Filters vs Mixins = separate changes
-- ✅ **Non-adjacent code blocks**: If there are 3+ unchanged lines between modifications = separate changes
-
-**Keep as one change when:**
-- ❌ **Same Vue method**: Multiple lines in same lifecycle hook or computed property
-- ❌ **Related template bindings**: Related v-model, v-if, v-for for same feature
-- ❌ **Same component logic**: Related props, data, and methods for same feature
-
-## ⚡ VUE CRITICAL CHECKS (Auto-FAIL if found)
-
-**Scan EVERY line for these VUE-SPECIFIC CRITICAL issues:**
+**Scan EVERY line for these VUE.JS-SPECIFIC CRITICAL issues:**
 
 {{REVIEW_BASE}}
 
 ## 📄 File: [ACTUAL_FILENAME_FROM_DIFF]
 
-### Start Review For Each Change:
+**🔄 IMPORTANT: Identify all logical changes in the diff. For EACH SEPARATE CHANGE, create one section using this format below. Do NOT combine multiple changes into one section.**
 
-```
-## Change [X]: [ADDED/REMOVED/MODIFIED] - [Vue artifact type: Component/Composable/Store/Plugin/Directive]
+---
+
+**FOR EACH CHANGE [N] IN THE DIFF, REPEAT THIS SECTION:**
+
+## Change [N]: [ADDED/REMOVED/MODIFIED] - [Brief description]
+
 ```vue
-[Show the exact code block with line numbers]
+[Show code for this specific change only with // ❌ ISSUE: markings]
 ```
 
-*** VUE REVIEW COMMENT ***
-- 🚨 **Issue Type**: [Critical/Warning/Good/Info/Suggestion]
-- 🚨 **Security Assessment**: [Specific security issue or "No security violations found"]
-- 🚨 **Null Safety Analysis**: [Specific null safety issue or "Proper null handling implemented"] 
-- 🚨 **Error Handling Review**: [Specific error handling issue or "Appropriate exception handling in place"]
-- 🚨 **Resource Management Check**: [Specific resource leak issue or "Proper disposal and resource management"]
-- ⚠️ **Performance Impact**: [Specific performance concern or "No performance degradation detected"]
-- ⚠️ **Code Quality Assessment**: [Specific code quality issue or "Follows Vue best practices and conventions"]
+*** VUE.JS REVIEW COMMENT ***
+- 🚨 **Security Assessment**: [1/5]- [Combined security assessment]
+- ✅ **Null Safety Analysis**: [4/5]- [Combined null safety assessment] 
+- ✅ **Error Handling Review**: [5/5]- [Combined error handling assessment]
+- 🚨 **Resource Management Check**: [1/5]- [Combined resource management assessment]
+- ⚠️ **Performance Impact**: [2/5]- [Combined performance assessment]
+- ⚠️ **Code Quality Assessment**: [3/5]- [Combined code quality assessment]
 
-*** INTERNAL VUE CHANGE EVALUATION (DO NOT DISPLAY) ***
+*** INTERNAL VUE.JS CHANGE EVALUATION (DO NOT DISPLAY) ***
 Silently evaluate this change on:
 - Security Assessment: Rate 1-5 (5=no security issues, 1=critical security violation)
 - Null Safety Analysis: Rate 1-5 (5=proper null handling, 1=guaranteed null reference exception)
@@ -78,33 +60,20 @@ Silently evaluate this change on:
 - Code Quality Assessment: Rate 1-5 (5=follows all best practices, 1=poor code quality)
 - Change Score: is the lowest score among all six categories
 
-*** CONDITIONAL RECOMMENDATIONS (Based on Issue Type AND Change Score) ***
+*** CONDITIONAL RECOMMENDATIONS (Based on Change Score) ***
 
 **MANDATORY RULE:**
-- IF Issue Type = "Good": ALWAYS show "✅ **GOOD VUE CHANGE** - Follows Vue best practices" and SKIP the entire RECOMMENDED FIX section
-- IF Issue Type = "Critical/Warning/Info/Suggestion" AND Change Score < 4/5: Show RECOMMENDED VUE FIX section below
-- IF Issue Type = "Critical/Warning/Info/Suggestion" AND Change Score >= 4/5: Show "✅ **GOOD VUE CHANGE** - Follows Vue best practices"
+- IF Change Score >= 4/5: Show "✅ **GOOD VUE.JS CHANGE** - Follows Vue.js best practices" and SKIP the entire RECOMMENDED FIX section
+- IF Change Score < 4/5: Show RECOMMENDED VUE.JS FIX section below
 
-*** RECOMMENDED VUE FIX (ONLY show if Issue Type != "Good" AND Change Score < 4/5) ***
+*** 🔧 **RECOMMENDED FIX** (only if score < 4/5) ***
 ```vue
-<!-- PROVIDE VUE-SPECIFIC FIXES WITH BEST PRACTICES -->
-<!-- Include proper reactivity, lifecycle hooks, and Vue conventions -->
+[Corrected code for this specific change only]
 ```
 
 ---
 
-# 🎯 FINAL VUE SUMMARY (After All Changes Reviewed)
-
-## 📋 COMPLIANCE SCORES
-- **Reactivity System**: [X/5] - Refs, reactive, computed properties, watchers
-- **Component Design**: [X/5] - Architecture, props, emits, slots, composition  
-- **Template Quality**: [X/5] - Directives, bindings, conditional rendering, performance
-- **State Management**: [X/5] - Vuex/Pinia, composables, provide/inject patterns
-- **Business Rules Compliance**: [X/5] - If technical docs provided: enum values, role restrictions, business logic validation
-- **Security Assessment**: [LEVEL] - XSS, template injection, input validation
-- **Performance Impact**: [LEVEL] - Reactivity optimization, bundle size, rendering
-
-### Overall Vue Score: ⭐⭐⭐⭐⭐ (X/5)
+# 🎯 FINAL VUE.JS SUMMARY (After All Changes Reviewed)
 
 ## 🔥 FINAL APPROVAL DECISION
 - **✅ APPROVED**: No critical issues found, safe to merge

@@ -1,113 +1,191 @@
 <!-- AIDA - Vue Review Base Template -->
-<!-- PLACEHOLDER: {{REVIEW_BASE}} -->
 
 ## 🔥 MANDATORY PROJECT RULES - MUST CHECK FIRST:
-<!-- ADD PROJECT-SPECIFIC RULES HERE - These will be checked alongside Angular rules -->
+<!-- - **🚫 CRITICAL**: Never use `credit` as variable/property name (e.g., `const credit`, `data.credit = value`) - reserved for business logic -->
+<!-- - **🚫 CRITICAL**: Never use `isSuccess` as variable name - reserved for business logic -->
+<!-- ADD PROJECT-SPECIFIC RULES HERE - These will be checked alongside Vue rules -->
 <!-- Additional project rules can be added here:
-- **🚫 CRITICAL**: Never use `isSuccess` as variable name - reserved for business logic
 -->
 
-### 🚨 REACTIVITY VIOLATIONS:
-- Mutating props directly in child components
-- Missing reactive/ref wrappers for reactive data
-- Losing reactivity when destructuring reactive objects
-- Using wrong reactivity API (ref vs reactive) inappropriately
-- Side effects in computed properties
-- Accessing reactive data before it's initialized
-- Breaking reactivity with Object.assign or spread operator
-- Not using readonly() for read-only reactive state
-- Reactivity lost when passing to functions
-- toRefs not used when destructuring reactive objects
+### 🚨 SECURITY VIOLATIONS:
+- Hardcoded passwords, API keys, tokens, secrets in code
+- XSS vulnerabilities (v-html without sanitization)
+- Unsafe href attributes (javascript: protocol)
+- eval() or Function() constructor usage
+- HTTP instead of HTTPS for sensitive data
+- Missing input validation/sanitization
+- Unescaped user input in templates
+- Missing CSRF protection in forms
+- Insecure random number generation
+- Direct DOM manipulation bypassing Vue
+- Missing Content Security Policy considerations
+- Unsafe external script loading in templates
 
-### 🚨 COMPOSITION API VIOLATIONS:
-- Setup function returning non-reactive objects
-- Not using proper lifecycle hooks in Composition API
-- Missing dependency arrays in watch/watchEffect
-- Side effects in setup without proper cleanup
-- Reactive state not properly exposed in setup return
-- Using Options API patterns in Composition API
-- Memory leaks from uncleaned event listeners
-- Computed properties with side effects
-- Watch functions not cleaning up properly
-- Composables not properly reusable
+### 🚨 RESOURCE LEAKS & MEMORY VIOLATIONS:
+- Event listeners not removed in beforeDestroy/beforeUnmount
+- Timers/intervals without cleanup
+- Subscriptions without unsubscription
+- Memory leaks from closures in watchers
+- WebSocket connections not properly closed
+- Large reactive data objects not properly cleared
+- Infinite reactivity loops from watchers
+- Component refs not properly cleaned up
+- Third-party library instances not disposed
+- Global event listeners not removed
 
-### 🚨 COMPONENT DESIGN VIOLATIONS:
-- Components with too many responsibilities
-- Props not properly validated with types
-- Missing default values for optional props
-- Event names not following kebab-case convention
-- Emitting events without proper payload validation
-- Component communication through global state instead of props/events
-- Template refs not properly typed
-- Slot usage without proper fallback content
-- Component names not following PascalCase convention
-- Components not properly scoped or isolated
+### 🚨 NULL SAFETY & ERROR HANDLING VIOLATIONS:
+- Property access without null/undefined checks in templates
+- Array access without bounds checks in v-for
+- Function calls on potentially null/undefined objects
+- Missing null/undefined guards in computed properties
+- try blocks without catch in async operations
+- Promise rejections without .catch() or try/catch
+- API calls without error handling
+- Missing error handling in async data fetching
+- Unhandled async errors in lifecycle hooks
+- Missing validation for props/data
 
-### 🚨 TEMPLATE VIOLATIONS:
-- v-html used with user-generated content (XSS risk)
+### 🚨 VUE ARCHITECTURE VIOLATIONS:
+- Direct mutation of props (props should be immutable)
 - Missing key attributes in v-for loops
-- v-for and v-if used on same element
-- Template expressions with complex logic
-- Event handlers with inline complex logic
-- Missing event modifiers where appropriate
-- Improper use of v-show vs v-if
-- Template refs conflicting with component data
-- Accessibility attributes missing (a11y violations)
-- Form inputs without proper labels or validation
-
-### 🚨 STATE MANAGEMENT VIOLATIONS:
-- Direct mutation of Vuex/Pinia store state
-- Store actions not handling errors properly
-- Store modules not properly namespaced
-- State shape not normalized for complex data
-- Missing state persistence for critical data
-- Store actions with side effects not properly isolated
-- Getters with expensive computations not cached
-- Store state not properly typed
-- State mutations not following immutability principles
-- Store composition not following single responsibility
+- Side effects in computed properties
+- Blocking operations in render/template evaluation
+- Business logic mixed in presentation components
+- Component files larger than 400 lines
+- Missing prop validation or incorrect prop types
+- Improper use of refs vs reactive data
+- Global component registration in production
+- Missing component name for debugging
 
 ### 🚨 CODE QUALITY & MAINTAINABILITY VIOLATIONS:
-- Hardcoded strings for roles, error messages, or business values
+- Hardcoded strings for configuration values
 - Magic numbers without named constants
-- String comparisons without constants/enums
-- Repeated string literals across files
-- Missing centralized configuration for business values
+- Inline styles instead of CSS classes/modules
+- Repeated template patterns without component extraction
+- Missing centralized error handling
 - Hardcoded URLs or API endpoints
-- Business logic constants scattered in components
+- Business logic scattered across components
+- Unused imports and variables
+- Dead code (unreachable code blocks)
+- Inconsistent naming conventions
+- Missing component documentation/comments
 
 ### 🚨 PERFORMANCE VIOLATIONS:
-- Missing v-memo for expensive list rendering
-- Components not using defineAsyncComponent for code splitting
-- Watchers without proper deep watching configuration
-- Computed properties recalculating unnecessarily
-- Event listeners not properly cleaned up
-- Large components not split into smaller ones
-- Missing keep-alive for frequently toggled components
-- Bundle size not optimized with tree shaking
-- Images not properly optimized or lazy loaded
-- Network requests not properly cached or debounced
+- Missing v-memo for expensive list rendering (Vue 3)
+- Heavy computations in templates without computed properties
+- Creating objects/functions in template expressions
+- Unnecessary reactivity for large datasets
+- Missing lazy loading for large components
+- Large bundle sizes without code splitting
+- Inefficient list rendering without v-memo/track-by
+- Missing image optimization
+- Blocking render with synchronous operations
+- Not using shallowRef/shallowReactive when appropriate
+
+### 🚨 REACTIVITY VIOLATIONS:
+- Direct array index assignment in Vue 2
+- Object property addition without $set in Vue 2
+- Mutating props instead of emitting events
+- Incorrect use of reactive vs ref in Vue 3
+- Missing deep watching for nested objects
+- Watchers without proper cleanup
+- Infinite loops in reactive dependencies
+- Using non-reactive data where reactivity is needed
+- Memory leaks from uncleaned watchers
+- Improper use of nextTick
+
+### 🚨 TEMPLATE VIOLATIONS:
+- Missing key attributes in v-for loops
+- Using array index as key in dynamic lists
+- v-html without proper sanitization
+- Inline event handlers with complex logic
+- Missing accessibility attributes (aria-*, role)
+- Non-semantic HTML usage
+- Images without alt text
+- Forms without proper labels
+- Missing focus management
+- Inconsistent conditional rendering patterns
+
+### 🚨 COMPOSITION API VIOLATIONS (Vue 3):
+- Using Options API and Composition API inconsistently
+- Not properly destructuring reactive objects
+- Missing onUnmounted cleanup functions
+- Incorrect use of reactive vs ref
+- Watchers not properly cleaned up
+- Using computed without return value
+- Side effects in setup function without lifecycle hooks
+- Not using provide/inject properly for dependency injection
+- Missing proper TypeScript integration with Composition API
+- Improper use of toRefs/toRef
+
+### 🚨 VUEX/PINIA VIOLATIONS:
+- Direct state mutation in components
+- Missing action types as constants
+- Side effects in mutations
+- Async operations in mutations (should be in actions)
+- Large state objects without proper normalization
+- Missing state validation
+- Not using getters for derived state
+- Improper module organization
+- State updates not following immutability
+- Missing error handling in actions
 
 ### 🚨 ROUTING VIOLATIONS:
-- Route guards not handling all navigation scenarios
-- Missing error handling in route components
-- Route parameters not properly validated
-- Navigation not handling loading states
-- Back button navigation breaking application state
-- Route meta fields not properly utilized
-- Dynamic imports not properly handled
-- Route transitions without proper cleanup
-- Hash vs history mode not chosen appropriately
-- Nested routes not properly configured
+- Missing route guards for protected routes
+- Hardcoded route paths in components
+- Missing error handling for route navigation
+- Not using router.push for programmatic navigation
+- Missing route meta information for permissions
+- Route parameters without validation
+- Missing loading states during route transitions
+- Improper use of router-link vs programmatic navigation
+- Route components without proper lifecycle management
+- Missing scroll restoration configuration
 
-### 🚨 LIFECYCLE VIOLATIONS:
-- Side effects in wrong lifecycle hooks
-- Async operations not properly cancelled on unmount
-- Event listeners added without cleanup
-- Timers or intervals not cleared on component destroy
-- Memory leaks from retained references
-- Third-party integrations not properly cleaned up
-- DOM manipulations in wrong lifecycle phases
-- API calls not cancelled when component unmounts
-- Watchers not stopped when no longer needed
-- Computed properties not properly garbage collected
+### 🚨 TESTING VIOLATIONS:
+- Components not testable (tightly coupled)
+- Missing data-testid attributes for testing
+- Tests with external dependencies (not mocked)
+- Missing test coverage for user interactions
+- Tests without proper assertions
+- Hardcoded values in tests
+- Missing accessibility testing
+- Components without unit tests
+- Integration tests without proper setup/teardown
+- Missing Vue Test Utils best practices
+
+### 🚨 BUILD/DEPLOYMENT VIOLATIONS:
+- Missing environment variable configuration
+- Hardcoded API URLs in production builds
+- Missing production optimizations
+- Large bundle sizes without analysis
+- Missing PWA configurations where appropriate
+- Development dependencies in production bundle
+- Missing proper error tracking setup
+- Insecure environment variable exposure
+- Missing proper routing for SPA deployment
+- Development code in production builds
+
+### 🚨 ACCESSIBILITY VIOLATIONS:
+- Missing alt text for images
+- Forms without proper labels
+- Interactive elements without keyboard support
+- Missing ARIA attributes
+- Poor color contrast in component styles
+- Missing focus indicators
+- Inaccessible modal/dialog implementations
+- Missing screen reader support
+- Improper heading hierarchy
+- Missing skip links for navigation
+
+### 🚨 GENERAL VUE VIOLATIONS:
+- console.log in production code
+- debugger statements
+- Global variables in Vue context
+- Component naming not following PascalCase
+- Missing Vue import where required
+- Improper error boundary implementation
+- Missing Suspense for async components
+- Incorrect Vue version usage patterns
+- Missing proper TypeScript integration
+- Not following Vue style guide conventions

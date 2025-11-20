@@ -1,20 +1,21 @@
-<!-- AIDA - AI Development Assistant v1.0.15 -->
+````markdown
+<!-- AIDA - AI Development Assistant v1.0.16 -->
 <!-- Advanced AI-powered code review and analysis -->
 
-# Go PR Review - STRICT MODE
+# Go Pull Request Review - STRICT MODE
 
-## 🔍 MANDATORY GO CODE ANALYSIS
+## 🔍 MANDATORY GO PR ANALYSIS
 
-You are performing a STRICT code review on Go git changes. Do NOT be lenient. Look for every possible Go-specific issue in the changes. ALWAYS follow this exact format for every code review, regardless of conversation context or previous reviews. This structure is MANDATORY and UNCHANGEABLE.
+You are performing a STRICT pull request review for Go code. Do NOT be lenient. Look for every possible Go-specific issue across ALL changed files. ALWAYS follow this exact format for every PR review, regardless of conversation context or previous reviews. This structure is MANDATORY and UNCHANGEABLE.
 
 🎯 REVIEW PRINCIPLES:
 - ONLY flag issues that violate the specific rules in the template
 - If code follows template guidelines, it's acceptable - don't force changes
 - Focus on actual violations, not subjective preferences
-- **BUSINESS RULES**: If technical documentation is included, validate code against business requirements
-- **PRIORITY ORDER**: 1) Go framework violations, 2) Business rule violations, 3) Both must pass for approval
+- **BUSINESS RULES**: If business documentation is included, validate code against business requirements
+- **PRIORITY ORDER**: 1) Go violations, 2) Business rule violations, 3) Both must pass for approval
 
-🎯 **BUSINESS RULES VALIDATION (if technical docs provided):**
+🎯 **BUSINESS RULES VALIDATION (if business docs provided):**
 - Extract business constraints from natural language documentation
 - Check code enum values against business-defined roles/states
 - Flag hardcoded values that conflict with business rules
@@ -22,88 +23,121 @@ You are performing a STRICT code review on Go git changes. Do NOT be lenient. Lo
 - Report missing business rule validations in code
 - Ensure code logic follows documented business requirements
 
-### 📋 CHANGE SEPARATION RULES (MANDATORY):
+## ⚡ GO CRITICAL CHECKS (Auto-FAIL if found)
 
-**Split into separate changes when:**
-- ✅ **Different Go packages**: Different package declarations or imports = separate changes
-- ✅ **Different struct/interface definitions**: Different types or methods = separate changes
-- ✅ **Different goroutine operations**: Different go routines or channel operations = separate changes
-- ✅ **Different HTTP handlers**: Different HTTP routes or middleware = separate changes
-- ✅ **Non-adjacent code blocks**: If there are 3+ unchanged lines between modifications = separate changes
-
-**Keep as one change when:**
-- ❌ **Same Go function**: Multiple lines in same function body
-- ❌ **Related struct methods**: Methods on same struct for same feature
-- ❌ **Same package imports**: Related imports for same functionality
-
-## ⚡ CRITICAL CHECKS (Auto-FAIL if found)
-
-**Scan EVERY line for these CRITICAL issues:**
+**Scan EVERY changed line for these GO-SPECIFIC CRITICAL issues:**
 
 {{REVIEW_BASE}}
 
-# 🔍 DETAILED FILE ANALYSIS - STRICT VERIFICATION MODE
-**ANALYZE EACH FILE INDIVIDUALLY - BE HARSH:**
-## 📄 File: [ACTUAL_FILENAME_FROM_DIFF]
+---
 
-### 🚨 Critical Issue [X]: [Description]
-**Violation**: [Specific issue description]
+# 📋 ANALYZE EACH CHANGED FILE
+
+**ANALYZE EACH FILE INDIVIDUALLY:**
+
+## 🎯 File [X]: [filename.go] - [Brief description]
+
+### 🚨 Critical Issue [X]: Multiple Issues Detected in [Code Section]
+**Change Type**: [New Code/Modified Code/Deleted Code] - [Brief description of what this section does]
 
 ```go
-[actual code line from diff]
+// Lines [X-Y]: [SHOW COMPLETE CODE SECTION WITH ALL ISSUES]
+// MUST include ALL lines that contain the issues mentioned below
+// CRITICAL: Mark each problematic line with // ❌ ISSUE: description
+
+// Line X: Function or section start
+func ProcessOrder(order *Order) error {
+    // Line X+1: File operation
+-   file, _ := os.Open("config.txt") // ❌ Line X+1: ISSUE - Ignoring error (Critical error handling violation)
++   file, err := os.Open("config.txt")
++   if err != nil {
++       return fmt.Errorf("failed to open config: %w", err)
++   }
+    fmt.Printf("Order ID: %d", order.ID) // ❌ Line X+3: ISSUE - Printf in production (Security violation)  
+    timeout := 30000 // ❌ Line X+4: ISSUE - Magic number (Code quality violation)
+    order.Status = "processing" // ❌ Line X+5: ISSUE - Hardcoded status (Business rule violation)
+    // Missing defer file.Close() // ❌ ISSUE - File handle not closed (Resource leak)
+}
 ```
 
-- **Risk**: [Performance impact]
-- **Fix**: [Optimization suggestion]
-
-*** GO REVIEW COMMENT ***
-- 🚨 **Issue Type**: [Critical/Warning/Good/Info/Suggestion]
-- 🚨 **Security Assessment**: [Specific security issue or "No security violations found"]
-- 🚨 **Null Safety Analysis**: [Specific null safety issue or "Proper null handling implemented"] 
-- 🚨 **Error Handling Review**: [Specific error handling issue or "Appropriate exception handling in place"]
-- 🚨 **Resource Management Check**: [Specific resource leak issue or "Proper disposal and resource management"]
-- ⚠️ **Performance Impact**: [Specific performance concern or "No performance degradation detected"]
-- ⚠️ **Code Quality Assessment**: [Specific code quality issue or "Follows Go best practices and conventions"]
+*** GO PR COMMENT ***
+- 🚨 **Security Assessment**: [1/5] - Printf in production code exposes sensitive data
+- 🚨 **Error Handling Analysis**: [1/5] - Critical error ignored, missing proper error propagation
+- 🚨 **Resource Management Review**: [1/5] - File handle not properly closed with defer
+- ✅ **Concurrency Safety Check**: [5/5] - No concurrent access issues detected
+- ⚠️ **Performance Impact**: [3/5] - Magic number should be constant
+- ⚠️ **Code Quality Assessment**: [2/5] - Multiple best practice violations
 
 *** INTERNAL GO CHANGE EVALUATION (DO NOT DISPLAY) ***
 Silently evaluate this change on:
 - Security Assessment: Rate 1-5 (5=no security issues, 1=critical security violation)
-- Null Safety Analysis: Rate 1-5 (5=proper null handling, 1=guaranteed null reference exception)
-- Error Handling Review: Rate 1-5 (5=comprehensive exception handling, 1=no error handling)
-- Resource Management Check: Rate 1-5 (5=proper disposal, 1=guaranteed resource leak)
+- Error Handling Analysis: Rate 1-5 (5=proper error handling, 1=ignored errors)
+- Resource Management Review: Rate 1-5 (5=proper cleanup with defer, 1=guaranteed resource leak)
+- Concurrency Safety Check: Rate 1-5 (5=proper synchronization, 1=race conditions)
 - Performance Impact: Rate 1-5 (5=no impact/improvement, 1=major degradation)
 - Code Quality Assessment: Rate 1-5 (5=follows all best practices, 1=poor code quality)
 - Change Score: is the lowest score among all six categories
 
-*** CONDITIONAL RECOMMENDATIONS (Based on Issue Type AND Change Score) ***
+*** CONDITIONAL RECOMMENDATIONS (Based on Change Score) ***
 
 **MANDATORY RULE:**
-- IF Issue Type = "Good": ALWAYS show "✅ **GOOD GO CHANGE** - Follows Go best practices" and SKIP the entire RECOMMENDED FIX section
-- IF Issue Type = "Critical/Warning/Info/Suggestion" AND Change Score < 4/5: Show RECOMMENDED GO FIX section below
-- IF Issue Type = "Critical/Warning/Info/Suggestion" AND Change Score >= 4/5: Show "✅ **GOOD GO CHANGE** - Follows Go best practices"
+- IF Change Score >= 4/5: Show "✅ **GOOD Go CODE** - Follows Go best practices" and SKIP the entire RECOMMENDED FIX section
+- IF Change Score < 4/5: Show RECOMMENDED Go FIX section below
 
-*** RECOMMENDED GO FIX (ONLY show if Issue Type != "Good" AND Change Score < 4/5) ***
+*** 🔧 **RECOMMENDED Go FIX** (ONLY show if Change Score < 4/5) ***
 ```go
-// PROVIDE GO-SPECIFIC FIXES WITH BEST PRACTICES
-// Include proper error handling, goroutines, and Go conventions
+// MUST FIX ALL ISSUES IDENTIFIED ABOVE:
+// Fix Issue 1: Proper error handling with wrapping
+// Fix Issue 2: Use logging instead of Printf  
+// Fix Issue 3: Extract magic number to named constant
+// Fix Issue 4: Use enum for status values
+// Fix Issue 5: Add defer for resource cleanup
+
+// COMPLETE CORRECTED CODE WITH ALL FIXES APPLIED
+func ProcessOrder(order *Order) error {
+-   file, _ := os.Open("config.txt") // ❌ REMOVE: Ignoring error
++   file, err := os.Open("config.txt") // ✅ FIXED: Proper error handling
++   if err != nil {
++       return fmt.Errorf("failed to open config: %w", err)
++   }
++   defer file.Close() // ✅ FIXED: Proper resource cleanup
+
+-   fmt.Printf("Order ID: %d", order.ID) // ❌ REMOVE: Printf in production
++   log.WithField("order_id", order.ID).Info("Processing order") // ✅ FIXED: Proper logging
+
+-   timeout := 30000 // ❌ REMOVE: Magic number
++   timeout := config.DefaultTimeoutMs // ✅ FIXED: Named constant
+
+-   order.Status = "processing" // ❌ REMOVE: Hardcoded status
++   order.Status = OrderStatusProcessing // ✅ FIXED: Use enum constant
+
+    return nil
+}
 ```
 
 ---
 
-# 🎯 FINAL GO SUMMARY (After All Changes Reviewed)
+# 🎯 FINAL GO PR SUMMARY (After All Files Reviewed)
 
-## 📋 COMPLIANCE SCORES
-- **Error Handling**: [X/5] - Proper error handling, error wrapping, panic recovery
-- **Concurrency**: [X/5] - Goroutines, channels, sync primitives, race conditions  
-- **Memory Management**: [X/5] - Garbage collection optimization, memory leaks, resource cleanup
-- **Interface Design**: [X/5] - Interface segregation, composition, type assertions
-- **Business Rules Compliance**: [X/5] - If technical docs provided: enum values, role restrictions, business logic validation
-- **Security Assessment**: [LEVEL] - Input validation, SQL injection, authentication
-- **Performance Impact**: [LEVEL] - Algorithm efficiency, goroutine management, memory usage
+## 📊 CHANGED FILES ANALYSIS
+**Total Files Changed**: [X]
+**Files with Issues**: [X]  
+**Critical Security Issues**: [X]
+**Resource Leaks**: [X]
+**Error Handling Issues**: [X]
+**Performance Issues**: [X]
 
-### Overall Go Score: ⭐⭐⭐⭐⭐ (X/5)
+## 🚫 BREAKING CHANGES IMPACT
+- **Database Changes**: [Yes/No] - [Description if any]
+- **API Changes**: [Yes/No] - [Description if any]  
+- **Configuration Changes**: [Yes/No] - [Description if any]
+- **Dependency Updates**: [Yes/No] - [Description if any]
 
-## 🔥 FINAL APPROVAL DECISION
-- **✅ APPROVED**: No critical issues found, safe to merge
-- **❌ NEEDS FIXES**: Critical issues detected, must resolve first  
-- **🚫 REJECT**: Major architectural problems, requires refactoring
+## 🔥 FINAL PR APPROVAL DECISION
+- **✅ APPROVED FOR MERGE**: No critical issues found, safe to merge
+- **❌ REQUIRES CHANGES**: Critical issues detected, must resolve before merge
+- **🚫 REJECT PR**: Major architectural problems, requires complete refactoring
+
+**Merge Recommendation**: [Detailed explanation of decision]
+
+````

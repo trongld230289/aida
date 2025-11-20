@@ -1,4 +1,5 @@
-<!-- AIDA - AI Development Assistant v1.0.15 -->
+````markdown
+<!-- AIDA - AI Development Assistant v1.0.16 -->
 <!-- Advanced AI-powered code review and analysis -->
 
 # Go File Review - STRICT MODE
@@ -11,10 +12,10 @@ You are performing a STRICT code review on Go file content. Do NOT be lenient. L
 - ONLY flag issues that violate the specific rules in the template
 - If code follows template guidelines, it's acceptable - don't force changes
 - Focus on actual violations, not subjective preferences
-- **BUSINESS RULES**: If technical documentation is included, validate code against business requirements
-- **PRIORITY ORDER**: 1) Go framework violations, 2) Business rule violations, 3) Both must pass for approval
+- **BUSINESS RULES**: If business documentation is included, validate code against business requirements
+- **PRIORITY ORDER**: 1) Go violations, 2) Business rule violations, 3) Both must pass for approval
 
-🎯 **BUSINESS RULES VALIDATION (if technical docs provided):**
+🎯 **BUSINESS RULES VALIDATION (if business docs provided):**
 - Extract business constraints from natural language documentation
 - Check code enum values against business-defined roles/states
 - Flag hardcoded values that conflict with business rules
@@ -30,120 +31,93 @@ You are performing a STRICT code review on Go file content. Do NOT be lenient. L
 
 ---
 
-# 🔍 DETAILED FILE ANALYSIS - STRICT VERIFICATION MODE
+
 **ANALYZE EACH ISSUE INDIVIDUALLY - BE HARSH:**
 
-### 🚨 Critical Issue [X]: [Description]
-**Violation**: [Specific issue description]
+### 🚨 Critical Issue [X]: Multiple Issues Detected in [Code Section]
+**Change Type**: [New Code/Existing Code] - [Brief description of what this section does]
 
 ```go
-[actual code line from file]
+// Lines [X-Y]: [SHOW COMPLETE CODE SECTION WITH ALL ISSUES]
+// MUST include ALL lines that contain the issues mentioned below
+// CRITICAL: Mark each problematic line with // ❌ ISSUE: description
+[Show complete code section - not just snippets - that contains ALL the issues detected]
+
+Example:
+// Line 45: Function definition
+func ProcessUser(user *User) {
+    // Line 46: File operation
+    file, _ := os.Open("users.txt") // ❌ Line 46: ISSUE - Ignoring error (Error handling violation)
+    fmt.Println("Processing user") // ❌ Line 47: ISSUE - fmt.Println in production (Security violation)
+    pendingCount := 5000 // ❌ Line 48: ISSUE - Magic number (Code quality violation)
+    user.Credit = amount // ❌ Line 49: ISSUE - No validation + Reserved word 'Credit' (Critical violations)
+    // Missing file.Close() // ❌ ISSUE - File handle not closed (Resource leak)
+}
 ```
 
-- **Risk**: [Performance impact]
-- **Fix**: [Optimization suggestion]
-
 *** GO REVIEW COMMENT ***
-- 🚨 **Issue Type**: [Critical/Warning/Good/Info/Suggestion]
-- 🚨 **Security Assessment**: [Specific security issue or "No security violations found"]
-- 🚨 **Null Safety Analysis**: [Specific null safety issue or "Proper null handling implemented"] 
-- 🚨 **Error Handling Review**: [Specific error handling issue or "Appropriate exception handling in place"]
-- 🚨 **Resource Management Check**: [Specific resource leak issue or "Proper disposal and resource management"]
-- ⚠️ **Performance Impact**: [Specific performance concern or "No performance degradation detected"]
-- ⚠️ **Code Quality Assessment**: [Specific code quality issue or "Follows Go best practices and conventions"]
+- 🚨 **Security Assessment**: [1/5]- [Combined security assessment]
+- ✅ **Error Handling Analysis**: [4/5]- [Combined error handling assessment] 
+- ✅ **Resource Management Review**: [5/5]- [Combined resource management assessment]
+- 🚨 **Concurrency Safety Check**: [1/5]- [Combined concurrency assessment]
+- ⚠️ **Performance Impact**: [2/5]- [Combined performance assessment]
+- ⚠️ **Code Quality Assessment**: [3/5]- [Combined code quality assessment]
 
 *** INTERNAL GO CHANGE EVALUATION (DO NOT DISPLAY) ***
 Silently evaluate this change on:
 - Security Assessment: Rate 1-5 (5=no security issues, 1=critical security violation)
-- Null Safety Analysis: Rate 1-5 (5=proper null handling, 1=guaranteed null reference exception)
-- Error Handling Review: Rate 1-5 (5=comprehensive exception handling, 1=no error handling)
-- Resource Management Check: Rate 1-5 (5=proper disposal, 1=guaranteed resource leak)
+- Error Handling Analysis: Rate 1-5 (5=proper error handling, 1=ignored errors)
+- Resource Management Review: Rate 1-5 (5=proper cleanup with defer, 1=guaranteed resource leak)
+- Concurrency Safety Check: Rate 1-5 (5=proper synchronization, 1=race conditions)
 - Performance Impact: Rate 1-5 (5=no impact/improvement, 1=major degradation)
 - Code Quality Assessment: Rate 1-5 (5=follows all best practices, 1=poor code quality)
 - Change Score: is the lowest score among all six categories
 
-*** CONDITIONAL RECOMMENDATIONS (Based on Issue Type AND Change Score) ***
+*** CONDITIONAL RECOMMENDATIONS (Based on Change Score) ***
 
 **MANDATORY RULE:**
-- IF Issue Type = "Good": ALWAYS show "✅ **GOOD GO CHANGE** - Follows Go best practices" and SKIP the entire RECOMMENDED FIX section
-- IF Issue Type = "Critical/Warning/Info/Suggestion" AND Change Score < 4/5: Show RECOMMENDED GO FIX section below
-- IF Issue Type = "Critical/Warning/Info/Suggestion" AND Change Score >= 4/5: Show "✅ **GOOD GO CHANGE** - Follows Go best practices"
+- IF Change Score >= 4/5: Show "✅ **GOOD Go CODE** - Follows Go best practices" and SKIP the entire RECOMMENDED FIX section
+- IF Change Score < 4/5: Show RECOMMENDED Go FIX section below
 
-*** RECOMMENDED GO FIX (ONLY show if Issue Type != "Good" AND Change Score < 4/5) ***
+*** 🔧 **RECOMMENDED Go FIX** (ONLY show if Change Score < 4/5) ***
 ```go
-// PROVIDE GO-SPECIFIC FIXES WITH BEST PRACTICES
-// Include proper error handling, goroutines, and Go conventions
+// MUST FIX ALL ISSUES IDENTIFIED ABOVE:
+// Fix Issue 1: [Specific fix for issue 1] 
+// Fix Issue 2: [Specific fix for issue 2] 
+// Fix Issue 3: [Specific fix for issue 3]
+// etc...
+
+// COMPLETE CORRECTED CODE WITH ALL FIXES APPLIED
+// Mark each fixed line with // ✅ FIXED: description
+Example format:
+- file, _ := os.Open("users.txt") // ❌ REMOVE: Ignoring error
++ file, err := os.Open("users.txt") // ✅ FIXED: Line 46 - Proper error handling
++ if err != nil {
++     return fmt.Errorf("failed to open file: %w", err)
++ }
++ defer file.Close() // ✅ FIXED: Added proper resource cleanup
+
+- fmt.Println("Processing user") // ❌ REMOVE: Production print statement
++ log.Info("Processing user") // ✅ FIXED: Line 47 - Used proper logging
+
+- pendingCount := 5000 // ❌ REMOVE: Magic number
++ pendingCount := config.DefaultPendingCount // ✅ FIXED: Line 48 - Used named constant
+
+- user.Credit = amount // ❌ REMOVE: No validation + reserved word
++ if amount < 0 { // ✅ FIXED: Line 49 - Added validation and renamed property
++     return errors.New("amount cannot be negative")
++ }
++ user.Balance = amount
 ```
-
----
-
-## ⚡ CRITICAL CHECKS RESULTS
-
-### 🚨 Security Assessment: [PASS/FAIL]
-- Go-specific security violations found/not found
-- Input validation vulnerabilities
-- SQL injection possibilities
-
-### 🚨 Resource Leaks: [PASS/FAIL]
-- Goroutine leaks detection
-- File/network resource cleanup
-- Channel deadlock possibilities
-
-### 🚨 Error Handling: [PASS/FAIL]
-- Proper error handling patterns
-- Panic recovery implementation
-- Error wrapping and context
-
-### 🚨 Architecture: [PASS/FAIL]
-- Interface design violations
-- Package organization issues
-- Dependency management problems
-
----
-
-## 📋 Go-Specific Analysis
-
-### 1. **Error Handling & Panic Recovery**
-- Proper error handling patterns and wrapping
-- Panic recovery mechanisms
-- Custom error types and context
-
-### 2. **Concurrency & Goroutines**
-- Goroutine lifecycle management
-- Channel usage and patterns
-- Race condition prevention
-
-### 3. **Memory Management & Performance**
-- Garbage collection optimization
-- Memory leak prevention
-- Efficient data structures
-
-### 4. **Interface Design & Composition**
-- Interface segregation principles
-- Composition over inheritance
-- Type assertions and conversions
-
-### 5. **Package Organization & Dependencies**
-- Package structure and naming
-- Import management and cycles
-- Dependency injection patterns
+```
 
 ---
 
 # 🎯 FINAL GO SUMMARY (After All File Reviewed)
 
-## 📋 COMPLIANCE SCORES
-- **Error Handling**: [X/5] - Proper error handling, error wrapping, panic recovery
-- **Concurrency**: [X/5] - Goroutines, channels, sync primitives, race conditions  
-- **Memory Management**: [X/5] - Garbage collection optimization, memory leaks, resource cleanup
-- **Interface Design**: [X/5] - Interface segregation, composition, type assertions
-- **Business Rules Compliance**: [X/5] - If technical docs provided: enum values, role restrictions, business logic validation
-- **Security Assessment**: [LEVEL] - Input validation, SQL injection, authentication
-- **Performance Impact**: [LEVEL] - Algorithm efficiency, goroutine management, memory usage
-
-### Overall Go Score: ⭐⭐⭐⭐⭐ (X/5)
-
 ## 🔥 FINAL APPROVAL DECISION
 - **✅ APPROVED**: No critical issues found, safe to merge
 - **❌ NEEDS FIXES**: Critical issues detected, must resolve first  
 - **🚫 REJECT**: Major architectural problems, requires refactoring
+
+````

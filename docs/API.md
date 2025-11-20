@@ -2,7 +2,7 @@
 
 **Complete API reference and configuration options for AIDA - AI Development Assistant**
 
-Technical documentation for developers, advanced users, and enterprise integrations.
+business documentation for developers, advanced users, and enterprise integrations.
 
 ## 📖 Table of Contents
 

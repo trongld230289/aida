@@ -104,6 +104,9 @@ async function processReviewChanges(targetInput, stream, context = null, request
             );
             
             // If showReviewOptions returns true, it handled everything
+            if (shouldContinue) {
+                return;
+            }
             // If it returns false, it's showing the options dialog
             if (shouldContinue === false) {
                 return;
@@ -117,7 +120,7 @@ async function processReviewChanges(targetInput, stream, context = null, request
             return;
         }
         
-        // Use unified AI review changes function
+        // Use unified AI review changes function (this should not be reached if callback was used)
         await aiReviewChanges(targetInput, stream, null, context, request);
         
     } catch (error) {
@@ -292,9 +295,9 @@ async function handleNoChangesScenario(stream, selectedModel, context, message, 
         
         // Create button for confirming file review
         stream.button({
-            command: 'aida.confirmFileReview',
+            command: 'aida.confirmReviewDocs',
             title: `✅ Yes, review file ${fileName}`,
-            arguments: [targetFilePath]
+            arguments: [targetFilePath, 'review-file']
         });
     } else {
         // Fallback to active file if no requested file
@@ -312,9 +315,9 @@ async function handleNoChangesScenario(stream, selectedModel, context, message, 
             
             // Create button for confirming file review
             stream.button({
-                command: 'aida.confirmFileReview',
+                command: 'aida.confirmReviewDocs',
                 title: `✅ Yes, review file ${fileName}`,
-                arguments: [targetFilePath]
+                arguments: [targetFilePath, 'review-file', true]
             });
         }
     }

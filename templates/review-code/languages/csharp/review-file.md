@@ -1,4 +1,5 @@
-<!-- AIDA - AI Development Assistant v1.0.15 -->
+````markdown
+<!-- AIDA - AI Development Assistant v1.0.16 -->
 <!-- Advanced AI-powered code review and analysis -->
 
 # C# File Review - STRICT MODE
@@ -11,10 +12,10 @@ You are performing a STRICT code review on C# file content. Do NOT be lenient. L
 - ONLY flag issues that violate the specific rules in the template
 - If code follows template guidelines, it's acceptable - don't force changes
 - Focus on actual violations, not subjective preferences
-- **BUSINESS RULES**: If technical documentation is included, validate code against business requirements
-- **PRIORITY ORDER**: 1) C# framework violations, 2) Business rule violations, 3) Both must pass for approval
+- **BUSINESS RULES**: If business documentation is included, validate code against business requirements
+- **PRIORITY ORDER**: 1) C#/.NET framework violations, 2) Business rule violations, 3) Both must pass for approval
 
-🎯 **BUSINESS RULES VALIDATION (if technical docs provided):**
+🎯 **BUSINESS RULES VALIDATION (if business docs provided):**
 - Extract business constraints from natural language documentation
 - Check code enum values against business-defined roles/states
 - Flag hardcoded values that conflict with business rules
@@ -30,27 +31,35 @@ You are performing a STRICT code review on C# file content. Do NOT be lenient. L
 
 ---
 
-# 🔍 DETAILED FILE ANALYSIS - STRICT VERIFICATION MODE
+
 **ANALYZE EACH ISSUE INDIVIDUALLY - BE HARSH:**
 
-### 🚨 Critical Issue [X]: [Description]
-**Violation**: [Specific issue description]
+### 🚨 Critical Issue [X]: Multiple Issues Detected in [Code Section]
+**Change Type**: [New Code/Existing Code] - [Brief description of what this section does]
 
 ```csharp
-[actual code line from file]
+// Lines [X-Y]: [SHOW COMPLETE CODE SECTION WITH ALL ISSUES]
+// MUST include ALL lines that contain the issues mentioned below
+// CRITICAL: Mark each problematic line with // ❌ ISSUE: description
+[Show complete code section - not just snippets - that contains ALL the issues detected]
+
+Example:
+// Line 45: Database connection
+using var connection = new SqlConnection(); 
+// Line 46: Normal code
+Console.WriteLine("Processing started"); // ❌ Line 46: ISSUE - Console.WriteLine in production (Security violation)
+// Line 47: More code  
+var pendingCount = 5000; // ❌ Line 60: ISSUE - Magic number (Code quality violation)
+user.Credit = 10000; // ❌ Line 62: ISSUE - Null access + Reserved word 'Credit' (Critical violations)
 ```
 
-- **Risk**: [Performance impact]
-- **Fix**: [Optimization suggestion]
-
 *** C# REVIEW COMMENT ***
-- 🚨 **Issue Type**: [Critical/Warning/Good/Info/Suggestion]
-- 🚨 **Security Assessment**: [Specific security issue or "No security violations found"]
-- 🚨 **Null Safety Analysis**: [Specific null safety issue or "Proper null handling implemented"] 
-- 🚨 **Error Handling Review**: [Specific error handling issue or "Appropriate exception handling in place"]
-- 🚨 **Resource Management Check**: [Specific resource leak issue or "Proper disposal and resource management"]
-- ⚠️ **Performance Impact**: [Specific performance concern or "No performance degradation detected"]
-- ⚠️ **Code Quality Assessment**: [Specific code quality issue or "Follows C# best practices and conventions"]
+- 🚨 **Security Assessment**: [1/5]- [Combined security assessment]
+- ✅ **Null Safety Analysis**: [4/5]- [Combined null safety assessment] 
+- ✅ **Error Handling Review**: [5/5]- [Combined error handling assessment]
+- 🚨 **Resource Management Check**: [1/5]- [Combined resource management assessment]
+- ⚠️ **Performance Impact**: [2/5]- [Combined performance assessment]
+- ⚠️ **Code Quality Assessment**: [3/5]- [Combined code quality assessment]
 
 *** INTERNAL C# CHANGE EVALUATION (DO NOT DISPLAY) ***
 Silently evaluate this change on:
@@ -62,88 +71,42 @@ Silently evaluate this change on:
 - Code Quality Assessment: Rate 1-5 (5=follows all best practices, 1=poor code quality)
 - Change Score: is the lowest score among all six categories
 
-*** CONDITIONAL RECOMMENDATIONS (Based on Issue Type AND Change Score) ***
+*** CONDITIONAL RECOMMENDATIONS (Based on Change Score) ***
 
 **MANDATORY RULE:**
-- IF Issue Type = "Good": ALWAYS show "✅ **GOOD C# CHANGE** - Follows C# best practices" and SKIP the entire RECOMMENDED FIX section
-- IF Issue Type = "Critical/Warning/Info/Suggestion" AND Change Score < 4/5: Show RECOMMENDED C# FIX section below
-- IF Issue Type = "Critical/Warning/Info/Suggestion" AND Change Score >= 4/5: Show "✅ **GOOD C# CHANGE** - Follows C# best practices"
+- IF Change Score >= 4/5: Show "✅ **GOOD C# CODE** - Follows C# best practices" and SKIP the entire RECOMMENDED FIX section
+- IF Change Score < 4/5: Show RECOMMENDED C# FIX section below
 
-*** RECOMMENDED C# FIX (ONLY show if Issue Type != "Good" AND Change Score < 4/5) ***
+*** 🔧 **RECOMMENDED C# FIX** (ONLY show if Change Score < 4/5) ***
 ```csharp
-// PROVIDE C#-SPECIFIC FIXES WITH BEST PRACTICES
-// Include proper async/await patterns, SOLID principles, and .NET conventions
+// MUST FIX ALL ISSUES IDENTIFIED ABOVE:
+// Fix Issue 1: [Specific fix for issue 1] 
+// Fix Issue 2: [Specific fix for issue 2] 
+// Fix Issue 3: [Specific fix for issue 3]
+// etc...
+
+// COMPLETE CORRECTED CODE WITH ALL FIXES APPLIED
+// Mark each fixed line with // ✅ FIXED: description
+Example format:
+- Console.WriteLine("Processing started"); // ❌ REMOVE: Production console output
++ // Processing started - removed console output // ✅ FIXED: Line 46 - Removed production console output
+
+- var pendingCount = 5000; // ❌ REMOVE: Magic number
++ var pendingCount = Constants.DEFAULT_PENDING_COUNT; // ✅ FIXED: Line 60 - Used named constant
+
+- user.Credit = 10000; // ❌ REMOVE: Null access + reserved word
++ if (user != null) { // ✅ FIXED: Line 62 - Added null check and renamed property
++   user.Balance = Constants.DEFAULT_USER_BALANCE; 
++ }
 ```
-
----
-
-## ⚡ CRITICAL CHECKS RESULTS
-
-### 🚨 Security Assessment: [PASS/FAIL]
-- C#-specific security violations found/not found
-- SQL injection vulnerabilities
-- Authorization bypass issues
-
-### 🚨 Resource Leaks: [PASS/FAIL]
-- IDisposable implementation issues
-- Memory leak detection
-- Unmanaged resource cleanup
-
-### 🚨 Error Handling: [PASS/FAIL]
-- Exception handling patterns
-- Custom exception implementation
-- Error propagation strategies
-
-### 🚨 Architecture: [PASS/FAIL]
-- SOLID principle violations
-- Dependency injection issues
-- Design pattern misuse
-
----
-
-## 📋 C#-Specific Analysis
-
-### 1. **Object-Oriented Design & SOLID Principles**
-- Class design and responsibility separation
-- Interface segregation and dependency inversion
-- Inheritance vs composition decisions
-
-### 2. **Async Programming & Performance**
-- Task-based asynchronous patterns
-- ConfigureAwait usage and deadlock prevention
-- Cancellation token implementation
-
-### 3. **Memory Management & Resources**
-- IDisposable pattern implementation
-- Using statements and resource cleanup
-- Garbage collection optimization
-
-### 4. **Exception Handling & Validation**
-- Custom exception design
-- Input validation and sanitization
-- Error boundary implementation
-
-### 5. **LINQ & Data Access**
-- LINQ query optimization
-- Entity Framework best practices
-- Database connection management
 
 ---
 
 # 🎯 FINAL C# SUMMARY (After All File Reviewed)
 
-## 📋 COMPLIANCE SCORES
-- **Async/Await Compliance**: [X/5] - Task handling, ConfigureAwait, cancellation tokens
-- **SOLID Principles**: [X/5] - Single responsibility, dependency injection, interfaces  
-- **Memory Management**: [X/5] - IDisposable, using statements, resource cleanup
-- **Exception Handling**: [X/5] - Custom exceptions, try-catch patterns, error propagation
-- **Business Rules Compliance**: [X/5] - If technical docs provided: enum values, role restrictions, business logic validation
-- **Security Assessment**: [LEVEL] - SQL injection, XSS, authorization, input validation
-- **Performance Impact**: [LEVEL] - LINQ efficiency, memory allocation, database queries
-
-### Overall C# Score: ⭐⭐⭐⭐⭐ (X/5)
-
 ## 🔥 FINAL APPROVAL DECISION
 - **✅ APPROVED**: No critical issues found, safe to merge
 - **❌ NEEDS FIXES**: Critical issues detected, must resolve first  
 - **🚫 REJECT**: Major architectural problems, requires refactoring
+
+````

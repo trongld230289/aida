@@ -2,103 +2,108 @@
 <!-- PLACEHOLDER: {{REVIEW_BASE}} -->
 
 ## 🔥 MANDATORY PROJECT RULES - MUST CHECK FIRST:
-<!-- ADD PROJECT-SPECIFIC RULES HERE - These will be checked alongside Angular rules -->
+<!-- - **🚫 CRITICAL**: Never use `credit` as variable/property name (e.g., `var credit`, `obj.Credit = value`) - reserved for business logic -->
+<!-- - **🚫 CRITICAL**: Never use `IsSuccess` as variable name - reserved for business logic -->
+<!-- ADD PROJECT-SPECIFIC RULES HERE - These will be checked alongside C# rules -->
 <!-- Additional project rules can be added here:
-- **🚫 CRITICAL**: Never use `isSuccess` as variable name - reserved for business logic
 -->
 
 ### 🚨 SECURITY VIOLATIONS:
-- Hardcoded passwords, API keys, connection strings, secrets
-- SQL injection vulnerabilities (string concatenation in SQL)
-- XSS vulnerabilities (unescaped output)
-- Path traversal vulnerabilities
+- Hardcoded passwords, API keys, tokens, secrets in code
+- SQL injection vulnerabilities (concatenated SQL strings)
+- XSS vulnerabilities (unescaped HTML output)
+- Unsafe file operations, path traversal
 - Authentication/authorization bypasses
-- Insecure deserialization
-- Weak cryptography implementations
-- No input validation/sanitization
-- Missing authentication attributes
-- Unsafe reflection usage
-- File operations without validation
+- Deserializing untrusted data without validation
 - HTTP instead of HTTPS endpoints
+- No input validation/sanitization
+- Unvalidated redirects and forwards
+- Missing CSRF protection
+- Weak cryptographic implementations
+- Directory traversal vulnerabilities
 
 ### 🚨 RESOURCE LEAKS & MEMORY VIOLATIONS:
-- IDisposable objects without using statements
-- Unmanaged resources without proper disposal
+- IDisposable not disposed (missing using statements)
 - Event handlers without unsubscription
-- Missing async/await patterns causing blocking
-- Memory leaks from static references
-- Missing cancellation token usage
-- Stream/FileStream without proper disposal
-- Database connections without disposal
-- HttpClient instances not properly managed
-- Timer objects without disposal
+- Timers without disposal
+- File/stream handles not closed
+- Database connections not properly closed
+- Memory leaks from event subscriptions
+- Tasks without proper cancellation tokens
+- Large object heap pressure
 
 ### 🚨 NULL SAFETY & ERROR HANDLING VIOLATIONS:
-- Nullable reference access without null checks
-- Missing null-conditional operators (?.)
-- Null-forgiving operator (!) without validation
-- Missing try-catch blocks for risky operations
-- Exception swallowing (empty catch blocks)
-- Generic exceptions instead of specific ones
-- Missing async exception handling
-- Unhandled Task exceptions
-- Missing validation for method parameters
-- Dereference without null checks
+- Null reference access without checks (`obj.Property` without null check)
+- Array/collection access without bounds checks
+- Method calls on potentially null objects
+- Missing null-conditional operators (?. and ?[])
+- try blocks without catch or finally
+- Exceptions swallowed without logging
+- Async methods without proper error handling
+- Database operations without transaction handling
+- Network calls without timeout/retry logic
+- Missing argument validation in public methods
 
-### 🚨 C# ARCHITECTURE VIOLATIONS:
-- Violation of SOLID principles
-- Missing dependency injection patterns
-- Circular dependencies
-- Static classes used incorrectly
-- Missing interface implementations
-- Poor separation of concerns
-- Large methods (>50 lines)
-- Deep nesting levels (>4 levels)
-- Missing async/await in I/O operations
-- Synchronous calls to async methods
-- Missing ConfigureAwait(false) in libraries
-- Controller methods without proper HTTP verbs
+### 🚨 .NET ARCHITECTURE VIOLATIONS:
+- Controllers with business logic (fat controllers)
+- Direct database access from controllers
+- Circular dependencies between layers
+- Static classes with state
+- God objects (classes with too many responsibilities)
+- Tight coupling between layers
+- Missing dependency injection usage
+- Improper async/await usage
+- Blocking calls in async methods
+- ConfigureAwait(false) misuse in libraries
 
 ### 🚨 CODE QUALITY & MAINTAINABILITY VIOLATIONS:
-- Hardcoded strings for roles, error messages, or business values
+- Hardcoded strings for configuration values
 - Magic numbers without named constants
-- String comparisons without constants/enums
+- String comparisons without StringComparison
 - Repeated string literals across files
-- Missing centralized configuration for business values
-- Hardcoded URLs or API endpoints
-- Business logic constants scattered in components
+- Missing centralized configuration
+- Hardcoded URLs or connection strings
+- Business logic constants scattered in controllers
+- Unused using statements
+- Unused variables and methods
+- Dead code (unreachable code blocks)
+- Improper naming conventions (PascalCase/camelCase)
+- Missing XML documentation for public APIs
 
 ### 🚨 PERFORMANCE VIOLATIONS:
-- String concatenation in loops
-- Missing StringBuilder usage
-- Inefficient LINQ operations
+- StringBuilder not used for string concatenation in loops
+- LINQ queries that could be optimized
+- Synchronous calls in async contexts
+- Heavy operations on UI thread
+- Inefficient database queries (N+1 problem)
+- Boxing/unboxing in performance-critical code
+- Reflection usage without caching
+- Large objects allocated frequently
 - Missing async/await for I/O operations
-- Boxing/unboxing of value types
-- Unnecessary object allocations
-- Missing caching for expensive operations
-- N+1 database query problems
-- Synchronous database operations
-- Missing pagination for large datasets
-- Inefficient collections usage
 
-### 🚨 ASYNC/AWAIT VIOLATIONS:
-- Missing async/await keywords
-- Async void methods (except event handlers)
-- Blocking on async code (.Result, .Wait())
-- Missing ConfigureAwait(false) in libraries
-- Not using CancellationToken
-- Async methods without Task return type
-- Deadlock-prone async patterns
-- Mixed async/sync code paths
-- Missing exception handling in async methods
+### 🚨 ENTITY FRAMEWORK VIOLATIONS:
+- Queries without AsNoTracking for read-only operations
+- Missing Include for navigation properties
+- Cartesian explosion in queries
+- DbContext not disposed properly
+- Lazy loading in loops
+- Missing query filters
+- Synchronous operations (ToList() instead of ToListAsync())
 
-### 🚨 .NET FRAMEWORK/CORE VIOLATIONS:
-- Deprecated API usage
-- Missing using statements for namespaces
-- Incorrect attribute usage
-- Missing XML documentation
-- Non-standard naming conventions
-- Missing sealed classes where appropriate
-- Incorrect access modifiers
-- Missing readonly keywords
-- Improper generic constraints
+### 🚨 ASP.NET CORE VIOLATIONS:
+- Controllers not using dependency injection
+- Missing model validation attributes
+- ActionResult without proper status codes
+- Missing authorization attributes
+- Improper exception handling middleware
+- Missing CORS configuration
+- Insecure cookie settings
+- Missing request validation
+
+### 🚨 C# LANGUAGE VIOLATIONS:
+- Console.WriteLine in production code
+- Debug.WriteLine without conditional compilation
+- Environment.Exit() usage
+- GC.Collect() calls
+- Thread.Sleep() in async code
+- Raw Task.Result usage (deadlock potential)

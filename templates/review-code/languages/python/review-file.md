@@ -1,4 +1,5 @@
-<!-- AIDA - AI Development Assistant v1.0.15 -->
+````markdown
+<!-- AIDA - AI Development Assistant v1.0.16 -->
 <!-- Advanced AI-powered code review and analysis -->
 
 # Python File Review - STRICT MODE
@@ -11,10 +12,10 @@ You are performing a STRICT code review on Python file content. Do NOT be lenien
 - ONLY flag issues that violate the specific rules in the template
 - If code follows template guidelines, it's acceptable - don't force changes
 - Focus on actual violations, not subjective preferences
-- **BUSINESS RULES**: If technical documentation is included, validate code against business requirements
-- **PRIORITY ORDER**: 1) Python framework violations, 2) Business rule violations, 3) Both must pass for approval
+- **BUSINESS RULES**: If business documentation is included, validate code against business requirements
+- **PRIORITY ORDER**: 1) Python violations, 2) Business rule violations, 3) Both must pass for approval
 
-🎯 **BUSINESS RULES VALIDATION (if technical docs provided):**
+🎯 **BUSINESS RULES VALIDATION (if business docs provided):**
 - Extract business constraints from natural language documentation
 - Check code enum values against business-defined roles/states
 - Flag hardcoded values that conflict with business rules
@@ -30,118 +31,83 @@ You are performing a STRICT code review on Python file content. Do NOT be lenien
 
 ---
 
-# 🔍 DETAILED FILE ANALYSIS - STRICT VERIFICATION MODE
+
 **ANALYZE EACH ISSUE INDIVIDUALLY - BE HARSH:**
 
-### 🚨 Critical Issue [X]: [Description]
-**Violation**: [Specific issue description]
+### 🚨 Critical Issue [X]: Multiple Issues Detected in [Code Section]
+**Change Type**: [New Code/Existing Code] - [Brief description of what this section does]
 
 ```python
-[actual code line from file]
+# Lines [X-Y]: [SHOW COMPLETE CODE SECTION WITH ALL ISSUES]
+# MUST include ALL lines that contain the issues mentioned below
+# CRITICAL: Mark each problematic line with # ❌ ISSUE: description
+[Show complete code section - not just snippets - that contains ALL the issues detected]
+
+Example:
+# Line 45: Function definition
+def process_user(user):
+    # Line 46: File operation
+    data = open('users.txt', 'r').read()  # ❌ Line 46: ISSUE - File not closed (Resource leak)
+    print('Processing users')  # ❌ Line 47: ISSUE - print() in production (Security violation)
+    pendingCount = 5000  # ❌ Line 48: ISSUE - camelCase naming + magic number (Code quality violations)
+    user.credit = amount  # ❌ Line 49: ISSUE - No validation + Reserved word 'credit' (Critical violations)
 ```
 
-- **Risk**: [Performance impact]
-- **Fix**: [Optimization suggestion]
-
 *** PYTHON REVIEW COMMENT ***
-- 🚨 **Issue Type**: [Critical/Warning/Good/Info/Suggestion]
-- 🚨 **Security Assessment**: [Specific security issue or "No security violations found"]
-- 🚨 **Null Safety Analysis**: [Specific null safety issue or "Proper null handling implemented"] 
-- 🚨 **Error Handling Review**: [Specific error handling issue or "Appropriate exception handling in place"]
-- 🚨 **Resource Management Check**: [Specific resource leak issue or "Proper disposal and resource management"]
-- ⚠️ **Performance Impact**: [Specific performance concern or "No performance degradation detected"]
-- ⚠️ **Code Quality Assessment**: [Specific code quality issue or "Follows Python best practices and conventions"]
+- 🚨 **Security Assessment**: [1/5]- [Combined security assessment]
+- ✅ **Exception Handling Analysis**: [4/5]- [Combined exception handling assessment] 
+- ✅ **Resource Management Review**: [5/5]- [Combined resource management assessment]
+- 🚨 **Code Quality Check**: [1/5]- [Combined code quality assessment]
+- ⚠️ **Performance Impact**: [2/5]- [Combined performance assessment]
+- ⚠️ **PEP8 Compliance**: [3/5]- [Combined PEP8 compliance assessment]
 
 *** INTERNAL PYTHON CHANGE EVALUATION (DO NOT DISPLAY) ***
 Silently evaluate this change on:
 - Security Assessment: Rate 1-5 (5=no security issues, 1=critical security violation)
-- Null Safety Analysis: Rate 1-5 (5=proper null handling, 1=guaranteed null reference exception)
-- Error Handling Review: Rate 1-5 (5=comprehensive exception handling, 1=no error handling)
-- Resource Management Check: Rate 1-5 (5=proper disposal, 1=guaranteed resource leak)
+- Exception Handling Analysis: Rate 1-5 (5=proper exception handling, 1=no error handling)
+- Resource Management Review: Rate 1-5 (5=proper cleanup with context managers, 1=guaranteed resource leak)
+- Code Quality Check: Rate 1-5 (5=follows all best practices, 1=poor code quality)
 - Performance Impact: Rate 1-5 (5=no impact/improvement, 1=major degradation)
-- Code Quality Assessment: Rate 1-5 (5=follows all best practices, 1=poor code quality)
+- PEP8 Compliance: Rate 1-5 (5=fully compliant, 1=major violations)
 - Change Score: is the lowest score among all six categories
 
-*** CONDITIONAL RECOMMENDATIONS (Based on Issue Type AND Change Score) ***
+*** CONDITIONAL RECOMMENDATIONS (Based on Change Score) ***
 
 **MANDATORY RULE:**
-- IF Issue Type = "Good": ALWAYS show "✅ **GOOD PYTHON CHANGE** - Follows Python best practices" and SKIP the entire RECOMMENDED FIX section
-- IF Issue Type = "Critical/Warning/Info/Suggestion" AND Change Score < 4/5: Show RECOMMENDED PYTHON FIX section below
-- IF Issue Type = "Critical/Warning/Info/Suggestion" AND Change Score >= 4/5: Show "✅ **GOOD PYTHON CHANGE** - Follows Python best practices"
+- IF Change Score >= 4/5: Show "✅ **GOOD Python CODE** - Follows Python best practices" and SKIP the entire RECOMMENDED FIX section
+- IF Change Score < 4/5: Show RECOMMENDED Python FIX section below
 
-*** RECOMMENDED PYTHON FIX (ONLY show if Issue Type != "Good" AND Change Score < 4/5) ***
+*** 🔧 **RECOMMENDED Python FIX** (ONLY show if Change Score < 4/5) ***
 ```python
-# PROVIDE PYTHON-SPECIFIC FIXES WITH BEST PRACTICES
-# Include proper exception handling, type hints, and Pythonic patterns
+# MUST FIX ALL ISSUES IDENTIFIED ABOVE:
+# Fix Issue 1: [Specific fix for issue 1] 
+# Fix Issue 2: [Specific fix for issue 2] 
+# Fix Issue 3: [Specific fix for issue 3]
+# etc...
+
+# COMPLETE CORRECTED CODE WITH ALL FIXES APPLIED
+# Mark each fixed line with # ✅ FIXED: description
+Example format:
+- data = open('users.txt', 'r').read()  # ❌ REMOVE: File not closed
++ with open('users.txt', 'r') as f:  # ✅ FIXED: Line 46 - Used context manager
++     data = f.read()
+
+- print('Processing users')  # ❌ REMOVE: Production print statement
++ logger.info('Processing users')  # ✅ FIXED: Line 47 - Used proper logging
+
+- pendingCount = 5000  # ❌ REMOVE: camelCase + magic number
++ pending_count = config.DEFAULT_PENDING_COUNT  # ✅ FIXED: Line 48 - Used snake_case and constant
+
+- user.credit = amount  # ❌ REMOVE: No validation + reserved word
++ if not isinstance(amount, (int, float)) or amount < 0:  # ✅ FIXED: Line 49 - Added validation and renamed
++     raise ValueError('Invalid amount')
++ user.balance = amount
 ```
-
----
-
-## ⚡ CRITICAL CHECKS RESULTS
-
-### 🚨 Security Assessment: [PASS/FAIL]
-- Python-specific security violations found/not found
-- Code injection vulnerabilities
-- Input validation issues
-
-### 🚨 Resource Leaks: [PASS/FAIL]
-- File handle management issues
-- Context manager usage
-- Memory leak detection
-
-### 🚨 Error Handling: [PASS/FAIL]
-- Exception handling patterns
-- Custom exception implementation
-- Error propagation strategies
-
-### 🚨 Architecture: [PASS/FAIL]
-- Class design violations
-- Module organization issues
-- Import pattern problems
-
----
-
-## 📋 Python-Specific Analysis
-
-### 1. **Code Style & PEP 8 Compliance**
-- Naming conventions and code formatting
-- Import organization and structure
-- Documentation and docstring standards
-
-### 2. **Type Safety & Modern Python**
-- Type hints and mypy compliance
-- f-strings and modern syntax usage
-- Dataclasses and typing patterns
-
-### 3. **Exception Handling & Validation**
-- Custom exception design and hierarchy
-- Input validation and sanitization
-- Error boundary implementation
-
-### 4. **Resource Management & Performance**
-- Context managers and file handling
-- Memory management and optimization
-- Async/await patterns and concurrency
-
-### 5. **Object-Oriented Design & Patterns**
-- Class design and inheritance
-- Decorators and metaclasses
-- Design pattern implementation
 
 ---
 
 # 🎯 FINAL PYTHON SUMMARY (After All File Reviewed)
 
-## 📋 COMPLIANCE SCORES
-- **PEP 8 Compliance**: [X/5] - Code style, naming conventions, formatting
-- **Type Safety**: [X/5] - Type hints, mypy compliance, runtime validation  
-- **Exception Handling**: [X/5] - Try-except blocks, custom exceptions, error propagation
-- **Resource Management**: [X/5] - Context managers, file handling, memory management
-- **Business Rules Compliance**: [X/5] - If technical docs provided: enum values, role restrictions, business logic validation
-- **Security Assessment**: [LEVEL] - SQL injection, code injection, input validation
-- **Performance Impact**: [LEVEL] - Algorithm efficiency, memory usage, I/O optimization
-
-### Overall Python Score: ⭐⭐⭐⭐⭐ (X/5)
 
 ## 🔥 FINAL APPROVAL DECISION
 - **✅ APPROVED**: No critical issues found, safe to merge
