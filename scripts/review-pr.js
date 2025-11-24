@@ -915,7 +915,7 @@ async function reviewPullRequestCommand() {
     try {
         // Show input box for PR URL or ID
         const prInput = await vscode.window.showInputBox({
-            prompt: 'Enter Azure DevOps PR URL or PR ID',
+            prompt: 'Enter Azure DevOps PR URL or PR ID (org/project auto-detected from URL)',
             placeHolder: 'Example: https://dev.azure.com/org/project/_git/repo/pullrequest/123 or PR #123',
             validateInput: (value) => {
                 if (!value) return 'Please enter PR URL or ID';
@@ -928,20 +928,40 @@ async function reviewPullRequestCommand() {
 
         if (!prInput) return;
 
-        // Extract PR ID from input
-        const prPattern = /(?:pullrequest(?:s)?\/(\d+)|pr[#\s]?(\d+)|id[:\s]?(\d+))/i;
-        const match = prInput.match(prPattern);
-        const prId = match ? (match[1] || match[2] || match[3]) : null;
+        // Parse organization, project, and repository from Azure DevOps URL
+        let organization = null, project = null, repository = null, prId = null;
+        
+        // Azure DevOps URL pattern: https://dev.azure.com/{org}/{project}/_git/{repo}/pullrequest/{id}
+        const azureUrlPattern = /https:\/\/dev\.azure\.com\/([^\/]+)\/([^\/]+)\/_git\/([^\/]+)\/pullrequest\/(\d+)/i;
+        const azureMatch = prInput.match(azureUrlPattern);
+        
+        if (azureMatch) {
+            organization = azureMatch[1];
+            project = azureMatch[2];
+            repository = azureMatch[3];
+            prId = azureMatch[4];
+            console.log(`🔍 Parsed from URL: org=${organization}, project=${project}, repo=${repository}, prId=${prId}`);
+        } else {
+            // Fallback to simple PR ID pattern
+            const prPattern = /(?:pullrequest(?:s)?\/(\d+)|pr[#\s]?(\d+)|id[:\s]?(\d+))/i;
+            const match = prInput.match(prPattern);
+            prId = match ? (match[1] || match[2] || match[3]) : null;
+            console.log(`🔍 Parsed PR ID only: ${prId} (using defaults for org/project)`);
+        }
 
         if (!prId) {
             vscode.window.showErrorMessage('Unable to determine PR ID from provided input');
             return;
         }
 
-        // Show progress
+        // Show progress with auto-detection info
+        const progressTitle = organization && project 
+            ? `Reviewing ${organization}/${project} PR #${prId}`
+            : `Reviewing Azure DevOps PR #${prId} (auto-detecting context)`;
+            
         await vscode.window.withProgress({
             location: vscode.ProgressLocation.Notification,
-            title: `Reviewing Azure DevOps PR #${prId}`,
+            title: progressTitle,
             cancellable: false
         }, async (progress) => {
             progress.report({ increment: 0, message: 'Connecting to Azure DevOps...' });
@@ -950,7 +970,8 @@ async function reviewPullRequestCommand() {
             const mockStream = {
                 markdown: (text) => console.log(text)
             };
-            const prAnalysis = await analyzePullRequest(mockStream, prId);
+            // Pass parsed organization, project, repository to analyzePullRequest
+            const prAnalysis = await analyzePullRequest(mockStream, prId, organization, project, repository);
 
             progress.report({ increment: 50, message: 'Analyzing diff...' });
 
@@ -978,32 +999,38 @@ async function analyzePullRequest(stream, prId, organization = null, project = n
         // Get Azure DevOps configuration from VS Code settings
         const config = vscode.workspace.getConfiguration('aida');
         const personalAccessToken = config.get('azureDevOps.personalAccessToken');
-        const defaultOrg = config.get('azureDevOps.organization');
-        const defaultProject = config.get('azureDevOps.defaultProject');
 
-        // Use provided values or fall back to configuration
-        const org = organization || defaultOrg || 'BusinessWebUS';
-        const proj = project || defaultProject || 'Shippo';
+        // Use provided values (parsed from URL) or fall back to defaults only if needed
+        const org = organization || 'BusinessWebUS';
+        const proj = project || 'Shippo';
         const repo = repository || 'Shippo-Web';
 
+        // Auto-detection success info
+        if (organization && project && repository) {
+            console.log(`✅ Auto-detected from URL: org=${org}, project=${proj}, repo=${repo}`);
+            stream.markdown(`🔍 **Auto-detected**: ${org}/${proj}/${repo}\n\n`);
+        } else {
+            console.log(`⚠️ Using defaults: org=${org}, project=${proj}, repo=${repo}`);
+            stream.markdown(`⚠️ **Using defaults**: ${org}/${proj}/${repo} (provide full URL for auto-detection)\n\n`);
+        }
+
         if (!personalAccessToken) {
-            // Show configuration help if no token
+            // Show configuration help if no token (simplified - no manual org/project config needed)
             stream.markdown('⚠️ **Azure DevOps Token Not Configured**\n\n');
             stream.markdown('To get real PR data from Azure DevOps:\n\n');
             stream.markdown('**Click button below to open User Settings JSON:**\n\n');
 
             stream.markdown(`[🔧 Open User Settings JSON](command:workbench.action.openSettingsJson)\n\n`);
-            stream.markdown('**Add to end of settings.json file (before closing `}`):**\n\n');
+            stream.markdown('**Add this to your settings.json file:**\n\n');
             stream.markdown('```json\n');
             stream.markdown('{\n');
-            stream.markdown('    "aida.azureDevOps.personalAccessToken": "YOUR_TOKEN_HERE",\n');
-            stream.markdown('    "aida.azureDevOps.organization": "BusinessWebUS",\n');
-            stream.markdown('    "aida.azureDevOps.defaultProject": "Shippo"\n');
+            stream.markdown('    "aida.azureDevOps.personalAccessToken": "YOUR_TOKEN_HERE"\n');
             stream.markdown('}\n');
             stream.markdown('```\n\n');
 
-            stream.markdown('**Create token at:** https://dev.azure.com/BusinessWebUS/_usersSettings/tokens\n\n');
+            stream.markdown('**Create token at:** https://dev.azure.com/_usersSettings/tokens\n\n');
             stream.markdown('**Required permissions:** Code (Read) + Pull Request (Read)\n\n');
+            stream.markdown('💡 **Note:** Organization and project will be auto-detected from URL\n\n');
             stream.markdown('---\n\n');
 
             // Return error instead of mock data
@@ -1057,7 +1084,7 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
         let fileChanges = [];
         let finalDiff = '';
         let diffSource = 'PR-specific changes only';
-        let mergeBaseCommit = null; // Store the actual merge base for Monaco diff view
+        // mergeBaseCommit now declared at function scope above
 
         console.log('🔍 Getting PR-specific changes from source commit...');
 
@@ -1101,6 +1128,13 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
         // STEP 2: Get PR iterations to find the latest iteration (this contains actual PR changes)
         const iterationsUrl = `https://dev.azure.com/${organization}/${project}/_apis/git/repositories/${repository}/pullRequests/${prId}/iterations?api-version=7.0`;
         const iterationsResponse = await makeAzureDevOpsRequest(iterationsUrl, token);
+
+        // Initialize variables at FUNCTION scope (not block scope)
+        console.log('🐛 DEBUG: Initializing allFileChanges and reviewableFileChanges at FUNCTION scope...');
+        let allFileChanges = [];
+        let reviewableFileChanges = [];
+        let mergeBaseCommit = null;
+        console.log('🐛 DEBUG: Variables initialized at function scope - allFileChanges.length:', allFileChanges.length);
 
         if (iterationsResponse.success && iterationsResponse.data.value?.length > 0) {
             const iterations = iterationsResponse.data.value;
@@ -1168,7 +1202,7 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
                 }
 
                 // Process ALL files for diff view (Monaco needs complete file list)
-                const allFileChanges = await Promise.all(allActualFiles.map(async (change) => {
+                allFileChanges = await Promise.all(allActualFiles.map(async (change) => {
                     const filePath = change.item?.path || change.originalPath || 'Unknown';
                     console.log(`📁 Processing file: ${filePath} (${change.changeType})`);
 
@@ -1251,7 +1285,7 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
                 }));
 
                 // Filter reviewable files from processed results using shared function
-                const reviewableFileChanges = filterReviewableFiles(allFileChanges, 'Azure DevOps');
+                reviewableFileChanges = filterReviewableFiles(allFileChanges, 'Azure DevOps');
 
                 console.log(`✅ Processed ${allFileChanges.length} total files, ${reviewableFileChanges.length} for review content`);
             } else {
@@ -2280,63 +2314,48 @@ async function addQuickReviewOption(stream, prAnalysis, request, originalUrl = n
         keys: Object.keys(prAnalysis.data || {})
     }, null, 2));
 
-    // Build diff from cache (same source as webview) or fallback to data structure
+    // Build diff content from reviewableFileChanges only (filtered files for AI review)
     let diffContent = '';
 
-    // 🔄 NEW APPROACH: Try to get diff from cache first (same as webview)
-    if (global.prDiffCache) {
-        const cacheKeys = Object.keys(global.prDiffCache);
-        console.log(`🔍 Checking cache for diff content. Available keys: ${cacheKeys.length}`);
-        
-        // Filter cache keys for current PR/MR
-        const relevantKeys = cacheKeys.filter(key => {
-            if (data.gitlabHost && key.includes(`gitlab_${data.id}_`)) return true;
-            if (data.owner && data.repository && key.includes(`github_${data.id}_`)) return true;
-            if (data.organization && key.includes(`azure_${data.id}_`)) return true;
-            return false;
+    // Always get diff from reviewableFileChanges (filtered for AI review)
+    const reviewableFiles = data.reviewableFileChanges || [];
+    console.log(`🔍 Building diff from reviewableFileChanges: ${reviewableFiles.length} files`);
+    
+    if (reviewableFiles.length > 0) {
+        // Log each reviewable file
+        reviewableFiles.forEach((file, index) => {
+            console.log(`🔍 Reviewable file ${index + 1}: ${file.path}, diffContent length: ${file.diffContent?.length || 0}`);
         });
         
-        console.log(`🎯 Found ${relevantKeys.length} relevant cache entries for current PR/MR`);
-        
-        if (relevantKeys.length > 0) {
-            // Build diff from cache (same as webview uses)
-            const cacheDiffs = relevantKeys.map(key => {
-                const cached = global.prDiffCache[key];
-                console.log(`📄 Cache entry ${key}: diffContent length = ${cached.diffContent?.length || 0}`);
-                return cached.diffContent || cached.diff || '';
-            }).filter(diff => diff.trim());
-            
-            if (cacheDiffs.length > 0) {
-                diffContent = cacheDiffs.join('\n\n');
-                console.log(`✅ Using cache diff: ${diffContent.length} chars from ${cacheDiffs.length} files`);
-            }
-        }
-    }
-
-    // 🔄 FALLBACK 1: Original finalDiff approach
-    if (!diffContent && data.finalDiff && data.finalDiff.trim()) {
-        diffContent = data.finalDiff;
-        console.log(`✅ Fallback to finalDiff: ${diffContent.length} chars`);
-    } 
-    // 🔄 FALLBACK 2: Build from fileChanges
-    else if (!diffContent && data.fileChanges && data.fileChanges.length > 0) {
-        console.log(`⚠️ Fallback to fileChanges: building from ${data.fileChanges.length} file changes`);
-        
-        data.fileChanges.forEach((file, index) => {
-            console.log(`🔍 File ${index + 1}: ${file.path}, diffContent length: ${file.diffContent?.length || 0}`);
-        });
-        
-        diffContent = data.fileChanges
+        // Build diff from reviewable files only
+        diffContent = reviewableFiles
             .filter(file => file.diffContent && file.diffContent.trim())
             .map(file => file.diffContent)
             .join('\n\n');
-        console.log(`✅ Built diff from fileChanges: ${diffContent.length} chars`);
+        console.log(`✅ Built diff from reviewableFileChanges: ${diffContent.length} chars from ${reviewableFiles.length} files`);
     }
 
-    // Only proceed if we have any diff content
+    // Only proceed if we have reviewable diff content
     if (!diffContent || !diffContent.trim()) {
-        console.log('⚠️ No diff content available for review');
-        stream.markdown('⚠️ **No diff content available for AI review**\n\n');
+        const totalFiles = data.fileChanges ? data.fileChanges.length : 0;
+        const reviewableCount = reviewableFiles.length;
+        
+        console.log('⚠️ No reviewable diff content available for AI review');
+        stream.markdown('⚠️ **No reviewable files found for AI review**\n\n');
+        
+        if (totalFiles > 0 && reviewableCount === 0) {
+            stream.markdown(`Found ${totalFiles} file changes, but all files were filtered out (auto-generated, config files, etc.)\n\n`);
+            stream.markdown('**Filtered file types typically include:**\n');
+            stream.markdown('- Lock files (package-lock.json, yarn.lock)\n');
+            stream.markdown('- Generated files (*.min.js, *.generated.*)\n');
+            stream.markdown('- Config files (webpack.config.js, tsconfig.json)\n');
+            stream.markdown('- Documentation files (README.md, CHANGELOG.md)\n\n');
+        } else if (reviewableCount > 0) {
+            stream.markdown(`Found ${reviewableCount} reviewable files, but no diff content available.\n\n`);
+        } else {
+            stream.markdown('No file changes detected in this PR/MR.\n\n');
+        }
+        
         return;
     }
 
@@ -2387,8 +2406,8 @@ async function performQuickReviewWithAI(stream, prData, request, diffContent, or
                             prData.owner && prData.repository ? `${prData.owner}/${prData.repository}` : 
                             prData.repository || `PR #${prData.id}`);
         displayCommonReviewInfo(stream, 'PR Quick Review', displayName, {
-            length: prData.fileChanges ? prData.fileChanges.length : 0,
-            lengthType: 'changes'
+            length: prData.reviewableFileChanges ? prData.reviewableFileChanges.length : 0,
+            lengthType: 'reviewable files'
         });
 
     } catch (error) {
@@ -2407,8 +2426,10 @@ async function performQuickReviewWithAI(stream, prData, request, diffContent, or
     processedTemplate += '\n\n---\n\n';
     processedTemplate += '## PULL REQUEST CHANGES TO REVIEW\n\n';
     
-    // Use reviewableFileChanges if available (filtered), otherwise fallback to fileChanges (all)
-    const sourceFiles = prData.reviewableFileChanges || prData.fileChanges || [];
+    // Use reviewableFileChanges (filtered files for AI review)
+    const sourceFiles = prData.reviewableFileChanges || [];
+    
+    console.log(`📊 [REVIEW FILTER] Using reviewableFileChanges: ${sourceFiles.length} files for AI analysis`);
     
     // Separate files by change type for better analysis
     const modifiedFiles = sourceFiles.filter(f => {
@@ -2425,8 +2446,7 @@ async function performQuickReviewWithAI(stream, prData, request, diffContent, or
         return isNewFile;
     });
     
-    console.log(`📊 [REVIEW FILTER] Using ${prData.reviewableFileChanges ? 'reviewableFileChanges' : 'fileChanges'}: ${sourceFiles.length} files`);
-    console.log(`📊 [FILTER RESULT] Total files: ${sourceFiles.length}, Modified: ${modifiedFiles.length}, New: ${newFiles.length}`);
+    console.log(`📊 [FILTER RESULT] Total reviewable files: ${sourceFiles.length}, Modified: ${modifiedFiles.length}, New: ${newFiles.length}`);
     
     if (newFiles.length > 0) {
         console.log(`✅ New files to inject as fullContent:`, newFiles.map(f => f.path));

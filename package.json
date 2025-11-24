@@ -2,7 +2,7 @@
   "name": "aida-dev",
   "displayName": "AIDA - AI Development Assistant",
   "description": "Advanced AI Development Assistant with intelligent code review, PR analysis, project scanning, and AIDA Chatbot. Use your own AI API (OpenAI/Claude) or GitHub Copilot. Complete development workflows for TypeScript, JavaScript, Python, C#, and more. Now with Cursor IDE support!",
-  "version": "1.0.27",
+  "version": "1.0.32",
   "publisher": "trongld232",
   "icon": "icons/extension-icon.png",
   "author": {
@@ -194,19 +194,7 @@
         "aida.azureDevOps.personalAccessToken": {
           "type": "string",
           "default": "",
-          "description": "Azure DevOps Personal Access Token for PR review (requires Code:Read and Pull Request:Read permissions)",
-          "scope": "application"
-        },
-        "aida.azureDevOps.organization": {
-          "type": "string",
-          "default": "",
-          "description": "Default Azure DevOps organization name",
-          "scope": "application"
-        },
-        "aida.azureDevOps.defaultProject": {
-          "type": "string",
-          "default": "",
-          "description": "Default Azure DevOps project name",
+          "description": "Azure DevOps Personal Access Token for PR review (requires Code:Read and Pull Request:Read permissions). Organization and project will be auto-detected from PR URL.",
           "scope": "application"
         },
         "aida.ai.apiKey": {

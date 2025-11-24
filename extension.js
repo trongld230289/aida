@@ -103,9 +103,7 @@ async function setupAzureDevOpsSettings() {
 
         // Show info message with instructions
         const settingsTemplate = `{
-    "aida.azureDevOps.personalAccessToken": "YOUR_TOKEN_HERE",
-    "aida.azureDevOps.organization": "YOUR_ORG_HERE",
-    "aida.azureDevOps.defaultProject": "YOUR_PROJECT_HERE"
+    "aida.azureDevOps.personalAccessToken": "YOUR_TOKEN_HERE"
 }`;
 
         const action = await vscode.window.showInformationMessage(

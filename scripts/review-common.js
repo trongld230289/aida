@@ -1679,14 +1679,18 @@ async function getUnifiedModel(stream, requestedModel = null, chatContext = null
         
         if (models.length > 0) {
             // FALLBACK 1: Smart model selection based on quality preference (respecting user choice)
+            // Updated based on available models in VS Code Chat (November 2024)
             const modelPreferences = [
-                // Tier 1: High-quality models (Claude and GPT)
-                'claude-sonnet-4', 'claude-4', 'claude-3.5-sonnet', 'claude-3.7-sonnet',
-                'gpt-4o', 'gpt-4-turbo', 'gpt-4',
-                // Tier 2: Other advanced models
-                'gpt-4o-mini', 'o4-mini', 'o3-mini', 'gemini-2.5-pro', 'gemini-2.0-flash', 
-                // Tier 3: Fallback options
-                'gpt-3.5-turbo', 'grok-code'
+                // Tier 1: Premium Claude models (highest quality)
+                'claude-sonnet-4', 'claude-haiku-4.5', 'claude-sonnet-4.5',
+                // Tier 2: Current generation Claude and GPT
+                'claude-sonnet-3.5', 'claude-haiku-3.5', 'gpt-4.1', 'gpt-4o',
+                // Tier 3: Advanced models
+                'gpt-5', 'gpt-5-mini', 'gemini-2.5-pro', 'gemini-3-pro',
+                // Tier 4: Preview and experimental models
+                'grok-code-fast-1', 'raptor-mini', 'gpt-5.1', 'gpt-5-codex-mini',
+                // Tier 5: Fallback options
+                'gpt-3.5-turbo', 'auto'
             ];
 
             let selectedModel = null;

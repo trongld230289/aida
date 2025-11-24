@@ -2,8 +2,71 @@
 
 All notable changes to the "AIDA - AI Development Assistant" extension will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.27/),
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.32/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.0.32] - 2025-11-24
+
+### Improved
+- **AI Model Selection**: Updated model preferences to match current VS Code Chat available models
+- **Model Priority**: Enhanced auto-detection to prioritize Claude Sonnet 4, Claude Haiku 4.5, and other premium models
+- **Code Quality**: Improved model selection logic based on latest available models in GitHub Copilot
+- **PR Review Logic**: Optimized reviewable file filtering to use only filtered files for AI analysis instead of all file changes
+
+### Technical
+- Updated model preferences array to include: Claude Sonnet 4, Claude Haiku 4.5, Claude Sonnet 4.5, GPT-4.1, GPT-5, and other current generation models
+- Enhanced PR review to focus only on reviewable files (excluding auto-generated, config files, etc.)
+- Improved debugging and logging for model selection process
+
+## [1.0.30] - 2025-11-24
+
+### Fixed
+- **Azure DevOps PR Analysis**: Fixed Azure DevOps URL parsing to support both classic and modern URL formats
+- **Variable Scope Issues**: Resolved 'allFileChanges is not defined' errors in Azure DevOps PR analysis
+- **File Change Detection**: Fixed issue where PR analysis showed 0 files when multiple files were actually processed
+- **Debug Logging**: Enhanced error reporting and debugging capabilities for PR analysis operations
+
+### Improved
+- **URL Pattern Matching**: Added dual regex patterns to handle Azure DevOps URL variations  
+- **Error Handling**: Better error messages and diagnostic information for failed PR operations
+- **Code Quality**: Eliminated variable shadowing issues in async functions
+
+## [1.0.29] - 2025-11-24
+
+### Fixed
+- Azure DevOps URL parsing: Added support for modern Azure DevOps URL format (`dev.azure.com/{org}/{project}/pullrequest/{id}`)
+- Resolved variable scope issue in Azure DevOps PR analysis that caused `allFileChanges is not defined` error
+- Enhanced Azure DevOps URL regex patterns to handle both classic and modern URL formats
+- Improved error handling and variable initialization in Azure DevOps integration
+
+### Improved  
+- Azure DevOps PR analysis now supports both URL formats seamlessly
+- Better compatibility with newer Azure DevOps project structures
+- Enhanced help documentation with examples of both supported URL formats
+- More robust error handling during PR data processing
+
+## [1.0.28] - 2025-11-21
+
+### Added
+- Azure DevOps auto-detection: Organization and project are now automatically parsed from PR URLs
+- Simplified Azure DevOps configuration: Only token required, no manual organization/project setup needed
+- Enhanced Azure DevOps user experience with auto-detection status messages and fallback handling
+- Consistent URL-based auto-detection across GitLab, GitHub, and Azure DevOps platforms
+
+### Improved
+- Azure DevOps setup process simplified - removed manual configuration requirements
+- Progress notifications now show detected organization/project information
+- Settings templates updated to reflect token-only configuration approach
+- Extension documentation updated to highlight auto-detection capabilities
+
+### Removed
+- `aida.azureDevOps.organization` setting (now auto-detected from URL)
+- `aida.azureDevOps.defaultProject` setting (now auto-detected from URL)
+- Manual configuration step for Azure DevOps organization and project
+
+### Changed
+- Azure DevOps PR review workflow now matches GitLab simplicity
+- Updated setup commands and help text to reflect auto-detection approach
 
 ## [1.0.27] - 2025-11-20
 
