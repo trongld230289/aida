@@ -643,10 +643,10 @@ function mapProviderResponse(rawResponse, provider) {
  */
 function shouldUseApiKey() {
     const config = vscode.workspace.getConfiguration('aida');
-    const useApiKey = config.get('useApiKeyInsteadOfCopilot', false);
+    const useApiKey = config.get('useExternalAI', false);
     const apiKey = config.get('ai.apiKey');
     
-    console.log(`🔍 API Key mode check: useApiKeyInsteadOfCopilot=${useApiKey}, hasApiKey=${!!apiKey}`);
+    console.log(`🔍 API Key mode check: useExternalAI=${useApiKey}, hasApiKey=${!!apiKey}`);
     
     return useApiKey && !!apiKey;
 }
@@ -1672,7 +1672,7 @@ async function getUnifiedModel(stream, requestedModel = null, chatContext = null
             console.warn('⚠️ No Copilot models available - check GitHub Copilot installation and authentication');
             // If API key is configured, suggest using it instead
             if (vscode.workspace.getConfiguration('aida').get('ai.apiKey')) {
-                console.log('💡 Suggestion: Enable API key mode in settings: aida.useApiKeyInsteadOfCopilot = true');
+                console.log('💡 Suggestion: Enable API key mode in settings: aida.useExternalAI = true');
             }
             return null;
         }
@@ -1735,9 +1735,9 @@ async function getUnifiedModel(stream, requestedModel = null, chatContext = null
             const hasApiKey = config.get('ai.apiKey');
             
             if (hasApiKey) {
-                console.log('💡 You have an API key configured. Enable API key mode: aida.useApiKeyInsteadOfCopilot = true');
+                console.log('💡 You have an API key configured. Enable API key mode: aida.useExternalAI = true');
             } else {
-                console.log('💡 Configure an API key in settings: aida.ai.apiKey and enable aida.useApiKeyInsteadOfCopilot');
+                console.log('💡 Configure an API key in settings: aida.ai.apiKey and enable aida.useExternalAI');
             }
         }
         
@@ -1761,7 +1761,7 @@ async function getUnifiedModel(stream, requestedModel = null, chatContext = null
             stream.markdown('1. **GitHub Copilot**: Install and authenticate GitHub Copilot extension\n');
             stream.markdown('2. **API Key Mode**: Configure an API key in extension settings\n');
             stream.markdown('3. **Permissions**: Check VS Code language model permissions\n\n');
-            stream.markdown('💡 **Tip**: If you have an API key, enable `aida.useApiKeyInsteadOfCopilot` in settings\n');
+            stream.markdown('💡 **Tip**: If you have an API key, enable `aida.useExternalAI` in settings\n');
         }
     }
     
@@ -1816,11 +1816,11 @@ function displayDocumentReviewHeader(stream)
             if (typeof doc === 'string') {
                 // Direct string path
                 docName = path.basename(doc);
-                docPath = doc.replace(/\\/g, '/');
+                docPath = normalizePathForDisplay(doc);
             } else if (doc && typeof doc === 'object' && doc.path) {
                 // Object with path property
                 docName = path.basename(doc.path);
-                docPath = doc.path.replace(/\\/g, '/');
+                docPath = normalizePathForDisplay(doc.path);
             } else if (doc && typeof doc === 'object' && doc.name) {
                 // Object with name property
                 docName = doc.name;
@@ -2107,9 +2107,9 @@ async function autoDetectLanguage(workspacePath, targetFilePath = null) {
                 ...detectionResult,
                 type: 'framework',
                 detected: 'Angular',
-                templatePath: 'frameworks/angular',
+                templatePath: normalizePathForDisplay('frameworks/angular'),
                 confidence: 'high',
-                reason: 'angular.json configuration file found'
+                reason: ('angular.json configuration file found at ' + normalizePathForDisplay(workspacePath))
             };
         }
 
@@ -2336,66 +2336,56 @@ async function getReviewTemplateWithDetection(templateType, context = null, targ
     
     console.log(`🎯 Detection result:`, detection);
 
-    // Build template path based on detection
-    let templatePath, templateSource;
+    // Resolve AIDA base path using config
+    const { basePath, source } = resolveAidaBasePath(workspaceFolder);
     
-    // Try AIDA structure first (newest)
-    const aidaTemplatePath = path.join(
-        workspaceFolder.uri.fsPath, 
-        'AIDA', 
-        'templates', 
-        'review-code',
-        detection.templatePath,
-        templateType
-    );
+    // Build template paths based on detection
+    const templatePaths = [
+        // Language-specific template
+        path.join(basePath, 'templates', 'review-code', 'languages', detection.detected.toLowerCase(), templateType),
+        // Fallback template
+        path.join(basePath, 'templates', 'review-code', 'fallback', templateType),
+        // Legacy path support
+        path.join(basePath, 'templates', detection.templatePath, templateType)
+    ];
     
-    if (fs.existsSync(aidaTemplatePath)) {
-        templatePath = aidaTemplatePath;
-        templateSource = 'AIDA workspace';
-        console.log(`✅ Using AIDA template: ${templatePath}`);
-    } else {
-        // Fallback to extension templates
-        if (context) {
-            const extensionTemplatePath = path.join(
-                context.extensionPath,
-                'templates',
-                'review-code',
-                detection.templatePath,
-                templateType
-            );
-            
-            if (fs.existsSync(extensionTemplatePath)) {
-                templatePath = extensionTemplatePath;
-                templateSource = 'extension';
-                console.log(`✅ Using extension template: ${templatePath}`);
-            } else {
-                // Ultimate fallback to legacy templates
-                const legacyPath = path.join(context.extensionPath, 'templates', templateType);
-                if (fs.existsSync(legacyPath)) {
-                    templatePath = legacyPath;
-                    templateSource = 'extension legacy';
-                    console.log(`⚠️ Using legacy template: ${templatePath}`);
-                } else {
-                    throw new Error(`Template not found: ${templateType} for ${detection.detected}`);
-                }
-            }
-        } else {
-            throw new Error('No extension context available for fallback templates');
+    let templatePath = null;
+    let rawContent = null;
+    
+    // Try each template path in order
+    for (const tryPath of templatePaths) {
+        console.log(`🔍 Checking template: ${tryPath}`);
+        if (fs.existsSync(tryPath)) {
+            console.log(`✅ Found template at: ${tryPath}`);
+            templatePath = tryPath;
+            rawContent = fs.readFileSync(templatePath, 'utf8');
+            break;
         }
+    }
+    
+    if (!rawContent) {
+        throw new Error(`Template not found: ${templateType} for ${detection.detected}`);
     }
 
     try {
-        const rawContent = fs.readFileSync(templatePath, 'utf8');
-        
         // Process template with placeholder replacement
         const templateDir = path.dirname(templatePath);
         const processedContent = processTemplateWithPlaceholders(rawContent, templateDir);
         
-        console.log(`✅ Loaded and processed template from: ${templatePath}`);
+        // Source display - show relative path from workspace if config
+        let sourceDisplay;
+        if (source === 'config' && workspaceFolder) {
+            const relativeFromWorkspace = path.relative(workspaceFolder.uri.fsPath, basePath);
+            sourceDisplay = relativeFromWorkspace || 'workspace';
+        } else {
+            sourceDisplay = 'extension/templates';
+        }
+        
+        console.log(`✅ Loaded and processed template from: ${sourceDisplay}`);
         
         return {
             content: processedContent,
-            source: templateSource,
+            source: sourceDisplay,
             path: templatePath,
             detection: detection
         };
@@ -2425,10 +2415,12 @@ function displayDetectionInfo(stream, detection, templateType) {
         stream.markdown(`**Detection:** ${detection.detected} (${detection.type}) ⚠️\n`);
     }
     
-    // Template info
+    // Template info - normalize path separators for display (use forward slash for cross-platform)
+    const normalizedTemplatePath = normalizePathForDisplay(detection.templatePath);
+    const normalizedReason = normalizePathForDisplay(detection.reason);
+    stream.markdown(`**Template used:** \`${normalizedTemplatePath}\`\n`);
     stream.markdown(`**Review Template:** \`${templateType}\`\n`);
-    stream.markdown(`**Template Path:** \`${detection.templatePath}/${templateType}\`\n`);
-    stream.markdown(`**Confidence:** ${detection.confidence} (${detection.reason})\n\n`);
+    stream.markdown(`**Confidence:** ${detection.confidence} (${normalizedReason})\n\n`);
     
     // Show appropriate icon and message
     const detectionEmoji = {
@@ -2653,22 +2645,43 @@ function autoDetectLanguage(filePath) {
  * @returns {object} - Template content with detection info
  */
 function getReviewTemplateWithDetection(templateType, filePath) {
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
     const detection = autoDetectLanguage(filePath);
     
-    // Try framework-specific template first
+    // Resolve AIDA base path using config
+    const { basePath, source } = resolveAidaBasePath(workspaceFolder);
+    
+    // Build template paths based on detection
     const templatePaths = [
-        path.join(global.extensionPath, 'templates', detection.templatePath, `${templateType}.md`),
-        path.join(global.extensionPath, 'templates', `${templateType}.md`)
+        // Language-specific template
+        path.join(basePath, 'templates', 'review-code', 'languages', detection.detected.toLowerCase(), `${templateType}.md`),
+        // Fallback template
+        path.join(basePath, 'templates', 'review-code', 'fallback', `${templateType}.md`),
+        // Legacy path support
+        path.join(basePath, 'templates', detection.templatePath, `${templateType}.md`),
+        path.join(basePath, 'templates', `${templateType}.md`)
     ];
     
     for (const templatePath of templatePaths) {
+        console.log(`🔍 Checking template: ${templatePath}`);
         if (fs.existsSync(templatePath)) {
+            console.log(`✅ Found template at: ${templatePath}`);
             const content = fs.readFileSync(templatePath, 'utf8');
+            
+            // Source display - show relative path from workspace if config
+            let sourceDisplay;
+            if (source === 'config' && workspaceFolder) {
+                const relativeFromWorkspace = path.relative(workspaceFolder.uri.fsPath, basePath);
+                sourceDisplay = relativeFromWorkspace || 'workspace';
+            } else {
+                sourceDisplay = 'extension/templates';
+            }
+            
             return {
                 content,
                 detection,
                 templatePath: templatePath,
-                source: detection.detected
+                source: sourceDisplay
             };
         }
     }
@@ -2699,76 +2712,189 @@ function getLanguageFromExtension(ext) {
 }
 
 /**
- * Load template with workspace AIDA priority
+ * Normalize path separators to backslash for Windows display
+ * @param {string} pathString - Path string to normalize
+ * @returns {string} - Normalized path with backslashes
+ */
+function normalizePathForDisplay(pathString) {
+    if (!pathString || typeof pathString !== 'string') return '';
+    return pathString.replace(/\\/g, '/');
+}
+
+/**
+ * Resolve AIDA template base path from config or default locations
+ * @param {object} workspaceFolder - VS Code workspace folder
+ * @returns {object} - { basePath: string, source: 'config'|'extension' }
+ */
+function resolveAidaBasePath(workspaceFolder) {
+    const config = vscode.workspace.getConfiguration('aida');
+    const configPath = config.get('templatesBasePath', '');
+    
+    // Priority 1: User-configured path (if provided)
+    if (configPath && configPath.trim()) {
+        let resolvedPath = configPath.trim();
+        
+        // Support ${workspaceFolder} variable
+        if (workspaceFolder) {
+            resolvedPath = resolvedPath.replace(/\$\{workspaceFolder\}/g, workspaceFolder.uri.fsPath);
+        }
+        
+        // Resolve relative paths
+        if (!path.isAbsolute(resolvedPath) && workspaceFolder) {
+            resolvedPath = path.resolve(workspaceFolder.uri.fsPath, resolvedPath);
+        }
+        
+        // Check if templates folder exists
+        const templatesPath = path.join(resolvedPath, 'templates');
+        if (fs.existsSync(templatesPath)) {
+            console.log(`✅ Using configured AIDA path: ${resolvedPath}`);
+            return {
+                basePath: resolvedPath,
+                source: 'config'
+            };
+        } else {
+            // Auto-create AIDA structure if base path doesn't exist
+            console.warn(`⚠️ Configured AIDA path not found: ${templatesPath}`);
+            console.log(`🔧 Attempting to create AIDA structure at: ${resolvedPath}`);
+            
+            try {
+                // Create AIDA base directory
+                if (!fs.existsSync(resolvedPath)) {
+                    fs.mkdirSync(resolvedPath, { recursive: true });
+                    console.log(`✅ Created AIDA directory: ${resolvedPath}`);
+                }
+                
+                // Create templates directory structure
+                const templatesDirs = [
+                    templatesPath,
+                    path.join(templatesPath, 'review-code'),
+                    path.join(templatesPath, 'review-code', 'languages'),
+                    path.join(templatesPath, 'review-code', 'fallback')
+                ];
+                
+                for (const dir of templatesDirs) {
+                    if (!fs.existsSync(dir)) {
+                        fs.mkdirSync(dir, { recursive: true });
+                        console.log(`✅ Created directory: ${dir}`);
+                    }
+                }
+                
+                // Copy templates from extension to AIDA folder
+                const extensionTemplatesPath = path.join(global.extensionPath, 'templates');
+                if (fs.existsSync(extensionTemplatesPath)) {
+                    copyTemplatesRecursive(extensionTemplatesPath, templatesPath);
+                    console.log(`✅ Copied templates from extension to: ${templatesPath}`);
+                }
+                
+                console.log(`✅ AIDA structure created successfully at: ${resolvedPath}`);
+                return {
+                    basePath: resolvedPath,
+                    source: 'config'
+                };
+                
+            } catch (error) {
+                console.error(`❌ Failed to create AIDA structure: ${error.message}`);
+                console.warn(`⚠️ Falling back to extension templates`);
+            }
+        }
+    }
+    
+    // Priority 2: Extension templates (fallback)
+    console.log(`✅ Using extension AIDA templates`);
+    return {
+        basePath: global.extensionPath,
+        source: 'extension'
+    };
+}
+
+/**
+ * Copy templates recursively from source to destination
+ * @param {string} src - Source directory path
+ * @param {string} dest - Destination directory path
+ */
+function copyTemplatesRecursive(src, dest) {
+    if (!fs.existsSync(dest)) {
+        fs.mkdirSync(dest, { recursive: true });
+    }
+    
+    const entries = fs.readdirSync(src, { withFileTypes: true });
+    
+    for (const entry of entries) {
+        const srcPath = path.join(src, entry.name);
+        const destPath = path.join(dest, entry.name);
+        
+        if (entry.isDirectory()) {
+            copyTemplatesRecursive(srcPath, destPath);
+        } else {
+            fs.copyFileSync(srcPath, destPath);
+            console.log(`  📄 Copied: ${entry.name}`);
+        }
+    }
+}
+
+/**
+ * Load template with AIDA path resolution
  * @param {string} templateType - Template file name (e.g., 'review-file.md')
  * @param {object} detection - Detection result object
  * @returns {object} Template result with content, source, and path info
  */
 async function loadTemplateWithPriority(templateType, detection) {
-    const vscode = require('vscode');
-    const fs = require('fs');
-    const path = require('path');
-    
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-    let templatePaths = [];
-    let templateSourceDisplay = 'extension/templates';
-    let templatePathDisplay = detection.templatePath;
+    
+    // Resolve AIDA base path
+    const { basePath, source } = resolveAidaBasePath(workspaceFolder);
+    
+    // Build template paths based on detection
+    const templatePaths = [
+        // Language-specific template
+        path.join(basePath, 'templates', 'review-code', 'languages', detection.detected.toLowerCase(), templateType),
+        // Fallback template
+        path.join(basePath, 'templates', 'review-code', 'fallback', templateType),
+        // Legacy path support
+        path.join(basePath, 'templates', detection.templatePath, templateType)
+    ];
+    
     let templateContent = null;
     let usedTemplatePath = null;
     
-    if (workspaceFolder) {
-        const workspaceAidaPath = path.join(workspaceFolder.uri.fsPath, 'AIDA', 'templates');
-        templatePaths = [
-            // Workspace AIDA templates (highest priority)
-            path.join(workspaceAidaPath, 'review-code', 'languages', detection.detected.toLowerCase(), templateType),
-            path.join(workspaceAidaPath, 'review-code', 'fallback', templateType),
-            // Extension templates (fallback)
-            path.join(global.extensionPath, 'templates', detection.templatePath, templateType),
-            path.join(global.extensionPath, 'templates', 'review-code', 'fallback', templateType)
-        ];
-    } else {
-        templatePaths = [
-            path.join(global.extensionPath, 'templates', detection.templatePath, templateType),
-            path.join(global.extensionPath, 'templates', 'review-code', 'fallback', templateType)
-        ];
-    }
-    
-    // Try each template path in priority order
+    // Try each template path in order
     for (const templatePath of templatePaths) {
-        console.log(`🔍 Checking template path: ${templatePath}`);
+        console.log(`🔍 Checking template: ${templatePath}`);
         if (fs.existsSync(templatePath)) {
             console.log(`✅ Found template at: ${templatePath}`);
             const rawContent = fs.readFileSync(templatePath, 'utf8');
             
-            // Process template with placeholder replacement using new utility function
+            // Process template with placeholder replacement
             templateContent = processTemplateContent(rawContent, templatePath);
-            
             usedTemplatePath = templatePath;
             break;
-        } else {
-            console.log(`❌ Template not found at: ${templatePath}`);
         }
     }
     
-    // Determine template source for display
-    if (workspaceFolder && usedTemplatePath && usedTemplatePath.includes(path.join(workspaceFolder.uri.fsPath, 'AIDA'))) {
-        templateSourceDisplay = 'workspace/AIDA/templates';
-        // Extract language from workspace path: review-code/languages/angular
-        const workspaceAidaPath = path.join(workspaceFolder.uri.fsPath, 'AIDA', 'templates');
-        const relativePath = path.relative(workspaceAidaPath, usedTemplatePath);
-        const pathParts = relativePath.split(path.sep);
-        templatePathDisplay = pathParts.slice(0, -1).join('/'); // e.g., "review-code/languages/angular"
-    }
-    
     if (!templateContent) {
-        throw new Error(`Template not found: ${templateType}`);
+        throw new Error(`Template not found: ${templateType} for ${detection.detected}`);
     }
     
-    console.log(`✅ Loaded review template from: ${templateSourceDisplay}/${templatePathDisplay} (${templateContent.length} characters)`);
+    // Determine display paths (use backslash for Windows consistency)
+    const templatesBasePath = path.join(basePath, 'templates');
+    const relativePath = path.relative(templatesBasePath, usedTemplatePath);
+    const pathParts = relativePath.split(path.sep);
+    const templatePathDisplay = pathParts.slice(0, -1).join('\\'); // ✅ Use backslash for display
+    
+    // Source display - show relative path from workspace if config, otherwise extension
+    let sourceDisplay;
+    if (source === 'config' && workspaceFolder) {
+        const relativeFromWorkspace = normalizePathForDisplay(path.relative(workspaceFolder.uri.fsPath, basePath));
+        sourceDisplay = relativeFromWorkspace || 'workspace';
+    } else {
+        sourceDisplay = 'extension\\templates'; // ✅ Use backslash for display
+    }
+    
+    console.log(`✅ Loaded template from: ${sourceDisplay}/${templatePathDisplay} (${templateContent.length} chars)`);
     
     return {
         content: templateContent,
-        templateSource: templateSourceDisplay,
+        templateSource: sourceDisplay,
         templatePath: templatePathDisplay,
         usedPath: usedTemplatePath
     };
@@ -2795,8 +2921,8 @@ function displayCommonReviewInfo(stream, reviewType, filePath, options = {}) {
         if (workspaceFolder && path.isAbsolute(filePath)) {
             // Convert to relative path from workspace root
             const relativePath = path.relative(workspaceFolder.uri.fsPath, filePath);
-            // Use forward slashes for consistency (like VS Code)
-            displayPath = relativePath.replace(/\\/g, '/');
+            // Use backslashes for consistency (Windows style)
+            displayPath = normalizePathForDisplay(relativePath);
         }
     } catch (error) {
         // Fallback to original path if conversion fails
@@ -2980,8 +3106,12 @@ async function getBusinessDocumentFolders(workspaceFolder) {
     console.log('🔍 getBusinessDocumentFolders called with workspaceFolder:', workspaceFolder?.uri?.fsPath);
     
     try {
-        // Try both folder names for backwards compatibility
-        const businessDocsPath = path.join(workspaceFolder.uri.fsPath, 'AIDA', 'business-docs');
+        // Use the same logic as template base path resolution
+        const aidaPathInfo = resolveAidaBasePath(workspaceFolder);
+        console.log(`🔍 Resolved AIDA base path: ${aidaPathInfo.basePath} (source: ${aidaPathInfo.source})`);
+        
+        // Build business docs path using the resolved AIDA base path
+        const businessDocsPath = path.join(aidaPathInfo.basePath, 'business-docs');
         
         let actualPath = null;
         if (fs.existsSync(businessDocsPath)) {
@@ -2990,7 +3120,7 @@ async function getBusinessDocumentFolders(workspaceFolder) {
         }
         
         if (!actualPath) {
-            console.log(`📁 Business document path not found at either: ${businessDocsPath} or ${technicalDocsPath}`);
+            console.log(`📁 Business document path not found at: ${businessDocsPath}`);
             return [];
         }
         
@@ -2998,25 +3128,40 @@ async function getBusinessDocumentFolders(workspaceFolder) {
             .filter(dirent => dirent.isDirectory())
             .map(dirent => {
                 const folderPath = path.join(actualPath, dirent.name);
+                
+                // Create dynamic relative path based on the resolved base path
+                const relativePath = aidaPathInfo.source === 'config' 
+                    ? path.relative(workspaceFolder.uri.fsPath, folderPath).replace(/\\/g, '/')
+                    : `AIDA/business-docs/${dirent.name}`;
+                
                 return {
                     name: dirent.name,
                     displayName: dirent.name.split('-').map(word => 
                         word.charAt(0).toUpperCase() + word.slice(1)
                     ).join(' '),
                     path: folderPath,
-                    relativePath: `AIDA/business-docs/${dirent.name}`,
+                    relativePath: relativePath,
                     basePath: actualPath,
                     workspacePath: workspaceFolder.uri.fsPath,
+                    aidaBasePath: aidaPathInfo.basePath,
+                    aidaSource: aidaPathInfo.source,
                     // Helper methods for getting files
                     getFiles: () => {
                         try {
                             return fs.readdirSync(folderPath, { withFileTypes: true })
                                 .filter(file => file.isFile() && file.name.endsWith('.md'))
-                                .map(file => ({
-                                    name: file.name,
-                                    path: path.join(folderPath, file.name),
-                                    relativePath: `AIDA/business-docs/${dirent.name}/${file.name}`
-                                }));
+                                .map(file => {
+                                    const filePath = path.join(folderPath, file.name);
+                                    const fileRelativePath = aidaPathInfo.source === 'config'
+                                        ? path.relative(workspaceFolder.uri.fsPath, filePath).replace(/\\/g, '/')
+                                        : `AIDA/business-docs/${dirent.name}/${file.name}`;
+                                    
+                                    return {
+                                        name: file.name,
+                                        path: filePath,
+                                        relativePath: fileRelativePath
+                                    };
+                                });
                         } catch (error) {
                             console.error(`❌ Error reading files in ${folderPath}:`, error);
                             return [];
@@ -3187,5 +3332,244 @@ module.exports = {
     processTemplateContent,
     getBusinessDocumentFolders,
     buildBusinessDocsContent,
-    showReviewOptions
+    showReviewOptions,
+    resolveAidaBasePath,
+    copyTemplatesRecursive,
+    normalizePathForDisplay,
+    // Source control helpers
+    parsePRUrl,
+    getTokenForPR,
+    hasTokenForProvider,
+    getConfiguredOrganizations,
+    showTokenConfigurationHelp
 };
+
+/**
+ * ===== SOURCE CONTROL HELPERS =====
+ * Helper functions for multiple organizations per provider
+ */
+
+/**
+ * Parse PR/MR URL to extract provider and organization information
+ * @param {string} prUrl - PR/MR URL
+ * @returns {object} - { provider, organization, project?, repository?, prId? }
+ */
+function parsePRUrl(prUrl) {
+    const url = prUrl.trim();
+    
+    // Azure DevOps: https://dev.azure.com/{organization}/{project}/_git/{repository}/pullrequest/{id}
+    if (url.includes('dev.azure.com')) {
+        const match = url.match(/dev\.azure\.com\/([^\/]+)\/([^\/]+)\/_git\/([^\/]+)\/pullrequest\/(\d+)/);
+        if (match) {
+            return {
+                provider: 'azureDevOps',
+                organization: match[1],
+                project: match[2],
+                repository: match[3],
+                prId: match[4]
+            };
+        }
+    }
+    
+    // GitHub: https://github.com/{owner}/{repo}/pull/{id}
+    if (url.includes('github.com')) {
+        const match = url.match(/github\.com\/([^\/]+)\/([^\/]+)\/pull\/(\d+)/);
+        if (match) {
+            return {
+                provider: 'github',
+                organization: match[1],
+                repository: match[2],
+                prId: match[3]
+            };
+        }
+    }
+    
+    // GitLab: https://gitlab.com/{namespace/path}/{repo}/-/merge_requests/{id}
+    // Support nested namespaces like: ds365ai/FDP/time-and-cost-project/fdp-activity-middleware-service
+    if (url.includes('gitlab.com')) {
+        const match = url.match(/gitlab\.com\/(.+?)\/-\/merge_requests\/(\d+)/);
+        if (match) {
+            const fullPath = match[1];
+            const pathParts = fullPath.split('/');
+            const repository = pathParts[pathParts.length - 1]; // Last part is project name
+            const organization = pathParts.slice(0, -1).join('/'); // Everything else is namespace
+            
+            return {
+                provider: 'gitlab',
+                organization: organization,
+                repository: repository,
+                prId: match[2]
+            };
+        }
+    }
+    
+    throw new Error(`Unsupported PR/MR URL format: ${prUrl}`);
+}
+
+/**
+ * Get token for PR/MR based on provider and organization
+ * @param {string} prUrl - PR/MR URL
+ * @returns {string|null} - Access token for the organization or null if not found
+ */
+function getTokenForPR(prUrl) {
+    const vscode = require('vscode');
+    
+    try {
+        const { provider, organization } = parsePRUrl(prUrl);
+        const config = vscode.workspace.getConfiguration('aida');
+        
+        console.log(`🔍 Looking for token: provider=${provider}, org=${organization}`);
+        
+        // Try new multi-organization configuration first
+        const sourceControls = config.get('sourceControls', {});
+        console.log(`🔍 DEBUG sourceControls config:`, JSON.stringify(sourceControls, null, 2));
+        const providerTokens = sourceControls[provider];
+        console.log(`🔍 DEBUG providerTokens for ${provider}:`, JSON.stringify(providerTokens, null, 2));
+        
+        if (providerTokens && providerTokens[organization]) {
+            console.log(`✅ Found token for ${provider}/${organization} in sourceControls`);
+            return providerTokens[organization];
+        } else {
+            console.log(`❌ No token found for ${provider}/${organization} in sourceControls`);
+        }
+        
+        console.log(`❌ No token found for ${provider}/${organization}`);
+        return null;
+        
+    } catch (error) {
+        console.error('❌ Error getting token for PR:', error.message);
+        return null;
+    }
+}
+
+/**
+ * Check if token is configured for a specific provider and organization
+ * @param {string} provider - Provider name (azureDevOps, github, gitlab)
+ * @param {string} organization - Organization name
+ * @returns {boolean} - true if token is configured
+ */
+function hasTokenForProvider(provider, organization) {
+    const vscode = require('vscode');
+    const config = vscode.workspace.getConfiguration('aida');
+    
+    // Check new configuration
+    const sourceControls = config.get('sourceControls', {});
+    if (sourceControls[provider]?.[organization]) {
+        return true;
+    }
+    
+    return false;
+}
+
+/**
+ * Get all configured organizations for a provider
+ * @param {string} provider - Provider name (azureDevOps, github, gitlab)
+ * @returns {Array<string>} - Array of organization names
+ */
+function getConfiguredOrganizations(provider) {
+    const vscode = require('vscode');
+    const config = vscode.workspace.getConfiguration('aida');
+    
+    const sourceControls = config.get('sourceControls', {});
+    const providerTokens = sourceControls[provider];
+    
+    if (providerTokens && typeof providerTokens === 'object') {
+        return Object.keys(providerTokens);
+    }
+    
+    return [];
+}
+
+/**
+ * Show comprehensive guidance for missing token configuration
+ * @param {string} provider - Provider name
+ * @param {string} organization - Organization name
+ * @param {object} stream - Chat stream (optional)
+ */
+function showTokenConfigurationHelp(provider, organization, stream = null) {
+    const vscode = require('vscode');
+    
+    
+const providerNames = {
+        azureDevOps: 'Azure DevOps',
+        github: 'GitHub',
+        gitlab: 'GitLab'
+    };
+    
+    const providerName = providerNames[provider] || provider;
+    
+    // Provider configuration data
+    const providerConfigs = {
+        azureDevOps: {
+            name: 'Azure DevOps',
+            docs: 'https://docs.microsoft.com/en-us/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate',
+            permissions: 'Code (read), Pull Request (read)'
+        },
+        github: {
+            name: 'GitHub',
+            docs: 'https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token',
+            permissions: 'repo (Full control of private repositories)'
+        },
+        gitlab: {
+            name: 'GitLab',
+            docs: 'https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html',
+            permissions: 'api (Access to the authenticated user\'s API), read_repository'
+        }
+    };
+    
+    const config = providerConfigs[provider];
+    if (!config) return;
+    
+    const errorMessage = `❌ **Missing ${providerName} Token**`;
+    const orgMessage = `No personal access token configured for organization: \`${organization}\``;
+    
+    let helpContent = `${errorMessage}\n\n${orgMessage}\n\n`;
+    
+    // Configuration instructions
+    helpContent += `## 🔧 **Configuration Required**\n\n`;
+    helpContent += `**Step 1:** Press \`Ctrl + ,\` (or \`Cmd + ,\` on Mac) → Search for: \`aida.sourceControls\`\n\n`;
+    helpContent += `**Step 2:** Add your ${config.name} configuration (Organization: \`${organization}\`):\n\n`;
+    helpContent += `\`\`\`json\n`;
+    helpContent += `"aida.sourceControls": {\n`;
+    helpContent += `  "${provider}": {\n`;
+    helpContent += `    "${organization}": "YOUR_${provider.toUpperCase()}_TOKEN",\n`;
+    helpContent += `    "AnotherOrganization": "YOUR_${provider.toUpperCase()}_TOKEN_2"\n`;
+    helpContent += `  }\n`;
+    helpContent += `}\n`;
+    helpContent += `\`\`\`\n\n`;
+    
+    // Token creation guidance
+    helpContent += `## 🔑 **How to Get Personal Access Token**\n\n`;
+    helpContent += `1. **Go to ${config.name}** → Settings → Personal Access Tokens\n`;
+    helpContent += `2. **Create new token** with these permissions:\n`;
+    helpContent += `   - ${config.permissions}\n`;
+    helpContent += `3. **Copy the token** and add to VS Code settings\n\n`;
+    helpContent += `📚 **Documentation:** ${config.docs}\n\n`;
+    
+    // Quick setup button
+    
+    console.error(`❌ Missing token: ${providerName}/${organization}`);
+    console.log('🔧 Configuration help displayed to user');
+    
+    if (stream) {
+        stream.markdown(helpContent);
+    } else {
+        vscode.window.showErrorMessage(
+            `Missing ${providerName} token for: ${organization}`, 
+            'Open Settings', 
+            'View Guide'
+        ).then(action => {
+            if (action === 'Open Settings') {
+                vscode.commands.executeCommand('workbench.action.openSettings', 'aida.sourceControls');
+            } else if (action === 'View Guide') {
+                // Create help document
+                vscode.workspace.openTextDocument({
+                    content: helpContent.replace(/\*\*/g, '').replace(/`/g, ''),
+                    language: 'markdown'
+                }).then(doc => {
+                    vscode.window.showTextDocument(doc);
+                });
+            }
+        });
+    }
+}

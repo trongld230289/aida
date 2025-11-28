@@ -134,7 +134,7 @@ async function setupAzureDevOpsSettings() {
 }`;
 
         const action = await vscode.window.showInformationMessage(
-            'Settings JSON opened. Copy và paste template below vào cuối file (trước dấu }).',
+            'Settings JSON opened. Only token needed - organization and project will be auto-detected from PR URL.',
             'Copy Template',
             'Open Azure DevOps'
         );
@@ -156,7 +156,7 @@ async function setupAzureDevOpsSettings() {
  */
 function activate(context) {
     // console.log('Reload 4');
-    console.log('🤖 AIDA v1.0.27 - AI Development Assistant');
+    console.log('🤖 AIDA v1.0.39 - AI Development Assistant');
     console.log('🚀 AIDA extension is now active!');
     
     // Store extension path globally
@@ -279,12 +279,17 @@ function activate(context) {
         try {
             // Check if AIDA chat should be used
             const config = vscode.workspace.getConfiguration('aida');
-            const hasNoGithubCopilot = config.get('hasNoGithubCopilot', false);
+            const useAidaChatbot = config.get('useAidaChatbot', false);
             
-            if (hasNoGithubCopilot || !vscode.extensions.getExtension('GitHub.copilot')?.isActive) {
+            console.log('🔍 useAidaChatbot flag:', useAidaChatbot);
+            console.log('🔍 GitHub Copilot extension active:', vscode.extensions.getExtension('GitHub.copilot')?.isActive);
+            
+            if (useAidaChatbot) {
+                console.log('➡️ Using AIDA chatbot (useAidaChatbot=true)');
                 // Use AIDA Copilot-style chat
                 await vscode.commands.executeCommand('aida.reviewFileContext', uri);
             } else {
+                console.log('➡️ Using GitHub Copilot (useAidaChatbot=false)');
                 // Use GitHub Copilot
                 await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
                 if (uri && uri.fsPath) {
@@ -313,12 +318,17 @@ function activate(context) {
         try {
             // Check if AIDA chat should be used
             const config = vscode.workspace.getConfiguration('aida');
-            const hasNoGithubCopilot = config.get('hasNoGithubCopilot', false);
+            const useAidaChatbot = config.get('useAidaChatbot', false);
             
-            if (hasNoGithubCopilot || !vscode.extensions.getExtension('GitHub.copilot')?.isActive) {
+            console.log('🔍 useAidaChatbot flag:', useAidaChatbot);
+            console.log('🔍 GitHub Copilot extension active:', vscode.extensions.getExtension('GitHub.copilot')?.isActive);
+            
+            if (useAidaChatbot) {
+                console.log('➡️ Using AIDA chatbot (useAidaChatbot=true)');
                 // Use AIDA Copilot-style chat
                 await vscode.commands.executeCommand('aida.reviewChangesContext', uri);
             } else {
+                console.log('➡️ Using GitHub Copilot (useAidaChatbot=false)');
                 // Use GitHub Copilot
                 await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
                 if (uri && uri.fsPath) {
@@ -347,9 +357,9 @@ function activate(context) {
         try {
             // Check if AIDA chat should be used
             const config = vscode.workspace.getConfiguration('aida');
-            const hasNoGithubCopilot = config.get('hasNoGithubCopilot', false);
+            const useAidaChatbot = config.get('useAidaChatbot', false);
             
-            if (hasNoGithubCopilot || !vscode.extensions.getExtension('GitHub.copilot')?.isActive) {
+            if (useAidaChatbot) {
                 // Use AIDA Copilot-style chat
                 await vscode.commands.executeCommand('aida.reviewAllChangesContext', uri);
             } else {
@@ -443,15 +453,32 @@ function activate(context) {
 
     console.log('🔄 About to initialize review modules...');
     
-    // Initialize review modules from external scripts
-    const reviewChanges = __webpack_require__(/*! ./scripts/review-changes */ "./scripts/review-changes.js");
-    const { reviewChangesParticipant } = reviewChanges.initializeReviewChanges(context);
+    // Always register chat participants for both AIDA and GitHub Copilot compatibility
+    const config = vscode.workspace.getConfiguration('aida');
+    const useAidaChatbot = config.get('useAidaChatbot', false);
+    const shouldRegisterParticipants = true; // Always register for GitHub Copilot compatibility
+    
+    console.log('🔍 Always register AIDA chat participants for GitHub Copilot compatibility');
+    console.log('🔍 useAidaChatbot flag:', useAidaChatbot);
+    console.log('🔍 GitHub Copilot active:', vscode.extensions.getExtension('GitHub.copilot')?.isActive);
+    
+    let reviewChangesParticipant, reviewFileParticipant, reviewAllChangesParticipant;
+    
+    if (shouldRegisterParticipants) {
+        // Always initialize review modules for both AIDA and GitHub Copilot compatibility
+        const reviewChanges = __webpack_require__(/*! ./scripts/review-changes */ "./scripts/review-changes.js");
+        reviewChangesParticipant = reviewChanges.initializeReviewChanges(context).reviewChangesParticipant;
 
-    const reviewFile = __webpack_require__(/*! ./scripts/review-file */ "./scripts/review-file.js");
-    const { reviewFileParticipant } = reviewFile.initializeReviewFile(context);
+        const reviewFile = __webpack_require__(/*! ./scripts/review-file */ "./scripts/review-file.js");
+        reviewFileParticipant = reviewFile.initializeReviewFile(context).reviewFileParticipant;
 
-    const reviewAllChanges = __webpack_require__(/*! ./scripts/review-all-changes */ "./scripts/review-all-changes.js");
-    const { reviewAllChangesParticipant } = reviewAllChanges.initializeReviewAllChanges(context);
+        const reviewAllChanges = __webpack_require__(/*! ./scripts/review-all-changes */ "./scripts/review-all-changes.js");
+        reviewAllChangesParticipant = reviewAllChanges.initializeReviewAllChanges(context).reviewAllChangesParticipant;
+        
+        console.log('✅ Chat participants registered for both AIDA and GitHub Copilot compatibility');
+    } else {
+        console.log('⚠️ Chat participants NOT registered (this should never happen)');
+    }
 
     console.log('🔄 About to initialize PR review...');
     // Initialize PR review functionality from external script
@@ -780,9 +807,6 @@ function activate(context) {
         reviewFileContextCommand,
         reviewChangesContextCommand,
         reviewAllChangesContextCommand,
-        reviewChangesParticipant,
-        reviewFileParticipant,
-        reviewAllChangesParticipant,
         reviewPrParticipant,
         reviewPullRequest,
         syncTemplatesParticipant,
@@ -793,6 +817,12 @@ function activate(context) {
         viewPrDiffCommand,
         copilotSidebarChat
     ].filter(item => item !== null && item !== undefined);
+
+    // Add conditional participants only if registered (should always be true now)
+    if (shouldRegisterParticipants) {
+        subscriptions.push(reviewChangesParticipant, reviewFileParticipant, reviewAllChangesParticipant);
+        console.log('✅ Chat participants added to subscriptions for full compatibility');
+    }
 
     context.subscriptions.push(...subscriptions);
 }
@@ -1156,14 +1186,59 @@ async function getMonacoWebviewContent(diffData, panel, context) {
         originalContent = cached.originalContent;
         modifiedContent = cached.modifiedContent;
     } else {
-        console.log('🔄 Parsing content for:', filePath);
-        const { originalLines, modifiedLines } = await parseFullDiffContentEnhanced(diff, filePath);
+        console.log('🔄 Fetching FULL file content for:', filePath);
         
-        console.log('📊 Original lines:', originalLines.length, 'Modified lines:', modifiedLines.length);
-        
-        // Reconstruct full file content
-        originalContent = originalLines.map(line => line.content).join('\n');
-        modifiedContent = modifiedLines.map(line => line.content).join('\n');
+        // PRIORITY 1: Check if full content already stored in diffData (from Azure DevOps API)
+        if (diffData.fullBaseContent !== undefined && diffData.fullSourceContent !== undefined) {
+            console.log('✅ Using pre-fetched full content from diffData');
+            originalContent = diffData.fullBaseContent || '';
+            modifiedContent = diffData.fullSourceContent || '';
+            console.log(`📊 Full content from cache: Original=${originalContent.length} chars, Modified=${modifiedContent.length} chars`);
+        }
+        // PRIORITY 2: For Azure DevOps, fetch full file content directly from API
+        else if (diffData.useFullContent && diffData.organization && diffData.sourceCommit && diffData.targetCommit && diffData.accessToken) {
+            console.log('⚠️ Full content not pre-fetched, fetching now from Azure DevOps API...');
+            try {
+                const reviewPrPath = path.join(context.extensionPath, 'scripts', 'review-pr.js');
+                const reviewPrModule = __webpack_require__("./. sync recursive")(reviewPrPath);
+                const getFileContent = reviewPrModule.getFileContent;
+                
+                if (typeof getFileContent === 'function') {
+                    // Fetch both versions in parallel
+                    const [baseContent, sourceContent] = await Promise.all([
+                        getFileContent(diffData.organization, diffData.project, diffData.repository, filePath, diffData.targetCommit, diffData.accessToken),
+                        getFileContent(diffData.organization, diffData.project, diffData.repository, filePath, diffData.sourceCommit, diffData.accessToken)
+                    ]);
+                    
+                    originalContent = baseContent || '';
+                    modifiedContent = sourceContent || '';
+                    
+                    console.log(`✅ Full content fetched: Original=${originalContent.length} chars, Modified=${modifiedContent.length} chars`);
+                } else {
+                    console.log('⚠️ getFileContent not available, falling back to diff parsing');
+                    const { originalLines, modifiedLines } = await parseFullDiffContentEnhanced(diff, filePath);
+                    originalContent = originalLines.map(line => line.content).join('\n');
+                    modifiedContent = modifiedLines.map(line => line.content).join('\n');
+                }
+            } catch (error) {
+                console.log('❌ Error fetching full content:', error.message);
+                // Fallback to diff parsing
+                const { originalLines, modifiedLines } = await parseFullDiffContentEnhanced(diff, filePath);
+                originalContent = originalLines.map(line => line.content).join('\n');
+                modifiedContent = modifiedLines.map(line => line.content).join('\n');
+            }
+        }
+        // PRIORITY 3: Fallback to diff parsing
+        else {
+            console.log('⚠️ Not Azure DevOps or missing required info, using diff parsing');
+            const { originalLines, modifiedLines } = await parseFullDiffContentEnhanced(diff, filePath);
+            
+            console.log('📊 Original lines:', originalLines.length, 'Modified lines:', modifiedLines.length);
+            
+            // Reconstruct full file content
+            originalContent = originalLines.map(line => line.content).join('\n');
+            modifiedContent = modifiedLines.map(line => line.content).join('\n');
+        }
         
         // Cache the parsed content for future use
         if (global.prDiffCache) {
@@ -2308,6 +2383,25 @@ async function parseFullDiffContentEnhanced(diff, filePath) {
     
     // Check if we have Azure DevOps cache data for full file content retrieval
     const cache = global.prDiffCache;
+    
+    console.log('📊 prDiffCache exists:', !!cache);
+    if (cache) {
+        console.log('📊 Cache keys (first 10):', Object.keys(cache).filter(k => !k.startsWith('content_')).slice(0, 10));
+        console.log('📊 Cache has global properties:', {
+            hasAccessToken: !!cache.accessToken,
+            hasOrganization: !!cache.organization,
+            hasProject: !!cache.project,
+            hasRepository: !!cache.repository,
+            hasSourceCommit: !!cache.sourceCommit,
+            hasTargetCommit: !!cache.targetCommit,
+            organization: cache.organization,
+            project: cache.project,
+            repository: cache.repository,
+            sourceCommit: cache.sourceCommit?.substring(0, 7),
+            targetCommit: cache.targetCommit?.substring(0, 7)
+        });
+    }
+    
     if (cache && cache.accessToken && cache.sourceCommit && cache.targetCommit) {
         console.log('✅ Azure DevOps cache available - fetching FULL FILE CONTENT');
         return await getFullFileContentFromAzureDevOps(filePath, diff);
@@ -2443,6 +2537,14 @@ async function getFullFileContentFromAzureDevOps(filePath, diff) {
     
     try {
         console.log(`🔄 Fetching FULL content for ${filePath} from both commits`);
+        console.log(`📊 Cache data:`, {
+            organization: cache.organization,
+            project: cache.project,
+            repository: cache.repository,
+            sourceCommit: cache.sourceCommit?.substring(0, 7),
+            targetCommit: cache.targetCommit?.substring(0, 7),
+            hasAccessToken: !!cache.accessToken
+        });
         
         // Import getFileContent function from review-pr.js if available
         const reviewPrPath = path.join(__dirname, 'scripts', 'review-pr.js');
@@ -2451,6 +2553,10 @@ async function getFullFileContentFromAzureDevOps(filePath, diff) {
             const getFileContent = reviewPrModule.getFileContent;
             
             if (typeof getFileContent === 'function') {
+                console.log(`🚀 Calling getFileContent for both commits...`);
+                console.log(`   LEFT (Original/Base): ${cache.targetCommit?.substring(0, 7)}`);
+                console.log(`   RIGHT (Modified/Feature): ${cache.sourceCommit?.substring(0, 7)}`);
+                
                 // 🔧 FIX: Azure DevOps PR terminology vs Monaco terminology
                 // sourceCommit = NEW code (feature branch) = Monaco "modified" (RIGHT)
                 // targetCommit = OLD code (base branch) = Monaco "original" (LEFT)
@@ -2459,18 +2565,33 @@ async function getFullFileContentFromAzureDevOps(filePath, diff) {
                     getFileContent(cache.organization, cache.project, cache.repository, filePath, cache.sourceCommit, cache.accessToken)  // NEW = modified = RIGHT
                 ]);
                 
+                console.log(`📊 API Response:`, {
+                    targetContentLength: targetContent ? targetContent.length : 'NULL',
+                    sourceContentLength: sourceContent ? sourceContent.length : 'NULL',
+                    targetContentFirstLines: targetContent ? targetContent.split('\n').slice(0, 3).join('\n') : 'NULL',
+                    sourceContentFirstLines: sourceContent ? sourceContent.split('\n').slice(0, 3).join('\n') : 'NULL'
+                });
+                
                 if (targetContent || sourceContent) {
                     console.log(`✅ SUCCESS: Got full content - Original (OLD): ${targetContent ? targetContent.length : 0}, Modified (NEW): ${sourceContent ? sourceContent.length : 0}`);
                     
                     return convertFullContentToLineFormat(targetContent || '', sourceContent || '');
+                } else {
+                    console.log(`⚠️ Both API calls returned NULL - file might not exist in one or both commits`);
                 }
+            } else {
+                console.log(`❌ getFileContent is not a function:`, typeof getFileContent);
             }
+        } else {
+            console.log(`❌ review-pr.js not found at:`, reviewPrPath);
         }
         
     } catch (error) {
         console.log('❌ Error fetching from Azure DevOps API:', error.message);
+        console.log('❌ Stack trace:', error.stack);
     }
     
+    console.log(`⚠️ Falling back to diff reconstruction...`);
     return await reconstructFromDiffFallback(diff, filePath);
 }
 
@@ -61483,10 +61604,10 @@ function mapProviderResponse(rawResponse, provider) {
  */
 function shouldUseApiKey() {
     const config = vscode.workspace.getConfiguration('aida');
-    const useApiKey = config.get('useApiKeyInsteadOfCopilot', false);
+    const useApiKey = config.get('useExternalAI', false);
     const apiKey = config.get('ai.apiKey');
     
-    console.log(`🔍 API Key mode check: useApiKeyInsteadOfCopilot=${useApiKey}, hasApiKey=${!!apiKey}`);
+    console.log(`🔍 API Key mode check: useExternalAI=${useApiKey}, hasApiKey=${!!apiKey}`);
     
     return useApiKey && !!apiKey;
 }
@@ -62512,7 +62633,7 @@ async function getUnifiedModel(stream, requestedModel = null, chatContext = null
             console.warn('⚠️ No Copilot models available - check GitHub Copilot installation and authentication');
             // If API key is configured, suggest using it instead
             if (vscode.workspace.getConfiguration('aida').get('ai.apiKey')) {
-                console.log('💡 Suggestion: Enable API key mode in settings: aida.useApiKeyInsteadOfCopilot = true');
+                console.log('💡 Suggestion: Enable API key mode in settings: aida.useExternalAI = true');
             }
             return null;
         }
@@ -62575,9 +62696,9 @@ async function getUnifiedModel(stream, requestedModel = null, chatContext = null
             const hasApiKey = config.get('ai.apiKey');
             
             if (hasApiKey) {
-                console.log('💡 You have an API key configured. Enable API key mode: aida.useApiKeyInsteadOfCopilot = true');
+                console.log('💡 You have an API key configured. Enable API key mode: aida.useExternalAI = true');
             } else {
-                console.log('💡 Configure an API key in settings: aida.ai.apiKey and enable aida.useApiKeyInsteadOfCopilot');
+                console.log('💡 Configure an API key in settings: aida.ai.apiKey and enable aida.useExternalAI');
             }
         }
         
@@ -62601,7 +62722,7 @@ async function getUnifiedModel(stream, requestedModel = null, chatContext = null
             stream.markdown('1. **GitHub Copilot**: Install and authenticate GitHub Copilot extension\n');
             stream.markdown('2. **API Key Mode**: Configure an API key in extension settings\n');
             stream.markdown('3. **Permissions**: Check VS Code language model permissions\n\n');
-            stream.markdown('💡 **Tip**: If you have an API key, enable `aida.useApiKeyInsteadOfCopilot` in settings\n');
+            stream.markdown('💡 **Tip**: If you have an API key, enable `aida.useExternalAI` in settings\n');
         }
     }
     
@@ -62656,11 +62777,11 @@ function displayDocumentReviewHeader(stream)
             if (typeof doc === 'string') {
                 // Direct string path
                 docName = path.basename(doc);
-                docPath = doc.replace(/\\/g, '/');
+                docPath = normalizePathForDisplay(doc);
             } else if (doc && typeof doc === 'object' && doc.path) {
                 // Object with path property
                 docName = path.basename(doc.path);
-                docPath = doc.path.replace(/\\/g, '/');
+                docPath = normalizePathForDisplay(doc.path);
             } else if (doc && typeof doc === 'object' && doc.name) {
                 // Object with name property
                 docName = doc.name;
@@ -62947,9 +63068,9 @@ async function autoDetectLanguage(workspacePath, targetFilePath = null) {
                 ...detectionResult,
                 type: 'framework',
                 detected: 'Angular',
-                templatePath: 'frameworks/angular',
+                templatePath: normalizePathForDisplay('frameworks/angular'),
                 confidence: 'high',
-                reason: 'angular.json configuration file found'
+                reason: ('angular.json configuration file found at ' + normalizePathForDisplay(workspacePath))
             };
         }
 
@@ -63176,66 +63297,56 @@ async function getReviewTemplateWithDetection(templateType, context = null, targ
     
     console.log(`🎯 Detection result:`, detection);
 
-    // Build template path based on detection
-    let templatePath, templateSource;
+    // Resolve AIDA base path using config
+    const { basePath, source } = resolveAidaBasePath(workspaceFolder);
     
-    // Try AIDA structure first (newest)
-    const aidaTemplatePath = path.join(
-        workspaceFolder.uri.fsPath, 
-        'AIDA', 
-        'templates', 
-        'review-code',
-        detection.templatePath,
-        templateType
-    );
+    // Build template paths based on detection
+    const templatePaths = [
+        // Language-specific template
+        path.join(basePath, 'templates', 'review-code', 'languages', detection.detected.toLowerCase(), templateType),
+        // Fallback template
+        path.join(basePath, 'templates', 'review-code', 'fallback', templateType),
+        // Legacy path support
+        path.join(basePath, 'templates', detection.templatePath, templateType)
+    ];
     
-    if (fs.existsSync(aidaTemplatePath)) {
-        templatePath = aidaTemplatePath;
-        templateSource = 'AIDA workspace';
-        console.log(`✅ Using AIDA template: ${templatePath}`);
-    } else {
-        // Fallback to extension templates
-        if (context) {
-            const extensionTemplatePath = path.join(
-                context.extensionPath,
-                'templates',
-                'review-code',
-                detection.templatePath,
-                templateType
-            );
-            
-            if (fs.existsSync(extensionTemplatePath)) {
-                templatePath = extensionTemplatePath;
-                templateSource = 'extension';
-                console.log(`✅ Using extension template: ${templatePath}`);
-            } else {
-                // Ultimate fallback to legacy templates
-                const legacyPath = path.join(context.extensionPath, 'templates', templateType);
-                if (fs.existsSync(legacyPath)) {
-                    templatePath = legacyPath;
-                    templateSource = 'extension legacy';
-                    console.log(`⚠️ Using legacy template: ${templatePath}`);
-                } else {
-                    throw new Error(`Template not found: ${templateType} for ${detection.detected}`);
-                }
-            }
-        } else {
-            throw new Error('No extension context available for fallback templates');
+    let templatePath = null;
+    let rawContent = null;
+    
+    // Try each template path in order
+    for (const tryPath of templatePaths) {
+        console.log(`🔍 Checking template: ${tryPath}`);
+        if (fs.existsSync(tryPath)) {
+            console.log(`✅ Found template at: ${tryPath}`);
+            templatePath = tryPath;
+            rawContent = fs.readFileSync(templatePath, 'utf8');
+            break;
         }
+    }
+    
+    if (!rawContent) {
+        throw new Error(`Template not found: ${templateType} for ${detection.detected}`);
     }
 
     try {
-        const rawContent = fs.readFileSync(templatePath, 'utf8');
-        
         // Process template with placeholder replacement
         const templateDir = path.dirname(templatePath);
         const processedContent = processTemplateWithPlaceholders(rawContent, templateDir);
         
-        console.log(`✅ Loaded and processed template from: ${templatePath}`);
+        // Source display - show relative path from workspace if config
+        let sourceDisplay;
+        if (source === 'config' && workspaceFolder) {
+            const relativeFromWorkspace = path.relative(workspaceFolder.uri.fsPath, basePath);
+            sourceDisplay = relativeFromWorkspace || 'workspace';
+        } else {
+            sourceDisplay = 'extension/templates';
+        }
+        
+        console.log(`✅ Loaded and processed template from: ${sourceDisplay}`);
         
         return {
             content: processedContent,
-            source: templateSource,
+            source: sourceDisplay,
             path: templatePath,
             detection: detection
         };
@@ -63265,10 +63376,12 @@ function displayDetectionInfo(stream, detection, templateType) {
         stream.markdown(`**Detection:** ${detection.detected} (${detection.type}) ⚠️\n`);
     }
     
-    // Template info
+    // Template info - normalize path separators for display (use forward slash for cross-platform)
+    const normalizedTemplatePath = normalizePathForDisplay(detection.templatePath);
+    const normalizedReason = normalizePathForDisplay(detection.reason);
+    stream.markdown(`**Template used:** \`${normalizedTemplatePath}\`\n`);
     stream.markdown(`**Review Template:** \`${templateType}\`\n`);
-    stream.markdown(`**Template Path:** \`${detection.templatePath}/${templateType}\`\n`);
-    stream.markdown(`**Confidence:** ${detection.confidence} (${detection.reason})\n\n`);
+    stream.markdown(`**Confidence:** ${detection.confidence} (${normalizedReason})\n\n`);
     
     // Show appropriate icon and message
     const detectionEmoji = {
@@ -63493,22 +63606,43 @@ function autoDetectLanguage(filePath) {
  * @returns {object} - Template content with detection info
  */
 function getReviewTemplateWithDetection(templateType, filePath) {
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
     const detection = autoDetectLanguage(filePath);
     
-    // Try framework-specific template first
+    // Resolve AIDA base path using config
+    const { basePath, source } = resolveAidaBasePath(workspaceFolder);
+    
+    // Build template paths based on detection
     const templatePaths = [
-        path.join(global.extensionPath, 'templates', detection.templatePath, `${templateType}.md`),
-        path.join(global.extensionPath, 'templates', `${templateType}.md`)
+        // Language-specific template
+        path.join(basePath, 'templates', 'review-code', 'languages', detection.detected.toLowerCase(), `${templateType}.md`),
+        // Fallback template
+        path.join(basePath, 'templates', 'review-code', 'fallback', `${templateType}.md`),
+        // Legacy path support
+        path.join(basePath, 'templates', detection.templatePath, `${templateType}.md`),
+        path.join(basePath, 'templates', `${templateType}.md`)
     ];
     
     for (const templatePath of templatePaths) {
+        console.log(`🔍 Checking template: ${templatePath}`);
         if (fs.existsSync(templatePath)) {
+            console.log(`✅ Found template at: ${templatePath}`);
             const content = fs.readFileSync(templatePath, 'utf8');
+            
+            // Source display - show relative path from workspace if config
+            let sourceDisplay;
+            if (source === 'config' && workspaceFolder) {
+                const relativeFromWorkspace = path.relative(workspaceFolder.uri.fsPath, basePath);
+                sourceDisplay = relativeFromWorkspace || 'workspace';
+            } else {
+                sourceDisplay = 'extension/templates';
+            }
+            
             return {
                 content,
                 detection,
                 templatePath: templatePath,
-                source: detection.detected
+                source: sourceDisplay
             };
         }
     }
@@ -63539,76 +63673,189 @@ function getLanguageFromExtension(ext) {
 }
 
 /**
- * Load template with workspace AIDA priority
+ * Normalize path separators to backslash for Windows display
+ * @param {string} pathString - Path string to normalize
+ * @returns {string} - Normalized path with backslashes
+ */
+function normalizePathForDisplay(pathString) {
+    if (!pathString || typeof pathString !== 'string') return '';
+    return pathString.replace(/\\/g, '/');
+}
+
+/**
+ * Resolve AIDA template base path from config or default locations
+ * @param {object} workspaceFolder - VS Code workspace folder
+ * @returns {object} - { basePath: string, source: 'config'|'extension' }
+ */
+function resolveAidaBasePath(workspaceFolder) {
+    const config = vscode.workspace.getConfiguration('aida');
+    const configPath = config.get('templatesBasePath', '');
+    
+    // Priority 1: User-configured path (if provided)
+    if (configPath && configPath.trim()) {
+        let resolvedPath = configPath.trim();
+        
+        // Support ${workspaceFolder} variable
+        if (workspaceFolder) {
+            resolvedPath = resolvedPath.replace(/\$\{workspaceFolder\}/g, workspaceFolder.uri.fsPath);
+        }
+        
+        // Resolve relative paths
+        if (!path.isAbsolute(resolvedPath) && workspaceFolder) {
+            resolvedPath = path.resolve(workspaceFolder.uri.fsPath, resolvedPath);
+        }
+        
+        // Check if templates folder exists
+        const templatesPath = path.join(resolvedPath, 'templates');
+        if (fs.existsSync(templatesPath)) {
+            console.log(`✅ Using configured AIDA path: ${resolvedPath}`);
+            return {
+                basePath: resolvedPath,
+                source: 'config'
+            };
+        } else {
+            // Auto-create AIDA structure if base path doesn't exist
+            console.warn(`⚠️ Configured AIDA path not found: ${templatesPath}`);
+            console.log(`🔧 Attempting to create AIDA structure at: ${resolvedPath}`);
+            
+            try {
+                // Create AIDA base directory
+                if (!fs.existsSync(resolvedPath)) {
+                    fs.mkdirSync(resolvedPath, { recursive: true });
+                    console.log(`✅ Created AIDA directory: ${resolvedPath}`);
+                }
+                
+                // Create templates directory structure
+                const templatesDirs = [
+                    templatesPath,
+                    path.join(templatesPath, 'review-code'),
+                    path.join(templatesPath, 'review-code', 'languages'),
+                    path.join(templatesPath, 'review-code', 'fallback')
+                ];
+                
+                for (const dir of templatesDirs) {
+                    if (!fs.existsSync(dir)) {
+                        fs.mkdirSync(dir, { recursive: true });
+                        console.log(`✅ Created directory: ${dir}`);
+                    }
+                }
+                
+                // Copy templates from extension to AIDA folder
+                const extensionTemplatesPath = path.join(global.extensionPath, 'templates');
+                if (fs.existsSync(extensionTemplatesPath)) {
+                    copyTemplatesRecursive(extensionTemplatesPath, templatesPath);
+                    console.log(`✅ Copied templates from extension to: ${templatesPath}`);
+                }
+                
+                console.log(`✅ AIDA structure created successfully at: ${resolvedPath}`);
+                return {
+                    basePath: resolvedPath,
+                    source: 'config'
+                };
+                
+            } catch (error) {
+                console.error(`❌ Failed to create AIDA structure: ${error.message}`);
+                console.warn(`⚠️ Falling back to extension templates`);
+            }
+        }
+    }
+    
+    // Priority 2: Extension templates (fallback)
+    console.log(`✅ Using extension AIDA templates`);
+    return {
+        basePath: global.extensionPath,
+        source: 'extension'
+    };
+}
+
+/**
+ * Copy templates recursively from source to destination
+ * @param {string} src - Source directory path
+ * @param {string} dest - Destination directory path
+ */
+function copyTemplatesRecursive(src, dest) {
+    if (!fs.existsSync(dest)) {
+        fs.mkdirSync(dest, { recursive: true });
+    }
+    
+    const entries = fs.readdirSync(src, { withFileTypes: true });
+    
+    for (const entry of entries) {
+        const srcPath = path.join(src, entry.name);
+        const destPath = path.join(dest, entry.name);
+        
+        if (entry.isDirectory()) {
+            copyTemplatesRecursive(srcPath, destPath);
+        } else {
+            fs.copyFileSync(srcPath, destPath);
+            console.log(`  📄 Copied: ${entry.name}`);
+        }
+    }
+}
+
+/**
+ * Load template with AIDA path resolution
  * @param {string} templateType - Template file name (e.g., 'review-file.md')
  * @param {object} detection - Detection result object
  * @returns {object} Template result with content, source, and path info
  */
 async function loadTemplateWithPriority(templateType, detection) {
-    const vscode = __webpack_require__(/*! vscode */ "vscode");
-    const fs = __webpack_require__(/*! fs */ "fs");
-    const path = __webpack_require__(/*! path */ "path");
-    
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-    let templatePaths = [];
-    let templateSourceDisplay = 'extension/templates';
-    let templatePathDisplay = detection.templatePath;
+    
+    // Resolve AIDA base path
+    const { basePath, source } = resolveAidaBasePath(workspaceFolder);
+    
+    // Build template paths based on detection
+    const templatePaths = [
+        // Language-specific template
+        path.join(basePath, 'templates', 'review-code', 'languages', detection.detected.toLowerCase(), templateType),
+        // Fallback template
+        path.join(basePath, 'templates', 'review-code', 'fallback', templateType),
+        // Legacy path support
+        path.join(basePath, 'templates', detection.templatePath, templateType)
+    ];
+    
     let templateContent = null;
     let usedTemplatePath = null;
     
-    if (workspaceFolder) {
-        const workspaceAidaPath = path.join(workspaceFolder.uri.fsPath, 'AIDA', 'templates');
-        templatePaths = [
-            // Workspace AIDA templates (highest priority)
-            path.join(workspaceAidaPath, 'review-code', 'languages', detection.detected.toLowerCase(), templateType),
-            path.join(workspaceAidaPath, 'review-code', 'fallback', templateType),
-            // Extension templates (fallback)
-            path.join(global.extensionPath, 'templates', detection.templatePath, templateType),
-            path.join(global.extensionPath, 'templates', 'review-code', 'fallback', templateType)
-        ];
-    } else {
-        templatePaths = [
-            path.join(global.extensionPath, 'templates', detection.templatePath, templateType),
-            path.join(global.extensionPath, 'templates', 'review-code', 'fallback', templateType)
-        ];
-    }
-    
-    // Try each template path in priority order
+    // Try each template path in order
     for (const templatePath of templatePaths) {
-        console.log(`🔍 Checking template path: ${templatePath}`);
+        console.log(`🔍 Checking template: ${templatePath}`);
         if (fs.existsSync(templatePath)) {
             console.log(`✅ Found template at: ${templatePath}`);
             const rawContent = fs.readFileSync(templatePath, 'utf8');
             
-            // Process template with placeholder replacement using new utility function
+            // Process template with placeholder replacement
             templateContent = processTemplateContent(rawContent, templatePath);
-            
             usedTemplatePath = templatePath;
             break;
-        } else {
-            console.log(`❌ Template not found at: ${templatePath}`);
         }
     }
     
-    // Determine template source for display
-    if (workspaceFolder && usedTemplatePath && usedTemplatePath.includes(path.join(workspaceFolder.uri.fsPath, 'AIDA'))) {
-        templateSourceDisplay = 'workspace/AIDA/templates';
-        // Extract language from workspace path: review-code/languages/angular
-        const workspaceAidaPath = path.join(workspaceFolder.uri.fsPath, 'AIDA', 'templates');
-        const relativePath = path.relative(workspaceAidaPath, usedTemplatePath);
-        const pathParts = relativePath.split(path.sep);
-        templatePathDisplay = pathParts.slice(0, -1).join('/'); // e.g., "review-code/languages/angular"
-    }
-    
     if (!templateContent) {
-        throw new Error(`Template not found: ${templateType}`);
+        throw new Error(`Template not found: ${templateType} for ${detection.detected}`);
     }
     
-    console.log(`✅ Loaded review template from: ${templateSourceDisplay}/${templatePathDisplay} (${templateContent.length} characters)`);
+    // Determine display paths (use backslash for Windows consistency)
+    const templatesBasePath = path.join(basePath, 'templates');
+    const relativePath = path.relative(templatesBasePath, usedTemplatePath);
+    const pathParts = relativePath.split(path.sep);
+    const templatePathDisplay = pathParts.slice(0, -1).join('\\'); // ✅ Use backslash for display
+    
+    // Source display - show relative path from workspace if config, otherwise extension
+    let sourceDisplay;
+    if (source === 'config' && workspaceFolder) {
+        const relativeFromWorkspace = normalizePathForDisplay(path.relative(workspaceFolder.uri.fsPath, basePath));
+        sourceDisplay = relativeFromWorkspace || 'workspace';
+    } else {
+        sourceDisplay = 'extension\\templates'; // ✅ Use backslash for display
+    }
+    
+    console.log(`✅ Loaded template from: ${sourceDisplay}/${templatePathDisplay} (${templateContent.length} chars)`);
     
     return {
         content: templateContent,
-        templateSource: templateSourceDisplay,
+        templateSource: sourceDisplay,
         templatePath: templatePathDisplay,
         usedPath: usedTemplatePath
     };
@@ -63635,8 +63882,8 @@ function displayCommonReviewInfo(stream, reviewType, filePath, options = {}) {
         if (workspaceFolder && path.isAbsolute(filePath)) {
             // Convert to relative path from workspace root
             const relativePath = path.relative(workspaceFolder.uri.fsPath, filePath);
-            // Use forward slashes for consistency (like VS Code)
-            displayPath = relativePath.replace(/\\/g, '/');
+            // Use backslashes for consistency (Windows style)
+            displayPath = normalizePathForDisplay(relativePath);
         }
     } catch (error) {
         // Fallback to original path if conversion fails
@@ -63820,8 +64067,12 @@ async function getBusinessDocumentFolders(workspaceFolder) {
     console.log('🔍 getBusinessDocumentFolders called with workspaceFolder:', workspaceFolder?.uri?.fsPath);
     
     try {
-        // Try both folder names for backwards compatibility
-        const businessDocsPath = path.join(workspaceFolder.uri.fsPath, 'AIDA', 'business-docs');
+        // Use the same logic as template base path resolution
+        const aidaPathInfo = resolveAidaBasePath(workspaceFolder);
+        console.log(`🔍 Resolved AIDA base path: ${aidaPathInfo.basePath} (source: ${aidaPathInfo.source})`);
+        
+        // Build business docs path using the resolved AIDA base path
+        const businessDocsPath = path.join(aidaPathInfo.basePath, 'business-docs');
         
         let actualPath = null;
         if (fs.existsSync(businessDocsPath)) {
@@ -63830,7 +64081,7 @@ async function getBusinessDocumentFolders(workspaceFolder) {
         }
         
         if (!actualPath) {
-            console.log(`📁 Business document path not found at either: ${businessDocsPath} or ${technicalDocsPath}`);
+            console.log(`📁 Business document path not found at: ${businessDocsPath}`);
             return [];
         }
         
@@ -63838,25 +64089,40 @@ async function getBusinessDocumentFolders(workspaceFolder) {
             .filter(dirent => dirent.isDirectory())
             .map(dirent => {
                 const folderPath = path.join(actualPath, dirent.name);
+                
+                // Create dynamic relative path based on the resolved base path
+                const relativePath = aidaPathInfo.source === 'config' 
+                    ? path.relative(workspaceFolder.uri.fsPath, folderPath).replace(/\\/g, '/')
+                    : `AIDA/business-docs/${dirent.name}`;
+                
                 return {
                     name: dirent.name,
                     displayName: dirent.name.split('-').map(word => 
                         word.charAt(0).toUpperCase() + word.slice(1)
                     ).join(' '),
                     path: folderPath,
-                    relativePath: `AIDA/business-docs/${dirent.name}`,
+                    relativePath: relativePath,
                     basePath: actualPath,
                     workspacePath: workspaceFolder.uri.fsPath,
+                    aidaBasePath: aidaPathInfo.basePath,
+                    aidaSource: aidaPathInfo.source,
                     // Helper methods for getting files
                     getFiles: () => {
                         try {
                             return fs.readdirSync(folderPath, { withFileTypes: true })
                                 .filter(file => file.isFile() && file.name.endsWith('.md'))
-                                .map(file => ({
-                                    name: file.name,
-                                    path: path.join(folderPath, file.name),
-                                    relativePath: `AIDA/business-docs/${dirent.name}/${file.name}`
-                                }));
+                                .map(file => {
+                                    const filePath = path.join(folderPath, file.name);
+                                    const fileRelativePath = aidaPathInfo.source === 'config'
+                                        ? path.relative(workspaceFolder.uri.fsPath, filePath).replace(/\\/g, '/')
+                                        : `AIDA/business-docs/${dirent.name}/${file.name}`;
+                                    
+                                    return {
+                                        name: file.name,
+                                        path: filePath,
+                                        relativePath: fileRelativePath
+                                    };
+                                });
                         } catch (error) {
                             console.error(`❌ Error reading files in ${folderPath}:`, error);
                             return [];
@@ -64027,8 +64293,247 @@ module.exports = {
     processTemplateContent,
     getBusinessDocumentFolders,
     buildBusinessDocsContent,
-    showReviewOptions
+    showReviewOptions,
+    resolveAidaBasePath,
+    copyTemplatesRecursive,
+    normalizePathForDisplay,
+    // Source control helpers
+    parsePRUrl,
+    getTokenForPR,
+    hasTokenForProvider,
+    getConfiguredOrganizations,
+    showTokenConfigurationHelp
 };
+
+/**
+ * ===== SOURCE CONTROL HELPERS =====
+ * Helper functions for multiple organizations per provider
+ */
+
+/**
+ * Parse PR/MR URL to extract provider and organization information
+ * @param {string} prUrl - PR/MR URL
+ * @returns {object} - { provider, organization, project?, repository?, prId? }
+ */
+function parsePRUrl(prUrl) {
+    const url = prUrl.trim();
+    
+    // Azure DevOps: https://dev.azure.com/{organization}/{project}/_git/{repository}/pullrequest/{id}
+    if (url.includes('dev.azure.com')) {
+        const match = url.match(/dev\.azure\.com\/([^\/]+)\/([^\/]+)\/_git\/([^\/]+)\/pullrequest\/(\d+)/);
+        if (match) {
+            return {
+                provider: 'azureDevOps',
+                organization: match[1],
+                project: match[2],
+                repository: match[3],
+                prId: match[4]
+            };
+        }
+    }
+    
+    // GitHub: https://github.com/{owner}/{repo}/pull/{id}
+    if (url.includes('github.com')) {
+        const match = url.match(/github\.com\/([^\/]+)\/([^\/]+)\/pull\/(\d+)/);
+        if (match) {
+            return {
+                provider: 'github',
+                organization: match[1],
+                repository: match[2],
+                prId: match[3]
+            };
+        }
+    }
+    
+    // GitLab: https://gitlab.com/{namespace/path}/{repo}/-/merge_requests/{id}
+    // Support nested namespaces like: ds365ai/FDP/time-and-cost-project/fdp-activity-middleware-service
+    if (url.includes('gitlab.com')) {
+        const match = url.match(/gitlab\.com\/(.+?)\/-\/merge_requests\/(\d+)/);
+        if (match) {
+            const fullPath = match[1];
+            const pathParts = fullPath.split('/');
+            const repository = pathParts[pathParts.length - 1]; // Last part is project name
+            const organization = pathParts.slice(0, -1).join('/'); // Everything else is namespace
+            
+            return {
+                provider: 'gitlab',
+                organization: organization,
+                repository: repository,
+                prId: match[2]
+            };
+        }
+    }
+    
+    throw new Error(`Unsupported PR/MR URL format: ${prUrl}`);
+}
+
+/**
+ * Get token for PR/MR based on provider and organization
+ * @param {string} prUrl - PR/MR URL
+ * @returns {string|null} - Access token for the organization or null if not found
+ */
+function getTokenForPR(prUrl) {
+    const vscode = __webpack_require__(/*! vscode */ "vscode");
+    
+    try {
+        const { provider, organization } = parsePRUrl(prUrl);
+        const config = vscode.workspace.getConfiguration('aida');
+        
+        console.log(`🔍 Looking for token: provider=${provider}, org=${organization}`);
+        
+        // Try new multi-organization configuration first
+        const sourceControls = config.get('sourceControls', {});
+        console.log(`🔍 DEBUG sourceControls config:`, JSON.stringify(sourceControls, null, 2));
+        const providerTokens = sourceControls[provider];
+        console.log(`🔍 DEBUG providerTokens for ${provider}:`, JSON.stringify(providerTokens, null, 2));
+        
+        if (providerTokens && providerTokens[organization]) {
+            console.log(`✅ Found token for ${provider}/${organization} in sourceControls`);
+            return providerTokens[organization];
+        } else {
+            console.log(`❌ No token found for ${provider}/${organization} in sourceControls`);
+        }
+        
+        console.log(`❌ No token found for ${provider}/${organization}`);
+        return null;
+        
+    } catch (error) {
+        console.error('❌ Error getting token for PR:', error.message);
+        return null;
+    }
+}
+
+/**
+ * Check if token is configured for a specific provider and organization
+ * @param {string} provider - Provider name (azureDevOps, github, gitlab)
+ * @param {string} organization - Organization name
+ * @returns {boolean} - true if token is configured
+ */
+function hasTokenForProvider(provider, organization) {
+    const vscode = __webpack_require__(/*! vscode */ "vscode");
+    const config = vscode.workspace.getConfiguration('aida');
+    
+    // Check new configuration
+    const sourceControls = config.get('sourceControls', {});
+    if (sourceControls[provider]?.[organization]) {
+        return true;
+    }
+    
+    return false;
+}
+
+/**
+ * Get all configured organizations for a provider
+ * @param {string} provider - Provider name (azureDevOps, github, gitlab)
+ * @returns {Array<string>} - Array of organization names
+ */
+function getConfiguredOrganizations(provider) {
+    const vscode = __webpack_require__(/*! vscode */ "vscode");
+    const config = vscode.workspace.getConfiguration('aida');
+    
+    const sourceControls = config.get('sourceControls', {});
+    const providerTokens = sourceControls[provider];
+    
+    if (providerTokens && typeof providerTokens === 'object') {
+        return Object.keys(providerTokens);
+    }
+    
+    return [];
+}
+
+/**
+ * Show comprehensive guidance for missing token configuration
+ * @param {string} provider - Provider name
+ * @param {string} organization - Organization name
+ * @param {object} stream - Chat stream (optional)
+ */
+function showTokenConfigurationHelp(provider, organization, stream = null) {
+    const vscode = __webpack_require__(/*! vscode */ "vscode");
+    
+    
+const providerNames = {
+        azureDevOps: 'Azure DevOps',
+        github: 'GitHub',
+        gitlab: 'GitLab'
+    };
+    
+    const providerName = providerNames[provider] || provider;
+    
+    // Provider configuration data
+    const providerConfigs = {
+        azureDevOps: {
+            name: 'Azure DevOps',
+            docs: 'https://docs.microsoft.com/en-us/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate',
+            permissions: 'Code (read), Pull Request (read)'
+        },
+        github: {
+            name: 'GitHub',
+            docs: 'https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token',
+            permissions: 'repo (Full control of private repositories)'
+        },
+        gitlab: {
+            name: 'GitLab',
+            docs: 'https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html',
+            permissions: 'api (Access to the authenticated user\'s API), read_repository'
+        }
+    };
+    
+    const config = providerConfigs[provider];
+    if (!config) return;
+    
+    const errorMessage = `❌ **Missing ${providerName} Token**`;
+    const orgMessage = `No personal access token configured for organization: \`${organization}\``;
+    
+    let helpContent = `${errorMessage}\n\n${orgMessage}\n\n`;
+    
+    // Configuration instructions
+    helpContent += `## 🔧 **Configuration Required**\n\n`;
+    helpContent += `**Step 1:** Press \`Ctrl + ,\` (or \`Cmd + ,\` on Mac) → Search for: \`aida.sourceControls\`\n\n`;
+    helpContent += `**Step 2:** Add your ${config.name} configuration (Organization: \`${organization}\`):\n\n`;
+    helpContent += `\`\`\`json\n`;
+    helpContent += `"aida.sourceControls": {\n`;
+    helpContent += `  "${provider}": {\n`;
+    helpContent += `    "${organization}": "YOUR_${provider.toUpperCase()}_TOKEN",\n`;
+    helpContent += `    "AnotherOrganization": "YOUR_${provider.toUpperCase()}_TOKEN_2"\n`;
+    helpContent += `  }\n`;
+    helpContent += `}\n`;
+    helpContent += `\`\`\`\n\n`;
+    
+    // Token creation guidance
+    helpContent += `## 🔑 **How to Get Personal Access Token**\n\n`;
+    helpContent += `1. **Go to ${config.name}** → Settings → Personal Access Tokens\n`;
+    helpContent += `2. **Create new token** with these permissions:\n`;
+    helpContent += `   - ${config.permissions}\n`;
+    helpContent += `3. **Copy the token** and add to VS Code settings\n\n`;
+    helpContent += `📚 **Documentation:** ${config.docs}\n\n`;
+    
+    // Quick setup button
+    
+    console.error(`❌ Missing token: ${providerName}/${organization}`);
+    console.log('🔧 Configuration help displayed to user');
+    
+    if (stream) {
+        stream.markdown(helpContent);
+    } else {
+        vscode.window.showErrorMessage(
+            `Missing ${providerName} token for: ${organization}`, 
+            'Open Settings', 
+            'View Guide'
+        ).then(action => {
+            if (action === 'Open Settings') {
+                vscode.commands.executeCommand('workbench.action.openSettings', 'aida.sourceControls');
+            } else if (action === 'View Guide') {
+                // Create help document
+                vscode.workspace.openTextDocument({
+                    content: helpContent.replace(/\*\*/g, '').replace(/`/g, ''),
+                    language: 'markdown'
+                }).then(doc => {
+                    vscode.window.showTextDocument(doc);
+                });
+            }
+        });
+    }
+}
 
 
 /***/ }),
@@ -64633,7 +65138,7 @@ const vscode = __webpack_require__(/*! vscode */ "vscode");
 const path = __webpack_require__(/*! path */ "path");
 const https = __webpack_require__(/*! https */ "https");
 const { execSync } = __webpack_require__(/*! child_process */ "child_process");
-const { getUnifiedModel, executeAIReview, shouldUseApiKey, processTemplateContent, showReviewOptions } = __webpack_require__(/*! ./review-common */ "./scripts/review-common.js");
+const { getUnifiedModel, executeAIReview, shouldUseApiKey, processTemplateContent, showReviewOptions, getTokenForPR, parsePRUrl, showTokenConfigurationHelp } = __webpack_require__(/*! ./review-common */ "./scripts/review-common.js");
 const { detectFromPRFiles, getReviewTemplateWithDetection, displayDetectionInfo } = __webpack_require__(/*! ./language-detection */ "./scripts/language-detection.js");
 
 // Import functions from extension.js
@@ -64993,9 +65498,13 @@ async function showAzureDevOpsDiffInWebview(prAnalysis, stream) {
     // Clear existing cache entries for this Azure DevOps PR to prevent file count discrepancy
     clearPrDiffCache('azure', data.id);
 
-    // 🚀 Cache Azure DevOps API credentials and PR metadata for full content retrieval
-    const config = vscode.workspace.getConfiguration('aida');
-    const accessToken = config.get('azureDevOps.personalAccessToken');
+    // 🚀 Get access token using new multi-org helper
+    const prUrl = `https://dev.azure.com/${data.organization}/${data.project}/_git/${data.repository}/pullrequest/${data.id}`;
+    const accessToken = getTokenForPR(prUrl);
+    
+    if (!accessToken) {
+        console.warn(`⚠️ No token configured for Azure DevOps organization: ${data.organization}`);
+    }
     
     // Store global Azure DevOps API info for parseFullDiffContentEnhanced
     global.prDiffCache.accessToken = accessToken;
@@ -65035,10 +65544,14 @@ async function showAzureDevOpsDiffInWebview(prAnalysis, stream) {
             repository: data.repository,
             sourceCommit: data.sourceCommit,
             targetCommit: data.targetCommit,
-            accessToken: accessToken
+            mergeBaseCommit: data.mergeBaseCommit,
+            accessToken: accessToken,
+            // Flag to force full file content fetching
+            useFullContent: true
         };
         
         console.log(`🔍 Cached Azure DevOps diff: ${diffId} for ${fileChange.path}`);
+        console.log(`   📊 Commits: base=${data.targetCommit?.substring(0, 7)}, source=${data.sourceCommit?.substring(0, 7)}`);
     });
 
     // Display file links with webview buttons (hover for details)
@@ -65353,7 +65866,7 @@ async function handleReviewPr(request, context, stream, token) {
             console.log('🎯 Enhanced/Quick PR Review detected:', global.selectedBusinessDocs);
             
             // Execute review directly
-            await processPrReview(userMessage, repoType, prId, owner, repo, organization, project, repository, originalUrl, stream, context);
+            await processPrReview(userMessage, repoType, prId, owner, repo, organization, project, repository, originalUrl, stream, context, request);
             return;
         }
 
@@ -65377,12 +65890,12 @@ async function handleReviewPr(request, context, stream, token) {
             // If no business documents, execute Quick Review immediately
             if (!hasBusinessDocs) {
                 console.log('📋 No business documents found - executing Quick Review automatically');
-                stream.markdown('� **Starting Quick Review automatically** (no business documents found)\n\n');
+                stream.markdown('🚀 **Starting Quick Review automatically** (no business documents found)\n\n');
                 
                 // Set Quick Review mode
                 global.selectedBusinessDocs = [];
                 
-                await processPrReview(userMessage, repoType, prId, owner, repo, organization, project, repository, originalUrl, stream, context);
+                await processPrReview(userMessage, repoType, prId, owner, repo, organization, project, repository, originalUrl, stream, context, request);
                 return;
             }
             
@@ -65424,7 +65937,7 @@ async function handleReviewPr(request, context, stream, token) {
         }
 
         // Continue with normal PR processing
-        await processPrReview(userMessage, repoType, prId, owner, repo, organization, project, repository, originalUrl, stream, context);
+        await processPrReview(userMessage, repoType, prId, owner, repo, organization, project, repository, originalUrl, stream, context, request);
 
     } catch (error) {
         stream.markdown('❌ **Unexpected Error**\n\n');
@@ -65436,7 +65949,7 @@ async function handleReviewPr(request, context, stream, token) {
 /**
  * Process PR review logic (extracted from handleReviewPr)
  */
-async function processPrReview(userMessage, repoType, prId, owner, repo, organization, project, repository, originalUrl, stream, context) {
+async function processPrReview(userMessage, repoType, prId, owner, repo, organization, project, repository, originalUrl, stream, context, request = null) {
     try {
         // Display repo info based on type
         if (repoType === 'github') {
@@ -65530,7 +66043,7 @@ async function processPrReview(userMessage, repoType, prId, owner, repo, organiz
         await displayPrReviewResults(stream, prAnalysis);
 
         // Add quick review option with original URL
-        await addQuickReviewOption(stream, prAnalysis, context, originalUrl);
+        await addQuickReviewOption(stream, prAnalysis, request, originalUrl);
 
     } catch (error) {
         stream.markdown('❌ **Unexpected Error in PR Processing**\n\n');
@@ -65625,47 +66138,52 @@ async function reviewPullRequestCommand() {
 /**
  * Analyze Pull Request using Azure DevOps API
  */
-async function analyzePullRequest(stream, prId, organization = null, project = null, repository = null) {
+async function analyzePullRequest(stream, prUrl, organization = null, project = null, repository = null) {
     try {
-        // Get Azure DevOps configuration from VS Code settings
-        const config = vscode.workspace.getConfiguration('aida');
-        const personalAccessToken = config.get('azureDevOps.personalAccessToken');
-
-        // Use provided values (parsed from URL) or fall back to defaults only if needed
-        const org = organization || 'BusinessWebUS';
-        const proj = project || 'Shippo';
-        const repo = repository || 'Shippo-Web';
-
-        // Auto-detection success info
-        if (organization && project && repository) {
-            console.log(`✅ Auto-detected from URL: org=${org}, project=${proj}, repo=${repo}`);
-            stream.markdown(`🔍 **Auto-detected**: ${org}/${proj}/${repo}\n\n`);
+        // Parse PR URL and auto-detect organization info if full URL provided
+        let org = organization;
+        let proj = project;
+        let repo = repository;
+        let prId = null;
+        
+        if (prUrl.includes('dev.azure.com')) {
+            try {
+                const parsed = parsePRUrl(prUrl);
+                org = parsed.organization;
+                proj = parsed.project;
+                repo = parsed.repository;
+                prId = parsed.prId;
+                console.log(`✅ Auto-detected from URL: org=${org}, project=${proj}, repo=${repo}, PR=${prId}`);
+                stream.markdown(`🔍 **Auto-detected**: ${org}/${proj}/${repo}/PR#${prId}\n\n`);
+            } catch (parseError) {
+                console.log('⚠️ Failed to parse URL, using provided values');
+                prId = prUrl; // Assume it's just a PR ID
+            }
         } else {
+            prId = prUrl; // Assume it's just a PR ID
+        }
+        
+        // Validate required parameters
+        if (!org || !proj || !repo || !prId) {
+            return { error: `Missing required parameters: org=${org}, project=${proj}, repo=${repo}, prId=${prId}` };
+        }
+        
+        if (!organization && !project && !repository) {
             console.log(`⚠️ Using defaults: org=${org}, project=${proj}, repo=${repo}`);
             stream.markdown(`⚠️ **Using defaults**: ${org}/${proj}/${repo} (provide full URL for auto-detection)\n\n`);
         }
 
+        // Get token using new multi-org helper
+        const fullPrUrl = `https://dev.azure.com/${org}/${proj}/_git/${repo}/pullrequest/${prId}`;
+        console.log(`🔍 Checking token for Azure DevOps URL: ${fullPrUrl}`);
+        const personalAccessToken = getTokenForPR(fullPrUrl);
+        console.log(`🔍 Token found: ${personalAccessToken ? 'YES' : 'NO'}`);
+
         if (!personalAccessToken) {
-            // Show configuration help if no token (simplified - no manual org/project config needed)
-            stream.markdown('⚠️ **Azure DevOps Token Not Configured**\n\n');
-            stream.markdown('To get real PR data from Azure DevOps:\n\n');
-            stream.markdown('**Click button below to open User Settings JSON:**\n\n');
-
-            stream.markdown(`[🔧 Open User Settings JSON](command:workbench.action.openSettingsJson)\n\n`);
-            stream.markdown('**Add this to your settings.json file:**\n\n');
-            stream.markdown('```json\n');
-            stream.markdown('{\n');
-            stream.markdown('    "aida.azureDevOps.personalAccessToken": "YOUR_TOKEN_HERE"\n');
-            stream.markdown('}\n');
-            stream.markdown('```\n\n');
-
-            stream.markdown('**Create token at:** https://dev.azure.com/_usersSettings/tokens\n\n');
-            stream.markdown('**Required permissions:** Code (Read) + Pull Request (Read)\n\n');
-            stream.markdown('💡 **Note:** Organization and project will be auto-detected from URL\n\n');
-            stream.markdown('---\n\n');
-
-            // Return error instead of mock data
-            return { error: 'Azure DevOps Personal Access Token is required' };
+            console.log(`❌ No token found for Azure DevOps org: ${org}`);
+            // Show configuration help using new helper
+            showTokenConfigurationHelp('azureDevOps', org, stream);
+            return { error: `Azure DevOps Personal Access Token is required for organization: ${org}` };
         }
 
         try {
@@ -65841,6 +66359,7 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
                     let additions = 0;
                     let deletions = 0;
                     let fileSourceContent = null; // Declare outside try block for new files
+                    let fileBaseContent = null; // Store base content for Monaco
 
                     if (baseCommit && sourceCommit) {
                         try {
@@ -65852,6 +66371,10 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
                             // Get file content from both commits
                             const baseContent = await getFileContent(organization, project, repository, filePath, baseCommit, token);
                             const sourceContent = await getFileContent(organization, project, repository, filePath, sourceCommit, token);
+                            
+                            // Store for Monaco diff viewer
+                            fileBaseContent = baseContent;
+                            fileSourceContent = sourceContent;
                             
                             // Store source content for new files
                             fileSourceContent = sourceContent;
@@ -65892,7 +66415,10 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
                         targetCommit: sourceCommit?.substring(0, 7) || 'source',
                         additions: additions,
                         deletions: deletions,
-                        diffContent: diffContent
+                        diffContent: diffContent,
+                        // Store FULL file content for Monaco diff viewer
+                        fullBaseContent: fileBaseContent || '',
+                        fullSourceContent: fileSourceContent || ''
                     };
                     
                     // Store full content for new files (needed for typescript code block injection)
@@ -65989,6 +66515,7 @@ async function makeAzureDevOpsRequest(url, token, method = 'GET', body = null) {
             port: 443,
             path: urlObj.pathname + urlObj.search,
             method: method,
+            rejectUnauthorized: false, // Fix SSL certificate issues in corporate environments
             headers: {
                 'Content-Type': 'application/json',
                 'User-Agent': 'VS Code AI Self Check Extension'
@@ -66058,6 +66585,7 @@ async function getFileContent(organization, project, repository, filePath, commi
                 hostname: url.hostname,
                 path: url.pathname + url.search,
                 method: 'GET',
+                rejectUnauthorized: false, // Fix SSL certificate issues in corporate environments
                 headers: {
                     'Authorization': `Basic ${authToken}`,
                     'Accept': 'text/plain',
@@ -66200,11 +66728,17 @@ function generateUnifiedDiff(filePath, baseContent, targetContent, changeType) {
  */
 async function analyzeGitHubPullRequest(stream, owner, repo, prId) {
     try {
-        // Get GitHub token from VS Code settings
-        const config = vscode.workspace.getConfiguration('aida');
-        const githubToken = config.get('github.personalAccessToken');
-
         console.log(`🔄 Fetching GitHub PR ${owner}/${repo}#${prId}`);
+
+        // Get token using new multi-org helper
+        const prUrl = `https://github.com/${owner}/${repo}/pull/${prId}`;
+        const githubToken = getTokenForPR(prUrl);
+
+        if (!githubToken) {
+            // Show configuration help using new helper
+            showTokenConfigurationHelp('github', owner, stream);
+            return { success: false, error: `GitHub Personal Access Token is required for organization: ${owner}` };
+        }
 
         // Get PR details from GitHub API
         const prData = await getGitHubPR(owner, repo, prId, githubToken);
@@ -66213,18 +66747,6 @@ async function analyzeGitHubPullRequest(stream, owner, repo, prId) {
             console.error('Failed to get GitHub PR:', prData.error);
             stream.markdown('❌ **GitHub API Error**\n\n');
             stream.markdown(`Error: ${prData.error}\n\n`);
-
-            if (!githubToken) {
-                stream.markdown('**Configure GitHub Token:**\n\n');
-                stream.markdown('[🔧 Open User Settings JSON](command:workbench.action.openSettingsJson)\n\n');
-                stream.markdown('```json\n');
-                stream.markdown('{\n');
-                stream.markdown('    "aida.github.personalAccessToken": "YOUR_GITHUB_TOKEN"\n');
-                stream.markdown('}\n');
-                stream.markdown('```\n\n');
-                stream.markdown('**Create token at:** https://github.com/settings/tokens\n');
-                stream.markdown('**Required scope:** `repo` (for private repos) or `public_repo` (for public repos)\n\n');
-            }
 
             return { error: prData.error };
         }
@@ -66445,6 +66967,7 @@ async function makeGitHubRequest(url, token, method = 'GET', customHeaders = {})
             port: 443,
             path: urlObj.pathname + urlObj.search,
             method: method,
+            rejectUnauthorized: false, // Fix SSL certificate issues in corporate environments
             headers: headers
         };
 
@@ -66504,11 +67027,17 @@ async function makeGitHubRequest(url, token, method = 'GET', customHeaders = {})
  */
 async function analyzeGitLabMergeRequest(stream, gitlabHost, owner, repo, mrId) {
     try {
-        // Get GitLab token from VS Code settings
-        const config = vscode.workspace.getConfiguration('aida');
-        const gitlabToken = config.get('gitlab.personalAccessToken');
-
         console.log(`🔄 Fetching GitLab MR ${owner}/${repo}!${mrId} from ${gitlabHost}`);
+
+        // Get token using new multi-org helper
+        const mrUrl = `https://${gitlabHost}/${owner}/${repo}/-/merge_requests/${mrId}`;
+        const gitlabToken = getTokenForPR(mrUrl);
+
+        if (!gitlabToken) {
+            // Show configuration help using new helper
+            showTokenConfigurationHelp('gitlab', owner, stream);
+            return { success: false, error: `GitLab Personal Access Token is required for organization: ${owner}` };
+        }
 
         // Get MR details from GitLab API
         const mrData = await getGitLabMR(gitlabHost, owner, repo, mrId, gitlabToken);
@@ -66517,19 +67046,6 @@ async function analyzeGitLabMergeRequest(stream, gitlabHost, owner, repo, mrId) 
             console.error('Failed to get GitLab MR:', mrData.error);
             stream.markdown('❌ **GitLab API Error**\n\n');
             stream.markdown(`Error: ${mrData.error}\n\n`);
-
-            if (!gitlabToken) {
-                stream.markdown('**Configure GitLab Token:**\n\n');
-                stream.markdown('[🔧 Open User Settings JSON](command:workbench.action.openSettingsJson)\n\n');
-                stream.markdown('```json\n');
-                stream.markdown('{\n');
-                stream.markdown('    "aida.gitlab.personalAccessToken": "YOUR_GITLAB_TOKEN"\n');
-                stream.markdown('}\n');
-                stream.markdown('```\n\n');
-                stream.markdown(`**Create token at:** https://${gitlabHost}/-/profile/personal_access_tokens\n`);
-                stream.markdown('**Required scope:** `read_api` (for public repos) or `api` (for private repos)\n\n');
-            }
-
             return { error: mrData.error };
         }
 
@@ -66780,6 +67296,7 @@ async function makeGitLabRequest(url, token, method = 'GET', customHeaders = {})
             port: 443,
             path: urlObj.pathname + urlObj.search,
             method: method,
+            rejectUnauthorized: false, // Fix SSL certificate issues in corporate environments
             headers: headers
         };
 

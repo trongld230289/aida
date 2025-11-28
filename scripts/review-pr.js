@@ -2,7 +2,7 @@ const vscode = require('vscode');
 const path = require('path');
 const https = require('https');
 const { execSync } = require('child_process');
-const { getUnifiedModel, executeAIReview, shouldUseApiKey, processTemplateContent, showReviewOptions } = require('./review-common');
+const { getUnifiedModel, executeAIReview, shouldUseApiKey, processTemplateContent, showReviewOptions, getTokenForPR, parsePRUrl, showTokenConfigurationHelp } = require('./review-common');
 const { detectFromPRFiles, getReviewTemplateWithDetection, displayDetectionInfo } = require('./language-detection');
 
 // Import functions from extension.js
@@ -362,9 +362,13 @@ async function showAzureDevOpsDiffInWebview(prAnalysis, stream) {
     // Clear existing cache entries for this Azure DevOps PR to prevent file count discrepancy
     clearPrDiffCache('azure', data.id);
 
-    // 🚀 Cache Azure DevOps API credentials and PR metadata for full content retrieval
-    const config = vscode.workspace.getConfiguration('aida');
-    const accessToken = config.get('azureDevOps.personalAccessToken');
+    // 🚀 Get access token using new multi-org helper
+    const prUrl = `https://dev.azure.com/${data.organization}/${data.project}/_git/${data.repository}/pullrequest/${data.id}`;
+    const accessToken = getTokenForPR(prUrl);
+    
+    if (!accessToken) {
+        console.warn(`⚠️ No token configured for Azure DevOps organization: ${data.organization}`);
+    }
     
     // Store global Azure DevOps API info for parseFullDiffContentEnhanced
     global.prDiffCache.accessToken = accessToken;
@@ -404,10 +408,14 @@ async function showAzureDevOpsDiffInWebview(prAnalysis, stream) {
             repository: data.repository,
             sourceCommit: data.sourceCommit,
             targetCommit: data.targetCommit,
-            accessToken: accessToken
+            mergeBaseCommit: data.mergeBaseCommit,
+            accessToken: accessToken,
+            // Flag to force full file content fetching
+            useFullContent: true
         };
         
         console.log(`🔍 Cached Azure DevOps diff: ${diffId} for ${fileChange.path}`);
+        console.log(`   📊 Commits: base=${data.targetCommit?.substring(0, 7)}, source=${data.sourceCommit?.substring(0, 7)}`);
     });
 
     // Display file links with webview buttons (hover for details)
@@ -722,7 +730,7 @@ async function handleReviewPr(request, context, stream, token) {
             console.log('🎯 Enhanced/Quick PR Review detected:', global.selectedBusinessDocs);
             
             // Execute review directly
-            await processPrReview(userMessage, repoType, prId, owner, repo, organization, project, repository, originalUrl, stream, context);
+            await processPrReview(userMessage, repoType, prId, owner, repo, organization, project, repository, originalUrl, stream, context, request);
             return;
         }
 
@@ -746,12 +754,12 @@ async function handleReviewPr(request, context, stream, token) {
             // If no business documents, execute Quick Review immediately
             if (!hasBusinessDocs) {
                 console.log('📋 No business documents found - executing Quick Review automatically');
-                stream.markdown('� **Starting Quick Review automatically** (no business documents found)\n\n');
+                stream.markdown('🚀 **Starting Quick Review automatically** (no business documents found)\n\n');
                 
                 // Set Quick Review mode
                 global.selectedBusinessDocs = [];
                 
-                await processPrReview(userMessage, repoType, prId, owner, repo, organization, project, repository, originalUrl, stream, context);
+                await processPrReview(userMessage, repoType, prId, owner, repo, organization, project, repository, originalUrl, stream, context, request);
                 return;
             }
             
@@ -793,7 +801,7 @@ async function handleReviewPr(request, context, stream, token) {
         }
 
         // Continue with normal PR processing
-        await processPrReview(userMessage, repoType, prId, owner, repo, organization, project, repository, originalUrl, stream, context);
+        await processPrReview(userMessage, repoType, prId, owner, repo, organization, project, repository, originalUrl, stream, context, request);
 
     } catch (error) {
         stream.markdown('❌ **Unexpected Error**\n\n');
@@ -805,7 +813,7 @@ async function handleReviewPr(request, context, stream, token) {
 /**
  * Process PR review logic (extracted from handleReviewPr)
  */
-async function processPrReview(userMessage, repoType, prId, owner, repo, organization, project, repository, originalUrl, stream, context) {
+async function processPrReview(userMessage, repoType, prId, owner, repo, organization, project, repository, originalUrl, stream, context, request = null) {
     try {
         // Display repo info based on type
         if (repoType === 'github') {
@@ -899,7 +907,7 @@ async function processPrReview(userMessage, repoType, prId, owner, repo, organiz
         await displayPrReviewResults(stream, prAnalysis);
 
         // Add quick review option with original URL
-        await addQuickReviewOption(stream, prAnalysis, context, originalUrl);
+        await addQuickReviewOption(stream, prAnalysis, request, originalUrl);
 
     } catch (error) {
         stream.markdown('❌ **Unexpected Error in PR Processing**\n\n');
@@ -994,47 +1002,52 @@ async function reviewPullRequestCommand() {
 /**
  * Analyze Pull Request using Azure DevOps API
  */
-async function analyzePullRequest(stream, prId, organization = null, project = null, repository = null) {
+async function analyzePullRequest(stream, prUrl, organization = null, project = null, repository = null) {
     try {
-        // Get Azure DevOps configuration from VS Code settings
-        const config = vscode.workspace.getConfiguration('aida');
-        const personalAccessToken = config.get('azureDevOps.personalAccessToken');
-
-        // Use provided values (parsed from URL) or fall back to defaults only if needed
-        const org = organization || 'BusinessWebUS';
-        const proj = project || 'Shippo';
-        const repo = repository || 'Shippo-Web';
-
-        // Auto-detection success info
-        if (organization && project && repository) {
-            console.log(`✅ Auto-detected from URL: org=${org}, project=${proj}, repo=${repo}`);
-            stream.markdown(`🔍 **Auto-detected**: ${org}/${proj}/${repo}\n\n`);
+        // Parse PR URL and auto-detect organization info if full URL provided
+        let org = organization;
+        let proj = project;
+        let repo = repository;
+        let prId = null;
+        
+        if (prUrl.includes('dev.azure.com')) {
+            try {
+                const parsed = parsePRUrl(prUrl);
+                org = parsed.organization;
+                proj = parsed.project;
+                repo = parsed.repository;
+                prId = parsed.prId;
+                console.log(`✅ Auto-detected from URL: org=${org}, project=${proj}, repo=${repo}, PR=${prId}`);
+                stream.markdown(`🔍 **Auto-detected**: ${org}/${proj}/${repo}/PR#${prId}\n\n`);
+            } catch (parseError) {
+                console.log('⚠️ Failed to parse URL, using provided values');
+                prId = prUrl; // Assume it's just a PR ID
+            }
         } else {
+            prId = prUrl; // Assume it's just a PR ID
+        }
+        
+        // Validate required parameters
+        if (!org || !proj || !repo || !prId) {
+            return { error: `Missing required parameters: org=${org}, project=${proj}, repo=${repo}, prId=${prId}` };
+        }
+        
+        if (!organization && !project && !repository) {
             console.log(`⚠️ Using defaults: org=${org}, project=${proj}, repo=${repo}`);
             stream.markdown(`⚠️ **Using defaults**: ${org}/${proj}/${repo} (provide full URL for auto-detection)\n\n`);
         }
 
+        // Get token using new multi-org helper
+        const fullPrUrl = `https://dev.azure.com/${org}/${proj}/_git/${repo}/pullrequest/${prId}`;
+        console.log(`🔍 Checking token for Azure DevOps URL: ${fullPrUrl}`);
+        const personalAccessToken = getTokenForPR(fullPrUrl);
+        console.log(`🔍 Token found: ${personalAccessToken ? 'YES' : 'NO'}`);
+
         if (!personalAccessToken) {
-            // Show configuration help if no token (simplified - no manual org/project config needed)
-            stream.markdown('⚠️ **Azure DevOps Token Not Configured**\n\n');
-            stream.markdown('To get real PR data from Azure DevOps:\n\n');
-            stream.markdown('**Click button below to open User Settings JSON:**\n\n');
-
-            stream.markdown(`[🔧 Open User Settings JSON](command:workbench.action.openSettingsJson)\n\n`);
-            stream.markdown('**Add this to your settings.json file:**\n\n');
-            stream.markdown('```json\n');
-            stream.markdown('{\n');
-            stream.markdown('    "aida.azureDevOps.personalAccessToken": "YOUR_TOKEN_HERE"\n');
-            stream.markdown('}\n');
-            stream.markdown('```\n\n');
-
-            stream.markdown('**Create token at:** https://dev.azure.com/_usersSettings/tokens\n\n');
-            stream.markdown('**Required permissions:** Code (Read) + Pull Request (Read)\n\n');
-            stream.markdown('💡 **Note:** Organization and project will be auto-detected from URL\n\n');
-            stream.markdown('---\n\n');
-
-            // Return error instead of mock data
-            return { error: 'Azure DevOps Personal Access Token is required' };
+            console.log(`❌ No token found for Azure DevOps org: ${org}`);
+            // Show configuration help using new helper
+            showTokenConfigurationHelp('azureDevOps', org, stream);
+            return { error: `Azure DevOps Personal Access Token is required for organization: ${org}` };
         }
 
         try {
@@ -1210,6 +1223,7 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
                     let additions = 0;
                     let deletions = 0;
                     let fileSourceContent = null; // Declare outside try block for new files
+                    let fileBaseContent = null; // Store base content for Monaco
 
                     if (baseCommit && sourceCommit) {
                         try {
@@ -1221,6 +1235,10 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
                             // Get file content from both commits
                             const baseContent = await getFileContent(organization, project, repository, filePath, baseCommit, token);
                             const sourceContent = await getFileContent(organization, project, repository, filePath, sourceCommit, token);
+                            
+                            // Store for Monaco diff viewer
+                            fileBaseContent = baseContent;
+                            fileSourceContent = sourceContent;
                             
                             // Store source content for new files
                             fileSourceContent = sourceContent;
@@ -1261,7 +1279,10 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
                         targetCommit: sourceCommit?.substring(0, 7) || 'source',
                         additions: additions,
                         deletions: deletions,
-                        diffContent: diffContent
+                        diffContent: diffContent,
+                        // Store FULL file content for Monaco diff viewer
+                        fullBaseContent: fileBaseContent || '',
+                        fullSourceContent: fileSourceContent || ''
                     };
                     
                     // Store full content for new files (needed for typescript code block injection)
@@ -1358,6 +1379,7 @@ async function makeAzureDevOpsRequest(url, token, method = 'GET', body = null) {
             port: 443,
             path: urlObj.pathname + urlObj.search,
             method: method,
+            rejectUnauthorized: false, // Fix SSL certificate issues in corporate environments
             headers: {
                 'Content-Type': 'application/json',
                 'User-Agent': 'VS Code AI Self Check Extension'
@@ -1427,6 +1449,7 @@ async function getFileContent(organization, project, repository, filePath, commi
                 hostname: url.hostname,
                 path: url.pathname + url.search,
                 method: 'GET',
+                rejectUnauthorized: false, // Fix SSL certificate issues in corporate environments
                 headers: {
                     'Authorization': `Basic ${authToken}`,
                     'Accept': 'text/plain',
@@ -1569,11 +1592,17 @@ function generateUnifiedDiff(filePath, baseContent, targetContent, changeType) {
  */
 async function analyzeGitHubPullRequest(stream, owner, repo, prId) {
     try {
-        // Get GitHub token from VS Code settings
-        const config = vscode.workspace.getConfiguration('aida');
-        const githubToken = config.get('github.personalAccessToken');
-
         console.log(`🔄 Fetching GitHub PR ${owner}/${repo}#${prId}`);
+
+        // Get token using new multi-org helper
+        const prUrl = `https://github.com/${owner}/${repo}/pull/${prId}`;
+        const githubToken = getTokenForPR(prUrl);
+
+        if (!githubToken) {
+            // Show configuration help using new helper
+            showTokenConfigurationHelp('github', owner, stream);
+            return { success: false, error: `GitHub Personal Access Token is required for organization: ${owner}` };
+        }
 
         // Get PR details from GitHub API
         const prData = await getGitHubPR(owner, repo, prId, githubToken);
@@ -1582,18 +1611,6 @@ async function analyzeGitHubPullRequest(stream, owner, repo, prId) {
             console.error('Failed to get GitHub PR:', prData.error);
             stream.markdown('❌ **GitHub API Error**\n\n');
             stream.markdown(`Error: ${prData.error}\n\n`);
-
-            if (!githubToken) {
-                stream.markdown('**Configure GitHub Token:**\n\n');
-                stream.markdown('[🔧 Open User Settings JSON](command:workbench.action.openSettingsJson)\n\n');
-                stream.markdown('```json\n');
-                stream.markdown('{\n');
-                stream.markdown('    "aida.github.personalAccessToken": "YOUR_GITHUB_TOKEN"\n');
-                stream.markdown('}\n');
-                stream.markdown('```\n\n');
-                stream.markdown('**Create token at:** https://github.com/settings/tokens\n');
-                stream.markdown('**Required scope:** `repo` (for private repos) or `public_repo` (for public repos)\n\n');
-            }
 
             return { error: prData.error };
         }
@@ -1814,6 +1831,7 @@ async function makeGitHubRequest(url, token, method = 'GET', customHeaders = {})
             port: 443,
             path: urlObj.pathname + urlObj.search,
             method: method,
+            rejectUnauthorized: false, // Fix SSL certificate issues in corporate environments
             headers: headers
         };
 
@@ -1873,11 +1891,17 @@ async function makeGitHubRequest(url, token, method = 'GET', customHeaders = {})
  */
 async function analyzeGitLabMergeRequest(stream, gitlabHost, owner, repo, mrId) {
     try {
-        // Get GitLab token from VS Code settings
-        const config = vscode.workspace.getConfiguration('aida');
-        const gitlabToken = config.get('gitlab.personalAccessToken');
-
         console.log(`🔄 Fetching GitLab MR ${owner}/${repo}!${mrId} from ${gitlabHost}`);
+
+        // Get token using new multi-org helper
+        const mrUrl = `https://${gitlabHost}/${owner}/${repo}/-/merge_requests/${mrId}`;
+        const gitlabToken = getTokenForPR(mrUrl);
+
+        if (!gitlabToken) {
+            // Show configuration help using new helper
+            showTokenConfigurationHelp('gitlab', owner, stream);
+            return { success: false, error: `GitLab Personal Access Token is required for organization: ${owner}` };
+        }
 
         // Get MR details from GitLab API
         const mrData = await getGitLabMR(gitlabHost, owner, repo, mrId, gitlabToken);
@@ -1886,19 +1910,6 @@ async function analyzeGitLabMergeRequest(stream, gitlabHost, owner, repo, mrId) 
             console.error('Failed to get GitLab MR:', mrData.error);
             stream.markdown('❌ **GitLab API Error**\n\n');
             stream.markdown(`Error: ${mrData.error}\n\n`);
-
-            if (!gitlabToken) {
-                stream.markdown('**Configure GitLab Token:**\n\n');
-                stream.markdown('[🔧 Open User Settings JSON](command:workbench.action.openSettingsJson)\n\n');
-                stream.markdown('```json\n');
-                stream.markdown('{\n');
-                stream.markdown('    "aida.gitlab.personalAccessToken": "YOUR_GITLAB_TOKEN"\n');
-                stream.markdown('}\n');
-                stream.markdown('```\n\n');
-                stream.markdown(`**Create token at:** https://${gitlabHost}/-/profile/personal_access_tokens\n`);
-                stream.markdown('**Required scope:** `read_api` (for public repos) or `api` (for private repos)\n\n');
-            }
-
             return { error: mrData.error };
         }
 
@@ -2149,6 +2160,7 @@ async function makeGitLabRequest(url, token, method = 'GET', customHeaders = {})
             port: 443,
             path: urlObj.pathname + urlObj.search,
             method: method,
+            rejectUnauthorized: false, // Fix SSL certificate issues in corporate environments
             headers: headers
         };
 

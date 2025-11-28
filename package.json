@@ -2,7 +2,7 @@
   "name": "aida-dev",
   "displayName": "AIDA - AI Development Assistant",
   "description": "Advanced AI Development Assistant with intelligent code review, PR analysis, project scanning, and AIDA Chatbot. Use your own AI API (OpenAI/Claude) or GitHub Copilot. Complete development workflows for TypeScript, JavaScript, Python, C#, and more. Now with Cursor IDE support!",
-  "version": "1.0.32",
+  "version": "1.0.39",
   "publisher": "trongld232",
   "icon": "icons/extension-icon.png",
   "author": {
@@ -191,10 +191,66 @@
     "configuration": {
       "title": "AIDA",
       "properties": {
-        "aida.azureDevOps.personalAccessToken": {
+        "aida.sourceControls": {
+          "type": "object",
+          "default": {
+            "azureDevOps": {
+              "organization": "your-azure-devops-token-here",
+              "anotherOrg": "another-azure-token-here"
+            },
+            "github": {
+              "organization": "your-github-token-here",
+              "anotherOrg": "your-personal-github-token"
+            },
+            "gitlab": {
+              "organization": "your-gitlab-token-here",
+              "anotherOrg": "your-personal-gitlab-token"
+            }
+          },
+          "description": "Source control configurations with tokens for multiple organizations. Organization names come from URLs: Azure DevOps (dev.azure.com/{ORG}), GitHub (github.com/{ORG}), GitLab (gitlab.com/{GROUP}). Example: For 'https://dev.azure.com/BusinessWebUS/project' use 'BusinessWebUS' as organization name.",
+          "properties": {
+            "azureDevOps": {
+              "type": "object",
+              "description": "Azure DevOps organizations and their tokens. Organization name from URL: dev.azure.com/{ORG}/project",
+              "patternProperties": {
+                ".*": {
+                  "type": "string",
+                  "description": "Personal access token for the organization"
+                }
+              }
+            },
+            "github": {
+              "type": "object",
+              "description": "GitHub organizations and their tokens. Organization name from URL: github.com/{ORG}/repo",
+              "patternProperties": {
+                ".*": {
+                  "type": "string",
+                  "description": "Personal access token for the organization"
+                }
+              }
+            },
+            "gitlab": {
+              "type": "object",
+              "description": "GitLab groups/users and their tokens. Group name from URL: gitlab.com/{GROUP}/repo",
+              "patternProperties": {
+                ".*": {
+                  "type": "string",
+                  "description": "Personal access token for the organization"
+                }
+              }
+            }
+          }
+        },
+        "aida.templatesBasePath": {
           "type": "string",
           "default": "",
-          "description": "Azure DevOps Personal Access Token for PR review (requires Code:Read and Pull Request:Read permissions). Organization and project will be auto-detected from PR URL.",
+          "description": "Custom path for AIDA templates (e.g., '../Documents/AIDA' or '${workspaceFolder}/../Documents/AIDA'). Leave empty to use extension templates.",
+          "scope": "window"
+        },
+        "aida.useExternalAI": {
+          "type": "boolean",
+          "default": false,
+          "description": "Use your own AI API key instead of GitHub Copilot for code review (useful for users without Copilot license)",
           "scope": "application"
         },
         "aida.ai.apiKey": {
@@ -211,32 +267,8 @@
         },
         "aida.ai.model": {
           "type": "string",
-          "default": "GPT-5",
-          "description": "AI Model to use for code analysis (gpt-4, gpt-5, claude-3-sonnet, or custom model)",
-          "scope": "application"
-        },
-        "aida.useApiKeyInsteadOfCopilot": {
-          "type": "boolean",
-          "default": false,
-          "description": "Use your own AI API key instead of GitHub Copilot for code review (useful for users without Copilot license)",
-          "scope": "application"
-        },
-        "aida.github.personalAccessToken": {
-          "type": "string",
-          "default": "",
-          "description": "GitHub Personal Access Token for PR review (requires repo or public_repo permissions)",
-          "scope": "application"
-        },
-        "aida.gitlab.personalAccessToken": {
-          "type": "string",
-          "default": "",
-          "description": "GitLab Personal Access Token for MR review (requires read_api or api permissions)",
-          "scope": "application"
-        },
-        "aida.hasNoGithubCopilot": {
-          "type": "boolean",
-          "default": false,
-          "description": "Use AIDA Copilot-style chat interface when GitHub Copilot is unavailable or disabled",
+          "default": "Claude-4-Sonnet",
+          "description": "AI Model to use for code analysis (gpt-4, gpt-5, claude-4-sonnet, or custom model)",
           "scope": "application"
         }
       }

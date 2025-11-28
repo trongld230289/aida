@@ -107,7 +107,7 @@ async function setupAzureDevOpsSettings() {
 }`;
 
         const action = await vscode.window.showInformationMessage(
-            'Settings JSON opened. Copy và paste template below vào cuối file (trước dấu }).',
+            'Settings JSON opened. Only token needed - organization and project will be auto-detected from PR URL.',
             'Copy Template',
             'Open Azure DevOps'
         );
@@ -129,7 +129,7 @@ async function setupAzureDevOpsSettings() {
  */
 function activate(context) {
     // console.log('Reload 4');
-    console.log('🤖 AIDA v1.0.27 - AI Development Assistant');
+    console.log('🤖 AIDA v1.0.39 - AI Development Assistant');
     console.log('🚀 AIDA extension is now active!');
     
     // Store extension path globally
@@ -252,12 +252,17 @@ function activate(context) {
         try {
             // Check if AIDA chat should be used
             const config = vscode.workspace.getConfiguration('aida');
-            const hasNoGithubCopilot = config.get('hasNoGithubCopilot', false);
+            const useAidaChatbot = config.get('useAidaChatbot', false);
             
-            if (hasNoGithubCopilot || !vscode.extensions.getExtension('GitHub.copilot')?.isActive) {
+            console.log('🔍 useAidaChatbot flag:', useAidaChatbot);
+            console.log('🔍 GitHub Copilot extension active:', vscode.extensions.getExtension('GitHub.copilot')?.isActive);
+            
+            if (useAidaChatbot) {
+                console.log('➡️ Using AIDA chatbot (useAidaChatbot=true)');
                 // Use AIDA Copilot-style chat
                 await vscode.commands.executeCommand('aida.reviewFileContext', uri);
             } else {
+                console.log('➡️ Using GitHub Copilot (useAidaChatbot=false)');
                 // Use GitHub Copilot
                 await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
                 if (uri && uri.fsPath) {
@@ -286,12 +291,17 @@ function activate(context) {
         try {
             // Check if AIDA chat should be used
             const config = vscode.workspace.getConfiguration('aida');
-            const hasNoGithubCopilot = config.get('hasNoGithubCopilot', false);
+            const useAidaChatbot = config.get('useAidaChatbot', false);
             
-            if (hasNoGithubCopilot || !vscode.extensions.getExtension('GitHub.copilot')?.isActive) {
+            console.log('🔍 useAidaChatbot flag:', useAidaChatbot);
+            console.log('🔍 GitHub Copilot extension active:', vscode.extensions.getExtension('GitHub.copilot')?.isActive);
+            
+            if (useAidaChatbot) {
+                console.log('➡️ Using AIDA chatbot (useAidaChatbot=true)');
                 // Use AIDA Copilot-style chat
                 await vscode.commands.executeCommand('aida.reviewChangesContext', uri);
             } else {
+                console.log('➡️ Using GitHub Copilot (useAidaChatbot=false)');
                 // Use GitHub Copilot
                 await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
                 if (uri && uri.fsPath) {
@@ -320,9 +330,9 @@ function activate(context) {
         try {
             // Check if AIDA chat should be used
             const config = vscode.workspace.getConfiguration('aida');
-            const hasNoGithubCopilot = config.get('hasNoGithubCopilot', false);
+            const useAidaChatbot = config.get('useAidaChatbot', false);
             
-            if (hasNoGithubCopilot || !vscode.extensions.getExtension('GitHub.copilot')?.isActive) {
+            if (useAidaChatbot) {
                 // Use AIDA Copilot-style chat
                 await vscode.commands.executeCommand('aida.reviewAllChangesContext', uri);
             } else {
@@ -416,15 +426,32 @@ function activate(context) {
 
     console.log('🔄 About to initialize review modules...');
     
-    // Initialize review modules from external scripts
-    const reviewChanges = require('./scripts/review-changes');
-    const { reviewChangesParticipant } = reviewChanges.initializeReviewChanges(context);
+    // Always register chat participants for both AIDA and GitHub Copilot compatibility
+    const config = vscode.workspace.getConfiguration('aida');
+    const useAidaChatbot = config.get('useAidaChatbot', false);
+    const shouldRegisterParticipants = true; // Always register for GitHub Copilot compatibility
+    
+    console.log('🔍 Always register AIDA chat participants for GitHub Copilot compatibility');
+    console.log('🔍 useAidaChatbot flag:', useAidaChatbot);
+    console.log('🔍 GitHub Copilot active:', vscode.extensions.getExtension('GitHub.copilot')?.isActive);
+    
+    let reviewChangesParticipant, reviewFileParticipant, reviewAllChangesParticipant;
+    
+    if (shouldRegisterParticipants) {
+        // Always initialize review modules for both AIDA and GitHub Copilot compatibility
+        const reviewChanges = require('./scripts/review-changes');
+        reviewChangesParticipant = reviewChanges.initializeReviewChanges(context).reviewChangesParticipant;
 
-    const reviewFile = require('./scripts/review-file');
-    const { reviewFileParticipant } = reviewFile.initializeReviewFile(context);
+        const reviewFile = require('./scripts/review-file');
+        reviewFileParticipant = reviewFile.initializeReviewFile(context).reviewFileParticipant;
 
-    const reviewAllChanges = require('./scripts/review-all-changes');
-    const { reviewAllChangesParticipant } = reviewAllChanges.initializeReviewAllChanges(context);
+        const reviewAllChanges = require('./scripts/review-all-changes');
+        reviewAllChangesParticipant = reviewAllChanges.initializeReviewAllChanges(context).reviewAllChangesParticipant;
+        
+        console.log('✅ Chat participants registered for both AIDA and GitHub Copilot compatibility');
+    } else {
+        console.log('⚠️ Chat participants NOT registered (this should never happen)');
+    }
 
     console.log('🔄 About to initialize PR review...');
     // Initialize PR review functionality from external script
@@ -753,9 +780,6 @@ function activate(context) {
         reviewFileContextCommand,
         reviewChangesContextCommand,
         reviewAllChangesContextCommand,
-        reviewChangesParticipant,
-        reviewFileParticipant,
-        reviewAllChangesParticipant,
         reviewPrParticipant,
         reviewPullRequest,
         syncTemplatesParticipant,
@@ -766,6 +790,12 @@ function activate(context) {
         viewPrDiffCommand,
         copilotSidebarChat
     ].filter(item => item !== null && item !== undefined);
+
+    // Add conditional participants only if registered (should always be true now)
+    if (shouldRegisterParticipants) {
+        subscriptions.push(reviewChangesParticipant, reviewFileParticipant, reviewAllChangesParticipant);
+        console.log('✅ Chat participants added to subscriptions for full compatibility');
+    }
 
     context.subscriptions.push(...subscriptions);
 }
@@ -1129,14 +1159,59 @@ async function getMonacoWebviewContent(diffData, panel, context) {
         originalContent = cached.originalContent;
         modifiedContent = cached.modifiedContent;
     } else {
-        console.log('🔄 Parsing content for:', filePath);
-        const { originalLines, modifiedLines } = await parseFullDiffContentEnhanced(diff, filePath);
+        console.log('🔄 Fetching FULL file content for:', filePath);
         
-        console.log('📊 Original lines:', originalLines.length, 'Modified lines:', modifiedLines.length);
-        
-        // Reconstruct full file content
-        originalContent = originalLines.map(line => line.content).join('\n');
-        modifiedContent = modifiedLines.map(line => line.content).join('\n');
+        // PRIORITY 1: Check if full content already stored in diffData (from Azure DevOps API)
+        if (diffData.fullBaseContent !== undefined && diffData.fullSourceContent !== undefined) {
+            console.log('✅ Using pre-fetched full content from diffData');
+            originalContent = diffData.fullBaseContent || '';
+            modifiedContent = diffData.fullSourceContent || '';
+            console.log(`📊 Full content from cache: Original=${originalContent.length} chars, Modified=${modifiedContent.length} chars`);
+        }
+        // PRIORITY 2: For Azure DevOps, fetch full file content directly from API
+        else if (diffData.useFullContent && diffData.organization && diffData.sourceCommit && diffData.targetCommit && diffData.accessToken) {
+            console.log('⚠️ Full content not pre-fetched, fetching now from Azure DevOps API...');
+            try {
+                const reviewPrPath = path.join(context.extensionPath, 'scripts', 'review-pr.js');
+                const reviewPrModule = require(reviewPrPath);
+                const getFileContent = reviewPrModule.getFileContent;
+                
+                if (typeof getFileContent === 'function') {
+                    // Fetch both versions in parallel
+                    const [baseContent, sourceContent] = await Promise.all([
+                        getFileContent(diffData.organization, diffData.project, diffData.repository, filePath, diffData.targetCommit, diffData.accessToken),
+                        getFileContent(diffData.organization, diffData.project, diffData.repository, filePath, diffData.sourceCommit, diffData.accessToken)
+                    ]);
+                    
+                    originalContent = baseContent || '';
+                    modifiedContent = sourceContent || '';
+                    
+                    console.log(`✅ Full content fetched: Original=${originalContent.length} chars, Modified=${modifiedContent.length} chars`);
+                } else {
+                    console.log('⚠️ getFileContent not available, falling back to diff parsing');
+                    const { originalLines, modifiedLines } = await parseFullDiffContentEnhanced(diff, filePath);
+                    originalContent = originalLines.map(line => line.content).join('\n');
+                    modifiedContent = modifiedLines.map(line => line.content).join('\n');
+                }
+            } catch (error) {
+                console.log('❌ Error fetching full content:', error.message);
+                // Fallback to diff parsing
+                const { originalLines, modifiedLines } = await parseFullDiffContentEnhanced(diff, filePath);
+                originalContent = originalLines.map(line => line.content).join('\n');
+                modifiedContent = modifiedLines.map(line => line.content).join('\n');
+            }
+        }
+        // PRIORITY 3: Fallback to diff parsing
+        else {
+            console.log('⚠️ Not Azure DevOps or missing required info, using diff parsing');
+            const { originalLines, modifiedLines } = await parseFullDiffContentEnhanced(diff, filePath);
+            
+            console.log('📊 Original lines:', originalLines.length, 'Modified lines:', modifiedLines.length);
+            
+            // Reconstruct full file content
+            originalContent = originalLines.map(line => line.content).join('\n');
+            modifiedContent = modifiedLines.map(line => line.content).join('\n');
+        }
         
         // Cache the parsed content for future use
         if (global.prDiffCache) {
@@ -2281,6 +2356,25 @@ async function parseFullDiffContentEnhanced(diff, filePath) {
     
     // Check if we have Azure DevOps cache data for full file content retrieval
     const cache = global.prDiffCache;
+    
+    console.log('📊 prDiffCache exists:', !!cache);
+    if (cache) {
+        console.log('📊 Cache keys (first 10):', Object.keys(cache).filter(k => !k.startsWith('content_')).slice(0, 10));
+        console.log('📊 Cache has global properties:', {
+            hasAccessToken: !!cache.accessToken,
+            hasOrganization: !!cache.organization,
+            hasProject: !!cache.project,
+            hasRepository: !!cache.repository,
+            hasSourceCommit: !!cache.sourceCommit,
+            hasTargetCommit: !!cache.targetCommit,
+            organization: cache.organization,
+            project: cache.project,
+            repository: cache.repository,
+            sourceCommit: cache.sourceCommit?.substring(0, 7),
+            targetCommit: cache.targetCommit?.substring(0, 7)
+        });
+    }
+    
     if (cache && cache.accessToken && cache.sourceCommit && cache.targetCommit) {
         console.log('✅ Azure DevOps cache available - fetching FULL FILE CONTENT');
         return await getFullFileContentFromAzureDevOps(filePath, diff);
@@ -2416,6 +2510,14 @@ async function getFullFileContentFromAzureDevOps(filePath, diff) {
     
     try {
         console.log(`🔄 Fetching FULL content for ${filePath} from both commits`);
+        console.log(`📊 Cache data:`, {
+            organization: cache.organization,
+            project: cache.project,
+            repository: cache.repository,
+            sourceCommit: cache.sourceCommit?.substring(0, 7),
+            targetCommit: cache.targetCommit?.substring(0, 7),
+            hasAccessToken: !!cache.accessToken
+        });
         
         // Import getFileContent function from review-pr.js if available
         const reviewPrPath = path.join(__dirname, 'scripts', 'review-pr.js');
@@ -2424,6 +2526,10 @@ async function getFullFileContentFromAzureDevOps(filePath, diff) {
             const getFileContent = reviewPrModule.getFileContent;
             
             if (typeof getFileContent === 'function') {
+                console.log(`🚀 Calling getFileContent for both commits...`);
+                console.log(`   LEFT (Original/Base): ${cache.targetCommit?.substring(0, 7)}`);
+                console.log(`   RIGHT (Modified/Feature): ${cache.sourceCommit?.substring(0, 7)}`);
+                
                 // 🔧 FIX: Azure DevOps PR terminology vs Monaco terminology
                 // sourceCommit = NEW code (feature branch) = Monaco "modified" (RIGHT)
                 // targetCommit = OLD code (base branch) = Monaco "original" (LEFT)
@@ -2432,18 +2538,33 @@ async function getFullFileContentFromAzureDevOps(filePath, diff) {
                     getFileContent(cache.organization, cache.project, cache.repository, filePath, cache.sourceCommit, cache.accessToken)  // NEW = modified = RIGHT
                 ]);
                 
+                console.log(`📊 API Response:`, {
+                    targetContentLength: targetContent ? targetContent.length : 'NULL',
+                    sourceContentLength: sourceContent ? sourceContent.length : 'NULL',
+                    targetContentFirstLines: targetContent ? targetContent.split('\n').slice(0, 3).join('\n') : 'NULL',
+                    sourceContentFirstLines: sourceContent ? sourceContent.split('\n').slice(0, 3).join('\n') : 'NULL'
+                });
+                
                 if (targetContent || sourceContent) {
                     console.log(`✅ SUCCESS: Got full content - Original (OLD): ${targetContent ? targetContent.length : 0}, Modified (NEW): ${sourceContent ? sourceContent.length : 0}`);
                     
                     return convertFullContentToLineFormat(targetContent || '', sourceContent || '');
+                } else {
+                    console.log(`⚠️ Both API calls returned NULL - file might not exist in one or both commits`);
                 }
+            } else {
+                console.log(`❌ getFileContent is not a function:`, typeof getFileContent);
             }
+        } else {
+            console.log(`❌ review-pr.js not found at:`, reviewPrPath);
         }
         
     } catch (error) {
         console.log('❌ Error fetching from Azure DevOps API:', error.message);
+        console.log('❌ Stack trace:', error.stack);
     }
     
+    console.log(`⚠️ Falling back to diff reconstruction...`);
     return await reconstructFromDiffFallback(diff, filePath);
 }
 

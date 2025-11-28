@@ -2,8 +2,84 @@
 
 All notable changes to the "AIDA - AI Development Assistant" extension will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.32/),
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.34/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.0.39] - 2025-11-29
+
+### Changed
+- **Token Configuration Help**: Enhanced multi-organization sample configuration display
+- **Configuration Examples**: Improved sample JSON to clearly show support for multiple organizations per provider
+- **Code Cleanup**: Removed unused `sampleConfigs` object and simplified token help generation
+
+### Fixed
+- **Package.json Structure**: Fixed JSON structure issues with chatParticipants placement
+- **Extension Loading**: Resolved extension registration problems for chat participants
+
+## [1.0.37] - 2025-11-28
+
+### Changed
+- **Path Normalization**: Refactored AIDA template path resolution to be simpler with config-based approach
+- **Code Reusability**: Created `normalizePathForDisplay()` helper function for consistent path display
+- **Cross-Platform Paths**: All path displays now use forward slash `/` for better cross-platform compatibility
+
+### Added
+- **Template Configuration**: Added `aida.templatesBasePath` config setting for custom template locations
+- **Auto-Creation**: Automatically creates AIDA structure if configured path doesn't exist
+- **Helper Functions**: Exported `normalizePathForDisplay`, `resolveAidaBasePath`, `copyTemplatesRecursive`
+
+### Fixed
+- **Path Separators**: Fixed mixed path separator issues (backslash/forward slash) in output display
+- **Detection Reason**: Normalized detection reason to use consistent path format
+
+## [1.0.36] - 2025-11-26
+
+### Fixed
+- **SSL Certificate Issues**: Added rejectUnauthorized: false option to fix corporate environment connectivity
+- **GitLab Integration**: Resolved SSL certificate errors when accessing GitLab API in corporate networks
+- **Azure DevOps Integration**: Fixed SSL certificate issues for Azure DevOps API requests
+- **GitHub Integration**: Added SSL bypass for GitHub API requests in restricted environments
+
+### Enhanced
+- **Corporate Network Support**: Improved compatibility with corporate firewalls and proxy configurations
+- **API Connectivity**: Better error handling for SSL certificate validation issues
+- **Cross-Platform PR Review**: Enhanced reliability for PR/MR reviews across all supported platforms
+
+### Technical
+- Added rejectUnauthorized: false to HTTPS request options for GitLab, GitHub, and Azure DevOps
+- Improved error messages for SSL-related connectivity issues
+- Enhanced corporate environment compatibility
+
+## [1.0.34] - 2025-11-25
+
+### Fixed
+- **Chat Participants**: Fixed issue where chat participants were only registered when useAidaChatbot=true
+- **GitHub Copilot Integration**: Restored proper @review-changes and @review-file functionality in GitHub Copilot
+- **Extension Logic**: Chat participants now always register regardless of useAidaChatbot setting
+
+### Changed
+- **Participant Registration**: Separated participant registration logic from UI selection logic
+- **Error Handling**: Improved error messages for missing chat participants
+
+### Technical
+- Fixed "No activated agent with id 'review-changes'" error in GitHub Copilot
+- Ensured chat participants are available for both AIDA and GitHub Copilot modes
+
+## [1.0.33] - 2025-11-24
+
+### Changed
+- **Settings Improvement**: Renamed setting from "Has No GitHub Copilot" to "Use AIDA Chatbot" for better clarity
+- **Logic Fix**: Fixed extension logic to properly respect user choice instead of auto-fallback based on Copilot status
+- **Configuration**: Updated setting key from `aida.hasNoGithubCopilot` to `aida.useAidaChatbot` for more positive naming
+
+### Fixed
+- **Right-click Menu**: Fixed issue where right-click review commands always opened AIDA chatbot regardless of setting
+- **Extension Logic**: Removed problematic OR condition that caused unwanted AIDA activation when Copilot was inactive
+
+### Technical
+- Simplified boolean logic for chat selection
+- Updated all internal references to use new setting key
+- Improved console logging for debugging
 
 ## [1.0.32] - 2025-11-24
 
