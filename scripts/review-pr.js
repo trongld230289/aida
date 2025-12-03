@@ -5,6 +5,84 @@ const { execSync } = require('child_process');
 const { getUnifiedModel, executeAIReview, shouldUseApiKey, processTemplateContent, showReviewOptions, getTokenForPR, parsePRUrl, showTokenConfigurationHelp } = require('./review-common');
 const { detectFromPRFiles, getReviewTemplateWithDetection, displayDetectionInfo } = require('./language-detection');
 
+/**
+ * Parse PR URL and extract repository information
+ * @param {string} userMessage - The user input containing PR URL
+ * @returns {object} Parsed PR information
+ */
+function parsePRUrlInfo(userMessage) {
+    let prId = null;
+    let repoType = null;
+    let organization = null;
+    let project = null;
+    let repository = null;
+    let owner = null;
+    let repo = null;
+    let originalUrl = null;
+
+    // GitHub URL pattern: https://github.com/{owner}/{repo}/pull/{id}
+    const githubUrlPattern = /https:\/\/github\.com\/([^\/]+)\/([^\/]+)\/pull\/(\d+)/i;
+    const githubMatch = userMessage.match(githubUrlPattern);
+
+    // Azure DevOps URL pattern: https://dev.azure.com/{org}/{project}/_git/{repo}/pullrequest/{id}
+    const azureUrlPattern = /https:\/\/dev\.azure\.com\/([^\/]+)\/([^\/]+)\/_git\/([^\/]+)\/pullrequest\/(\d+)/i;
+    const azureMatch = userMessage.match(azureUrlPattern);
+
+    // GitLab URL pattern: https://gitlab.com/{namespace}/{project}/-/merge_requests/{id}
+    // Supports nested namespaces like: ds365ai/FDP/time-and-cost-project/fdp-activity-middleware-service
+    const gitlabUrlPattern = /https:\/\/([^\/]+)\/(.+?)\/-\/merge_requests\/(\d+)/i;
+    const gitlabMatch = userMessage.match(gitlabUrlPattern);
+
+    if (githubMatch) {
+        repoType = 'github';
+        owner = githubMatch[1];
+        repo = githubMatch[2];
+        prId = githubMatch[3];
+        originalUrl = githubMatch[0];
+    } else if (azureMatch) {
+        repoType = 'azure';
+        organization = azureMatch[1];
+        project = azureMatch[2];
+        repository = azureMatch[3];
+        prId = azureMatch[4];
+        originalUrl = azureMatch[0];
+    } else if (gitlabMatch) {
+        repoType = 'gitlab';
+        // Extract GitLab instance, full namespace path, and MR ID
+        const gitlabHost = gitlabMatch[1]; // gitlab.com or custom instance
+        const fullPath = gitlabMatch[2]; // Full namespace/project path
+        prId = gitlabMatch[3]; // merge request ID
+        originalUrl = gitlabMatch[0]; // Store the full matched URL
+        
+        // Parse namespace/project - take last part as repo, rest as owner
+        const pathParts = fullPath.split('/');
+        repo = pathParts[pathParts.length - 1]; // Last part is project name
+        owner = pathParts.slice(0, -1).join('/'); // Everything else is namespace
+        
+        // Store GitLab host for API calls
+        organization = gitlabHost;
+    } else {
+        // Fallback to simple PR ID pattern (Azure DevOps default)
+        const prPattern = /(?:pullrequest(?:s)?\/(\d+)|pr[#\s]?(\d+)|id[:\s]?(\d+))/i;
+        const match = userMessage.match(prPattern);
+        if (match) {
+            repoType = 'azure';
+            prId = match[1] || match[2] || match[3];
+        }
+    }
+
+    return {
+        prId,
+        repoType,
+        organization,
+        project,
+        repository,
+        owner,
+        repo,
+        originalUrl
+    };
+}
+
 // Import functions from extension.js
 let checkAndInitializeTemplates;
 try {
@@ -499,50 +577,9 @@ function initializePrReview(extensionContext) {
 async function processReviewPr(userMessage, stream) {
     console.log('🔄 processReviewPr: Starting PR review with options');
     
-    // Parse repo URL and detect type
-    let prId = null;
-    let repoType = null;
-    let organization = null;
-    let project = null;
-    let repository = null;
-    let owner = null;
-    let repo = null;
-    let originalUrl = null;
-
-    // GitHub URL pattern: https://github.com/{owner}/{repo}/pull/{id}
-    const githubUrlPattern = /https:\/\/github\.com\/([^\/]+)\/([^\/]+)\/pull\/(\d+)/i;
-    const githubMatch = userMessage.match(githubUrlPattern);
-
-    // Azure DevOps URL pattern: https://dev.azure.com/{org}/{project}/_git/{repo}/pullrequest/{id}
-    const azureUrlPattern = /https:\/\/dev\.azure\.com\/([^\/]+)\/([^\/]+)\/_git\/([^\/]+)\/pullrequest\/(\d+)/i;
-    const azureMatch = userMessage.match(azureUrlPattern);
-
-    // GitLab URL pattern: https://gitlab.com/{namespace}/{project}/-/merge_requests/{id}
-    // Supports nested namespaces like: d365ai/FDP/time-and-cost-project/activity-middleware-service
-    const gitlabUrlPattern = /https:\/\/([^\/]+)\/(.+?)\/-\/merge_requests\/(\d+)/i;
-    const gitlabMatch = userMessage.match(gitlabUrlPattern);
-
-    if (githubMatch) {
-        repoType = 'github';
-        owner = githubMatch[1];
-        repo = githubMatch[2];
-        prId = githubMatch[3];
-        originalUrl = githubMatch[0];
-    } else if (azureMatch) {
-        repoType = 'azure';
-        organization = azureMatch[1];
-        project = azureMatch[2];
-        repository = azureMatch[3];
-        prId = azureMatch[4];
-        originalUrl = azureMatch[0];
-    } else if (gitlabMatch) {
-        repoType = 'gitlab';
-        // For GitLab, owner and repo extraction
-        owner = gitlabMatch[2];
-        repo = gitlabMatch[3];
-        prId = gitlabMatch[4];
-        originalUrl = gitlabMatch[0];
-    }
+    // Parse repo URL and detect type using centralized function
+    const parsedInfo = parsePRUrlInfo(userMessage);
+    const { prId, repoType, organization, project, repository, owner, repo, originalUrl } = parsedInfo;
 
     // Check for global selectedBusinessDocs (unified pattern with other review modules)
     if (global.selectedBusinessDocs) {
@@ -641,56 +678,9 @@ async function handleReviewPr(request, context, stream, token) {
         let repo = null;
         let originalUrl = null; // Store the original URL from user input
 
-        // GitHub URL pattern: https://github.com/{owner}/{repo}/pull/{id}
-        const githubUrlPattern = /https:\/\/github\.com\/([^\/]+)\/([^\/]+)\/pull\/(\d+)/i;
-        const githubMatch = userMessage.match(githubUrlPattern);
-
-        // Azure DevOps URL pattern: https://dev.azure.com/{org}/{project}/_git/{repo}/pullrequest/{id}
-        const azureUrlPattern = /https:\/\/dev\.azure\.com\/([^\/]+)\/([^\/]+)\/_git\/([^\/]+)\/pullrequest\/(\d+)/i;
-        const azureMatch = userMessage.match(azureUrlPattern);
-
-        // GitLab URL pattern: https://gitlab.com/{namespace}/{project}/-/merge_requests/{id}
-        // Supports nested namespaces like: d365ai/FDP/time-and-cost-project/activity-middleware-service
-        const gitlabUrlPattern = /https:\/\/([^\/]+)\/(.+?)\/-\/merge_requests\/(\d+)/i;
-        const gitlabMatch = userMessage.match(gitlabUrlPattern);
-
-        if (githubMatch) {
-            repoType = 'github';
-            owner = githubMatch[1];
-            repo = githubMatch[2];
-            prId = githubMatch[3];
-            originalUrl = githubMatch[0]; // Store the full matched URL
-        } else if (azureMatch) {
-            repoType = 'azure';
-            organization = azureMatch[1];
-            project = azureMatch[2];
-            repository = azureMatch[3];
-            prId = azureMatch[4];
-            originalUrl = azureMatch[0]; // Store the full matched URL
-        } else if (gitlabMatch) {
-            repoType = 'gitlab';
-            // Extract GitLab instance, full namespace path, and MR ID
-            const gitlabHost = gitlabMatch[1]; // gitlab.com or custom instance
-            const fullPath = gitlabMatch[2]; // Full namespace/project path
-            prId = gitlabMatch[3]; // merge request ID
-            originalUrl = gitlabMatch[0]; // Store the full matched URL
-            
-            // Parse namespace/project - take last part as repo, rest as owner
-            const pathParts = fullPath.split('/');
-            repo = pathParts[pathParts.length - 1]; // Last part is project name
-            owner = pathParts.slice(0, -1).join('/'); // Everything else is namespace
-            
-            // Store GitLab host for API calls
-            organization = gitlabHost;
-        } else {
-            // Fallback to simple PR ID pattern (Azure DevOps default)
-            const prPattern = /(?:pullrequest(?:s)?\/(\d+)|pr[#\s]?(\d+)|id[:\s]?(\d+))/i;
-            const match = userMessage.match(prPattern);
-            if (match) {
-                repoType = 'azure';
-                prId = match[1] || match[2] || match[3];
-            }
-        }
+        // Parse PR URL using centralized function
+        const parsedInfo = parsePRUrlInfo(userMessage);
+        ({ prId, repoType, organization, project, repository, owner, repo, originalUrl } = parsedInfo);
 
         // Check for quick-analyze command
         if (userMessage.toLowerCase().includes('quick-analyze')) {

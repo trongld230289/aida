@@ -5,6 +5,18 @@ All notable changes to the "AIDA - AI Development Assistant" extension will be d
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.34/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.41] - 2025-12-03
+
+### Fixed
+- Fixed GitLab URL parsing to correctly extract organization namespace for token configuration
+- Consolidated duplicate PR URL parsing logic into reusable function
+- Improved GitLab MR support for nested namespaces like ds365ai/FDP/time-and-cost-project
+
+## [1.0.40] - 2025-12-01
+
+### Changed
+- **Version Update**: Updated extension version to 1.0.40
+
 ## [1.0.39] - 2025-11-29
 
 ### Changed

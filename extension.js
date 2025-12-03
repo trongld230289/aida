@@ -129,7 +129,7 @@ async function setupAzureDevOpsSettings() {
  */
 function activate(context) {
     // console.log('Reload 4');
-    console.log('🤖 AIDA v1.0.39 - AI Development Assistant');
+    console.log('🤖 AIDA v1.0.41 - AI Development Assistant');
     console.log('🚀 AIDA extension is now active!');
     
     // Store extension path globally
@@ -252,13 +252,13 @@ function activate(context) {
         try {
             // Check if AIDA chat should be used
             const config = vscode.workspace.getConfiguration('aida');
-            const useAidaChatbot = config.get('useAidaChatbot', false);
+            const useAIDAChatbot = config.get('useAIDAChatbot', false);
             
-            console.log('🔍 useAidaChatbot flag:', useAidaChatbot);
+            console.log('🔍 useAIDAChatbot flag:', useAIDAChatbot);
             console.log('🔍 GitHub Copilot extension active:', vscode.extensions.getExtension('GitHub.copilot')?.isActive);
             
-            if (useAidaChatbot) {
-                console.log('➡️ Using AIDA chatbot (useAidaChatbot=true)');
+            if (useAIDAChatbot) {
+                console.log('➡️ Using AIDA chatbot (useAIDAChatbot=true)');
                 // Use AIDA Copilot-style chat
                 await vscode.commands.executeCommand('aida.reviewFileContext', uri);
             } else {
@@ -291,17 +291,17 @@ function activate(context) {
         try {
             // Check if AIDA chat should be used
             const config = vscode.workspace.getConfiguration('aida');
-            const useAidaChatbot = config.get('useAidaChatbot', false);
+            const useAIDAChatbot = config.get('useAIDAChatbot', false);
             
-            console.log('🔍 useAidaChatbot flag:', useAidaChatbot);
+            console.log('🔍 useAIDAChatbot flag:', useAIDAChatbot);
             console.log('🔍 GitHub Copilot extension active:', vscode.extensions.getExtension('GitHub.copilot')?.isActive);
             
-            if (useAidaChatbot) {
-                console.log('➡️ Using AIDA chatbot (useAidaChatbot=true)');
+            if (useAIDAChatbot) {
+                console.log('➡️ Using AIDA chatbot (useAIDAChatbot=true)');
                 // Use AIDA Copilot-style chat
                 await vscode.commands.executeCommand('aida.reviewChangesContext', uri);
             } else {
-                console.log('➡️ Using GitHub Copilot (useAidaChatbot=false)');
+                console.log('➡️ Using GitHub Copilot (useAIDAChatbot=false)');
                 // Use GitHub Copilot
                 await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
                 if (uri && uri.fsPath) {
@@ -330,9 +330,9 @@ function activate(context) {
         try {
             // Check if AIDA chat should be used
             const config = vscode.workspace.getConfiguration('aida');
-            const useAidaChatbot = config.get('useAidaChatbot', false);
+            const useAIDAChatbot = config.get('useAIDAChatbot', false);
             
-            if (useAidaChatbot) {
+            if (useAIDAChatbot) {
                 // Use AIDA Copilot-style chat
                 await vscode.commands.executeCommand('aida.reviewAllChangesContext', uri);
             } else {
@@ -428,11 +428,11 @@ function activate(context) {
     
     // Always register chat participants for both AIDA and GitHub Copilot compatibility
     const config = vscode.workspace.getConfiguration('aida');
-    const useAidaChatbot = config.get('useAidaChatbot', false);
+    const useAIDAChatbot = config.get('useAIDAChatbot', false);
     const shouldRegisterParticipants = true; // Always register for GitHub Copilot compatibility
     
     console.log('🔍 Always register AIDA chat participants for GitHub Copilot compatibility');
-    console.log('🔍 useAidaChatbot flag:', useAidaChatbot);
+    console.log('🔍 useAIDAChatbot flag:', useAIDAChatbot);
     console.log('🔍 GitHub Copilot active:', vscode.extensions.getExtension('GitHub.copilot')?.isActive);
     
     let reviewChangesParticipant, reviewFileParticipant, reviewAllChangesParticipant;
