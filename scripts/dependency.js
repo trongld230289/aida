@@ -40,10 +40,14 @@ function initializeDependencyGraph(context) {
             // Set cache file path
             cacheFilePath = path.join(workspaceRoot, '.vscode', 'dependency-cache.json');
             
+            // Check if user explicitly requested re-analysis
+            const userMessage = request.prompt.toLowerCase();
+            const isReAnalyzeRequest = userMessage.includes('re-analyze') || userMessage.includes('reanalyze');
+            
             // Check for existing cache
             const cacheExists = await checkCacheExists();
             
-            if (cacheExists) {
+            if (cacheExists && !isReAnalyzeRequest) {
                 // Show cache options
                 stream.markdown(`## 🔍 Dependency Analysis Options\n\n`);
                 stream.markdown(`📁 **Found existing cache** from previous analysis\n\n`);
@@ -66,8 +70,11 @@ function initializeDependencyGraph(context) {
                 stream.markdown('\n\n💡 **Tip:** Cache loads instantly, re-analysis takes 30-60 seconds but shows latest changes.');
                 
             } else {
-                // No cache - analyze directly
-                stream.markdown('🔍 **No cache found** - Starting fresh analysis...\n\n');
+                // No cache or explicit re-analyze request - analyze directly
+                const message = isReAnalyzeRequest 
+                    ? '🔄 **Re-analyzing dependencies...** - Getting fresh data\n\n'
+                    : '🔍 **No cache found** - Starting fresh analysis...\n\n';
+                stream.markdown(message);
                 await performDependencyAnalysis(workspaceRoot, stream);
             }
             
@@ -115,25 +122,13 @@ function registerCacheCommands(context) {
     // Command to re-analyze
     const analyzeCommand = vscode.commands.registerCommand('aida.analyzeDependencies', async (workspaceRoot) => {
         try {
-            // Show progress in window (status bar)
-            await vscode.window.withProgress({
-                location: vscode.ProgressLocation.Window,
-                title: "🔍 Analyzing Dependencies",
-                cancellable: false
-            }, async (progress) => {
-                progress.report({ increment: 0, message: "Starting analysis..." });
-                
-                const result = await performDependencyAnalysisWithProgress(workspaceRoot, progress);
-                
-                if (result) {
-                    vscode.window.showInformationMessage('✅ Dependency analysis complete!');
-                }
-                
-                return result;
+            // Trigger chat participant with re-analyze command
+            await vscode.commands.executeCommand('workbench.action.chat.open', {
+                query: '@dependency re-analyze'
             });
         } catch (error) {
-            console.error('❌ Error analyzing dependencies:', error);
-            vscode.window.showErrorMessage(`❌ Analysis failed: ${error.message}`);
+            console.error('❌ Error triggering re-analysis:', error);
+            vscode.window.showErrorMessage(`❌ Failed to trigger re-analysis: ${error.message}`);
         }
     });
 
@@ -209,46 +204,59 @@ async function loadFromCache() {
  * Perform dependency analysis (extracted from main function)
  */
 async function performDependencyAnalysis(workspaceRoot, stream) {
-    // Choose analyzer based on availability
-    let analyzer, analysisType;
-    
-    if (VSCodeApiDependencyAnalyzer) {
-        analyzer = new VSCodeApiDependencyAnalyzer(workspaceRoot);
-        analysisType = 'VS Code API (Symbol Crawling)';
-        if (stream) stream.progress('🔍 Using VS Code Language Server APIs...');
-    } else {
-        analyzer = new DependencyAnalyzer(workspaceRoot);
-        analysisType = 'Enhanced File Analysis';
-        if (stream) stream.progress('📊 Using enhanced file analysis...');
-    }
-    
-    if (stream) stream.progress('📊 Generating dependency graph...');
-    const graph = VSCodeApiDependencyAnalyzer && analyzer instanceof VSCodeApiDependencyAnalyzer 
-        ? await analyzer.analyze() 
-        : analyzer.analyze();
-    
-    if (stream) stream.progress('📈 Calculating metrics...');
-    const report = analyzer.generateReport(graph);
-    
-    // Validate graph data
-    if (!graph || !graph.nodes || !Array.isArray(graph.nodes)) {
-        throw new Error('Invalid graph data: missing or invalid nodes array');
-    }
-    if (!graph.edges || !Array.isArray(graph.edges)) {
-        throw new Error('Invalid graph data: missing or invalid edges array');  
-    }
-    
-    console.log(`🔍 Graph validation: ${graph.nodes.length} nodes, ${graph.edges.length} edges`);
-    
-    // Save to cache
-    await saveToCache(graph, report, analysisType);
-    
-    // Create webview
-    await createWebviewFromData(graph, report, analysisType);
-    
-    // Send confirmation message if stream provided
-    if (stream) {
-        stream.markdown(`## 🔍 Dependency Analysis Complete
+    // Show progress in status bar
+    return await vscode.window.withProgress({
+        location: vscode.ProgressLocation.Window,
+        title: "🔍 Analyzing Dependencies",
+        cancellable: false
+    }, async (progress) => {
+        progress.report({ increment: 10, message: "Initializing analyzer..." });
+        
+        // Choose analyzer based on availability
+        let analyzer, analysisType;
+        
+        if (VSCodeApiDependencyAnalyzer) {
+            analyzer = new VSCodeApiDependencyAnalyzer(workspaceRoot);
+            analysisType = 'VS Code API (Symbol Crawling)';
+            if (stream) stream.progress('🔍 Using VS Code Language Server APIs...');
+        } else {
+            analyzer = new DependencyAnalyzer(workspaceRoot);
+            analysisType = 'Enhanced File Analysis';
+            if (stream) stream.progress('📊 Using enhanced file analysis...');
+        }
+        
+        progress.report({ increment: 30, message: "Scanning files and analyzing dependencies..." });
+        if (stream) stream.progress('📊 Generating dependency graph...');
+        const graph = VSCodeApiDependencyAnalyzer && analyzer instanceof VSCodeApiDependencyAnalyzer 
+            ? await analyzer.analyze() 
+            : analyzer.analyze();
+        
+        progress.report({ increment: 70, message: "Calculating metrics..." });
+        if (stream) stream.progress('📈 Calculating metrics...');
+        const report = analyzer.generateReport(graph);
+        
+        // Validate graph data
+        if (!graph || !graph.nodes || !Array.isArray(graph.nodes)) {
+            throw new Error('Invalid graph data: missing or invalid nodes array');
+        }
+        if (!graph.edges || !Array.isArray(graph.edges)) {
+            throw new Error('Invalid graph data: missing or invalid edges array');  
+        }
+        
+        console.log(`🔍 Graph validation: ${graph.nodes.length} nodes, ${graph.edges.length} edges`);
+        
+        progress.report({ increment: 90, message: "Saving cache and creating visualization..." });
+        // Save to cache
+        await saveToCache(graph, report, analysisType);
+        
+        // Create webview
+        await createWebviewFromData(graph, report, analysisType);
+        
+        progress.report({ increment: 100, message: "Complete!" });
+        
+        // Send confirmation message if stream provided
+        if (stream) {
+            stream.markdown(`## 🔍 Dependency Analysis Complete
             
 ✅ **${analysisType}** for: \`all modules\`
 • Found: **${graph.nodes.length}** modules  
@@ -273,10 +281,11 @@ ${VSCodeApiDependencyAnalyzer && analyzer instanceof VSCodeApiDependencyAnalyzer
 • 🔄 **Pan & zoom** to navigate graph
 
 Perfect for QC impact analysis! 🎯`
-        );
-    }
-    
-    return { graph, report, analysisType };
+            );
+        }
+        
+        return { graph, report, analysisType };
+    });
 }
 
 /**
