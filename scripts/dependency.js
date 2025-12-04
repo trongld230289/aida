@@ -344,6 +344,13 @@ async function createWebviewFromData(graph, report, analysisType) {
     const webviewHtml = generateFilteredGraphWebviewHtml(graph, report.summary, 'all');
     panel.webview.html = webviewHtml;
     
+    // Handle messages from webview
+    panel.webview.onDidReceiveMessage(async (message) => {
+        if (message.command === 'buildSelectedNodeObject') {
+            await buildSelectedNodeObject(message.nodeId, graph, panel);
+        }
+    });
+    
     console.log(`✅ Webview created with ${graph.nodes.length} nodes, ${graph.edges.length} edges`);
 }
 
@@ -529,6 +536,119 @@ function analyzeModuleImpact(graph, targetNode) {
         directDependents,
         transitiveImpact: Array.from(transitiveImpact).filter(id => id !== targetNode.id)
     };
+}
+
+/**
+ * Build complete selected node object with all CSS/HTML assets
+ */
+async function buildSelectedNodeObject(nodeId, graph, panel) {
+    try {
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath;
+        if (!workspaceRoot) {
+            console.error('No workspace root found');
+            return;
+        }
+
+        const selectedNode = graph.nodes.find(n => n.id === nodeId);
+        if (!selectedNode) {
+            console.error('Node not found:', nodeId);
+            return;
+        }
+
+        // Helper function to load assets for a node
+        const loadNodeAssets = async (node) => {
+            const result = { main: node.id };
+            
+            // Skip if not a component or module
+            const fileName = node.fileName || path.basename(node.id);
+            if (!fileName.endsWith('.ts')) {
+                return result;
+            }
+
+            // Get absolute path
+            let absolutePath = node.id;
+            if (!path.isAbsolute(node.id) && workspaceRoot) {
+                absolutePath = path.join(workspaceRoot, node.id);
+            }
+
+            // Check if file exists
+            if (!fs.existsSync(absolutePath)) {
+                return result;
+            }
+
+            // Read file content
+            const fileContent = fs.readFileSync(absolutePath, 'utf8');
+
+            // Parse templateUrl (HTML)
+            const templateUrlMatch = fileContent.match(/templateUrl\s*:\s*['"`]([^'"`]+)['"`]/);
+            if (templateUrlMatch) {
+                const htmlPath = path.resolve(path.dirname(absolutePath), templateUrlMatch[1]);
+                if (fs.existsSync(htmlPath)) {
+                    result.html = path.relative(workspaceRoot, htmlPath);
+                }
+            }
+
+            // Parse styleUrls (CSS/SCSS)
+            const styleUrlsMatch = fileContent.match(/styleUrls\s*:\s*\[([\s\S]*?)\]/);
+            if (styleUrlsMatch) {
+                const styleUrls = styleUrlsMatch[1].match(/['"`]([^'"`]+)['"`]/g);
+                if (styleUrls && styleUrls.length > 0) {
+                    const cleanUrl = styleUrls[0].replace(/['"`]/g, '');
+                    const cssPath = path.resolve(path.dirname(absolutePath), cleanUrl);
+                    if (fs.existsSync(cssPath)) {
+                        result.css = path.relative(workspaceRoot, cssPath);
+                    }
+                }
+            }
+
+            return result;
+        };
+
+        // Build dependencies array
+        const dependencies = [];
+        const dependencyEdges = graph.edges.filter(edge => {
+            const sourceId = edge.source.id || edge.source;
+            return sourceId === nodeId;
+        });
+
+        for (const edge of dependencyEdges) {
+            const targetId = edge.target.id || edge.target;
+            const targetNode = graph.nodes.find(n => n.id === targetId);
+            if (targetNode) {
+                const assets = await loadNodeAssets(targetNode);
+                dependencies.push(assets);
+            }
+        }
+
+        // Build dependents array
+        const dependents = [];
+        const dependentEdges = graph.edges.filter(edge => {
+            const targetId = edge.target.id || edge.target;
+            return targetId === nodeId;
+        });
+
+        for (const edge of dependentEdges) {
+            const sourceId = edge.source.id || edge.source;
+            const sourceNode = graph.nodes.find(n => n.id === sourceId);
+            if (sourceNode) {
+                const assets = await loadNodeAssets(sourceNode);
+                dependents.push(assets);
+            }
+        }
+
+        // Build final object
+        const selectedNodeObject = {
+            id: selectedNode.fileName || path.basename(nodeId),
+            fileName: selectedNode.fileName || path.basename(nodeId),
+            dependencies,
+            dependents
+        };
+
+        console.log('\n🎯 Selected Node Object:', JSON.stringify(selectedNodeObject, null, 2));
+
+    } catch (error) {
+        console.error('❌ Error building selected node object:', error);
+    }
 }
 
 /**

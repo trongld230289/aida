@@ -1,5 +1,8 @@
 // @ts-nocheck
 
+// Acquire VS Code API for webview messaging
+const vscode = acquireVsCodeApi();
+
 const graphData = __GRAPH_DATA__;
 const searchTerm = __SEARCH_TERM__;
 const workspaceRoot = __WORKSPACE_ROOT__;
@@ -92,6 +95,12 @@ function renderGraph() {
       if (searchInput) {
         searchInput.value = d.displayName || d.fileName || d.id;
       }
+
+      // Trigger building selected node object
+      vscode.postMessage({
+        command: 'buildSelectedNodeObject',
+        nodeId: d.id
+      });
     })
     .on('mouseenter', (event, d) => {
       const tooltip = document.getElementById('nodeTooltip');
