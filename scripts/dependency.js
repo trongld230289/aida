@@ -1,5 +1,6 @@
 const vscode = require('vscode');
 const path = require('path');
+const fs = require('fs');
 
 // Import dependency analyzers
 const DependencyAnalyzer = require('./dependency-graph/index').DependencyAnalyzer;
@@ -13,6 +14,10 @@ try {
     VSCodeApiDependencyAnalyzer = null;
 }
 
+// Cache management
+const CACHE_VERSION = '1.0';
+let cacheFilePath = null;
+
 /**
  * Initialize dependency graph functionality
  * @param {vscode.ExtensionContext} context
@@ -22,9 +27,6 @@ function initializeDependencyGraph(context) {
     // Create chat participant for dependency analysis
     const dependencyParticipant = vscode.chat.createChatParticipant('dependency', async (request, chatContext, stream, token) => {
         try {
-            // Show typing indicator
-            stream.progress('🔍 Analyzing dependencies using VS Code Language Servers...');
-            
             // Get workspace root
             const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath;
             if (!workspaceRoot) {
@@ -32,71 +34,222 @@ function initializeDependencyGraph(context) {
                 return;
             }
 
-            // Choose analyzer based on availability
-            let analyzer, analysisType;
+            // Set cache file path
+            cacheFilePath = path.join(workspaceRoot, '.vscode', 'dependency-cache.json');
             
-            if (VSCodeApiDependencyAnalyzer) {
-                analyzer = new VSCodeApiDependencyAnalyzer(workspaceRoot);
-                analysisType = 'VS Code API (Symbol Crawling)';
-                stream.progress('🔍 Using VS Code Language Server APIs...');
+            // Check for existing cache
+            const cacheExists = await checkCacheExists();
+            
+            if (cacheExists) {
+                // Show cache options
+                stream.markdown(`## 🔍 Dependency Analysis Options\n\n`);
+                stream.markdown(`📁 **Found existing cache** from previous analysis\n\n`);
+                stream.markdown(`**Choose your option:**\n\n`);
+                
+                stream.button({
+                    command: 'aida.loadDependencyCache',
+                    title: '⚡ Load from Cache (Fast)',
+                    arguments: [workspaceRoot]
+                });
+                
+                stream.markdown('   ');
+                
+                stream.button({
+                    command: 'aida.analyzeDependencies', 
+                    title: '🔄 Re-analyze (Slow but Fresh)',
+                    arguments: [workspaceRoot]
+                });
+                
+                stream.markdown('\n\n💡 **Tip:** Cache loads instantly, re-analysis takes 30-60 seconds but shows latest changes.');
+                
             } else {
-                analyzer = new DependencyAnalyzer(workspaceRoot);
-                analysisType = 'Enhanced File Analysis';
-                stream.progress('📊 Using enhanced file analysis...');
+                // No cache - analyze directly
+                stream.markdown('🔍 **No cache found** - Starting fresh analysis...\n\n');
+                await performDependencyAnalysis(workspaceRoot, stream);
             }
             
-            stream.progress('📊 Generating dependency graph...');
-            const graph = VSCodeApiDependencyAnalyzer && analyzer instanceof VSCodeApiDependencyAnalyzer 
-                ? await analyzer.analyze() 
-                : analyzer.analyze();
-            
-            stream.progress('📈 Calculating metrics...');
-            const report = analyzer.generateReport(graph);
-            
-            // Validate graph data before creating webview
-            if (!graph || !graph.nodes || !Array.isArray(graph.nodes)) {
-                throw new Error('Invalid graph data: missing or invalid nodes array');
+        } catch (error) {
+            console.error('❌ Dependency analysis error:', error);
+            console.error('❌ Stack trace:', error.stack);
+            stream.markdown(`❌ **Analysis Error**\n\n**Error:** ${error.message}\n\n**Debug Info:**\n- Workspace: \`${workspaceRoot || 'undefined'}\`\n- Please check console for details\n\n💡 **Fix:** Ensure the workspace folder is properly opened.`);
+        }
+    });
+
+    // Set participant metadata
+    dependencyParticipant.iconPath = vscode.Uri.file(
+        path.join(context.extensionPath, 'icons', 'dependency-icon.svg')
+    );
+    
+    // Remove followup provider that might be causing help responses
+    // dependencyParticipant.followupProvider = null;
+
+    return {
+        dependencyParticipant,
+        registerCacheCommands
+    };
+}
+
+/**
+ * Register cache-related commands
+ */
+function registerCacheCommands(context) {
+    // Command to load from cache
+    const loadCacheCommand = vscode.commands.registerCommand('aida.loadDependencyCache', async (workspaceRoot) => {
+        try {
+            const cachedData = await loadFromCache();
+            if (cachedData) {
+                await createWebviewFromData(cachedData.graph, cachedData.report, 'Cache');
+                vscode.window.showInformationMessage('✅ Dependency graph loaded from cache!');
+            } else {
+                vscode.window.showErrorMessage('❌ Failed to load cache data');
             }
-            if (!graph.edges || !Array.isArray(graph.edges)) {
-                throw new Error('Invalid graph data: missing or invalid edges array');  
-            }
-            
-            console.log(`🔍 Graph validation: ${graph.nodes.length} nodes, ${graph.edges.length} edges`);
-            
-            // Use full graph without limiting
-            const filteredGraph = graph;
-            
-            // Create and open webview panel
-            const panel = vscode.window.createWebviewPanel(
-                'dependencyGraph',
-                'Dependency Graph - All Modules',
-                vscode.ViewColumn.One,
-                {
-                    enableScripts: true,
-                    retainContextWhenHidden: true
+        } catch (error) {
+            console.error('❌ Error loading cache:', error);
+            vscode.window.showErrorMessage(`❌ Cache load failed: ${error.message}`);
+        }
+    });
+
+    // Command to re-analyze
+    const analyzeCommand = vscode.commands.registerCommand('aida.analyzeDependencies', async (workspaceRoot) => {
+        try {
+            // Show progress notification
+            vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: "🔍 Analyzing Dependencies",
+                cancellable: false
+            }, async (progress) => {
+                progress.report({ increment: 0, message: "Starting analysis..." });
+                
+                const result = await performDependencyAnalysisWithProgress(workspaceRoot, progress);
+                
+                if (result) {
+                    vscode.window.showInformationMessage('✅ Dependency analysis complete!');
                 }
-            );
-            
-            // Generate webview content with filtered/limited graph
-            console.log(`📊 Creating webview with data:`, {
-                nodeCount: filteredGraph.nodes.length,
-                edgeCount: filteredGraph.edges.length,
-                sampleNode: filteredGraph.nodes[0],
-                sampleEdge: filteredGraph.edges[0]
             });
-            
-            const webviewHtml = generateFilteredGraphWebviewHtml(filteredGraph, report.summary, 'all');
-            panel.webview.html = webviewHtml;
-            
-            console.log(`✅ Webview created with ${filteredGraph.nodes.length} nodes, ${filteredGraph.edges.length} edges`);
-            
-            // Send confirmation message
-            stream.markdown(`## 🔍 Dependency Analysis Complete
+        } catch (error) {
+            console.error('❌ Error analyzing dependencies:', error);
+            vscode.window.showErrorMessage(`❌ Analysis failed: ${error.message}`);
+        }
+    });
+
+    context.subscriptions.push(loadCacheCommand, analyzeCommand);
+}
+
+/**
+ * Check if cache exists and is valid
+ */
+async function checkCacheExists() {
+    try {
+        if (!cacheFilePath) return false;
+        
+        const cacheStats = await fs.promises.stat(cacheFilePath);
+        const cacheAge = Date.now() - cacheStats.mtime.getTime();
+        const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+        
+        return cacheAge < maxAge;
+    } catch (error) {
+        return false;
+    }
+}
+
+/**
+ * Save analysis result to cache
+ */
+async function saveToCache(graph, report, analysisType) {
+    try {
+        if (!cacheFilePath) return;
+        
+        // Ensure .vscode directory exists
+        const vscodeDir = path.dirname(cacheFilePath);
+        await fs.promises.mkdir(vscodeDir, { recursive: true });
+        
+        const cacheData = {
+            version: CACHE_VERSION,
+            timestamp: new Date().toISOString(),
+            analysisType,
+            graph,
+            report
+        };
+        
+        await fs.promises.writeFile(cacheFilePath, JSON.stringify(cacheData, null, 2));
+        console.log('💾 Dependency analysis cached successfully');
+    } catch (error) {
+        console.warn('⚠️ Failed to save cache:', error.message);
+    }
+}
+
+/**
+ * Load analysis result from cache
+ */
+async function loadFromCache() {
+    try {
+        if (!cacheFilePath) return null;
+        
+        const cacheData = JSON.parse(await fs.promises.readFile(cacheFilePath, 'utf8'));
+        
+        if (cacheData.version !== CACHE_VERSION) {
+            console.log('🔄 Cache version mismatch, will regenerate');
+            return null;
+        }
+        
+        console.log('💾 Loaded dependency analysis from cache');
+        return cacheData;
+    } catch (error) {
+        console.warn('⚠️ Failed to load cache:', error.message);
+        return null;
+    }
+}
+
+/**
+ * Perform dependency analysis (extracted from main function)
+ */
+async function performDependencyAnalysis(workspaceRoot, stream) {
+    // Choose analyzer based on availability
+    let analyzer, analysisType;
+    
+    if (VSCodeApiDependencyAnalyzer) {
+        analyzer = new VSCodeApiDependencyAnalyzer(workspaceRoot);
+        analysisType = 'VS Code API (Symbol Crawling)';
+        if (stream) stream.progress('🔍 Using VS Code Language Server APIs...');
+    } else {
+        analyzer = new DependencyAnalyzer(workspaceRoot);
+        analysisType = 'Enhanced File Analysis';
+        if (stream) stream.progress('📊 Using enhanced file analysis...');
+    }
+    
+    if (stream) stream.progress('📊 Generating dependency graph...');
+    const graph = VSCodeApiDependencyAnalyzer && analyzer instanceof VSCodeApiDependencyAnalyzer 
+        ? await analyzer.analyze() 
+        : analyzer.analyze();
+    
+    if (stream) stream.progress('📈 Calculating metrics...');
+    const report = analyzer.generateReport(graph);
+    
+    // Validate graph data
+    if (!graph || !graph.nodes || !Array.isArray(graph.nodes)) {
+        throw new Error('Invalid graph data: missing or invalid nodes array');
+    }
+    if (!graph.edges || !Array.isArray(graph.edges)) {
+        throw new Error('Invalid graph data: missing or invalid edges array');  
+    }
+    
+    console.log(`🔍 Graph validation: ${graph.nodes.length} nodes, ${graph.edges.length} edges`);
+    
+    // Save to cache
+    await saveToCache(graph, report, analysisType);
+    
+    // Create webview
+    await createWebviewFromData(graph, report, analysisType);
+    
+    // Send confirmation message if stream provided
+    if (stream) {
+        stream.markdown(`## 🔍 Dependency Analysis Complete
             
 ✅ **${analysisType}** for: \`all modules\`
 • Found: **${graph.nodes.length}** modules  
 • Connections: **${graph.edges.length}** dependencies
 • Analyzed with: **${analysisType}**
+• 💾 **Cached** for faster future loads
 
 **Analysis Method:**
 ${VSCodeApiDependencyAnalyzer && analyzer instanceof VSCodeApiDependencyAnalyzer ? 
@@ -115,26 +268,69 @@ ${VSCodeApiDependencyAnalyzer && analyzer instanceof VSCodeApiDependencyAnalyzer
 • 🔄 **Pan & zoom** to navigate graph
 
 Perfect for QC impact analysis! 🎯`
-            );
-            
-        } catch (error) {
-            console.error('❌ Dependency analysis error:', error);
-            console.error('❌ Stack trace:', error.stack);
-            stream.markdown(`❌ **Analysis Error**\n\n**Error:** ${error.message}\n\n**Debug Info:**\n- Workspace: \`${workspaceRoot || 'undefined'}\`\n- Please check console for details\n\n💡 **Fix:** Ensure the workspace folder is properly opened.`);
-        }
-    });
+        );
+    }
+    
+    return { graph, report, analysisType };
+}
 
-    // Set participant metadata
-    dependencyParticipant.iconPath = vscode.Uri.file(
-        path.join(context.extensionPath, 'icons', 'dependency-icon.svg')
+/**
+ * Perform analysis with progress reporting
+ */
+async function performDependencyAnalysisWithProgress(workspaceRoot, progress) {
+    progress.report({ increment: 10, message: "Initializing analyzer..." });
+    
+    let analyzer, analysisType;
+    if (VSCodeApiDependencyAnalyzer) {
+        analyzer = new VSCodeApiDependencyAnalyzer(workspaceRoot);
+        analysisType = 'VS Code API (Symbol Crawling)';
+    } else {
+        analyzer = new DependencyAnalyzer(workspaceRoot);
+        analysisType = 'Enhanced File Analysis';
+    }
+    
+    progress.report({ increment: 30, message: "Scanning files and analyzing dependencies..." });
+    const graph = VSCodeApiDependencyAnalyzer && analyzer instanceof VSCodeApiDependencyAnalyzer 
+        ? await analyzer.analyze() 
+        : analyzer.analyze();
+    
+    progress.report({ increment: 70, message: "Calculating metrics..." });
+    const report = analyzer.generateReport(graph);
+    
+    progress.report({ increment: 90, message: "Saving cache and creating visualization..." });
+    await saveToCache(graph, report, analysisType);
+    await createWebviewFromData(graph, report, analysisType);
+    
+    progress.report({ increment: 100, message: "Complete!" });
+    return { graph, report, analysisType };
+}
+
+/**
+ * Create webview from data (extracted for reuse)
+ */
+async function createWebviewFromData(graph, report, analysisType) {
+    // Create and open webview panel
+    const panel = vscode.window.createWebviewPanel(
+        'dependencyGraph',
+        `Dependency Graph - ${analysisType}`,
+        vscode.ViewColumn.One,
+        {
+            enableScripts: true,
+            retainContextWhenHidden: true
+        }
     );
     
-    // Remove followup provider that might be causing help responses
-    // dependencyParticipant.followupProvider = null;
-
-    return {
-        dependencyParticipant
-    };
+    // Generate webview content
+    console.log(`📊 Creating webview with data:`, {
+        nodeCount: graph.nodes.length,
+        edgeCount: graph.edges.length,
+        analysisType
+    });
+    
+    const webviewHtml = generateFilteredGraphWebviewHtml(graph, report.summary, 'all');
+    panel.webview.html = webviewHtml;
+    
+    console.log(`✅ Webview created with ${graph.nodes.length} nodes, ${graph.edges.length} edges`);
 }
 
 /**
@@ -683,6 +879,7 @@ function generateFilteredGraphWebviewHtml(graph, summary, searchTerm) {
             padding: 20px;
             overflow: hidden;
             min-width: 300px;
+            position: relative;
         }
         .resizer {
             width: 4px;
@@ -954,8 +1151,7 @@ function generateFilteredGraphWebviewHtml(graph, summary, searchTerm) {
     <div class="main-container">
         <div class="left-panel">
             <div class="header">
-                <h1>🔍 Dependency Graph</h1>
-                <p>${graph.nodes.length} modules found</p>
+                <h1>🔍 Dependency Graph - ${graph.nodes.length} modules found</h1>
             </div>
             
             <div class="legend-info">
@@ -971,7 +1167,6 @@ function generateFilteredGraphWebviewHtml(graph, summary, searchTerm) {
                     <input type="text" id="nodeSearch" placeholder="Search modules..." autocomplete="off">
                     <div class="search-suggestions" id="searchSuggestions"></div>
                     <button class="btn" onclick="searchAndFocus()">🔍 Search</button>
-                    <button class="btn" onclick="resetZoom()">🎯 Reset View</button>
                 </div>
             </div>
     
@@ -1444,8 +1639,20 @@ function generateFilteredGraphWebviewHtml(graph, summary, searchTerm) {
             }
         }
         
+        function zoomIn() {
+            svg.transition().duration(300).call(
+                zoom.scaleBy, 1.5
+            );
+        }
+        
+        function zoomOut() {
+            svg.transition().duration(300).call(
+                zoom.scaleBy, 1 / 1.5
+            );
+        }
+        
         function resetZoom() {
-            svg.transition().duration(750).call(
+            svg.transition().duration(500).call(
                 zoom.transform,
                 d3.zoomIdentity
             );
@@ -1743,31 +1950,6 @@ function generateGraphWebviewHtml(graph, summary) {
             padding: 40px;
             color: #888;
         }
-        .zoom-controls {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-            z-index: 10;
-        }
-        .zoom-btn {
-            width: 35px;
-            height: 35px;
-            background: #0e639c;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 16px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .zoom-btn:hover {
-            background: #1177bb;
-        }
         .node-tooltip {
             position: absolute;
             background: rgba(45, 45, 48, 0.95);
@@ -1839,11 +2021,6 @@ function generateGraphWebviewHtml(graph, summary) {
     </div>
     
     <div class="graph-container">
-        <div class="zoom-controls">
-            <button class="zoom-btn" onclick="zoomIn()">+</button>
-            <button class="zoom-btn" onclick="zoomOut()">-</button>
-            <button class="zoom-btn" onclick="resetZoom()">⌂</button>
-        </div>
         <div class="pan-indicator">🖱️ Click and drag to pan • Mouse wheel to zoom • Click nodes for details</div>
         
         <div class="loading" id="loading">📊 Loading dependency graph...</div>

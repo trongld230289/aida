@@ -451,7 +451,17 @@ function activate(context) {
         // Initialize dependency graph analysis
         try {
             const dependency = require('./scripts/dependency');
-            dependencyParticipant = dependency.initializeDependencyGraph(context).dependencyParticipant;
+            const dependencyResult = dependency.initializeDependencyGraph(context);
+            dependencyParticipant = dependencyResult.dependencyParticipant;
+            
+            // Register cache commands if available
+            if (dependencyResult && typeof dependencyResult.registerCacheCommands === 'function') {
+                dependencyResult.registerCacheCommands(context);
+                console.log('✅ Dependency cache commands registered');
+            } else {
+                console.log('⚠️ Cache commands not available, using basic dependency analysis');
+            }
+            
             console.log('✅ Dependency graph analysis participant registered');
         } catch (error) {
             console.error('❌ Failed to initialize dependency graph analysis:', error.message);
