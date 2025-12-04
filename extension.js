@@ -435,7 +435,7 @@ function activate(context) {
     console.log('🔍 useAIDAChatbot flag:', useAIDAChatbot);
     console.log('🔍 GitHub Copilot active:', vscode.extensions.getExtension('GitHub.copilot')?.isActive);
     
-    let reviewChangesParticipant, reviewFileParticipant, reviewAllChangesParticipant;
+    let reviewChangesParticipant, reviewFileParticipant, reviewAllChangesParticipant, dependencyParticipant;
     
     if (shouldRegisterParticipants) {
         // Always initialize review modules for both AIDA and GitHub Copilot compatibility
@@ -447,6 +447,16 @@ function activate(context) {
 
         const reviewAllChanges = require('./scripts/review-all-changes');
         reviewAllChangesParticipant = reviewAllChanges.initializeReviewAllChanges(context).reviewAllChangesParticipant;
+
+        // Initialize dependency graph analysis
+        try {
+            const dependency = require('./scripts/dependency');
+            dependencyParticipant = dependency.initializeDependencyGraph(context).dependencyParticipant;
+            console.log('✅ Dependency graph analysis participant registered');
+        } catch (error) {
+            console.error('❌ Failed to initialize dependency graph analysis:', error.message);
+            console.log('⚠️ Continuing without dependency analysis...');
+        }
         
         console.log('✅ Chat participants registered for both AIDA and GitHub Copilot compatibility');
     } else {

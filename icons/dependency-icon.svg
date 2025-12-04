@@ -1,0 +1,20 @@
+<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <!-- Graph nodes -->
+    <circle cx="4" cy="6" r="1.5" fill="#007ACC" />
+    <circle cx="10" cy="4" r="1.5" fill="#007ACC" />
+    <circle cx="16" cy="6" r="1.5" fill="#007ACC" />
+    <circle cx="7" cy="10" r="1.5" fill="#007ACC" />
+    <circle cx="13" cy="12" r="1.5" fill="#007ACC" />
+    <circle cx="4" cy="14" r="1.5" fill="#007ACC" />
+    
+    <!-- Graph edges -->
+    <path d="M5.2 6.8 L8.8 9.2" stroke="#007ACC" stroke-width="1" />
+    <path d="M10.8 5.2 L14.2 5.8" stroke="#007ACC" stroke-width="1" />
+    <path d="M8.2 9.2 L11.8 11.2" stroke="#007ACC" stroke-width="1" />
+    <path d="M5.2 7.2 L5.8 12.8" stroke="#007ACC" stroke-width="1" />
+    <path d="M11.5 4.8 L8.5 9.2" stroke="#007ACC" stroke-width="1" />
+    <path d="M14.5 6.8 L13.5 11.2" stroke="#007ACC" stroke-width="1" />
+    
+    <!-- Optional: Dependency flow arrow -->
+    <polygon points="17,8 19,10 17,12" fill="#007ACC" />
+</svg>

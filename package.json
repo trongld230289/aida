@@ -334,6 +334,12 @@
         "name": "scan-app",
         "description": "🤖 AI-powered code scanning and duplicate detection",
         "isSticky": true
+      },
+      {
+        "id": "dependency",
+        "name": "dependency",
+        "description": "📊 Analyze project dependencies, detect circular deps, and get architecture insights",
+        "isSticky": true
       }
     ]
   },
@@ -353,7 +359,10 @@
     "monaco-editor": "^0.52.0",
     "natural": "^6.12.0",
     "string-similarity": "^4.0.4",
-    "tesseract.js": "^6.0.1"
+    "tesseract.js": "^6.0.1",
+    "tree-sitter": "^0.21.1",
+    "tree-sitter-javascript": "^0.21.2",
+    "tree-sitter-typescript": "^0.21.2"
   },
   "devDependencies": {
     "@types/vscode": "^1.80.0",
