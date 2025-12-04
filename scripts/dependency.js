@@ -17,6 +17,7 @@ try {
 // Cache management
 const CACHE_VERSION = '1.0';
 let cacheFilePath = null;
+let extensionContext = null;
 
 /**
  * Initialize dependency graph functionality
@@ -24,6 +25,8 @@ let cacheFilePath = null;
  * @returns {object} - Chat participant and related functions
  */
 function initializeDependencyGraph(context) {
+    // Store extension context for later use
+    extensionContext = context;
     // Create chat participant for dependency analysis
     const dependencyParticipant = vscode.chat.createChatParticipant('dependency', async (request, chatContext, stream, token) => {
         try {
@@ -112,9 +115,9 @@ function registerCacheCommands(context) {
     // Command to re-analyze
     const analyzeCommand = vscode.commands.registerCommand('aida.analyzeDependencies', async (workspaceRoot) => {
         try {
-            // Show progress notification
-            vscode.window.withProgress({
-                location: vscode.ProgressLocation.Notification,
+            // Show progress in window (status bar)
+            await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Window,
                 title: "🔍 Analyzing Dependencies",
                 cancellable: false
             }, async (progress) => {
@@ -125,6 +128,8 @@ function registerCacheCommands(context) {
                 if (result) {
                     vscode.window.showInformationMessage('✅ Dependency analysis complete!');
                 }
+                
+                return result;
             });
         } catch (error) {
             console.error('❌ Error analyzing dependencies:', error);
@@ -850,7 +855,66 @@ function openGraphWebview(graph, summary) {
  * Generate HTML content for filtered webview with drag support
  */
 function generateFilteredGraphWebviewHtml(graph, summary, searchTerm) {
-    const mermaidDiagram = generateFilteredMermaidDiagram(graph, searchTerm);
+    // Get extension path from context
+    const extensionPath = extensionContext ? extensionContext.extensionPath : __dirname;
+    
+    // Read HTML template
+    const htmlTemplatePath = path.join(extensionPath, 'scripts', 'dependency-graph', 'graph-view.html');
+    let htmlTemplate = fs.readFileSync(htmlTemplatePath, 'utf8');
+    
+    // Read TypeScript script
+    const scriptPath = path.join(extensionPath, 'scripts', 'dependency-graph', 'graph-view.ts');
+    let scriptContent = fs.readFileSync(scriptPath, 'utf8');
+    
+    // Replace placeholders in HTML
+    htmlTemplate = htmlTemplate.replace('{{SEARCH_TERM}}', searchTerm);
+    htmlTemplate = htmlTemplate.replace('{{NODE_COUNT}}', graph.nodes.length);
+    
+    // Prepare graph data with Angular entity info
+    const graphDataJson = JSON.stringify({
+        nodes: graph.nodes.map(node => {
+            // Extract Angular entities for display
+            const angularEntities = node.metadata?.angularEntities || {};
+            const primaryEntity = getNodeDisplayName(node, angularEntities);
+            
+            return {
+                id: node.id,
+                fileName: node.fileName || 'unknown',
+                relativePath: node.relativePath || '',
+                category: node.category || 'file',
+                displayName: primaryEntity.name,
+                entityType: primaryEntity.type,
+                entities: {
+                    components: angularEntities.components || [],
+                    services: angularEntities.services || [],
+                    modules: angularEntities.modules || [],
+                    models: angularEntities.models || [],
+                    interfaces: angularEntities.interfaces || []
+                }
+            };
+        }),
+        edges: graph.edges
+    });
+    
+    // Get workspace root for file reading in AI analysis
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath || '';
+    
+    // Replace script placeholders
+    scriptContent = scriptContent.replace('__GRAPH_DATA__', graphDataJson);
+    scriptContent = scriptContent.replace('__SEARCH_TERM__', JSON.stringify(searchTerm));
+    scriptContent = scriptContent.replace('__WORKSPACE_ROOT__', JSON.stringify(workspaceRoot));
+    
+    // Inject script into HTML
+    htmlTemplate = htmlTemplate.replace('/*__GRAPH_SCRIPT__*/', scriptContent);
+    
+    return htmlTemplate;
+}
+
+/**
+ * Generate HTML content for webview
+ */
+function generateGraphWebviewHtml(graph, summary) {
+    const mermaidDiagram = generateMermaidDiagram(graph);
     
     return `<!DOCTYPE html>
 <html lang="en">

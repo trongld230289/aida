@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+    <title>Dependency Graph - {{SEARCH_TERM}}</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+      body {
+        margin: 0;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background: #1e1e1e;
+        color: #cccccc;
+        display: flex;
+        height: 100vh;
+      }
+
+      .main-container {
+        display: flex;
+        width: 100%;
+        height: 100vh;
+        position: relative;
+      }
+
+      .left-panel {
+        width: 65%;
+        padding: 20px;
+        overflow: hidden;
+        min-width: 300px;
+        position: relative;
+      }
+
+      .resizer {
+        width: 4px;
+        background: transparent;
+        cursor: col-resize;
+        position: relative;
+        flex-shrink: 0;
+        border-left: 1px solid #3c3c3c;
+      }
+
+      .resizer:hover {
+        background: #007acc;
+        border-left: 1px solid #007acc;
+      }
+
+      .resizer::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+      }
+
+      .right-panel {
+        flex: 1;
+        padding: 20px;
+        background: #252526;
+        overflow-y: auto;
+        min-width: 200px;
+      }
+
+      .header {
+        margin-bottom: 20px;
+        padding: 15px;
+        background: #2d2d30;
+        border-radius: 8px;
+        border-left: 4px solid #007acc;
+      }
+
+      .legend-info {
+        background: #2d2d30;
+        color: #cccccc;
+        padding: 10px;
+        border-radius: 4px;
+        margin-bottom: 15px;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        flex-wrap: wrap;
+      }
+
+      .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+
+      .legend-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        border: 2px solid #fff;
+      }
+
+      .legend-dot.service {
+        background: #4CAF50;
+      }
+
+      .legend-dot.component {
+        background: #2196F3;
+      }
+
+      .legend-dot.module {
+        background: #FF9800;
+      }
+
+      .legend-dot.model {
+        background: #9C27B0;
+      }
+
+      .header {
+        margin-bottom: 20px;
+        padding: 15px;
+        background: #2d2d30;
+        border-radius: 8px;
+        border-left: 4px solid #007acc;
+      }
+
+      .legend-info {
+        background: #2d2d30;
+        color: #cccccc;
+        padding: 10px;
+        border-radius: 4px;
+        margin-bottom: 15px;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        flex-wrap: wrap;
+        border-left: 4px solid #007acc;
+      }
+
+      .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+
+      .legend-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        border: 2px solid #fff;
+      }
+
+      .search-info {
+        background: #4ecdc4;
+        color: #1e1e1e;
+        padding: 10px;
+        border-radius: 4px;
+        margin-bottom: 15px;
+        font-weight: bold;
+      }
+
+      .controls {
+        margin-bottom: 15px;
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+
+      .search-container {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        width: 100%;
+        position: relative;
+      }
+
+      #nodeSearch {
+        flex: 1;
+        padding: 10px 15px;
+        border: 2px solid #007acc;
+        border-radius: 6px;
+        background: #2d2d30;
+        color: #cccccc;
+        font-size: 14px;
+        transition: all 0.2s ease;
+      }
+
+      #nodeSearch:focus {
+        outline: none;
+        border-color: #0078d4;
+        box-shadow: 0 0 8px rgba(0, 120, 212, 0.3);
+        background: #323233;
+      }
+
+      .search-suggestions {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: #2d2d30;
+        border: 2px solid #007acc;
+        border-top: none;
+        border-radius: 0 0 6px 6px;
+        max-height: 200px;
+        overflow-y: auto;
+        z-index: 1000;
+        display: none;
+      }
+
+      .suggestion-item {
+        padding: 10px 15px;
+        cursor: pointer;
+        border-bottom: 1px solid #444;
+        color: #cccccc;
+        transition: background-color 0.2s;
+      }
+
+      .suggestion-item:hover,
+      .suggestion-item.selected {
+        background: #007acc;
+        color: #ffffff;
+      }
+
+      .suggestion-item:last-child {
+        border-bottom: none;
+      }
+
+      .btn {
+        background: #007acc;
+        color: #ffffff;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: bold;
+        transition: background-color 0.2s;
+      }
+
+      .btn:hover {
+        background: #0078d4;
+      }
+
+      .ai-analyst-btn {
+        background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+        color: white;
+        border: none;
+        padding: 12px 20px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: bold;
+        width: 100%;
+        margin: 10px 0;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+      }
+
+      .ai-analyst-btn:hover {
+        background: linear-gradient(135deg, #5f3dc4, #9775fa);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
+      }
+
+      .ai-analysis-result {
+        background: #2d2d30;
+        border: 1px solid #6c5ce7;
+        border-radius: 6px;
+        padding: 15px;
+        margin-top: 10px;
+        max-height: 300px;
+        overflow-y: auto;
+        display: none;
+      }
+
+      .ai-analysis-loading {
+        text-align: center;
+        padding: 20px;
+        color: #a29bfe;
+      }
+
+      #d3-graph {
+        width: 100%;
+        height: calc(100vh - 140px);
+        border: 2px solid #007acc;
+        border-radius: 8px;
+        background: #252526;
+      }
+
+      .detail-section {
+        margin-bottom: 20px;
+        padding: 15px;
+        background: #2d2d30;
+        border-radius: 8px;
+        border-left: 4px solid #4fc3f7;
+        color: #e0e0e0;
+      }
+
+      .detail-section h4 {
+        margin: 0 0 10px 0;
+        color: #4fc3f7;
+        font-weight: bold;
+      }
+
+      .dependency-item {
+        padding: 8px;
+        margin: 5px 0;
+        background: #3d3d3d;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background-color 0.2s;
+        color: #e0e0e0;
+      }
+
+      .dependency-item:hover {
+        background: #4d4d4d;
+        color: #ffffff;
+      }
+
+      .module-title {
+        font-size: 18px;
+        font-weight: bold;
+        color: #81c784;
+        margin-bottom: 10px;
+      }
+
+      .node-circle {
+        stroke: #fff;
+        stroke-width: 2px;
+        cursor: move;
+      }
+
+      .node-circle.service {
+        fill: #4CAF50;
+      }
+
+      .node-circle.component {
+        fill: #2196F3;
+      }
+
+      .node-circle.module {
+        fill: #FF9800;
+      }
+
+      .node-circle.model {
+        fill: #9C27B0;
+      }
+
+      .node-circle:not(.service):not(.component):not(.module):not(.model) {
+        fill: #007acc;
+      }
+
+      .node-circle:hover {
+        filter: drop-shadow(0 0 5px currentColor);
+      }
+
+      .node-circle.search-match {
+        fill: #ffeaa7;
+        stroke: #333;
+        stroke-width: 3px;
+      }
+
+      .link {
+        stroke: #6A9EDB;
+        stroke-opacity: 0.6;
+        stroke-width: 1.5px;
+        marker-end: url(#arrowhead);
+      }
+
+      .node-text {
+        font-size: 11px;
+        fill: #cccccc;
+        text-anchor: middle;
+        pointer-events: none;
+      }
+
+      .tooltip {
+        position: absolute;
+        background: rgba(45, 45, 48, 0.95);
+        border: 1px solid #4ecdc4;
+        border-radius: 4px;
+        padding: 8px;
+        font-size: 12px;
+        z-index: 1000;
+        pointer-events: none;
+        opacity: 0;
+        max-width: 250px;
+      }
+
+    </style>
+  </head>
+
+  <body>
+    <div class="main-container">
+      <div class="left-panel">
+        <div class="header">
+          <h1>🔍 Dependency Graph - {{NODE_COUNT}} modules found</h1>
+        </div>
+
+        <div class="legend-info">
+          📋 File Types:
+          <span class="legend-item"><span class="legend-dot service"></span>Service</span>
+          <span class="legend-item"><span class="legend-dot component"></span>Component</span>
+          <span class="legend-item"><span class="legend-dot module"></span>Module</span>
+          <span class="legend-item"><span class="legend-dot model"></span>Model</span>
+        </div>
+
+        <div class="controls">
+          <div class="search-container">
+            <input type="text"
+                   id="nodeSearch"
+                   placeholder="Search modules..."
+                   autocomplete="off">
+            <div class="search-suggestions"
+                 id="searchSuggestions"></div>
+            <button class="btn"
+                    onclick="searchAndFocus()">🔍 Search</button>
+          </div>
+        </div>
+
+        <svg id="d3-graph"></svg>
+        <div class="tooltip"
+             id="nodeTooltip"></div>
+      </div>
+
+      <div class="resizer"
+           id="resizer"></div>
+
+      <div class="right-panel">
+        <div id="detailView">
+          <h3>🎯 Module Details</h3>
+          <p>Click on any module to see its dependencies and dependents</p>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      /*__GRAPH_SCRIPT__*/
+    </script>
+  </body>
+
+</html>

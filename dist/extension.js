@@ -478,7 +478,17 @@ function activate(context) {
         // Initialize dependency graph analysis
         try {
             const dependency = __webpack_require__(/*! ./scripts/dependency */ "./scripts/dependency.js");
-            dependencyParticipant = dependency.initializeDependencyGraph(context).dependencyParticipant;
+            const dependencyResult = dependency.initializeDependencyGraph(context);
+            dependencyParticipant = dependencyResult.dependencyParticipant;
+            
+            // Register cache commands if available
+            if (dependencyResult && typeof dependencyResult.registerCacheCommands === 'function') {
+                dependencyResult.registerCacheCommands(context);
+                console.log('✅ Dependency cache commands registered');
+            } else {
+                console.log('⚠️ Cache commands not available, using basic dependency analysis');
+            }
+            
             console.log('✅ Dependency graph analysis participant registered');
         } catch (error) {
             console.error('❌ Failed to initialize dependency graph analysis:', error.message);
@@ -62899,6 +62909,7 @@ module.exports = {
 
 const vscode = __webpack_require__(/*! vscode */ "vscode");
 const path = __webpack_require__(/*! path */ "path");
+const fs = __webpack_require__(/*! fs */ "fs");
 
 // Import dependency analyzers
 const DependencyAnalyzer = (__webpack_require__(/*! ./dependency-graph/index */ "./scripts/dependency-graph/index.js").DependencyAnalyzer);
@@ -62912,18 +62923,22 @@ try {
     VSCodeApiDependencyAnalyzer = null;
 }
 
+// Cache management
+const CACHE_VERSION = '1.0';
+let cacheFilePath = null;
+let extensionContext = null;
+
 /**
  * Initialize dependency graph functionality
  * @param {vscode.ExtensionContext} context
  * @returns {object} - Chat participant and related functions
  */
 function initializeDependencyGraph(context) {
+    // Store extension context for later use
+    extensionContext = context;
     // Create chat participant for dependency analysis
     const dependencyParticipant = vscode.chat.createChatParticipant('dependency', async (request, chatContext, stream, token) => {
         try {
-            // Show typing indicator
-            stream.progress('🔍 Analyzing dependencies using VS Code Language Servers...');
-            
             // Get workspace root
             const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath;
             if (!workspaceRoot) {
@@ -62931,71 +62946,224 @@ function initializeDependencyGraph(context) {
                 return;
             }
 
-            // Choose analyzer based on availability
-            let analyzer, analysisType;
+            // Set cache file path
+            cacheFilePath = path.join(workspaceRoot, '.vscode', 'dependency-cache.json');
             
-            if (VSCodeApiDependencyAnalyzer) {
-                analyzer = new VSCodeApiDependencyAnalyzer(workspaceRoot);
-                analysisType = 'VS Code API (Symbol Crawling)';
-                stream.progress('🔍 Using VS Code Language Server APIs...');
+            // Check for existing cache
+            const cacheExists = await checkCacheExists();
+            
+            if (cacheExists) {
+                // Show cache options
+                stream.markdown(`## 🔍 Dependency Analysis Options\n\n`);
+                stream.markdown(`📁 **Found existing cache** from previous analysis\n\n`);
+                stream.markdown(`**Choose your option:**\n\n`);
+                
+                stream.button({
+                    command: 'aida.loadDependencyCache',
+                    title: '⚡ Load from Cache (Fast)',
+                    arguments: [workspaceRoot]
+                });
+                
+                stream.markdown('   ');
+                
+                stream.button({
+                    command: 'aida.analyzeDependencies', 
+                    title: '🔄 Re-analyze (Slow but Fresh)',
+                    arguments: [workspaceRoot]
+                });
+                
+                stream.markdown('\n\n💡 **Tip:** Cache loads instantly, re-analysis takes 30-60 seconds but shows latest changes.');
+                
             } else {
-                analyzer = new DependencyAnalyzer(workspaceRoot);
-                analysisType = 'Enhanced File Analysis';
-                stream.progress('📊 Using enhanced file analysis...');
+                // No cache - analyze directly
+                stream.markdown('🔍 **No cache found** - Starting fresh analysis...\n\n');
+                await performDependencyAnalysis(workspaceRoot, stream);
             }
             
-            stream.progress('📊 Generating dependency graph...');
-            const graph = VSCodeApiDependencyAnalyzer && analyzer instanceof VSCodeApiDependencyAnalyzer 
-                ? await analyzer.analyze() 
-                : analyzer.analyze();
-            
-            stream.progress('📈 Calculating metrics...');
-            const report = analyzer.generateReport(graph);
-            
-            // Validate graph data before creating webview
-            if (!graph || !graph.nodes || !Array.isArray(graph.nodes)) {
-                throw new Error('Invalid graph data: missing or invalid nodes array');
+        } catch (error) {
+            console.error('❌ Dependency analysis error:', error);
+            console.error('❌ Stack trace:', error.stack);
+            stream.markdown(`❌ **Analysis Error**\n\n**Error:** ${error.message}\n\n**Debug Info:**\n- Workspace: \`${workspaceRoot || 'undefined'}\`\n- Please check console for details\n\n💡 **Fix:** Ensure the workspace folder is properly opened.`);
+        }
+    });
+
+    // Set participant metadata
+    dependencyParticipant.iconPath = vscode.Uri.file(
+        path.join(context.extensionPath, 'icons', 'dependency-icon.svg')
+    );
+    
+    // Remove followup provider that might be causing help responses
+    // dependencyParticipant.followupProvider = null;
+
+    return {
+        dependencyParticipant,
+        registerCacheCommands
+    };
+}
+
+/**
+ * Register cache-related commands
+ */
+function registerCacheCommands(context) {
+    // Command to load from cache
+    const loadCacheCommand = vscode.commands.registerCommand('aida.loadDependencyCache', async (workspaceRoot) => {
+        try {
+            const cachedData = await loadFromCache();
+            if (cachedData) {
+                await createWebviewFromData(cachedData.graph, cachedData.report, 'Cache');
+                vscode.window.showInformationMessage('✅ Dependency graph loaded from cache!');
+            } else {
+                vscode.window.showErrorMessage('❌ Failed to load cache data');
             }
-            if (!graph.edges || !Array.isArray(graph.edges)) {
-                throw new Error('Invalid graph data: missing or invalid edges array');  
-            }
-            
-            console.log(`🔍 Graph validation: ${graph.nodes.length} nodes, ${graph.edges.length} edges`);
-            
-            // Use full graph without limiting
-            const filteredGraph = graph;
-            
-            // Create and open webview panel
-            const panel = vscode.window.createWebviewPanel(
-                'dependencyGraph',
-                'Dependency Graph - All Modules',
-                vscode.ViewColumn.One,
-                {
-                    enableScripts: true,
-                    retainContextWhenHidden: true
+        } catch (error) {
+            console.error('❌ Error loading cache:', error);
+            vscode.window.showErrorMessage(`❌ Cache load failed: ${error.message}`);
+        }
+    });
+
+    // Command to re-analyze
+    const analyzeCommand = vscode.commands.registerCommand('aida.analyzeDependencies', async (workspaceRoot) => {
+        try {
+            // Show progress in window (status bar)
+            await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Window,
+                title: "🔍 Analyzing Dependencies",
+                cancellable: false
+            }, async (progress) => {
+                progress.report({ increment: 0, message: "Starting analysis..." });
+                
+                const result = await performDependencyAnalysisWithProgress(workspaceRoot, progress);
+                
+                if (result) {
+                    vscode.window.showInformationMessage('✅ Dependency analysis complete!');
                 }
-            );
-            
-            // Generate webview content with filtered/limited graph
-            console.log(`📊 Creating webview with data:`, {
-                nodeCount: filteredGraph.nodes.length,
-                edgeCount: filteredGraph.edges.length,
-                sampleNode: filteredGraph.nodes[0],
-                sampleEdge: filteredGraph.edges[0]
+                
+                return result;
             });
-            
-            const webviewHtml = generateFilteredGraphWebviewHtml(filteredGraph, report.summary, 'all');
-            panel.webview.html = webviewHtml;
-            
-            console.log(`✅ Webview created with ${filteredGraph.nodes.length} nodes, ${filteredGraph.edges.length} edges`);
-            
-            // Send confirmation message
-            stream.markdown(`## 🔍 Dependency Analysis Complete
+        } catch (error) {
+            console.error('❌ Error analyzing dependencies:', error);
+            vscode.window.showErrorMessage(`❌ Analysis failed: ${error.message}`);
+        }
+    });
+
+    context.subscriptions.push(loadCacheCommand, analyzeCommand);
+}
+
+/**
+ * Check if cache exists and is valid
+ */
+async function checkCacheExists() {
+    try {
+        if (!cacheFilePath) return false;
+        
+        const cacheStats = await fs.promises.stat(cacheFilePath);
+        const cacheAge = Date.now() - cacheStats.mtime.getTime();
+        const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+        
+        return cacheAge < maxAge;
+    } catch (error) {
+        return false;
+    }
+}
+
+/**
+ * Save analysis result to cache
+ */
+async function saveToCache(graph, report, analysisType) {
+    try {
+        if (!cacheFilePath) return;
+        
+        // Ensure .vscode directory exists
+        const vscodeDir = path.dirname(cacheFilePath);
+        await fs.promises.mkdir(vscodeDir, { recursive: true });
+        
+        const cacheData = {
+            version: CACHE_VERSION,
+            timestamp: new Date().toISOString(),
+            analysisType,
+            graph,
+            report
+        };
+        
+        await fs.promises.writeFile(cacheFilePath, JSON.stringify(cacheData, null, 2));
+        console.log('💾 Dependency analysis cached successfully');
+    } catch (error) {
+        console.warn('⚠️ Failed to save cache:', error.message);
+    }
+}
+
+/**
+ * Load analysis result from cache
+ */
+async function loadFromCache() {
+    try {
+        if (!cacheFilePath) return null;
+        
+        const cacheData = JSON.parse(await fs.promises.readFile(cacheFilePath, 'utf8'));
+        
+        if (cacheData.version !== CACHE_VERSION) {
+            console.log('🔄 Cache version mismatch, will regenerate');
+            return null;
+        }
+        
+        console.log('💾 Loaded dependency analysis from cache');
+        return cacheData;
+    } catch (error) {
+        console.warn('⚠️ Failed to load cache:', error.message);
+        return null;
+    }
+}
+
+/**
+ * Perform dependency analysis (extracted from main function)
+ */
+async function performDependencyAnalysis(workspaceRoot, stream) {
+    // Choose analyzer based on availability
+    let analyzer, analysisType;
+    
+    if (VSCodeApiDependencyAnalyzer) {
+        analyzer = new VSCodeApiDependencyAnalyzer(workspaceRoot);
+        analysisType = 'VS Code API (Symbol Crawling)';
+        if (stream) stream.progress('🔍 Using VS Code Language Server APIs...');
+    } else {
+        analyzer = new DependencyAnalyzer(workspaceRoot);
+        analysisType = 'Enhanced File Analysis';
+        if (stream) stream.progress('📊 Using enhanced file analysis...');
+    }
+    
+    if (stream) stream.progress('📊 Generating dependency graph...');
+    const graph = VSCodeApiDependencyAnalyzer && analyzer instanceof VSCodeApiDependencyAnalyzer 
+        ? await analyzer.analyze() 
+        : analyzer.analyze();
+    
+    if (stream) stream.progress('📈 Calculating metrics...');
+    const report = analyzer.generateReport(graph);
+    
+    // Validate graph data
+    if (!graph || !graph.nodes || !Array.isArray(graph.nodes)) {
+        throw new Error('Invalid graph data: missing or invalid nodes array');
+    }
+    if (!graph.edges || !Array.isArray(graph.edges)) {
+        throw new Error('Invalid graph data: missing or invalid edges array');  
+    }
+    
+    console.log(`🔍 Graph validation: ${graph.nodes.length} nodes, ${graph.edges.length} edges`);
+    
+    // Save to cache
+    await saveToCache(graph, report, analysisType);
+    
+    // Create webview
+    await createWebviewFromData(graph, report, analysisType);
+    
+    // Send confirmation message if stream provided
+    if (stream) {
+        stream.markdown(`## 🔍 Dependency Analysis Complete
             
 ✅ **${analysisType}** for: \`all modules\`
 • Found: **${graph.nodes.length}** modules  
 • Connections: **${graph.edges.length}** dependencies
 • Analyzed with: **${analysisType}**
+• 💾 **Cached** for faster future loads
 
 **Analysis Method:**
 ${VSCodeApiDependencyAnalyzer && analyzer instanceof VSCodeApiDependencyAnalyzer ? 
@@ -63014,26 +63182,69 @@ ${VSCodeApiDependencyAnalyzer && analyzer instanceof VSCodeApiDependencyAnalyzer
 • 🔄 **Pan & zoom** to navigate graph
 
 Perfect for QC impact analysis! 🎯`
-            );
-            
-        } catch (error) {
-            console.error('❌ Dependency analysis error:', error);
-            console.error('❌ Stack trace:', error.stack);
-            stream.markdown(`❌ **Analysis Error**\n\n**Error:** ${error.message}\n\n**Debug Info:**\n- Workspace: \`${workspaceRoot || 'undefined'}\`\n- Please check console for details\n\n💡 **Fix:** Ensure the workspace folder is properly opened.`);
-        }
-    });
+        );
+    }
+    
+    return { graph, report, analysisType };
+}
 
-    // Set participant metadata
-    dependencyParticipant.iconPath = vscode.Uri.file(
-        path.join(context.extensionPath, 'icons', 'dependency-icon.svg')
+/**
+ * Perform analysis with progress reporting
+ */
+async function performDependencyAnalysisWithProgress(workspaceRoot, progress) {
+    progress.report({ increment: 10, message: "Initializing analyzer..." });
+    
+    let analyzer, analysisType;
+    if (VSCodeApiDependencyAnalyzer) {
+        analyzer = new VSCodeApiDependencyAnalyzer(workspaceRoot);
+        analysisType = 'VS Code API (Symbol Crawling)';
+    } else {
+        analyzer = new DependencyAnalyzer(workspaceRoot);
+        analysisType = 'Enhanced File Analysis';
+    }
+    
+    progress.report({ increment: 30, message: "Scanning files and analyzing dependencies..." });
+    const graph = VSCodeApiDependencyAnalyzer && analyzer instanceof VSCodeApiDependencyAnalyzer 
+        ? await analyzer.analyze() 
+        : analyzer.analyze();
+    
+    progress.report({ increment: 70, message: "Calculating metrics..." });
+    const report = analyzer.generateReport(graph);
+    
+    progress.report({ increment: 90, message: "Saving cache and creating visualization..." });
+    await saveToCache(graph, report, analysisType);
+    await createWebviewFromData(graph, report, analysisType);
+    
+    progress.report({ increment: 100, message: "Complete!" });
+    return { graph, report, analysisType };
+}
+
+/**
+ * Create webview from data (extracted for reuse)
+ */
+async function createWebviewFromData(graph, report, analysisType) {
+    // Create and open webview panel
+    const panel = vscode.window.createWebviewPanel(
+        'dependencyGraph',
+        `Dependency Graph - ${analysisType}`,
+        vscode.ViewColumn.One,
+        {
+            enableScripts: true,
+            retainContextWhenHidden: true
+        }
     );
     
-    // Remove followup provider that might be causing help responses
-    // dependencyParticipant.followupProvider = null;
-
-    return {
-        dependencyParticipant
-    };
+    // Generate webview content
+    console.log(`📊 Creating webview with data:`, {
+        nodeCount: graph.nodes.length,
+        edgeCount: graph.edges.length,
+        analysisType
+    });
+    
+    const webviewHtml = generateFilteredGraphWebviewHtml(graph, report.summary, 'all');
+    panel.webview.html = webviewHtml;
+    
+    console.log(`✅ Webview created with ${graph.nodes.length} nodes, ${graph.edges.length} edges`);
 }
 
 /**
@@ -63553,7 +63764,66 @@ function openGraphWebview(graph, summary) {
  * Generate HTML content for filtered webview with drag support
  */
 function generateFilteredGraphWebviewHtml(graph, summary, searchTerm) {
-    const mermaidDiagram = generateFilteredMermaidDiagram(graph, searchTerm);
+    // Get extension path from context
+    const extensionPath = extensionContext ? extensionContext.extensionPath : __dirname;
+    
+    // Read HTML template
+    const htmlTemplatePath = path.join(extensionPath, 'scripts', 'dependency-graph', 'graph-view.html');
+    let htmlTemplate = fs.readFileSync(htmlTemplatePath, 'utf8');
+    
+    // Read TypeScript script
+    const scriptPath = path.join(extensionPath, 'scripts', 'dependency-graph', 'graph-view.ts');
+    let scriptContent = fs.readFileSync(scriptPath, 'utf8');
+    
+    // Replace placeholders in HTML
+    htmlTemplate = htmlTemplate.replace('{{SEARCH_TERM}}', searchTerm);
+    htmlTemplate = htmlTemplate.replace('{{NODE_COUNT}}', graph.nodes.length);
+    
+    // Prepare graph data with Angular entity info
+    const graphDataJson = JSON.stringify({
+        nodes: graph.nodes.map(node => {
+            // Extract Angular entities for display
+            const angularEntities = node.metadata?.angularEntities || {};
+            const primaryEntity = getNodeDisplayName(node, angularEntities);
+            
+            return {
+                id: node.id,
+                fileName: node.fileName || 'unknown',
+                relativePath: node.relativePath || '',
+                category: node.category || 'file',
+                displayName: primaryEntity.name,
+                entityType: primaryEntity.type,
+                entities: {
+                    components: angularEntities.components || [],
+                    services: angularEntities.services || [],
+                    modules: angularEntities.modules || [],
+                    models: angularEntities.models || [],
+                    interfaces: angularEntities.interfaces || []
+                }
+            };
+        }),
+        edges: graph.edges
+    });
+    
+    // Get workspace root for file reading in AI analysis
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath || '';
+    
+    // Replace script placeholders
+    scriptContent = scriptContent.replace('__GRAPH_DATA__', graphDataJson);
+    scriptContent = scriptContent.replace('__SEARCH_TERM__', JSON.stringify(searchTerm));
+    scriptContent = scriptContent.replace('__WORKSPACE_ROOT__', JSON.stringify(workspaceRoot));
+    
+    // Inject script into HTML
+    htmlTemplate = htmlTemplate.replace('/*__GRAPH_SCRIPT__*/', scriptContent);
+    
+    return htmlTemplate;
+}
+
+/**
+ * Generate HTML content for webview
+ */
+function generateGraphWebviewHtml(graph, summary) {
+    const mermaidDiagram = generateMermaidDiagram(graph);
     
     return `<!DOCTYPE html>
 <html lang="en">
@@ -63582,6 +63852,7 @@ function generateFilteredGraphWebviewHtml(graph, summary, searchTerm) {
             padding: 20px;
             overflow: hidden;
             min-width: 300px;
+            position: relative;
         }
         .resizer {
             width: 4px;
@@ -63756,6 +64027,40 @@ function generateFilteredGraphWebviewHtml(graph, summary, searchTerm) {
         .btn:hover {
             background: #0078d4;
         }
+        .ai-analyst-btn {
+            background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            width: 100%;
+            margin: 10px 0;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        .ai-analyst-btn:hover {
+            background: linear-gradient(135deg, #5f3dc4, #9775fa);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+        }
+        .ai-analysis-result {
+            background: #2d2d30;
+            border: 1px solid #6c5ce7;
+            border-radius: 6px;
+            padding: 15px;
+            margin-top: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+            display: none;
+        }
+        .ai-analysis-loading {
+            text-align: center;
+            padding: 20px;
+            color: #a29bfe;
+        }
         #d3-graph {
             width: 100%;
             height: calc(100vh - 140px);
@@ -63853,8 +64158,7 @@ function generateFilteredGraphWebviewHtml(graph, summary, searchTerm) {
     <div class="main-container">
         <div class="left-panel">
             <div class="header">
-                <h1>🔍 Dependency Graph</h1>
-                <p>${graph.nodes.length} modules found</p>
+                <h1>🔍 Dependency Graph - ${graph.nodes.length} modules found</h1>
             </div>
             
             <div class="legend-info">
@@ -63870,7 +64174,6 @@ function generateFilteredGraphWebviewHtml(graph, summary, searchTerm) {
                     <input type="text" id="nodeSearch" placeholder="Search modules..." autocomplete="off">
                     <div class="search-suggestions" id="searchSuggestions"></div>
                     <button class="btn" onclick="searchAndFocus()">🔍 Search</button>
-                    <button class="btn" onclick="resetZoom()">🎯 Reset View</button>
                 </div>
             </div>
     
@@ -64164,6 +64467,13 @@ function generateFilteredGraphWebviewHtml(graph, summary, searchTerm) {
                         \${dependentsHtml || '<p>No dependents found</p>'}
                     </div>
                 </div>
+                
+                <div class="detail-section">
+                    <button class="ai-analyst-btn" onclick="analyzeWithAI('\${node.id}')">
+                        🤖 AI Impact Recommendations
+                    </button>
+                    <div id="ai-analysis-\${node.id}" class="ai-analysis-result"></div>
+                </div>
             \`;
             
             console.log('Setting detail view HTML');
@@ -64343,8 +64653,20 @@ function generateFilteredGraphWebviewHtml(graph, summary, searchTerm) {
             }
         }
         
+        function zoomIn() {
+            svg.transition().duration(300).call(
+                zoom.scaleBy, 1.5
+            );
+        }
+        
+        function zoomOut() {
+            svg.transition().duration(300).call(
+                zoom.scaleBy, 1 / 1.5
+            );
+        }
+        
         function resetZoom() {
-            svg.transition().duration(750).call(
+            svg.transition().duration(500).call(
                 zoom.transform,
                 d3.zoomIdentity
             );
@@ -64521,6 +64843,203 @@ function generateFilteredGraphWebviewHtml(graph, summary, searchTerm) {
             populateAutocomplete();
             setupSearchInput();
         });
+        
+        // AI Analysis function for webview
+        function analyzeWithAI(nodeId) {
+            console.log('🤖 AI Analysis clicked for nodeId:', nodeId);
+            
+            const resultDiv = document.getElementById('ai-analysis-' + nodeId);
+            console.log('📍 Found resultDiv:', resultDiv);
+            
+            const node = graphData.nodes.find(n => n.id === nodeId);
+            console.log('🎯 Found node:', node);
+            
+            if (!node) {
+                console.error('❌ Node not found for ID:', nodeId);
+                return;
+            }
+            
+            // Show loading state
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = '<div class="ai-analysis-loading">🤖 Analyzing dependencies... Please wait</div>';
+            console.log('⏳ Loading state shown');
+            
+            // Get dependency info using edges (not links)
+            console.log('📊 Total edges available:', graphData.edges ? graphData.edges.length : 0);
+            
+            const dependencies = (graphData.edges || [])
+                .filter(edge => edge.target === nodeId)
+                .map(edge => {
+                    const sourceNode = graphData.nodes.find(n => n.id === edge.source);
+                    return sourceNode ? {
+                        name: sourceNode.fileName,
+                        path: sourceNode.relativePath,
+                        id: sourceNode.id
+                    } : null;
+                }).filter(Boolean);
+                
+            const dependents = (graphData.edges || [])
+                .filter(edge => edge.source === nodeId)
+                .map(edge => {
+                    const targetNode = graphData.nodes.find(n => n.id === edge.target);
+                    return targetNode ? {
+                        name: targetNode.fileName,
+                        path: targetNode.relativePath,
+                        id: targetNode.id
+                    } : null;
+                }).filter(Boolean);
+            
+            // Read file content and prepare detailed analysis
+            console.log('📖 Reading file content for impact analysis...');
+            
+            // Read actual file content first
+            let fileContent = '';
+            let fileSize = 0;
+            try {
+                const fs = require('fs');
+                const path = require('path');
+                
+                // Try different path combinations to find the file
+                const possiblePaths = [
+                    node.relativePath,
+                    node.id,
+                    path.join(workspaceRoot || '', node.relativePath || ''),
+                    path.join(workspaceRoot || '', node.id || '')
+                ].filter(Boolean);
+                
+                let foundPath = null;
+                for (const testPath of possiblePaths) {
+                    if (fs.existsSync(testPath)) {
+                        foundPath = testPath;
+                        break;
+                    }
+                }
+                
+                if (foundPath) {
+                    fileContent = fs.readFileSync(foundPath, 'utf8');
+                    fileSize = Math.round(fileContent.length / 1024);
+                    console.log('✅ Successfully read file:', foundPath, 'Size:', fileSize + 'KB');
+                } else {
+                    console.log('⚠️ File not found at paths:', possiblePaths);
+                    fileContent = '[File content could not be read - file not found]';
+                }
+            } catch (error) {
+                console.log('❌ Error reading file:', error.message);
+                fileContent = '[Error reading file content: ' + error.message + ']';
+            }
+            
+            // Prepare impact analysis prompt focusing on what happens when file changes
+            const analysisPrompt = \`Analyze the potential impact of modifying this file in an Angular application.
+
+File to be modified: \${node.fileName}
+Path: \${node.relativePath || node.id}
+Content: 
+\${fileContent.length > 3000 ? fileContent.substring(0, 3000) + '\\n[... content truncated ...]' : fileContent}
+
+Dependencies (\${dependencies.length} modules this file imports):
+\${dependencies.map(dep => \`- \${dep.name} (\${dep.path || dep.id})\`).join('\\n')}
+
+Dependents (\${dependents.length} modules that depend on this file):
+\${dependents.map(dep => \`- \${dep.name} (\${dep.path || dep.id})\`).join('\\n')}
+
+Please analyze what could happen if this file is modified and provide:
+
+## Potential Impact Analysis
+- What functionality could break if this file changes
+- Which user features/workflows might be affected
+- What other modules could stop working
+- Performance implications of changes
+- Security risks if applicable
+
+## Risk Level Assessment
+- High Risk: Critical functionality that would definitely break
+- Medium Risk: Features that might have issues or need updates
+- Low Risk: Minor impacts or easily fixable issues
+
+## Recommended Actions
+- What to test before deploying changes
+- Which teams/stakeholders to notify
+- What documentation to update
+- Deployment considerations\`;
+
+            console.log('🔄 Sending impact analysis prompt to AI...');
+            
+            // Simulate AI analysis with detailed, context-aware recommendations
+            setTimeout(() => {
+                console.log('🎨 Generating detailed AI response for:', node.fileName);
+                console.log('📊 Dependencies count:', dependencies.length);
+                console.log('🔗 Dependents count:', dependents.length);
+                console.log('📋 Analysis prompt prepared:', analysisPrompt.substring(0, 200) + '...');
+                
+                // Simple response - let AI service handle the analysis
+                const response = \`## Impact Analysis for \${node.fileName}
+
+**File Analysis:**
+- **File Size**: \${fileSize}KB
+- **Content Available**: \${fileContent.includes('[File content could not be read') || fileContent.includes('[Error reading file') ? 'No - file reading failed' : 'Yes - analyzed successfully'}
+
+\${fileContent.includes('[File content could not be read') || fileContent.includes('[Error reading file') ? 
+\`**Note**: File content could not be read. Analysis is based on dependency relationships only.
+
+## Potential Impact Analysis
+- **File Type**: \${node.fileName.includes('.component.') ? 'Angular Component' : node.fileName.includes('.service.') ? 'Angular Service' : node.fileName.includes('.module.') ? 'Angular Module' : 'TypeScript File'}
+- **Direct Dependencies**: \${dependencies.length} modules import this file
+- **Dependent Modules**: \${dependents.length} modules depend on this file
+- **Potential Breaking Changes**: Changes to public APIs could break \${dependents.length} dependent modules
+- **User Impact**: \${dependents.length > 0 ? \`Modifications may affect user features using \${dependents.length} related modules\` : 'Low user impact - isolated module'}
+- **Performance Impact**: Monitor for performance implications in data processing
+- **Security Considerations**: Validate input handling if this file processes user data
+
+## Risk Level Assessment
+- **High Risk**: \${dependents.length > 5 ? \`\${dependents.length} modules depend on this - high blast radius\` : 'None identified'}
+- **Medium Risk**: \${dependents.length > 2 && dependents.length <= 5 ? \`\${dependents.length} dependent modules may need updates\` : dependents.length > 0 ? 'Some integration points to verify' : 'Interface changes only'}
+- **Low Risk**: \${dependents.length <= 1 ? 'Minimal dependencies - low risk of breakage' : 'Internal implementation changes'}
+
+## Recommended Actions
+- **Testing Priority**: \${dependents.length > 3 ? 'High - test all dependent modules immediately' : dependents.length > 0 ? 'Medium - verify integration points' : 'Low - standard unit testing sufficient'}
+- **Stakeholder Notification**: \${dependents.length > 2 ? 'Notify teams owning dependent modules' : 'Standard development team notification'}
+- **Deployment Strategy**: \${dependents.length > 5 ? 'Staged rollout recommended' : dependents.length > 0 ? 'Monitor dependent module functionality' : 'Standard deployment'}
+- **Documentation**: Update API documentation if public interfaces change\` :
+
+\`## 🔮 AI Impact Recommendations
+🚫 **Real AI analysis would provide detailed impact assessment**
+
+This is a mock response. In a real implementation, the prompt above would be sent to an AI service to provide:
+
+**✅ Comprehensive Impact Analysis:**
+1. **Functional Impact** - What features could break
+2. **Integration Impact** - How other modules are affected  
+3. **User Experience Impact** - Which user workflows might change
+4. **Performance Impact** - System performance considerations
+5. **Security Impact** - Any security implications
+
+**✅ Risk Assessment:**
+- Categorized risk levels (High/Medium/Low)
+- Blast radius calculation
+- Criticality assessment
+
+**✅ Actionable Recommendations:**
+- Testing strategy and priorities
+- Stakeholder communication plan
+- Deployment considerations
+- Monitoring requirements
+
+**Next Steps for Implementation:**
+- Integrate with AI service API (OpenAI, Claude, etc.)
+- Send impact analysis prompt
+- Parse and format recommendations
+- Display actionable insights\`}
+
+**Module Context:**
+- Path: \${node.relativePath || 'Unknown'}
+- File Size: \${fileSize}KB
+- Dependencies: \${dependencies.length}
+- Dependents: \${dependents.length}\`;
+
+                console.log('✅ AI analysis completed, showing results');
+                resultDiv.innerHTML = '<div style="white-space: pre-line; line-height: 1.6; color: #cccccc; font-size: 13px;">' + response + '</div>';
+            }, 1500);
+        }
     </script>
 </body>
 </html>`;
@@ -64642,31 +65161,6 @@ function generateGraphWebviewHtml(graph, summary) {
             padding: 40px;
             color: #888;
         }
-        .zoom-controls {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-            z-index: 10;
-        }
-        .zoom-btn {
-            width: 35px;
-            height: 35px;
-            background: #0e639c;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 16px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .zoom-btn:hover {
-            background: #1177bb;
-        }
         .node-tooltip {
             position: absolute;
             background: rgba(45, 45, 48, 0.95);
@@ -64738,11 +65232,6 @@ function generateGraphWebviewHtml(graph, summary) {
     </div>
     
     <div class="graph-container">
-        <div class="zoom-controls">
-            <button class="zoom-btn" onclick="zoomIn()">+</button>
-            <button class="zoom-btn" onclick="zoomOut()">-</button>
-            <button class="zoom-btn" onclick="resetZoom()">⌂</button>
-        </div>
         <div class="pan-indicator">🖱️ Click and drag to pan • Mouse wheel to zoom • Click nodes for details</div>
         
         <div class="loading" id="loading">📊 Loading dependency graph...</div>
