@@ -1497,7 +1497,7 @@ function generateFilteredGraphWebviewHtml(graph, summary, searchTerm) {
                 
                 <div class="detail-section">
                     <button class="ai-analyst-btn" onclick="analyzeWithAI('\${node.id}')">
-                        🤖 AI Analyst - Test Recommendations
+                        🤖 AI Impact Recommendations
                     </button>
                     <div id="ai-analysis-\${node.id}" class="ai-analysis-result"></div>
                 </div>
@@ -1917,60 +1917,79 @@ function generateFilteredGraphWebviewHtml(graph, summary, searchTerm) {
                 }).filter(Boolean);
             
             // Read file content and prepare detailed analysis
-            console.log('📖 Reading file content for detailed analysis...');
+            console.log('📖 Reading file content for impact analysis...');
             
-            // Simulate file reading and prepare comprehensive prompt
-            const analysisPrompt = \`You are an expert Angular/TypeScript developer analyzing code for test impact assessment.
+            // Read actual file content first
+            let fileContent = '';
+            let fileSize = 0;
+            try {
+                const fs = require('fs');
+                const path = require('path');
+                
+                // Try different path combinations to find the file
+                const possiblePaths = [
+                    node.relativePath,
+                    node.id,
+                    path.join(workspaceRoot || '', node.relativePath || ''),
+                    path.join(workspaceRoot || '', node.id || '')
+                ].filter(Boolean);
+                
+                let foundPath = null;
+                for (const testPath of possiblePaths) {
+                    if (fs.existsSync(testPath)) {
+                        foundPath = testPath;
+                        break;
+                    }
+                }
+                
+                if (foundPath) {
+                    fileContent = fs.readFileSync(foundPath, 'utf8');
+                    fileSize = Math.round(fileContent.length / 1024);
+                    console.log('✅ Successfully read file:', foundPath, 'Size:', fileSize + 'KB');
+                } else {
+                    console.log('⚠️ File not found at paths:', possiblePaths);
+                    fileContent = '[File content could not be read - file not found]';
+                }
+            } catch (error) {
+                console.log('❌ Error reading file:', error.message);
+                fileContent = '[Error reading file content: ' + error.message + ']';
+            }
+            
+            // Prepare impact analysis prompt focusing on what happens when file changes
+            const analysisPrompt = \`Analyze the potential impact of modifying this file in an Angular application.
 
-**TARGET MODULE FOR ANALYSIS:**
-- **File**: \${node.fileName}
-- **Path**: \${node.relativePath || 'Unknown path'}
-- **Type**: \${node.category || 'Unknown type'}
+File to be modified: \${node.fileName}
+Path: \${node.relativePath || node.id}
+Content: 
+\${fileContent.length > 3000 ? fileContent.substring(0, 3000) + '\\n[... content truncated ...]' : fileContent}
 
-**DEPENDENCY ANALYSIS:**
-\${dependencies.length > 0 ? 
-\`**This module imports/depends on (\${dependencies.length} modules):**
-\${dependencies.map(dep => \`- \${dep.name} (\${dep.path})\`).join('\\n')}\` : 
-'**No dependencies found** - This module appears to be standalone or only uses framework dependencies.'}
+Dependencies (\${dependencies.length} modules this file imports):
+\${dependencies.map(dep => \`- \${dep.name} (\${dep.path || dep.id})\`).join('\\n')}
 
-\${dependents.length > 0 ? 
-\`**Modules that depend on this (\${dependents.length} modules):**
-\${dependents.map(dep => \`- \${dep.name} (\${dep.path})\`).join('\\n')}\` : 
-'**No dependents found** - No other modules directly import this one.'}
+Dependents (\${dependents.length} modules that depend on this file):
+\${dependents.map(dep => \`- \${dep.name} (\${dep.path || dep.id})\`).join('\\n')}
 
-**ANALYSIS REQUEST:**
-Please provide detailed, actionable test recommendations when this module changes. Consider:
+Please analyze what could happen if this file is modified and provide:
 
-1. **Component Analysis**: If this is a component, what UI elements, user interactions, and lifecycle methods need testing?
-2. **Service Analysis**: If this is a service, what business logic, API calls, and data transformations need validation?
-3. **Integration Points**: Based on the dependency graph, what integration scenarios need testing?
-4. **Risk Assessment**: Given the dependency relationships, what's the blast radius of changes?
-5. **Angular-Specific Concerns**: What Angular-specific patterns (dependency injection, observables, etc.) need attention?
+## Potential Impact Analysis
+- What functionality could break if this file changes
+- Which user features/workflows might be affected
+- What other modules could stop working
+- Performance implications of changes
+- Security risks if applicable
 
-**OUTPUT FORMAT:**
-## 🧪 Test Recommendations for \${node.fileName}
+## Risk Level Assessment
+- High Risk: Critical functionality that would definitely break
+- Medium Risk: Features that might have issues or need updates
+- Low Risk: Minor impacts or easily fixable issues
 
-### 1. 🎯 Direct Impact Testing
-[Specific tests for this module based on its type and functionality]
+## Recommended Actions
+- What to test before deploying changes
+- Which teams/stakeholders to notify
+- What documentation to update
+- Deployment considerations\`;
 
-### 2. 🔗 Integration Testing
-[Tests for interactions with dependencies and dependents]
-
-### 3. 🚀 Regression Testing
-[Critical user journeys and system-wide impacts]
-
-### 4. ⚡ Priority & Risk Assessment
-[Priority levels based on dependency analysis and business impact]
-
-### 5. 🛠️ Angular-Specific Testing
-[Framework-specific testing considerations]
-
-### 6. 💡 Implementation Tips
-[Practical advice for implementing these tests]
-
-Make recommendations specific to the module type and dependency relationships.\`;
-
-            console.log('🔄 Sending detailed prompt to AI analysis...');
+            console.log('🔄 Sending impact analysis prompt to AI...');
             
             // Simulate AI analysis with detailed, context-aware recommendations
             setTimeout(() => {
@@ -1979,107 +1998,72 @@ Make recommendations specific to the module type and dependency relationships.\`
                 console.log('🔗 Dependents count:', dependents.length);
                 console.log('📋 Analysis prompt prepared:', analysisPrompt.substring(0, 200) + '...');
                 
-                // Generate intelligent response based on file type and dependencies
-                const isComponent = node.fileName.includes('.component.');
-                const isService = node.fileName.includes('.service.');
-                const isModule = node.fileName.includes('.module.');
-                const isDirective = node.fileName.includes('.directive.');
-                const isPipe = node.fileName.includes('.pipe.');
-                
-                let typeSpecificTests = '';
-                let angularSpecificTests = '';
-                
-                if (isComponent) {
-                    typeSpecificTests = \`- **Component Rendering**: Test template rendering with various input combinations
-- **User Interactions**: Verify click handlers, form submissions, and event emissions
-- **Lifecycle Hooks**: Test ngOnInit, ngOnChanges, ngOnDestroy behaviors
-- **Component State**: Validate state management and data binding
-- **Input/Output Properties**: Test @Input validation and @Output event emission\`;
-                    
-                    angularSpecificTests = \`- **Change Detection**: Test OnPush strategy if used
-- **ViewChild/ViewChildren**: Verify DOM queries work correctly
-- **Content Projection**: Test ng-content and projected content
-- **Template References**: Validate template reference variables\`;
-                } else if (isService) {
-                    typeSpecificTests = \`- **Business Logic**: Test all public methods with edge cases
-- **API Interactions**: Mock HTTP calls and test error handling
-- **Data Transformation**: Verify data mapping and validation logic
-- **State Management**: Test service state consistency
-- **Error Handling**: Validate error scenarios and recovery\`;
-                    
-                    angularSpecificTests = \`- **Dependency Injection**: Test service instantiation and dependencies
-- **Observables**: Test RxJS streams, operators, and subscriptions
-- **HTTP Interceptors**: Verify request/response processing
-- **Singleton Behavior**: Test service instance management\`;
-                } else if (isModule) {
-                    typeSpecificTests = \`- **Module Configuration**: Test imports, exports, and providers
-- **Lazy Loading**: Verify module loads correctly when routed
-- **Feature Isolation**: Test module boundaries and encapsulation
-- **Shared Dependencies**: Validate shared service configurations\`;
-                    
-                    angularSpecificTests = \`- **Module Imports**: Test NgModule dependencies
-- **Provider Configuration**: Verify service registration
-- **Route Configuration**: Test routing setup if applicable
-- **Feature Module Integration**: Test with app module\`;
-                }
-                
-                const riskLevel = dependents.length > 5 ? '🔴 HIGH' : dependents.length > 2 ? '🟡 MEDIUM' : '🟢 LOW';
-                const testPriority = dependencies.length > 3 ? 'High Priority' : dependencies.length > 1 ? 'Medium Priority' : 'Standard Priority';
-                
-                const response = \`## 🧪 Test Recommendations for \${node.fileName}
+                // Simple response - let AI service handle the analysis
+                const response = \`## Impact Analysis for \${node.fileName}
 
-### 1. 🎯 Direct Impact Testing
-\${typeSpecificTests || \`- **Unit Tests**: Test all public methods and properties
-- **Interface Testing**: Verify public API contracts
-- **Edge Cases**: Test boundary conditions and error scenarios
-- **Mock Dependencies**: Ensure proper mocking of external dependencies\`}
+**File Analysis:**
+- **File Size**: \${fileSize}KB
+- **Content Available**: \${fileContent.includes('[File content could not be read') || fileContent.includes('[Error reading file') ? 'No - file reading failed' : 'Yes - analyzed successfully'}
 
-### 2. 🔗 Integration Testing
-\${dependents.length > 0 ? 
-\`- **Dependent Modules Impact**: Test \${dependents.length} modules that depend on this:
-\${dependents.slice(0,3).map(dep => \`  • \${dep.name} - \${dep.path}\`).join('\\n')}
-\${dependents.length > 3 ? \`  • ...and \${dependents.length - 3} more modules\` : ''}
-- **Data Flow Testing**: Verify data contracts between this module and dependents
-- **API Compatibility**: Ensure interface changes don't break dependent modules
-- **Integration Scenarios**: Test complete workflows involving this module\` : 
-\`- **No Direct Dependents**: Focus on testing this module's integration with its dependencies
-- **Framework Integration**: Test Angular framework interactions
-- **External API Integration**: Verify third-party service interactions\`}
+\${fileContent.includes('[File content could not be read') || fileContent.includes('[Error reading file') ? 
+\`**Note**: File content could not be read. Analysis is based on dependency relationships only.
 
-### 3. 🚀 Regression Testing
-- **Critical User Journeys**: Test main application workflows using this module
-- **Cross-Browser Compatibility**: Verify behavior across different browsers
-- **Performance Impact**: Check if changes affect application performance
-- **Accessibility Testing**: Ensure UI accessibility standards are maintained
-- **E2E Scenarios**: Test complete user workflows end-to-end
+## Potential Impact Analysis
+- **File Type**: \${node.fileName.includes('.component.') ? 'Angular Component' : node.fileName.includes('.service.') ? 'Angular Service' : node.fileName.includes('.module.') ? 'Angular Module' : 'TypeScript File'}
+- **Direct Dependencies**: \${dependencies.length} modules import this file
+- **Dependent Modules**: \${dependents.length} modules depend on this file
+- **Potential Breaking Changes**: Changes to public APIs could break \${dependents.length} dependent modules
+- **User Impact**: \${dependents.length > 0 ? \`Modifications may affect user features using \${dependents.length} related modules\` : 'Low user impact - isolated module'}
+- **Performance Impact**: Monitor for performance implications in data processing
+- **Security Considerations**: Validate input handling if this file processes user data
 
-### 4. ⚡ Priority & Risk Assessment  
-- **Risk Level**: \${riskLevel} (\${dependents.length} dependent modules)
-- **Test Priority**: \${testPriority} (based on \${dependencies.length} dependencies)
-- **Change Blast Radius**: \${dependents.length === 0 ? 'Minimal - isolated module' : \`Medium to High - affects \${dependents.length} modules\`}
-- **Recommended Test Coverage**: \${dependents.length > 3 ? '90%+ due to high impact' : dependents.length > 0 ? '80%+ due to dependencies' : '70%+ standard coverage'}
+## Risk Level Assessment
+- **High Risk**: \${dependents.length > 5 ? \`\${dependents.length} modules depend on this - high blast radius\` : 'None identified'}
+- **Medium Risk**: \${dependents.length > 2 && dependents.length <= 5 ? \`\${dependents.length} dependent modules may need updates\` : dependents.length > 0 ? 'Some integration points to verify' : 'Interface changes only'}
+- **Low Risk**: \${dependents.length <= 1 ? 'Minimal dependencies - low risk of breakage' : 'Internal implementation changes'}
 
-### 5. 🛠️ Angular-Specific Testing
-\${angularSpecificTests || \`- **Dependency Injection**: Test service injection and mock strategies
-- **Zone.js Integration**: Verify change detection works correctly
-- **Angular Testing Utilities**: Use TestBed, ComponentFixture effectively
-- **RxJS Patterns**: Test observables, subscriptions, and operators\`}
+## Recommended Actions
+- **Testing Priority**: \${dependents.length > 3 ? 'High - test all dependent modules immediately' : dependents.length > 0 ? 'Medium - verify integration points' : 'Low - standard unit testing sufficient'}
+- **Stakeholder Notification**: \${dependents.length > 2 ? 'Notify teams owning dependent modules' : 'Standard development team notification'}
+- **Deployment Strategy**: \${dependents.length > 5 ? 'Staged rollout recommended' : dependents.length > 0 ? 'Monitor dependent module functionality' : 'Standard deployment'}
+- **Documentation**: Update API documentation if public interfaces change\` :
 
-### 6. 💡 Implementation Tips
-- **Test Environment**: Use staging environment for integration testing
-- **Mock Strategy**: Mock \${dependencies.length} dependencies for isolated unit tests
-- **Test Data**: Prepare test data sets covering edge cases
-- **Monitoring**: Set up application monitoring for post-deployment validation
-- **Documentation**: Update test documentation with new scenarios
-\${dependents.length > 2 ? '- **Coordination**: Coordinate testing with teams owning dependent modules' : ''}
+\`## 🔮 AI Impact Recommendations
+🚫 **Real AI analysis would provide detailed impact assessment**
 
-**📍 Module Context:**
-- Path: \${node.relativePath || 'Unknown path'}
-- Dependencies: \${dependencies.length} modules
-- Dependents: \${dependents.length} modules  
-- Type: \${node.category || 'Unknown type'}\`;
+This is a mock response. In a real implementation, the prompt above would be sent to an AI service to provide:
 
-                console.log('✅ Detailed AI analysis completed, showing results');
+**✅ Comprehensive Impact Analysis:**
+1. **Functional Impact** - What features could break
+2. **Integration Impact** - How other modules are affected  
+3. **User Experience Impact** - Which user workflows might change
+4. **Performance Impact** - System performance considerations
+5. **Security Impact** - Any security implications
+
+**✅ Risk Assessment:**
+- Categorized risk levels (High/Medium/Low)
+- Blast radius calculation
+- Criticality assessment
+
+**✅ Actionable Recommendations:**
+- Testing strategy and priorities
+- Stakeholder communication plan
+- Deployment considerations
+- Monitoring requirements
+
+**Next Steps for Implementation:**
+- Integrate with AI service API (OpenAI, Claude, etc.)
+- Send impact analysis prompt
+- Parse and format recommendations
+- Display actionable insights\`}
+
+**Module Context:**
+- Path: \${node.relativePath || 'Unknown'}
+- File Size: \${fileSize}KB
+- Dependencies: \${dependencies.length}
+- Dependents: \${dependents.length}\`;
+
+                console.log('✅ AI analysis completed, showing results');
                 resultDiv.innerHTML = '<div style="white-space: pre-line; line-height: 1.6; color: #cccccc; font-size: 13px;">' + response + '</div>';
             }, 1500);
         }
