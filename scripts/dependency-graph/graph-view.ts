@@ -251,7 +251,7 @@ function showNodeDetails(node) {
         
         <div class="detail-section">
             <button class="ai-analyst-btn" onclick="analyzeWithAI('${node.id}')">
-                🤖 AI Impact Recommendations
+                🤖 AI Impact Analysis
             </button>
             <div id="ai-analysis-${node.id}" class="ai-analysis-result"></div>
         </div>
@@ -602,190 +602,58 @@ function analyzeWithAI(nodeId) {
   console.log('🤖 AI Analysis clicked for nodeId:', nodeId);
 
   const resultDiv = document.getElementById('ai-analysis-' + nodeId);
-  console.log('📍 Found resultDiv:', resultDiv);
-
-  const node = graphData.nodes.find(n => n.id === nodeId);
-  console.log('🎯 Found node:', node);
-
-  if (!node) {
-    console.error('❌ Node not found for ID:', nodeId);
+  if (!resultDiv) {
+    console.error('❌ Result div not found');
     return;
   }
 
+  // Show loading state
   resultDiv.style.display = 'block';
-  resultDiv.innerHTML = '<div class="ai-analysis-loading">🤖 Analyzing dependencies... Please wait</div>';
-  console.log('⏳ Loading state shown');
+  resultDiv.innerHTML = '<div class="ai-analysis-loading">🤖 Analyzing impact... Please wait</div>';
 
-  console.log('📊 Total edges available:', graphData.edges ? graphData.edges.length : 0);
+  // Trigger building selected node object and send to AI
+  vscode.postMessage({
+    command: 'buildSelectedNodeObject',
+    nodeId: nodeId
+  });
+}
 
-  const dependencies = (graphData.edges || [])
-    .filter(edge => edge.target === nodeId)
-    .map(edge => {
-      const sourceNode = graphData.nodes.find(n => n.id === edge.source);
-      return sourceNode ? {
-        name: sourceNode.fileName,
-        path: sourceNode.relativePath,
-        id: sourceNode.id
-      } : null;
-    }).filter(Boolean);
+// Listen for AI analysis response from extension
+window.addEventListener('message', event => {
+  const message = event.data;
 
-  const dependents = (graphData.edges || [])
-    .filter(edge => edge.source === nodeId)
-    .map(edge => {
-      const targetNode = graphData.nodes.find(n => n.id === edge.target);
-      return targetNode ? {
-        name: targetNode.fileName,
-        path: targetNode.relativePath,
-        id: targetNode.id
-      } : null;
-    }).filter(Boolean);
-
-  console.log('📖 Reading file content for impact analysis...');
-
-  let fileContent = '';
-  let fileSize = 0;
-  try {
-    if (typeof require === 'function') {
-      const fs = require('fs');
-      const path = require('path');
-
-      const possiblePaths = [
-        node.relativePath,
-        node.id,
-        path.join(workspaceRoot || '', node.relativePath || ''),
-        path.join(workspaceRoot || '', node.id || '')
-      ].filter(Boolean);
-
-      let foundPath = null;
-      for (const testPath of possiblePaths) {
-        if (fs.existsSync(testPath)) {
-          foundPath = testPath;
-          break;
-        }
-      }
-
-      if (foundPath) {
-        fileContent = fs.readFileSync(foundPath, 'utf8');
-        fileSize = Math.round(fileContent.length / 1024);
-        console.log('✅ Successfully read file:', foundPath, 'Size:', fileSize + 'KB');
-      } else {
-        console.log('⚠️ File not found at paths:', possiblePaths);
-        fileContent = '[File content could not be read - file not found]';
-      }
-    } else {
-      fileContent = '[File system APIs are not available inside this view]';
+  if (message.command === 'aiAnalysisComplete') {
+    const resultDiv = document.getElementById('ai-analysis-' + message.nodeId);
+    if (resultDiv) {
+      resultDiv.innerHTML = `
+        <div class="ai-analysis-content">
+          <h4>📊 Impact Analysis Results</h4>
+          <div class="ai-response">${formatMarkdown(message.analysis)}</div>
+        </div>
+      `;
     }
-  } catch (error) {
-    console.log('❌ Error reading file:', error.message);
-    fileContent = '[Error reading file content: ' + error.message + ']';
+  } else if (message.command === 'aiAnalysisError') {
+    const resultDiv = document.getElementById('ai-analysis-' + message.nodeId);
+    if (resultDiv) {
+      resultDiv.innerHTML = `
+        <div class="ai-analysis-error">
+          ❌ Error: ${message.error}
+        </div>
+      `;
+    }
   }
+});
 
-  const analysisPrompt = `Analyze the potential impact of modifying this file in an Angular application.
-
-File to be modified: ${node.fileName}
-Path: ${node.relativePath || node.id}
-Content: 
-${fileContent.length > 3000 ? fileContent.substring(0, 3000) + '\n[... content truncated ...]' : fileContent}
-
-Dependencies (${dependencies.length} modules this file imports):
-${dependencies.map(dep => `- ${dep.name} (${dep.path || dep.id})`).join('\n')}
-
-Dependents (${dependents.length} modules that depend on this file):
-${dependents.map(dep => `- ${dep.name} (${dep.path || dep.id})`).join('\n')}
-
-Please analyze what could happen if this file is modified and provide:
-
-## Potential Impact Analysis
-- What functionality could break if this file changes
-- Which user features/workflows might be affected
-- What other modules could stop working
-- Performance implications of changes
-- Security risks if applicable
-
-## Risk Level Assessment
-- High Risk: Critical functionality that would definitely break
-- Medium Risk: Features that might have issues or need updates
-- Low Risk: Minor impacts or easily fixable issues
-
-## Recommended Actions
-- What to test before deploying changes
-- Which teams/stakeholders to notify
-- What documentation to update
-- Deployment considerations`;
-
-  console.log('🔄 Sending impact analysis prompt to AI...');
-
-  setTimeout(() => {
-    console.log('🎨 Generating detailed AI response for:', node.fileName);
-    console.log('📊 Dependencies count:', dependencies.length);
-    console.log('🔗 Dependents count:', dependents.length);
-    console.log('📋 Analysis prompt prepared:', analysisPrompt.substring(0, 200) + '...');
-
-    const response = `## Impact Analysis for ${node.fileName}
-
-**File Analysis:**
-- **File Size**: ${fileSize}KB
-- **Content Available**: ${fileContent.includes('[File content could not be read') || fileContent.includes('[Error reading file') ? 'No - file reading failed' : 'Yes - analyzed successfully'}
-
-${fileContent.includes('[File content could not be read') || fileContent.includes('[Error reading file') ?
-        `**Note**: File content could not be read. Analysis is based on dependency relationships only.
-
-## Potential Impact Analysis
-- **File Type**: ${node.fileName.includes('.component.') ? 'Angular Component' : node.fileName.includes('.service.') ? 'Angular Service' : node.fileName.includes('.module.') ? 'Angular Module' : 'TypeScript File'}
-- **Direct Dependencies**: ${dependencies.length} modules import this file
-- **Dependent Modules**: ${dependents.length} modules depend on this file
-- **Potential Breaking Changes**: Changes to public APIs could break ${dependents.length} dependent modules
-- **User Impact**: ${dependents.length > 0 ? `Modifications may affect user features using ${dependents.length} related modules` : 'Low user impact - isolated module'}
-- **Performance Impact**: Monitor for performance implications in data processing
-- **Security Considerations**: Validate input handling if this file processes user data
-
-## Risk Level Assessment
-- **High Risk**: ${dependents.length > 5 ? `${dependents.length} modules depend on this - high blast radius` : 'None identified'}
-- **Medium Risk**: ${dependents.length > 2 && dependents.length <= 5 ? `${dependents.length} dependent modules may need updates` : dependents.length > 0 ? 'Some integration points to verify' : 'Interface changes only'}
-- **Low Risk**: ${dependents.length <= 1 ? 'Minimal dependencies - low risk of breakage' : 'Internal implementation changes'}
-
-## Recommended Actions
-- **Testing Priority**: ${dependents.length > 3 ? 'High - test all dependent modules immediately' : dependents.length > 0 ? 'Medium - verify integration points' : 'Low - standard unit testing sufficient'}
-- **Stakeholder Notification**: ${dependents.length > 2 ? 'Notify teams owning dependent modules' : 'Standard development team notification'}
-- **Deployment Strategy**: ${dependents.length > 5 ? 'Staged rollout recommended' : dependents.length > 0 ? 'Monitor dependent module functionality' : 'Standard deployment'}
-- **Documentation**: Update API documentation if public interfaces change` :
-
-        `## 🔮 AI Impact Recommendations
-🚫 **Real AI analysis would provide detailed impact assessment**
-
-This is a mock response. In a real implementation, the prompt above would be sent to an AI service to provide:
-
-**✅ Comprehensive Impact Analysis:**
-1. **Functional Impact** - What features could break
-2. **Integration Impact** - How other modules are affected  
-3. **User Experience Impact** - Which user workflows might change
-4. **Performance Impact** - System performance considerations
-5. **Security Impact** - Any security implications
-
-**✅ Risk Assessment:**
-- Categorized risk levels (High/Medium/Low)
-- Blast radius calculation
-- Criticality assessment
-
-**✅ Actionable Recommendations:**
-- Testing strategy and priorities
-- Stakeholder communication plan
-- Deployment considerations
-- Monitoring requirements
-
-**Next Steps for Implementation:**
-- Integrate with AI service API (OpenAI, Claude, etc.)
-- Send impact analysis prompt
-- Parse and format recommendations
-- Display actionable insights`}
-
-**Module Context:**
-- Path: ${node.relativePath || 'Unknown'}
-- File Size: ${fileSize}KB
-- Dependencies: ${dependencies.length}
-- Dependents: ${dependents.length}`;
-
-    console.log('✅ AI analysis completed, showing results');
-    resultDiv.innerHTML = '<div style="white-space: pre-line; line-height: 1.6; color: #cccccc; font-size: 13px;">' + response + '</div>';
-  }, 1500);
+// Simple markdown formatter
+function formatMarkdown(text) {
+  return text
+    .replace(/^### (.*$)/gim, '<h5>$1</h5>')
+    .replace(/^## (.*$)/gim, '<h4>$1</h4>')
+    .replace(/^# (.*$)/gim, '<h3>$1</h3>')
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/^- (.*$)/gim, '<li>$1</li>')
+    .replace(/\n\n/g, '</p><p>')
+    .replace(/^(?!<[hl]|<li)/gim, '<p>')
+    .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
 }

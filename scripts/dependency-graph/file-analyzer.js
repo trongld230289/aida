@@ -8,16 +8,75 @@ const path = require('path');
 class FileAnalyzer {
     constructor(projectRoot) {
         this.projectRoot = projectRoot;
-        this.supportedExtensions = ['.ts', '.js', '.html', '.scss', '.css'];
+        this.supportedExtensions = ['.ts', '.js', '.html', '.scss', '.css', '.jsx', '.tsx', '.cs', '.cshtml', '.razor'];
+        
+        // Comprehensive ignore patterns - skip all non-source files
         this.excludePatterns = [
+            // Dependencies & Libraries
             'node_modules',
+            'bower_components',
+            'jspm_packages',
+            'packages',
+            'vendor',
+            
+            // Build outputs
             'dist',
-            'coverage',
-            'e2e',
-            '.git',
+            'build',
+            'out',
             'out-tsc',
+            '.next',
+            '.nuxt',
+            'coverage',
+            'tmp',
+            'temp',
+            
+            // Bundled & Minified files
+            '*.min.js',
+            '*.min.css',
+            '*.bundle.js',
+            '*.bundle.css',
+            '*.chunk.js',
+            '*-compiled.js',
+            
+            // Testing
+            'e2e',
             '*.spec.ts',
-            '*.test.ts'
+            '*.spec.js',
+            '*.spec.tsx',
+            '*.spec.jsx',
+            '*.test.ts',
+            '*.test.js',
+            '*.test.tsx',
+            '*.test.jsx',
+            '__tests__',
+            '__mocks__',
+            
+            // Version Control
+            '.git',
+            '.svn',
+            '.hg',
+            
+            // IDE & Config
+            '.vscode',
+            '.idea',
+            '.vs',
+            '.angular',
+            
+            // Logs & Cache
+            'logs',
+            '*.log',
+            '.cache',
+            '.parcel-cache',
+            
+            // C# specific
+            'bin',
+            'obj',
+            '*.Designer.cs',
+            '*.designer.cs',
+            
+            // Documentation
+            'docs',
+            'documentation'
         ];
     }
 

@@ -156,7 +156,7 @@ async function setupAzureDevOpsSettings() {
  */
 function activate(context) {
     // console.log('Reload 4');
-    console.log('🤖 AIDA v1.0.41 - AI Development Assistant');
+    console.log('🤖 AIDA v1.0.43 - AI Development Assistant');
     console.log('🚀 AIDA extension is now active!');
     
     // Store extension path globally
@@ -58783,16 +58783,75 @@ const path = __webpack_require__(/*! path */ "path");
 class FileAnalyzer {
     constructor(projectRoot) {
         this.projectRoot = projectRoot;
-        this.supportedExtensions = ['.ts', '.js', '.html', '.scss', '.css'];
+        this.supportedExtensions = ['.ts', '.js', '.html', '.scss', '.css', '.jsx', '.tsx', '.cs', '.cshtml', '.razor'];
+        
+        // Comprehensive ignore patterns - skip all non-source files
         this.excludePatterns = [
+            // Dependencies & Libraries
             'node_modules',
+            'bower_components',
+            'jspm_packages',
+            'packages',
+            'vendor',
+            
+            // Build outputs
             'dist',
-            'coverage',
-            'e2e',
-            '.git',
+            'build',
+            'out',
             'out-tsc',
+            '.next',
+            '.nuxt',
+            'coverage',
+            'tmp',
+            'temp',
+            
+            // Bundled & Minified files
+            '*.min.js',
+            '*.min.css',
+            '*.bundle.js',
+            '*.bundle.css',
+            '*.chunk.js',
+            '*-compiled.js',
+            
+            // Testing
+            'e2e',
             '*.spec.ts',
-            '*.test.ts'
+            '*.spec.js',
+            '*.spec.tsx',
+            '*.spec.jsx',
+            '*.test.ts',
+            '*.test.js',
+            '*.test.tsx',
+            '*.test.jsx',
+            '__tests__',
+            '__mocks__',
+            
+            // Version Control
+            '.git',
+            '.svn',
+            '.hg',
+            
+            // IDE & Config
+            '.vscode',
+            '.idea',
+            '.vs',
+            '.angular',
+            
+            // Logs & Cache
+            'logs',
+            '*.log',
+            '.cache',
+            '.parcel-cache',
+            
+            // C# specific
+            'bin',
+            'obj',
+            '*.Designer.cs',
+            '*.designer.cs',
+            
+            // Documentation
+            'docs',
+            'documentation'
         ];
     }
 
@@ -62949,10 +63008,14 @@ function initializeDependencyGraph(context) {
             // Set cache file path
             cacheFilePath = path.join(workspaceRoot, '.vscode', 'dependency-cache.json');
             
+            // Check if user explicitly requested re-analysis
+            const userMessage = request.prompt.toLowerCase();
+            const isReAnalyzeRequest = userMessage.includes('re-analyze') || userMessage.includes('reanalyze');
+            
             // Check for existing cache
             const cacheExists = await checkCacheExists();
             
-            if (cacheExists) {
+            if (cacheExists && !isReAnalyzeRequest) {
                 // Show cache options
                 stream.markdown(`## 🔍 Dependency Analysis Options\n\n`);
                 stream.markdown(`📁 **Found existing cache** from previous analysis\n\n`);
@@ -62975,8 +63038,11 @@ function initializeDependencyGraph(context) {
                 stream.markdown('\n\n💡 **Tip:** Cache loads instantly, re-analysis takes 30-60 seconds but shows latest changes.');
                 
             } else {
-                // No cache - analyze directly
-                stream.markdown('🔍 **No cache found** - Starting fresh analysis...\n\n');
+                // No cache or explicit re-analyze request - analyze directly
+                const message = isReAnalyzeRequest 
+                    ? '🔄 **Re-analyzing dependencies...** - Getting fresh data\n\n'
+                    : '🔍 **No cache found** - Starting fresh analysis...\n\n';
+                stream.markdown(message);
                 await performDependencyAnalysis(workspaceRoot, stream);
             }
             
@@ -63024,25 +63090,13 @@ function registerCacheCommands(context) {
     // Command to re-analyze
     const analyzeCommand = vscode.commands.registerCommand('aida.analyzeDependencies', async (workspaceRoot) => {
         try {
-            // Show progress in window (status bar)
-            await vscode.window.withProgress({
-                location: vscode.ProgressLocation.Window,
-                title: "🔍 Analyzing Dependencies",
-                cancellable: false
-            }, async (progress) => {
-                progress.report({ increment: 0, message: "Starting analysis..." });
-                
-                const result = await performDependencyAnalysisWithProgress(workspaceRoot, progress);
-                
-                if (result) {
-                    vscode.window.showInformationMessage('✅ Dependency analysis complete!');
-                }
-                
-                return result;
+            // Trigger chat participant with re-analyze command
+            await vscode.commands.executeCommand('workbench.action.chat.open', {
+                query: '@dependency re-analyze'
             });
         } catch (error) {
-            console.error('❌ Error analyzing dependencies:', error);
-            vscode.window.showErrorMessage(`❌ Analysis failed: ${error.message}`);
+            console.error('❌ Error triggering re-analysis:', error);
+            vscode.window.showErrorMessage(`❌ Failed to trigger re-analysis: ${error.message}`);
         }
     });
 
@@ -63118,46 +63172,59 @@ async function loadFromCache() {
  * Perform dependency analysis (extracted from main function)
  */
 async function performDependencyAnalysis(workspaceRoot, stream) {
-    // Choose analyzer based on availability
-    let analyzer, analysisType;
-    
-    if (VSCodeApiDependencyAnalyzer) {
-        analyzer = new VSCodeApiDependencyAnalyzer(workspaceRoot);
-        analysisType = 'VS Code API (Symbol Crawling)';
-        if (stream) stream.progress('🔍 Using VS Code Language Server APIs...');
-    } else {
-        analyzer = new DependencyAnalyzer(workspaceRoot);
-        analysisType = 'Enhanced File Analysis';
-        if (stream) stream.progress('📊 Using enhanced file analysis...');
-    }
-    
-    if (stream) stream.progress('📊 Generating dependency graph...');
-    const graph = VSCodeApiDependencyAnalyzer && analyzer instanceof VSCodeApiDependencyAnalyzer 
-        ? await analyzer.analyze() 
-        : analyzer.analyze();
-    
-    if (stream) stream.progress('📈 Calculating metrics...');
-    const report = analyzer.generateReport(graph);
-    
-    // Validate graph data
-    if (!graph || !graph.nodes || !Array.isArray(graph.nodes)) {
-        throw new Error('Invalid graph data: missing or invalid nodes array');
-    }
-    if (!graph.edges || !Array.isArray(graph.edges)) {
-        throw new Error('Invalid graph data: missing or invalid edges array');  
-    }
-    
-    console.log(`🔍 Graph validation: ${graph.nodes.length} nodes, ${graph.edges.length} edges`);
-    
-    // Save to cache
-    await saveToCache(graph, report, analysisType);
-    
-    // Create webview
-    await createWebviewFromData(graph, report, analysisType);
-    
-    // Send confirmation message if stream provided
-    if (stream) {
-        stream.markdown(`## 🔍 Dependency Analysis Complete
+    // Show progress in status bar
+    return await vscode.window.withProgress({
+        location: vscode.ProgressLocation.Window,
+        title: "🔍 Analyzing Dependencies",
+        cancellable: false
+    }, async (progress) => {
+        progress.report({ increment: 10, message: "Initializing analyzer..." });
+        
+        // Choose analyzer based on availability
+        let analyzer, analysisType;
+        
+        if (VSCodeApiDependencyAnalyzer) {
+            analyzer = new VSCodeApiDependencyAnalyzer(workspaceRoot);
+            analysisType = 'VS Code API (Symbol Crawling)';
+            if (stream) stream.progress('🔍 Using VS Code Language Server APIs...');
+        } else {
+            analyzer = new DependencyAnalyzer(workspaceRoot);
+            analysisType = 'Enhanced File Analysis';
+            if (stream) stream.progress('📊 Using enhanced file analysis...');
+        }
+        
+        progress.report({ increment: 30, message: "Scanning files and analyzing dependencies..." });
+        if (stream) stream.progress('📊 Generating dependency graph...');
+        const graph = VSCodeApiDependencyAnalyzer && analyzer instanceof VSCodeApiDependencyAnalyzer 
+            ? await analyzer.analyze() 
+            : analyzer.analyze();
+        
+        progress.report({ increment: 70, message: "Calculating metrics..." });
+        if (stream) stream.progress('📈 Calculating metrics...');
+        const report = analyzer.generateReport(graph);
+        
+        // Validate graph data
+        if (!graph || !graph.nodes || !Array.isArray(graph.nodes)) {
+            throw new Error('Invalid graph data: missing or invalid nodes array');
+        }
+        if (!graph.edges || !Array.isArray(graph.edges)) {
+            throw new Error('Invalid graph data: missing or invalid edges array');  
+        }
+        
+        console.log(`🔍 Graph validation: ${graph.nodes.length} nodes, ${graph.edges.length} edges`);
+        
+        progress.report({ increment: 90, message: "Saving cache and creating visualization..." });
+        // Save to cache
+        await saveToCache(graph, report, analysisType);
+        
+        // Create webview
+        await createWebviewFromData(graph, report, analysisType);
+        
+        progress.report({ increment: 100, message: "Complete!" });
+        
+        // Send confirmation message if stream provided
+        if (stream) {
+            stream.markdown(`## 🔍 Dependency Analysis Complete
             
 ✅ **${analysisType}** for: \`all modules\`
 • Found: **${graph.nodes.length}** modules  
@@ -63182,10 +63249,11 @@ ${VSCodeApiDependencyAnalyzer && analyzer instanceof VSCodeApiDependencyAnalyzer
 • 🔄 **Pan & zoom** to navigate graph
 
 Perfect for QC impact analysis! 🎯`
-        );
-    }
-    
-    return { graph, report, analysisType };
+            );
+        }
+        
+        return { graph, report, analysisType };
+    });
 }
 
 /**
@@ -63243,6 +63311,15 @@ async function createWebviewFromData(graph, report, analysisType) {
     
     const webviewHtml = generateFilteredGraphWebviewHtml(graph, report.summary, 'all');
     panel.webview.html = webviewHtml;
+    
+    // Handle messages from webview
+    panel.webview.onDidReceiveMessage(async (message) => {
+        if (message.command === 'buildSelectedNodeObject') {
+            await buildSelectedNodeObject(message.nodeId, graph, panel);
+        } else if (message.command === 'analyzeImpact') {
+            await analyzeImpactWithAI(message.selectedNodeData, panel);
+        }
+    });
     
     console.log(`✅ Webview created with ${graph.nodes.length} nodes, ${graph.edges.length} edges`);
 }
@@ -63429,6 +63506,402 @@ function analyzeModuleImpact(graph, targetNode) {
         directDependents,
         transitiveImpact: Array.from(transitiveImpact).filter(id => id !== targetNode.id)
     };
+}
+
+/**
+ * Build complete selected node object with all CSS/HTML assets
+ */
+async function buildSelectedNodeObject(nodeId, graph, panel) {
+    try {
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath;
+        if (!workspaceRoot) {
+            console.error('No workspace root found');
+            return;
+        }
+
+        const selectedNode = graph.nodes.find(n => n.id === nodeId);
+        if (!selectedNode) {
+            console.error('Node not found:', nodeId);
+            return;
+        }
+
+        // Helper function to load assets for a node
+        const loadNodeAssets = async (node) => {
+            const result = { main: node.id };
+            
+            const fileName = node.fileName || path.basename(node.id);
+            
+            // Get absolute path
+            let absolutePath = node.id;
+            if (!path.isAbsolute(node.id) && workspaceRoot) {
+                absolutePath = path.join(workspaceRoot, node.id);
+            }
+
+            // Check if file exists
+            if (!fs.existsSync(absolutePath)) {
+                return result;
+            }
+
+            // Read file content
+            const fileContent = fs.readFileSync(absolutePath, 'utf8');
+
+            // Detect framework and load assets accordingly
+            if (fileName.endsWith('.ts') || fileName.endsWith('.tsx')) {
+                // Angular or React TypeScript
+                if (fileContent.includes('@Component') || fileContent.includes('templateUrl')) {
+                    // Angular component
+                    Object.assign(result, await loadAngularAssets(absolutePath, fileContent, workspaceRoot));
+                } else if (fileName.endsWith('.tsx') || fileContent.includes('import React')) {
+                    // React component
+                    Object.assign(result, await loadReactAssets(absolutePath, fileContent, workspaceRoot));
+                }
+            } else if (fileName.endsWith('.jsx') || fileName.endsWith('.js')) {
+                // JavaScript - React or Node.js
+                if (fileContent.includes('import React') || fileContent.includes('from \'react\'')) {
+                    Object.assign(result, await loadReactAssets(absolutePath, fileContent, workspaceRoot));
+                } else {
+                    Object.assign(result, await loadNodeJsAssets(absolutePath, fileContent, workspaceRoot));
+                }
+            } else if (fileName.endsWith('.cs')) {
+                // C# file
+                Object.assign(result, await loadCSharpAssets(absolutePath, fileContent, workspaceRoot));
+            } else if (fileName.endsWith('.cshtml') || fileName.endsWith('.razor')) {
+                // C# view files
+                Object.assign(result, await loadCSharpViewAssets(absolutePath, fileContent, workspaceRoot));
+            }
+
+            return result;
+        };
+
+        // Build dependencies array
+        const dependencies = [];
+        const dependencyEdges = graph.edges.filter(edge => {
+            const sourceId = edge.source.id || edge.source;
+            return sourceId === nodeId;
+        });
+
+        for (const edge of dependencyEdges) {
+            const targetId = edge.target.id || edge.target;
+            const targetNode = graph.nodes.find(n => n.id === targetId);
+            if (targetNode) {
+                const assets = await loadNodeAssets(targetNode);
+                dependencies.push(assets);
+            }
+        }
+
+        // Build dependents array
+        const dependents = [];
+        const dependentEdges = graph.edges.filter(edge => {
+            const targetId = edge.target.id || edge.target;
+            return targetId === nodeId;
+        });
+
+        for (const edge of dependentEdges) {
+            const sourceId = edge.source.id || edge.source;
+            const sourceNode = graph.nodes.find(n => n.id === sourceId);
+            if (sourceNode) {
+                const assets = await loadNodeAssets(sourceNode);
+                dependents.push(assets);
+            }
+        }
+
+        // Build final object
+        const selectedNodeObject = {
+            id: selectedNode.fileName || path.basename(nodeId),
+            fileName: selectedNode.fileName || path.basename(nodeId),
+            originalNodeId: nodeId, // Keep original nodeId for webview message matching
+            dependencies,
+            dependents
+        };
+
+        console.log('\n🎯 Selected Node Object:', JSON.stringify(selectedNodeObject, null, 2));
+
+        // Send to AI for analysis
+        await analyzeImpactWithAI(selectedNodeObject, panel);
+
+        return selectedNodeObject;
+
+    } catch (error) {
+        console.error('❌ Error building selected node object:', error);
+        return null;
+    }
+}
+
+/**
+ * Analyze impact with AI using selected node data
+ */
+async function analyzeImpactWithAI(selectedNodeData, panel) {
+    try {
+        // Import review-common for executeAIReview and getUnifiedModel
+        const { executeAIReview, getUnifiedModel } = __webpack_require__(/*! ./review-common */ "./scripts/review-common.js");
+        
+        // Build a simple, non-technical prompt for AI
+        const prompt = `You are analyzing a code change impact. A developer wants to modify a file and needs to know what to test.
+
+**File being modified:** ${selectedNodeData.fileName}
+
+**This file uses these components/modules (${selectedNodeData.dependencies.length} dependencies):**
+${selectedNodeData.dependencies.map(dep => {
+    let parts = [`- ${dep.main}`];
+    if (dep.html) parts.push(`(has UI template: ${dep.html})`);
+    if (dep.css) parts.push(`(has styles: ${dep.css})`);
+    return parts.join(' ');
+}).join('\n')}
+
+**These components/modules depend on this file (${selectedNodeData.dependents.length} dependents):**
+${selectedNodeData.dependents.map(dep => {
+    let parts = [`- ${dep.main}`];
+    if (dep.html) parts.push(`(has UI template: ${dep.html})`);
+    if (dep.css) parts.push(`(has styles: ${dep.css})`);
+    return parts.join(' ');
+}).join('\n')}
+
+Please provide a simple, easy-to-understand analysis for a QA tester or project manager (non-technical user):
+
+1. **What features should be tested?** - List specific user-facing features that could break
+2. **Which pages/screens need checking?** - Identify UI areas to verify
+3. **Risk level:** High/Medium/Low and why
+4. **Testing priority:** What to test first
+
+Keep the language simple and focus on USER IMPACT, not technical details.`;
+
+        console.log('🤖 Sending to AI for analysis...');
+        console.log('📋 Prompt:', prompt);
+
+        // Create a stream object to collect AI response
+        let aiResponse = '';
+        const mockStream = {
+            markdown: (text) => {
+                // Strip markdown formatting and accumulate response
+                aiResponse += text;
+            },
+            progress: (text) => {
+                console.log('Progress:', text);
+            }
+        };
+
+        // Get current selected model using getUnifiedModel (same as review-changes)
+        const model = await getUnifiedModel(mockStream, null, null, null);
+
+        // Use executeAIReview which handles both Copilot and API key modes
+        const success = await executeAIReview(prompt, model, mockStream, 'Impact Analysis', 0, null, null);
+
+        if (success) {
+            console.log('✅ AI Response received, length:', aiResponse.length);
+            
+            // Clean up the response - remove markdown decorations that we added
+            let cleanResponse = aiResponse
+                .replace(/^---\n\n/, '') // Remove separator
+                .replace(/🤖 \*\*Streaming.*?\*\*:?\n\n/g, '') // Remove streaming header
+                .replace(/💰 \*\*Cost.*?\*\*:?\n\n[\s\S]*?$/g, '') // Remove cost footer
+                .trim();
+
+            console.log('📤 Sending AI response to webview for nodeId:', selectedNodeData.originalNodeId);
+
+            // Send response back to webview using ORIGINAL nodeId for matching
+            panel.webview.postMessage({
+                command: 'aiAnalysisComplete',
+                nodeId: selectedNodeData.originalNodeId, // Use original nodeId from graph
+                analysis: cleanResponse
+            });
+        } else {
+            throw new Error('AI analysis failed');
+        }
+
+    } catch (error) {
+        console.error('❌ Error analyzing with AI:', error);
+        panel.webview.postMessage({
+            command: 'aiAnalysisError',
+            nodeId: selectedNodeData.originalNodeId || selectedNodeData.id, // Fallback to id
+            error: error.message
+        });
+    }
+}
+
+/**
+ * Load assets for Angular components
+ */
+async function loadAngularAssets(absolutePath, fileContent, workspaceRoot) {
+    const result = {};
+
+    // Parse templateUrl (HTML)
+    const templateUrlMatch = fileContent.match(/templateUrl\s*:\s*['"`]([^'"`]+)['"`]/);
+    if (templateUrlMatch) {
+        const htmlPath = path.resolve(path.dirname(absolutePath), templateUrlMatch[1]);
+        if (fs.existsSync(htmlPath)) {
+            result.html = path.relative(workspaceRoot, htmlPath);
+        }
+    }
+
+    // Parse styleUrls (CSS/SCSS)
+    const styleUrlsMatch = fileContent.match(/styleUrls\s*:\s*\[([\s\S]*?)\]/);
+    if (styleUrlsMatch) {
+        const styleUrls = styleUrlsMatch[1].match(/['"`]([^'"`]+)['"`]/g);
+        if (styleUrls && styleUrls.length > 0) {
+            const cleanUrl = styleUrls[0].replace(/['"`]/g, '');
+            const cssPath = path.resolve(path.dirname(absolutePath), cleanUrl);
+            if (fs.existsSync(cssPath)) {
+                result.css = path.relative(workspaceRoot, cssPath);
+            }
+        }
+    }
+
+    return result;
+}
+
+/**
+ * Load assets for React components
+ */
+async function loadReactAssets(absolutePath, fileContent, workspaceRoot) {
+    const result = {};
+    const dirPath = path.dirname(absolutePath);
+
+    // Find CSS/SCSS imports
+    // import './Component.css'
+    // import styles from './Component.module.css'
+    // import './styles.scss'
+    const cssImports = fileContent.matchAll(/import\s+(?:['"`]([^'"`]+\.(?:css|scss|sass|less))['"`]|.*?from\s+['"`]([^'"`]+\.(?:css|scss|sass|less))['"`])/gi);
+    
+    for (const match of cssImports) {
+        const cssFile = match[1] || match[2];
+        if (cssFile) {
+            const cssPath = path.resolve(dirPath, cssFile);
+            if (fs.existsSync(cssPath)) {
+                result.css = path.relative(workspaceRoot, cssPath);
+                break; // Take first CSS file found
+            }
+        }
+    }
+
+    // Check for co-located CSS files (Component.tsx -> Component.css/module.css)
+    if (!result.css) {
+        const baseName = path.basename(absolutePath, path.extname(absolutePath));
+        const possibleCssFiles = [
+            `${baseName}.module.css`,
+            `${baseName}.module.scss`,
+            `${baseName}.css`,
+            `${baseName}.scss`,
+            'styles.module.css',
+            'styles.css'
+        ];
+
+        for (const cssFile of possibleCssFiles) {
+            const cssPath = path.join(dirPath, cssFile);
+            if (fs.existsSync(cssPath)) {
+                result.css = path.relative(workspaceRoot, cssPath);
+                break;
+            }
+        }
+    }
+
+    // React components don't have separate HTML files (JSX is inline)
+    // But we can mark it as JSX-based
+    result.jsx = path.relative(workspaceRoot, absolutePath);
+
+    return result;
+}
+
+/**
+ * Load assets for Node.js files
+ */
+async function loadNodeJsAssets(absolutePath, fileContent, workspaceRoot) {
+    const result = {};
+    const dirPath = path.dirname(absolutePath);
+
+    // Check for static file serving
+    // app.use(express.static('public'))
+    const staticMatch = fileContent.match(/express\.static\s*\(\s*['"`]([^'"`]+)['"`]\s*\)/);
+    if (staticMatch) {
+        const staticDir = path.resolve(dirPath, staticMatch[1]);
+        if (fs.existsSync(staticDir)) {
+            result.staticDir = path.relative(workspaceRoot, staticDir);
+        }
+    }
+
+    // Check for view engine and views directory
+    // app.set('views', './views')
+    const viewsMatch = fileContent.match(/set\s*\(\s*['"`]views['"`]\s*,\s*['"`]([^'"`]+)['"`]\s*\)/);
+    if (viewsMatch) {
+        const viewsDir = path.resolve(dirPath, viewsMatch[1]);
+        if (fs.existsSync(viewsDir)) {
+            result.viewsDir = path.relative(workspaceRoot, viewsDir);
+        }
+    }
+
+    return result;
+}
+
+/**
+ * Load assets for C# class files
+ */
+async function loadCSharpAssets(absolutePath, fileContent, workspaceRoot) {
+    const result = {};
+    const dirPath = path.dirname(absolutePath);
+
+    // Check for associated .cshtml or .razor files (same name convention)
+    const baseName = path.basename(absolutePath, '.cs');
+    
+    // Check for Razor views (e.g., HomeController.cs -> Home folder)
+    if (baseName.endsWith('Controller')) {
+        const viewName = baseName.replace('Controller', '');
+        const possibleViewPaths = [
+            path.join(dirPath, '..', 'Views', viewName, 'Index.cshtml'),
+            path.join(dirPath, '..', 'Views', viewName, `${viewName}.cshtml`),
+            path.join(dirPath, 'Views', viewName, 'Index.cshtml')
+        ];
+
+        for (const viewPath of possibleViewPaths) {
+            if (fs.existsSync(viewPath)) {
+                result.view = path.relative(workspaceRoot, viewPath);
+                break;
+            }
+        }
+    }
+
+    // Check for Razor component
+    const razorPath = absolutePath.replace('.cs', '.razor');
+    if (fs.existsSync(razorPath)) {
+        result.razor = path.relative(workspaceRoot, razorPath);
+    }
+
+    return result;
+}
+
+/**
+ * Load assets for C# view files (.cshtml, .razor)
+ */
+async function loadCSharpViewAssets(absolutePath, fileContent, workspaceRoot) {
+    const result = {};
+    const dirPath = path.dirname(absolutePath);
+
+    // Check for associated CSS files
+    const baseName = path.basename(absolutePath, path.extname(absolutePath));
+    const possibleCssFiles = [
+        `${baseName}.css`,
+        `${baseName}.razor.css`, // Blazor scoped CSS
+        path.join(dirPath, 'wwwroot', 'css', `${baseName}.css`)
+    ];
+
+    for (const cssFile of possibleCssFiles) {
+        const cssPath = path.isAbsolute(cssFile) ? cssFile : path.join(dirPath, cssFile);
+        if (fs.existsSync(cssPath)) {
+            result.css = path.relative(workspaceRoot, cssPath);
+            break;
+        }
+    }
+
+    // Parse @section styles or link tags for external CSS
+    const cssLinkMatch = fileContent.match(/<link[^>]+href=["']([^"']+\.css)["']/i);
+    if (cssLinkMatch && !result.css) {
+        const cssHref = cssLinkMatch[1];
+        // Try to resolve relative to wwwroot
+        const wwwrootPath = path.join(dirPath, '..', '..', 'wwwroot', cssHref.replace(/^\//, ''));
+        if (fs.existsSync(wwwrootPath)) {
+            result.css = path.relative(workspaceRoot, wwwrootPath);
+        }
+    }
+
+    return result;
 }
 
 /**
