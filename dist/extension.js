@@ -52240,7 +52240,7 @@ class CopilotSidebarChat {
             
             // Get current file context first (for context engine analysis)
             const participantType = this.determineParticipant(userMessage);
-            const isReviewCommand = ['review-file', 'review-changes', 'review-all-changes', 'review-pr', 'sync-review-templates','scan-app'].includes(participantType);
+            const isReviewCommand = ['review-file', 'review-changes', 'review-all-changes', 'review-pr', 'sync-review-templates','scan-app','dependency'].includes(participantType);
             
             if (!isReviewCommand) {
                 currentFileContext = await this.getCurrentFileContext();
@@ -52576,7 +52576,7 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
             };
             
             // Determine if streaming should be used
-            const isReviewMode = ['review-file', 'review-changes', 'review-all-changes', 'review-pr', 'scan-app', 'sync-review-templates'].includes(participant);
+            const isReviewMode = ['review-file', 'review-changes', 'review-all-changes', 'review-pr', 'scan-app', 'sync-review-templates', 'dependency'].includes(participant);
             const shouldStream = participant === 'general' || isReviewMode;
             
             let response;
@@ -52645,6 +52645,7 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
         if (lowerMessage.includes('@review-pr')) return 'review-pr';
         if (lowerMessage.includes('@sync-review-templates')) return 'sync-review-templates';
         if (lowerMessage.includes('@scan-app')) return 'scan-app';
+        if (lowerMessage.includes('@dependency')) return 'dependency';
         
         return 'general';
     }
@@ -54630,6 +54631,17 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
                         return '❌ **Error**: ' + error.message + '\n\nPlease check the console for details.';
                     }
 
+                case 'dependency':
+                    try {
+                        console.log('🔍 AIDA Chat: Calling dependency analysis with reusable logic');
+                        const dependencyModule = __webpack_require__(/*! ../dependency.js */ "./scripts/dependency.js");
+                        await dependencyModule.aiDependencyAnalysis(messageWithoutParticipant, mockStream, null, this.context);
+                        return result || '✅ **Dependency Analysis Complete**\n\nDependency analysis completed.';
+                    } catch (error) {
+                        console.error('❌ AIDA Chat dependency error:', error);
+                        return '❌ **Error**: ' + error.message + '\n\nPlease check the console for details.';
+                    }
+
                 case 'scan-app':
                     try {
                         console.log('🔍 AIDA Chat: Calling scan-app with reusable logic');
@@ -54698,6 +54710,7 @@ Xin chào! Tôi là AIDA, trợ lý AI chuyên về lập trình.
 - \`@review-all-changes\` - Phân tích TẤT CẢ git changes trong workspace
 - \`@review-pr\` - Review pull request  
 - \`@sync-review-templates\` - Sync templates
+- \`@dependency\` - Phân tích dependency graph
 
 Bạn đang làm gì thú vị vậy? 🚀`;
         } else {
@@ -54714,6 +54727,7 @@ Hello! I'm AIDA, your AI coding assistant.
 **Special Commands:**
 - \`@review-file\` - Review current file
 - \`@review-changes\` - Analyze git changes
+- \`@dependency\` - Analyze project dependencies
 - \`@review-all-changes\` - Analyze ALL git changes in workspace
 - \`@review-pr\` - Review pull request
 - \`@sync-review-templates\` - Sync templates
@@ -59016,7 +59030,7 @@ function initializeDependencyGraph(context) {
                     arguments: [workspaceRoot]
                 });
                 
-                stream.markdown('\n\n💡 **Tip:** Cache loads instantly, re-analysis takes 30-60 seconds but shows latest changes.');
+                stream.markdown('\n\n💡 **Tip:** Cache loads instantly, re-analysis will take some time but fresh.');
                 
             } else {
                 // No cache or explicit re-analyze request - analyze directly in background
@@ -59050,6 +59064,75 @@ function initializeDependencyGraph(context) {
         dependencyParticipant,
         registerCacheCommands
     };
+}
+
+/**
+ * AI Dependency Analysis function for AIDA Chatbot
+ * @param {string} message - User message
+ * @param {object} stream - Stream object for responses
+ * @param {object} token - Cancellation token
+ * @param {vscode.ExtensionContext} context - Extension context
+ */
+async function aiDependencyAnalysis(message, stream, token, context) {
+    try {
+        stream.markdown('# 🔍 AIDA Dependency Analysis\n\n');
+        
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath;
+        if (!workspaceRoot) {
+            stream.markdown('❌ **Error:** No workspace folder found. Please open a project folder.\n\n');
+            return;
+        }
+
+        // Set cache file path
+        cacheFilePath = path.join(workspaceRoot, '.vscode', 'dependency-cache.json');
+        
+        // Check if user explicitly requested re-analysis
+        const userMessage = message.toLowerCase();
+        const isReAnalyzeRequest = userMessage.includes('re-analyze') || userMessage.includes('reanalyze');
+        
+        // Check for existing cache
+        const cacheExists = await checkCacheExists();
+        
+        if (cacheExists && !isReAnalyzeRequest) {
+            // Show cache options (same as Copilot)
+            stream.markdown(`## 🔍 Dependency Analysis Options\n\n`);
+            stream.markdown(`📁 **Found existing cache** from previous analysis\n\n`);
+            stream.markdown(`**Choose your option:**\n\n`);
+            
+            stream.button({
+                command: 'aida.loadDependencyCache',
+                title: '⚡ Load from Cache (Fast)',
+                arguments: [workspaceRoot]
+            });
+            
+            stream.markdown('   ');
+            
+            stream.button({
+                command: 'aida.analyzeDependencies', 
+                title: '🔄 Re-analyze (Slow but Fresh)',
+                arguments: [workspaceRoot]
+            });
+            
+            stream.markdown('\n\n💡 **Tip:** Cache loads instantly, re-analysis will take some time but fresh.\n\n');
+            
+        } else {
+            // No cache or explicit re-analyze request
+            const message = isReAnalyzeRequest 
+                ? '🔄 **Re-analyzing dependencies...** - This will take some time\n\n'
+                : '🔍 **No cache found** - Starting fresh analysis...\n\n';
+            stream.markdown(message);
+            stream.markdown('✅ **Analysis started in background** - You can continue working!\n\n');
+            stream.markdown('💡 The dependency graph will open automatically when complete.\n\n');
+            
+            // Run in background without blocking chat
+            performDependencyAnalysisInBackground(workspaceRoot);
+        }
+        
+    } catch (error) {
+        console.error('❌ aiDependencyAnalysis error:', error);
+        stream.markdown(`❌ **Error:** ${error.message}\n\n`);
+        stream.markdown('Please check the console for details.\n\n');
+    }
 }
 
 /**
@@ -62121,7 +62204,8 @@ function generateDetailedAnalysis(graph, report) {
 }
 
 module.exports = {
-    initializeDependencyGraph
+    initializeDependencyGraph,
+    aiDependencyAnalysis
 };
 
 /***/ }),

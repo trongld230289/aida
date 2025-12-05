@@ -31,6 +31,7 @@ const participants = [
     { name: '@review-pr', icon: '🔄', description: 'Review Pull Request by URL' },
     { name: '@sync-review-templates', icon: '⚙️', description: 'Sync AIDA review templates to workspace' },
     { name: '@scan-app', icon: '🤖', description: 'AI-powered code scanning and duplicate detection' },
+    { name: '@dependency', icon: '🕸️', description: 'Analyze project dependency graph and impact analysis' },
     { name: '/clear', icon: '🗑️', description: 'Clear chat history and start fresh conversation' }
 ];
 

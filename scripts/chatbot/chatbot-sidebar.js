@@ -384,7 +384,7 @@ class CopilotSidebarChat {
             
             // Get current file context first (for context engine analysis)
             const participantType = this.determineParticipant(userMessage);
-            const isReviewCommand = ['review-file', 'review-changes', 'review-all-changes', 'review-pr', 'sync-review-templates','scan-app'].includes(participantType);
+            const isReviewCommand = ['review-file', 'review-changes', 'review-all-changes', 'review-pr', 'sync-review-templates','scan-app','dependency'].includes(participantType);
             
             if (!isReviewCommand) {
                 currentFileContext = await this.getCurrentFileContext();
@@ -720,7 +720,7 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
             };
             
             // Determine if streaming should be used
-            const isReviewMode = ['review-file', 'review-changes', 'review-all-changes', 'review-pr', 'scan-app', 'sync-review-templates'].includes(participant);
+            const isReviewMode = ['review-file', 'review-changes', 'review-all-changes', 'review-pr', 'scan-app', 'sync-review-templates', 'dependency'].includes(participant);
             const shouldStream = participant === 'general' || isReviewMode;
             
             let response;
@@ -789,6 +789,7 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
         if (lowerMessage.includes('@review-pr')) return 'review-pr';
         if (lowerMessage.includes('@sync-review-templates')) return 'sync-review-templates';
         if (lowerMessage.includes('@scan-app')) return 'scan-app';
+        if (lowerMessage.includes('@dependency')) return 'dependency';
         
         return 'general';
     }
@@ -2774,6 +2775,17 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
                         return '❌ **Error**: ' + error.message + '\n\nPlease check the console for details.';
                     }
 
+                case 'dependency':
+                    try {
+                        console.log('🔍 AIDA Chat: Calling dependency analysis with reusable logic');
+                        const dependencyModule = require('../dependency.js');
+                        await dependencyModule.aiDependencyAnalysis(messageWithoutParticipant, mockStream, null, this.context);
+                        return result || '✅ **Dependency Analysis Complete**\n\nDependency analysis completed.';
+                    } catch (error) {
+                        console.error('❌ AIDA Chat dependency error:', error);
+                        return '❌ **Error**: ' + error.message + '\n\nPlease check the console for details.';
+                    }
+
                 case 'scan-app':
                     try {
                         console.log('🔍 AIDA Chat: Calling scan-app with reusable logic');
@@ -2842,6 +2854,7 @@ Xin chào! Tôi là AIDA, trợ lý AI chuyên về lập trình.
 - \`@review-all-changes\` - Phân tích TẤT CẢ git changes trong workspace
 - \`@review-pr\` - Review pull request  
 - \`@sync-review-templates\` - Sync templates
+- \`@dependency\` - Phân tích dependency graph
 
 Bạn đang làm gì thú vị vậy? 🚀`;
         } else {
@@ -2858,6 +2871,7 @@ Hello! I'm AIDA, your AI coding assistant.
 **Special Commands:**
 - \`@review-file\` - Review current file
 - \`@review-changes\` - Analyze git changes
+- \`@dependency\` - Analyze project dependencies
 - \`@review-all-changes\` - Analyze ALL git changes in workspace
 - \`@review-pr\` - Review pull request
 - \`@sync-review-templates\` - Sync templates

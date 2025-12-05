@@ -58,7 +58,7 @@ function initializeDependencyGraph(context) {
                     arguments: [workspaceRoot]
                 });
                 
-                stream.markdown('\n\n💡 **Tip:** Cache loads instantly, re-analysis takes 30-60 seconds but shows latest changes.');
+                stream.markdown('\n\n💡 **Tip:** Cache loads instantly, re-analysis will take some time but fresh.');
                 
             } else {
                 // No cache or explicit re-analyze request - analyze directly in background
@@ -92,6 +92,75 @@ function initializeDependencyGraph(context) {
         dependencyParticipant,
         registerCacheCommands
     };
+}
+
+/**
+ * AI Dependency Analysis function for AIDA Chatbot
+ * @param {string} message - User message
+ * @param {object} stream - Stream object for responses
+ * @param {object} token - Cancellation token
+ * @param {vscode.ExtensionContext} context - Extension context
+ */
+async function aiDependencyAnalysis(message, stream, token, context) {
+    try {
+        stream.markdown('# 🔍 AIDA Dependency Analysis\n\n');
+        
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath;
+        if (!workspaceRoot) {
+            stream.markdown('❌ **Error:** No workspace folder found. Please open a project folder.\n\n');
+            return;
+        }
+
+        // Set cache file path
+        cacheFilePath = path.join(workspaceRoot, '.vscode', 'dependency-cache.json');
+        
+        // Check if user explicitly requested re-analysis
+        const userMessage = message.toLowerCase();
+        const isReAnalyzeRequest = userMessage.includes('re-analyze') || userMessage.includes('reanalyze');
+        
+        // Check for existing cache
+        const cacheExists = await checkCacheExists();
+        
+        if (cacheExists && !isReAnalyzeRequest) {
+            // Show cache options (same as Copilot)
+            stream.markdown(`## 🔍 Dependency Analysis Options\n\n`);
+            stream.markdown(`📁 **Found existing cache** from previous analysis\n\n`);
+            stream.markdown(`**Choose your option:**\n\n`);
+            
+            stream.button({
+                command: 'aida.loadDependencyCache',
+                title: '⚡ Load from Cache (Fast)',
+                arguments: [workspaceRoot]
+            });
+            
+            stream.markdown('   ');
+            
+            stream.button({
+                command: 'aida.analyzeDependencies', 
+                title: '🔄 Re-analyze (Slow but Fresh)',
+                arguments: [workspaceRoot]
+            });
+            
+            stream.markdown('\n\n💡 **Tip:** Cache loads instantly, re-analysis will take some time but fresh.\n\n');
+            
+        } else {
+            // No cache or explicit re-analyze request
+            const message = isReAnalyzeRequest 
+                ? '🔄 **Re-analyzing dependencies...** - This will take some time\n\n'
+                : '🔍 **No cache found** - Starting fresh analysis...\n\n';
+            stream.markdown(message);
+            stream.markdown('✅ **Analysis started in background** - You can continue working!\n\n');
+            stream.markdown('💡 The dependency graph will open automatically when complete.\n\n');
+            
+            // Run in background without blocking chat
+            performDependencyAnalysisInBackground(workspaceRoot);
+        }
+        
+    } catch (error) {
+        console.error('❌ aiDependencyAnalysis error:', error);
+        stream.markdown(`❌ **Error:** ${error.message}\n\n`);
+        stream.markdown('Please check the console for details.\n\n');
+    }
 }
 
 /**
@@ -3163,5 +3232,6 @@ function generateDetailedAnalysis(graph, report) {
 }
 
 module.exports = {
-    initializeDependencyGraph
+    initializeDependencyGraph,
+    aiDependencyAnalysis
 };
