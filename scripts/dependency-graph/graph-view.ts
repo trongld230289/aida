@@ -22,6 +22,13 @@ function initializeGraph() {
 
   svg.attr('width', width).attr('height', height);
 
+  // Update summary statistics
+  document.getElementById('edgeCount').textContent = graphData.edges.length;
+
+  // Calculate circular dependencies (simple cycle detection)
+  const circularCount = detectCircularDependencies(graphData.nodes, graphData.edges);
+  document.getElementById('circularCount').textContent = circularCount;
+
   zoom = d3.zoom()
     .scaleExtent([0.2, 3])
     .on('zoom', function (event) {
@@ -656,4 +663,42 @@ function formatMarkdown(text) {
     .replace(/\n\n/g, '</p><p>')
     .replace(/^(?!<[hl]|<li)/gim, '<p>')
     .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
+}
+
+// Detect circular dependencies using DFS
+function detectCircularDependencies(nodes, edges) {
+  const visited = new Set();
+  const recursionStack = new Set();
+  let circularCount = 0;
+
+  function hasCycle(nodeId) {
+    if (recursionStack.has(nodeId)) {
+      return true;
+    }
+    if (visited.has(nodeId)) {
+      return false;
+    }
+
+    visited.add(nodeId);
+    recursionStack.add(nodeId);
+
+    const outgoingEdges = edges.filter(e => (e.source.id || e.source) === nodeId);
+    for (const edge of outgoingEdges) {
+      const targetId = edge.target.id || edge.target;
+      if (hasCycle(targetId)) {
+        return true;
+      }
+    }
+
+    recursionStack.delete(nodeId);
+    return false;
+  }
+
+  for (const node of nodes) {
+    if (!visited.has(node.id) && hasCycle(node.id)) {
+      circularCount++;
+    }
+  }
+
+  return circularCount;
 }

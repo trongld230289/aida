@@ -64,11 +64,16 @@
       }
 
       .header {
-        margin-bottom: 20px;
-        padding: 15px;
+        margin-bottom: 15px;
+        padding: 10px 15px;
         background: #2d2d30;
         border-radius: 8px;
         border-left: 4px solid #007acc;
+      }
+
+      .header h1 {
+        font-size: 18px;
+        margin: 0;
       }
 
       .legend-info {
@@ -82,6 +87,7 @@
         align-items: center;
         gap: 15px;
         flex-wrap: wrap;
+        border-left: 4px solid #007acc;
       }
 
       .legend-item {
@@ -113,41 +119,6 @@
         background: #9C27B0;
       }
 
-      .header {
-        margin-bottom: 20px;
-        padding: 15px;
-        background: #2d2d30;
-        border-radius: 8px;
-        border-left: 4px solid #007acc;
-      }
-
-      .legend-info {
-        background: #2d2d30;
-        color: #cccccc;
-        padding: 10px;
-        border-radius: 4px;
-        margin-bottom: 15px;
-        font-size: 14px;
-        display: flex;
-        align-items: center;
-        gap: 15px;
-        flex-wrap: wrap;
-        border-left: 4px solid #007acc;
-      }
-
-      .legend-item {
-        display: flex;
-        align-items: center;
-        gap: 5px;
-      }
-
-      .legend-dot {
-        width: 12px;
-        height: 12px;
-        border-radius: 50%;
-        border: 2px solid #fff;
-      }
-
       .search-info {
         background: #4ecdc4;
         color: #1e1e1e;
@@ -171,14 +142,18 @@
         align-items: center;
         width: 100%;
         position: relative;
+        padding: 10px;
+        background: #2d2d30;
+        border-radius: 8px;
+        border-left: 4px solid #007acc;
       }
 
       #nodeSearch {
         flex: 1;
-        padding: 10px 15px;
-        border: 2px solid #007acc;
-        border-radius: 6px;
-        background: #2d2d30;
+        padding: 8px 12px;
+        border: 1px solid #3c3c3c;
+        border-radius: 4px;
+        background: #1e1e1e;
         color: #cccccc;
         font-size: 14px;
         transition: all 0.2s ease;
@@ -186,9 +161,9 @@
 
       #nodeSearch:focus {
         outline: none;
-        border-color: #0078d4;
+        border-color: #007acc;
         box-shadow: 0 0 8px rgba(0, 120, 212, 0.3);
-        background: #323233;
+        background: #252526;
       }
 
       .search-suggestions {
@@ -241,7 +216,7 @@
       }
 
       .ai-analyst-btn {
-        background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+        background: linear-gradient(135deg, #007acc, #0098ff);
         color: white;
         border: none;
         padding: 12px 20px;
@@ -256,14 +231,14 @@
       }
 
       .ai-analyst-btn:hover {
-        background: linear-gradient(135deg, #5f3dc4, #9775fa);
+        background: linear-gradient(135deg, #005a9e, #0078d4);
         transform: translateY(-1px);
         box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
       }
 
       .ai-analysis-result {
         background: #2d2d30;
-        border: 1px solid #6c5ce7;
+        border: 1px solid #007acc;
         border-radius: 6px;
         padding: 15px;
         margin-top: 10px;
@@ -275,13 +250,14 @@
       .ai-analysis-loading {
         text-align: center;
         padding: 20px;
-        color: #a29bfe;
+        color: #0098ff;
       }
 
       #d3-graph {
         width: 100%;
         height: calc(100vh - 140px);
-        border: 2px solid #007acc;
+        border: 2px solid #3c3c3c;
+        border-left: 4px solid #007acc;
         border-radius: 8px;
         background: #252526;
       }
@@ -291,7 +267,7 @@
         padding: 15px;
         background: #2d2d30;
         border-radius: 8px;
-        border-left: 4px solid #4fc3f7;
+        border-left: 4px solid #007acc;
         color: #e0e0e0;
       }
 
@@ -393,15 +369,14 @@
     <div class="main-container">
       <div class="left-panel">
         <div class="header">
-          <h1>🔍 Dependency Graph - {{NODE_COUNT}} modules found</h1>
+          <h1>🔍 Dependency Graph</h1>
         </div>
 
         <div class="legend-info">
-          📋 File Types:
-          <span class="legend-item"><span class="legend-dot service"></span>Service</span>
-          <span class="legend-item"><span class="legend-dot component"></span>Component</span>
-          <span class="legend-item"><span class="legend-dot module"></span>Module</span>
-          <span class="legend-item"><span class="legend-dot model"></span>Model</span>
+          📊 <strong>Analysis Summary:</strong>
+          <span class="legend-item">📁 <span id="nodeCount">{{NODE_COUNT}}</span> Files</span>
+          <span class="legend-item">🔗 <span id="edgeCount">0</span> Dependencies</span>
+          <span class="legend-item">🔄 <span id="circularCount">0</span> Circular</span>
         </div>
 
         <div class="controls">
