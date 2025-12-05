@@ -260,6 +260,24 @@
         border-left: 4px solid #007acc;
         border-radius: 8px;
         background: #252526;
+        position: relative;
+      }
+
+      .recenter-btn {
+        background: #007acc;
+        color: #ffffff;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: bold;
+        transition: background-color 0.2s;
+        flex-shrink: 0;
+      }
+
+      .recenter-btn:hover {
+        background: #0078d4;
       }
 
       .detail-section {
@@ -389,6 +407,9 @@
                  id="searchSuggestions"></div>
             <button class="btn"
                     onclick="searchAndFocus()">🔍 Search</button>
+            <button class="recenter-btn"
+                    onclick="recenterGraph()"
+                    title="Recenter Graph">🎯</button>
           </div>
         </div>
 

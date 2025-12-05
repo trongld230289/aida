@@ -282,18 +282,56 @@ function focusOnNode(nodeId) {
       searchInput.value = node.displayName || node.fileName || node.id;
     }
 
-    if (node.x && node.y) {
-      const container = document.querySelector('.left-panel');
-      const width = container.clientWidth - 40;
-      const height = container.clientHeight - 140;
+    // Function to center the node
+    const centerNode = () => {
+      if (node.x && node.y) {
+        const svgElement = document.getElementById('d3-graph');
+        const width = parseFloat(svgElement.getAttribute('width')) || 800;
+        const height = parseFloat(svgElement.getAttribute('height')) || 600;
 
-      const transform = d3.zoomIdentity
-        .translate(width / 2 - node.x, height / 2 - node.y)
-        .scale(1.5);
-      svg.transition().duration(750).call(
-        zoom.transform,
-        transform
-      );
+        // Use current zoom level or 0.8 for better overview
+        const currentScale = d3.zoomTransform(svgElement).k;
+        const targetScale = Math.max(0.8, Math.min(currentScale, 1.2));
+
+        const transform = d3.zoomIdentity
+          .translate(width / 2, height / 2)
+          .scale(targetScale)
+          .translate(-node.x, -node.y);
+
+        svg.transition().duration(750).call(
+          zoom.transform,
+          transform
+        );
+      }
+    };
+
+    // If node doesn't have coordinates yet, wait for simulation to tick
+    if (!node.x || !node.y) {
+      // Resume simulation if it's stopped
+      if (simulation && simulation.alpha() < 0.1) {
+        simulation.alpha(0.3).restart();
+      }
+
+      // Wait for next simulation tick
+      const tickHandler = () => {
+        if (node.x && node.y) {
+          simulation.on('tick.focus', null); // Remove listener
+          centerNode();
+        }
+      };
+
+      if (simulation) {
+        simulation.on('tick.focus', tickHandler);
+      }
+
+      // Fallback: try after 500ms regardless
+      setTimeout(() => {
+        simulation.on('tick.focus', null);
+        centerNode();
+      }, 500);
+    } else {
+      // Node already has coordinates, center immediately
+      centerNode();
     }
   }
 }
@@ -430,6 +468,13 @@ function searchAndFocus() {
   } else {
     alert('Module not found: ' + searchValue);
   }
+}
+
+function recenterGraph() {
+  svg.transition().duration(750).call(
+    zoom.transform,
+    d3.zoomIdentity
+  );
 }
 
 function zoomIn() {
