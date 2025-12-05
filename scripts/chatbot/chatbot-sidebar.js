@@ -354,7 +354,7 @@ class CopilotSidebarChat {
     /**
      * Process chat message through AIDA participants with image support
      */
-    async processChatMessage(userMessage, images = [], mode = 'ask', model = 'claude-sonnet-4') {
+    async processChatMessage(userMessage, images = [], mode = 'ask', model = 'claude-sonnet-4.5') {
         try {
             // Check for /clear command
             if (userMessage.trim() === '/clear') {
@@ -3248,7 +3248,7 @@ class AidaChatViewProvider {
                         message.message, 
                         message.images,
                         message.mode || 'ask',
-                        message.model || 'claude-sonnet-4'
+                        message.model || 'claude-sonnet-4.5'
                     );
                     break;
                     

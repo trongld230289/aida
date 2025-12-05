@@ -204,6 +204,10 @@ function activate(context) {
         vscode.commands.executeCommand('workbench.action.openSettings', 'aida');
     });
 
+    // Register test command to get Copilot models
+    const testModelsModule = __webpack_require__(/*! ./scripts/test-get-copilot-models.js */ "./scripts/test-get-copilot-models.js");
+    testModelsModule.registerTestCommand(context);
+
     let closeChatSidebarCommand = vscode.commands.registerCommand('aida.closeChatSidebar', async () => {
         vscode.commands.executeCommand('workbench.action.closeSidebar');
     });
@@ -52210,7 +52214,7 @@ class CopilotSidebarChat {
     /**
      * Process chat message through AIDA participants with image support
      */
-    async processChatMessage(userMessage, images = [], mode = 'ask', model = 'claude-sonnet-4') {
+    async processChatMessage(userMessage, images = [], mode = 'ask', model = 'claude-sonnet-4.5') {
         try {
             // Check for /clear command
             if (userMessage.trim() === '/clear') {
@@ -55104,7 +55108,7 @@ class AidaChatViewProvider {
                         message.message, 
                         message.images,
                         message.mode || 'ask',
-                        message.model || 'claude-sonnet-4'
+                        message.model || 'claude-sonnet-4.5'
                     );
                     break;
                     
@@ -59806,9 +59810,11 @@ Keep the language simple and focus on USER IMPACT, not technical details.`;
             
             // Clean up the response - remove markdown decorations that we added
             let cleanResponse = aiResponse
-                .replace(/^---\n\n/, '') // Remove separator
-                .replace(/🤖 \*\*Streaming.*?\*\*:?\n\n/g, '') // Remove streaming header
-                .replace(/💰 \*\*Cost.*?\*\*:?\n\n[\s\S]*?$/g, '') // Remove cost footer
+                .replace(/^---\n\n/, '') // Remove leading separator
+                .replace(/\n\n---\n\n$/, '') // Remove trailing separator
+                .replace(/🤖 \*\*Streaming.*?\*\*.*?\n\n/gs, '') // Remove streaming header
+                .replace(/\n\n---\n\n📊 \*\*Token Usage Summary:\*\*[\s\S]*$/g, '') // Remove token stats section
+                .replace(/💰 \*\*Cost.*?\*\*[\s\S]*$/g, '') // Remove cost footer
                 .trim();
 
             console.log('📤 Sending AI response to webview for nodeId:', selectedNodeData.originalNodeId);
@@ -66641,11 +66647,11 @@ async function getUnifiedModel(stream, requestedModel = null, chatContext = null
             // Updated based on available models in VS Code Chat (November 2024)
             const modelPreferences = [
                 // Tier 1: Premium Claude models (highest quality)
-                'claude-sonnet-4', 'claude-haiku-4.5', 'claude-sonnet-4.5',
+                'claude-sonnet-4.5', 'claude-sonnet-4', 'gemini-3-pro',
                 // Tier 2: Current generation Claude and GPT
-                'claude-sonnet-3.5', 'claude-haiku-3.5', 'gpt-4.1', 'gpt-4o',
+                'claude-sonnet-3.5', 'gpt-5.1-codex', 'gemini-2.5-pro', 
                 // Tier 3: Advanced models
-                'gpt-5', 'gpt-5-mini', 'gemini-2.5-pro', 'gemini-3-pro',
+                'claude-haiku-4.5', 'gpt-5', 'gpt-5-mini', 'gpt-4.1', 'gpt-4o',
                 // Tier 4: Preview and experimental models
                 'grok-code-fast-1', 'raptor-mini', 'gpt-5.1', 'gpt-5-codex-mini',
                 // Tier 5: Fallback options
@@ -73770,6 +73776,177 @@ async function aiSyncReviewTemplates(messageWithoutParticipant, stream, token, c
         stream.markdown(`❌ **Error:** ${error.message}\n\n`);
     }
 }
+
+/***/ }),
+
+/***/ "./scripts/test-get-copilot-models.js":
+/*!********************************************!*\
+  !*** ./scripts/test-get-copilot-models.js ***!
+  \********************************************/
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+const vscode = __webpack_require__(/*! vscode */ "vscode");
+
+/**
+ * Test script to get all available GitHub Copilot models
+ * Run this in VS Code Extension Host to see available models
+ * Ctrl+Shift+P: AIDA: Test Get Copilot Models
+ */
+async function testGetCopilotModels() {
+    console.log('🔍 Testing GitHub Copilot Model Discovery...\n');
+    
+    try {
+        // Method 1: Try vscode.lm API (VS Code 1.90+)
+        console.log('📋 Method 1: Using vscode.lm.selectChatModels()');
+        if (vscode.lm && vscode.lm.selectChatModels) {
+            const models = await vscode.lm.selectChatModels();
+            console.log(`✅ Found ${models.length} models:\n`);
+            
+            models.forEach((model, index) => {
+                console.log(`${index + 1}. Model ID: ${model.id}`);
+                console.log(`   Name: ${model.name || 'N/A'}`);
+                console.log(`   Vendor: ${model.vendor || 'N/A'}`);
+                console.log(`   Family: ${model.family || 'N/A'}`);
+                console.log(`   Version: ${model.version || 'N/A'}`);
+                console.log(`   Max Input Tokens: ${model.maxInputTokens || 'N/A'}`);
+                console.log(`   Max Output Tokens: ${model.maxOutputTokens || 'N/A'}`);
+                console.log('');
+            });
+            
+            // Try to get specific model families
+            console.log('\n🔎 Filtering by families:');
+            
+            const claudeModels = models.filter(m => 
+                m.family?.toLowerCase().includes('claude') || 
+                m.id?.toLowerCase().includes('claude')
+            );
+            console.log(`\n🤖 Claude models (${claudeModels.length}):`);
+            claudeModels.forEach(m => console.log(`   - ${m.id} (${m.name || 'unnamed'})`));
+            
+            const gptModels = models.filter(m => 
+                m.family?.toLowerCase().includes('gpt') || 
+                m.id?.toLowerCase().includes('gpt')
+            );
+            console.log(`\n🤖 GPT models (${gptModels.length}):`);
+            gptModels.forEach(m => console.log(`   - ${m.id} (${m.name || 'unnamed'})`));
+            
+            const geminiModels = models.filter(m => 
+                m.family?.toLowerCase().includes('gemini') || 
+                m.id?.toLowerCase().includes('gemini')
+            );
+            console.log(`\n🤖 Gemini models (${geminiModels.length}):`);
+            geminiModels.forEach(m => console.log(`   - ${m.id} (${m.name || 'unnamed'})`));
+            
+            const o1Models = models.filter(m => 
+                m.family?.toLowerCase().includes('o1') || 
+                m.id?.toLowerCase().includes('o1')
+            );
+            console.log(`\n🤖 O1 models (${o1Models.length}):`);
+            o1Models.forEach(m => console.log(`   - ${m.id} (${m.name || 'unnamed'})`));
+            
+        } else {
+            console.log('❌ vscode.lm.selectChatModels not available');
+        }
+        
+        // Method 2: Try languageModelAccessInformation
+        console.log('\n📋 Method 2: Using vscode.lm.languageModels');
+        if (vscode.lm && vscode.lm.languageModels) {
+            const languageModels = vscode.lm.languageModels;
+            console.log('✅ Available language models:', languageModels);
+        } else {
+            console.log('❌ vscode.lm.languageModels not available');
+        }
+        
+        // Method 3: Check chat model access
+        console.log('\n📋 Method 3: Checking specific model IDs');
+        const testModelIds = [
+            'copilot-gpt-4',
+            'copilot-gpt-4-turbo',
+            'copilot-gpt-4o',
+            'copilot-gpt-3.5-turbo',
+            'claude-3-5-sonnet',
+            'claude-3-opus',
+            'claude-sonnet-4',
+            'claude-sonnet-4.5',
+            'gemini-1.5-pro',
+            'gemini-2.0-flash',
+            'o1-preview',
+            'o1-mini'
+        ];
+        
+        for (const modelId of testModelIds) {
+            try {
+                const models = await vscode.lm.selectChatModels({ id: modelId });
+                if (models && models.length > 0) {
+                    console.log(`✅ ${modelId}: Available`);
+                } else {
+                    console.log(`❌ ${modelId}: Not found`);
+                }
+            } catch (error) {
+                console.log(`❌ ${modelId}: Error - ${error.message}`);
+            }
+        }
+        
+        console.log('\n✅ Test completed!');
+        
+    } catch (error) {
+        console.error('❌ Error testing models:', error);
+        console.error('Stack:', error.stack);
+    }
+}
+
+/**
+ * Alternative: Get currently selected model in chat context
+ */
+async function getCurrentChatModel(chatContext) {
+    console.log('\n🔍 Getting current chat model from context...');
+    
+    if (!chatContext) {
+        console.log('❌ No chat context provided');
+        return null;
+    }
+    
+    try {
+        // Check if context has model info
+        if (chatContext.model) {
+            console.log('✅ Model from context:', chatContext.model);
+            return chatContext.model;
+        }
+        
+        // Check language model accessor
+        if (chatContext.languageModelAccessInformation) {
+            console.log('✅ Language model info:', chatContext.languageModelAccessInformation);
+            return chatContext.languageModelAccessInformation;
+        }
+        
+        console.log('❌ No model information in chat context');
+        return null;
+        
+    } catch (error) {
+        console.error('❌ Error getting current model:', error);
+        return null;
+    }
+}
+
+/**
+ * Register test command
+ */
+function registerTestCommand(context) {
+    const testCommand = vscode.commands.registerCommand('aida.testGetCopilotModels', async () => {
+        await testGetCopilotModels();
+    });
+    
+    context.subscriptions.push(testCommand);
+    console.log('✅ Test command registered: aida.testGetCopilotModels');
+    console.log('💡 Run command: Developer: Run Command > "Test Get Copilot Models"');
+}
+
+module.exports = {
+    testGetCopilotModels,
+    getCurrentChatModel,
+    registerTestCommand
+};
+
 
 /***/ }),
 

@@ -834,9 +834,11 @@ Keep the language simple and focus on USER IMPACT, not technical details.`;
             
             // Clean up the response - remove markdown decorations that we added
             let cleanResponse = aiResponse
-                .replace(/^---\n\n/, '') // Remove separator
-                .replace(/🤖 \*\*Streaming.*?\*\*:?\n\n/g, '') // Remove streaming header
-                .replace(/💰 \*\*Cost.*?\*\*:?\n\n[\s\S]*?$/g, '') // Remove cost footer
+                .replace(/^---\n\n/, '') // Remove leading separator
+                .replace(/\n\n---\n\n$/, '') // Remove trailing separator
+                .replace(/🤖 \*\*Streaming.*?\*\*.*?\n\n/gs, '') // Remove streaming header
+                .replace(/\n\n---\n\n📊 \*\*Token Usage Summary:\*\*[\s\S]*$/g, '') // Remove token stats section
+                .replace(/💰 \*\*Cost.*?\*\*[\s\S]*$/g, '') // Remove cost footer
                 .trim();
 
             console.log('📤 Sending AI response to webview for nodeId:', selectedNodeData.originalNodeId);

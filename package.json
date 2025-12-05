@@ -102,6 +102,12 @@
         }
       },
       {
+        "command": "aida.testGetCopilotModels",
+        "title": "Test Get Copilot Models",
+        "category": "AIDA",
+        "icon": "$(globe)"
+      },
+      {
         "command": "aida.openSidebarChat",
         "title": "Open AIDA Sidebar Chat",
         "category": "AIDA"

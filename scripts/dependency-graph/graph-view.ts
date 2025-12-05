@@ -178,7 +178,8 @@ function updateNodeStyles() {
   svg.selectAll('.node-circle')
     .style('fill', d => d.selected ? '#ff6b6b' : null)
     .style('stroke', d => d.selected ? '#fff' : null)
-    .style('stroke-width', d => d.selected ? '3px' : null);
+    .style('stroke-width', d => d.selected ? '3px' : null)
+    .classed('node-selected', d => d.selected); // Add animation class
 }
 
 function showNodeDetails(node) {

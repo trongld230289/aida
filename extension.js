@@ -177,6 +177,10 @@ function activate(context) {
         vscode.commands.executeCommand('workbench.action.openSettings', 'aida');
     });
 
+    // Register test command to get Copilot models
+    const testModelsModule = require('./scripts/test-get-copilot-models.js');
+    testModelsModule.registerTestCommand(context);
+
     let closeChatSidebarCommand = vscode.commands.registerCommand('aida.closeChatSidebar', async () => {
         vscode.commands.executeCommand('workbench.action.closeSidebar');
     });

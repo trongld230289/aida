@@ -242,9 +242,11 @@
         border-radius: 6px;
         padding: 15px;
         margin-top: 10px;
-        max-height: 300px;
+        max-height: none;
         overflow-y: auto;
         display: none;
+        resize: vertical;
+        min-height: 200px;
       }
 
       .ai-analysis-loading {
@@ -378,6 +380,25 @@
         pointer-events: none;
         opacity: 0;
         max-width: 250px;
+      }
+
+      /* Pulse animation for selected node */
+      @keyframes pulse-glow {
+
+        0%,
+        100% {
+          opacity: 1;
+          filter: drop-shadow(0 0 2px rgba(255, 107, 107, 0.8));
+        }
+
+        50% {
+          opacity: 0.7;
+          filter: drop-shadow(0 0 8px rgba(255, 107, 107, 1)) drop-shadow(0 0 12px rgba(255, 107, 107, 0.6));
+        }
+      }
+
+      .node-selected {
+        animation: pulse-glow 2s ease-in-out infinite;
       }
 
     </style>

@@ -1682,11 +1682,11 @@ async function getUnifiedModel(stream, requestedModel = null, chatContext = null
             // Updated based on available models in VS Code Chat (November 2024)
             const modelPreferences = [
                 // Tier 1: Premium Claude models (highest quality)
-                'claude-sonnet-4', 'claude-haiku-4.5', 'claude-sonnet-4.5',
+                'claude-sonnet-4.5', 'claude-sonnet-4', 'gemini-3-pro',
                 // Tier 2: Current generation Claude and GPT
-                'claude-sonnet-3.5', 'claude-haiku-3.5', 'gpt-4.1', 'gpt-4o',
+                'claude-sonnet-3.5', 'gpt-5.1-codex', 'gemini-2.5-pro', 
                 // Tier 3: Advanced models
-                'gpt-5', 'gpt-5-mini', 'gemini-2.5-pro', 'gemini-3-pro',
+                'claude-haiku-4.5', 'gpt-5', 'gpt-5-mini', 'gpt-4.1', 'gpt-4o',
                 // Tier 4: Preview and experimental models
                 'grok-code-fast-1', 'raptor-mini', 'gpt-5.1', 'gpt-5-codex-mini',
                 // Tier 5: Fallback options
