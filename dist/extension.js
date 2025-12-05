@@ -58846,8 +58846,12 @@ class FileAnalyzer {
             // C# specific
             'bin',
             'obj',
+            'Migrations',
+            'migrations',
             '*.Designer.cs',
             '*.designer.cs',
+            '*.g.cs',
+            '*.g.i.cs',
             
             // Documentation
             'docs',
