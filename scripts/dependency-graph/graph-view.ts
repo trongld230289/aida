@@ -313,33 +313,46 @@ function showNodeDetails(node) {
         <div class="module-title">${node.fileName || node.id}</div>
         <div class="detail-section">
             <h4>📂 File Path</h4>
-            <div>${node.relativePath || 'Unknown path'}</div>
+            <div style="word-break: break-all; font-size: 0.9em; color: #ccc;">${node.relativePath || 'Unknown path'}</div>
         </div>
-        
-        <div class="detail-section">
-            <h4 style="border-bottom: 3px solid #ff6b6b; padding-bottom: 8px;">📥 Dependencies (${dependencies.length}) - What this module needs</h4>
-            <div style="max-height: 250px; overflow-y: auto;">
-                ${dependenciesHtml || '<p>No dependencies found</p>'}
+
+        <!-- Actions Bar: Moved to top for better accessibility -->
+        <div class="detail-section" style="margin-bottom: 15px;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                <button class="ai-analyst-btn" style="font-size: 11px; padding: 8px 4px; display: flex; align-items: center; justify-content: center; gap: 4px;" onclick="analyzeWithAI('${node.id}')">
+                    <span>🤖</span> AI Analysis
+                </button>
+                <button class="ai-analyst-btn" style="font-size: 11px; padding: 8px 4px; background: linear-gradient(135deg, #9C27B0 0%, #673AB7 100%); display: flex; align-items: center; justify-content: center; gap: 4px;" onclick="analyzeDeepImpact('${node.id}')">
+                    <span>🔍</span> Deep Impact
+                </button>
             </div>
-        </div>
-        
-        <div class="detail-section">
-            <h4 style="border-bottom: 3px solid #ffa500; padding-bottom: 8px;">📤 Dependents (${dependents.length}) - What needs this module</h4>
-            <div style="max-height: 250px; overflow-y: auto;">
-                ${dependentsHtml || '<p>No dependents found</p>'}
-            </div>
-        </div>
-        
-        <div class="detail-section">
-            <button class="ai-analyst-btn" onclick="analyzeWithAI('${node.id}')">
-                🤖 AI Impact Analysis
-            </button>
             <div id="ai-analysis-${node.id}" class="ai-analysis-result"></div>
+        </div>
+        
+        <div class="detail-section">
+            <h4 style="border-bottom: 3px solid #ff6b6b; padding-bottom: 8px;">📥 Dependencies (${dependencies.length}) - What I Need</h4>
+            <div style="max-height: 250px; overflow-y: auto;">
+                ${dependenciesHtml || '<p style="opacity:0.6; font-style:italic;">No dependencies found</p>'}
+            </div>
+        </div>
+        
+        <div class="detail-section">
+            <h4 style="border-bottom: 3px solid #ffa500; padding-bottom: 8px;">📤 Dependents (${dependents.length}) - Who Needs Me</h4>
+            <div style="max-height: 250px; overflow-y: auto;">
+                ${dependentsHtml || '<p style="opacity:0.6; font-style:italic;">No dependents found</p>'}
+            </div>
         </div>
     `;
 
   console.log('Setting detail view HTML');
   detailView.innerHTML = html;
+}
+
+function analyzeDeepImpact(nodeId) {
+  vscode.postMessage({
+    command: 'analyzeDeepImpact',
+    nodeId: nodeId
+  });
 }
 
 function focusOnNode(nodeId) {

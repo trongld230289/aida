@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+    <title>Impact Analysis</title>
+    <style>
+      :root {
+        --vscode-editor-background: #1e1e1e;
+        --vscode-editor-foreground: #d4d4d4;
+        --vscode-list-hoverBackground: #2a2d2e;
+        --vscode-list-activeSelectionBackground: #37373d;
+        --vscode-textLink-foreground: #3794ff;
+        --border-color: #454545;
+        --item-padding: 8px 12px;
+      }
+
+      body {
+        background-color: var(--vscode-editor-background);
+        color: var(--vscode-editor-foreground);
+        font-family: var(--vscode-font-family, "Segoe UI", Tahoma, Geneva, Verdana, sans-serif);
+        margin: 0;
+        padding: 0;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      .header {
+        padding: 10px 20px;
+        border-bottom: 1px solid var(--border-color);
+        background-color: var(--vscode-editor-background);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .header h2 {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 600;
+      }
+
+      .container {
+        display: flex;
+        flex: 1;
+        overflow: hidden;
+      }
+
+      .pane {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        border-right: 1px solid var(--border-color);
+        min-width: 0;
+        /* Prevent flex item from overflowing */
+      }
+
+      .pane:last-child {
+        border-right: none;
+      }
+
+      .pane-header {
+        padding: 8px 12px;
+        background-color: var(--vscode-list-hoverBackground);
+        font-weight: 600;
+        font-size: 13px;
+        border-bottom: 1px solid var(--border-color);
+        display: flex;
+        justify-content: space-between;
+      }
+
+      .list-container {
+        flex: 1;
+        overflow-y: auto;
+        padding: 0;
+      }
+
+      .list-item {
+        padding: var(--item-padding);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        border-bottom: 1px solid transparent;
+      }
+
+      .list-item:hover {
+        background-color: var(--vscode-list-hoverBackground);
+      }
+
+      .list-item.active {
+        background-color: var(--vscode-list-activeSelectionBackground);
+        border-left: 3px solid var(--vscode-textLink-foreground);
+      }
+
+      .list-item.dimmed {
+        opacity: 0.4;
+      }
+
+      .symbol-icon {
+        margin-right: 8px;
+        width: 16px;
+        text-align: center;
+      }
+
+      .symbol-name {
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .symbol-meta {
+        font-size: 11px;
+        opacity: 0.7;
+        margin-left: 8px;
+      }
+
+      .badge {
+        background-color: #007acc;
+        color: white;
+        border-radius: 10px;
+        padding: 2px 6px;
+        font-size: 10px;
+        min-width: 14px;
+        text-align: center;
+      }
+
+      .badge.zero {
+        background-color: #555;
+      }
+
+      /* Right Pane Specifics */
+      .file-item {
+        flex-direction: column;
+        align-items: flex-start;
+        padding: 8px 12px;
+      }
+
+      .file-header {
+        display: flex;
+        width: 100%;
+        align-items: center;
+      }
+
+      .file-path {
+        font-size: 11px;
+        opacity: 0.6;
+        margin-top: 2px;
+        word-break: break-all;
+      }
+
+      .usage-details {
+        margin-top: 6px;
+        padding-left: 20px;
+        font-size: 12px;
+        display: none;
+        width: 100%;
+      }
+
+      .file-item.expanded .usage-details {
+        display: block;
+      }
+
+      .usage-line {
+        padding: 2px 0;
+        color: var(--vscode-textLink-foreground);
+      }
+
+      /* Loading Overlay */
+      #loading {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.7);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 100;
+      }
+
+      .spinner {
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #3498db;
+        border-radius: 50%;
+        width: 30px;
+        height: 30px;
+        animation: spin 1s linear infinite;
+        margin-bottom: 10px;
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      /* Icons */
+      .codicon {
+        font-family: "codicon";
+        font-display: block;
+      }
+
+    </style>
+  </head>
+
+  <body>
+
+    <div id="loading">
+      <div class="spinner"></div>
+      <div id="loading-text">Analyzing symbols and references...</div>
+    </div>
+
+    <div class="header">
+      <h2 id="main-title">Impact Analysis</h2>
+      <button id="refresh-btn"
+              style="background:none; border:none; color:inherit; cursor:pointer;">🔄 Refresh</button>
+    </div>
+
+    <div class="container">
+      <!-- Left Pane: Dependencies (What I Need) -->
+      <div class="pane">
+        <div class="pane-header">
+          <span>Dependencies (What I Need)</span>
+          <span id="dep-count"
+                style="opacity:0.7">0 files</span>
+        </div>
+        <div class="list-container"
+             id="dep-list">
+          <!-- Dependencies will be injected here -->
+        </div>
+      </div>
+
+      <!-- Middle Pane: Source Symbols -->
+      <div class="pane">
+        <div class="pane-header">
+          <span id="source-filename">Source File</span>
+          <span id="symbol-count"
+                style="opacity:0.7">0 symbols</span>
+        </div>
+        <div class="list-container"
+             id="symbol-list">
+          <!-- Symbols will be injected here -->
+        </div>
+      </div>
+
+      <!-- Right Pane: Impacted Files (Who Needs Me) -->
+      <div class="pane">
+        <div class="pane-header">
+          <span>Dependents (Who Needs Me)</span>
+          <span id="file-count"
+                style="opacity:0.7">0 files</span>
+        </div>
+        <div class="list-container"
+             id="file-list">
+          <!-- Files will be injected here -->
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const vscode = acquireVsCodeApi();
+      let currentData = null;
+
+      // Handle messages from extension
+      window.addEventListener('message', event => {
+        const message = event.data;
+        switch (message.command) {
+          case 'loadData':
+            currentData = message.data;
+            render(currentData);
+            document.getElementById('loading').style.display = 'none';
+            break;
+          case 'error':
+            document.getElementById('loading-text').innerText = 'Error: ' + message.error;
+            document.querySelector('.spinner').style.display = 'none';
+            break;
+        }
+      });
+
+      document.getElementById('refresh-btn').addEventListener('click', () => {
+        document.getElementById('loading').style.display = 'flex';
+        document.getElementById('loading-text').innerText = 'Refreshing...';
+        vscode.postMessage({ command: 'refresh' });
+      });
+
+      function getSymbolIcon(kind) {
+        // Simple mapping, can be improved with real icons
+        const map = {
+          'Class': '📦',
+          'Method': '⚡',
+          'Property': '🔧',
+          'Function': 'ƒ',
+          'Variable': '🧊',
+          'Interface': '📄',
+          'Enum': 'E'
+        };
+        return map[kind] || '🔹';
+      }
+
+      function render(data) {
+        document.getElementById('main-title').innerText = `Impact Analysis: ${data.fileName}`;
+        document.getElementById('source-filename').innerText = data.fileName;
+        document.getElementById('symbol-count').innerText = `${data.symbols.length} symbols`;
+
+        // CONSISTENCY FIX: Use graph-based dependents if available, otherwise fall back to symbol-based
+        const dependentFiles = data.graphDependents || data.relatedFiles;
+        document.getElementById('file-count').innerText = `${dependentFiles.length} files`;
+        document.getElementById('dep-count').innerText = `${data.dependencies ? data.dependencies.length : 0} files`;
+
+        renderDependencies(data.dependencies || []);
+        renderSymbols(data.symbols);
+        renderFiles(dependentFiles, data.symbols);
+      }
+
+      function renderDependencies(dependencies) {
+        const container = document.getElementById('dep-list');
+        container.innerHTML = '';
+
+        if (dependencies.length === 0) {
+          container.innerHTML = '<div style="padding:20px; opacity:0.5; text-align:center">No dependencies found.</div>';
+          return;
+        }
+
+        dependencies.forEach(dep => {
+          const el = document.createElement('div');
+          el.className = 'list-item file-item';
+
+          // Show imports if available
+          const importsHtml = dep.imports ? dep.imports.map(i =>
+            `<div class="usage-line">Imports: <b>${i}</b></div>`
+          ).join('') : '';
+
+          el.onclick = () => {
+            el.classList.toggle('expanded');
+          };
+
+          el.innerHTML = `
+                <div class="file-header">
+                    <span class="symbol-icon">📥</span>
+                    <div style="flex:1">
+                        <div>${dep.fileName}</div>
+                        <div class="file-path">${dep.path}</div>
+                    </div>
+                </div>
+                <div class="usage-details">
+                    ${importsHtml}
+                </div>
+            `;
+          container.appendChild(el);
+        });
+      }
+
+      function renderSymbols(symbols) {
+        const container = document.getElementById('symbol-list');
+        container.innerHTML = '';
+
+        symbols.forEach(sym => {
+          const el = document.createElement('div');
+          el.className = 'list-item';
+          el.dataset.id = sym.id;
+          el.onclick = () => handleSymbolClick(sym.id);
+
+          const usageCount = sym.usedByFiles.length;
+          const badgeClass = usageCount === 0 ? 'badge zero' : 'badge';
+
+          el.innerHTML = `
+                    <span class="symbol-icon">${getSymbolIcon(sym.kind)}</span>
+                    <div class="symbol-name">
+                        ${sym.name}
+                        <span class="symbol-meta">${sym.containerName ? '(' + sym.containerName + ')' : ''}</span>
+                    </div>
+                    <span class="${badgeClass}">${usageCount}</span>
+                `;
+          container.appendChild(el);
+        });
+      }
+
+      function renderFiles(files, symbols) {
+        const container = document.getElementById('file-list');
+        container.innerHTML = '';
+
+        if (files.length === 0) {
+          container.innerHTML = '<div style="padding:20px; opacity:0.5; text-align:center">No dependents found.</div>';
+          return;
+        }
+
+        files.forEach(file => {
+          const el = document.createElement('div');
+          el.className = 'list-item file-item';
+          el.dataset.path = file.path;
+          el.onclick = (e) => handleFileClick(file.path, el);
+
+          // Check if this is graph-based (no usages) or symbol-based (has usages)
+          const isGraphBased = !file.usages || file.usages.length === 0;
+
+          let usagesHtml = '';
+          let badgeContent = '';
+
+          if (isGraphBased) {
+            // Graph-based: Show that this file imports the current file
+            usagesHtml = '<div class="usage-line" style="opacity:0.7;">📦 Imports this file</div>';
+            badgeContent = '📦';
+          } else {
+            // Symbol-based: Show specific symbol usages
+            usagesHtml = file.usages.map(u =>
+              `<div class="usage-line">Uses <b>${u.symbolName}</b> at line ${u.line + 1}</div>`
+            ).join('');
+            badgeContent = file.usages.length;
+          }
+
+          el.innerHTML = `
+                    <div class="file-header">
+                        <span class="symbol-icon">📄</span>
+                        <div style="flex:1">
+                            <div>${file.fileName}</div>
+                            <div class="file-path">${file.path}</div>
+                        </div>
+                        <span class="badge">${badgeContent}</span>
+                    </div>
+                    <div class="usage-details">
+                        ${usagesHtml}
+                    </div>
+                `;
+          container.appendChild(el);
+        });
+      }
+
+      // --- Interactions ---
+
+      let activeSymbolId = null;
+
+      function handleSymbolClick(symbolId) {
+        // Toggle logic
+        if (activeSymbolId === symbolId) {
+          // Deactivate
+          activeSymbolId = null;
+
+          // Reset symbols UI
+          document.querySelectorAll('#symbol-list .list-item').forEach(el => {
+            el.classList.remove('active');
+          });
+
+          // Reset files UI (Show all)
+          document.querySelectorAll('#file-list .file-item').forEach(el => {
+            el.style.display = 'flex';
+            el.classList.remove('expanded');
+          });
+          return;
+        }
+
+        // Activate new symbol
+        activeSymbolId = symbolId;
+
+        // 1. Highlight active symbol
+        document.querySelectorAll('#symbol-list .list-item').forEach(el => {
+          el.classList.remove('active');
+          if (el.dataset.id === symbolId) el.classList.add('active');
+        });
+
+        // 2. Filter files that use this symbol
+        const files = document.querySelectorAll('#file-list .file-item');
+        const dependentFiles = currentData.graphDependents || currentData.relatedFiles;
+
+        files.forEach(el => {
+          const filePath = el.dataset.path;
+          const fileData = dependentFiles.find(f => f.path === filePath);
+
+          // Check if using symbol-based data (has usages) or graph-based (no usages)
+          if (fileData && fileData.usages && fileData.usages.length > 0) {
+            const usesSymbol = fileData.usages.some(u => u.symbolId === symbolId);
+            if (usesSymbol) {
+              el.style.display = 'flex';
+              el.classList.add('expanded'); // Auto expand to show usage
+            } else {
+              el.style.display = 'none';
+              el.classList.remove('expanded');
+            }
+          } else {
+            // Graph-based: Cannot filter by symbol, show all
+            el.style.display = 'flex';
+          }
+        });
+      }
+
+      function handleFileClick(filePath, element) {
+        // Toggle expansion
+        element.classList.toggle('expanded');
+
+        // 1. Highlight active file
+        document.querySelectorAll('#file-list .file-item').forEach(el => el.classList.remove('active'));
+        element.classList.add('active');
+
+        // 2. Highlight symbols used by this file (only for symbol-based data)
+        const dependentFiles = currentData.graphDependents || currentData.relatedFiles;
+        const fileData = dependentFiles.find(f => f.path === filePath);
+
+        if (fileData && fileData.usages && fileData.usages.length > 0) {
+          // Symbol-based: highlight used symbols
+          const usedSymbolIds = fileData.usages.map(u => u.symbolId);
+
+          document.querySelectorAll('#symbol-list .list-item').forEach(el => {
+            const symId = el.dataset.id;
+            if (usedSymbolIds.includes(symId)) {
+              el.classList.remove('dimmed');
+              el.classList.add('active'); // Optional: highlight them
+            } else {
+              el.classList.add('dimmed');
+              el.classList.remove('active');
+            }
+          });
+        } else {
+          // Graph-based: cannot highlight specific symbols, just show all
+          document.querySelectorAll('#symbol-list .list-item').forEach(el => {
+            el.classList.remove('dimmed');
+            el.classList.remove('active');
+          });
+        }
+      }
+
+    </script>
+  </body>
+
+</html>

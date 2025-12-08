@@ -4,6 +4,7 @@ const fs = require('fs');
 
 // Import VS Code API analyzer - required
 const { VSCodeApiDependencyAnalyzer } = require('./dependency-graph/vscode-api-analyzer');
+const { SymbolAnalyzer } = require('./dependency-graph/symbol-analyzer');
 
 // Cache management
 const CACHE_VERSION = '1.0';
@@ -362,6 +363,9 @@ async function createWebviewFromData(graph, report, analysisType) {
             await buildSelectedNodeObject(message.nodeId, graph, panel);
         } else if (message.command === 'analyzeImpact') {
             await analyzeImpactWithAI(message.selectedNodeData, panel);
+        } else if (message.command === 'analyzeDeepImpact') {
+            // Pass graph to ensure consistent dependency/dependent logic
+            await openImpactAnalysisWebview(message.nodeId, graph);
         }
     });
     
@@ -580,6 +584,140 @@ Keep the language simple and focus on USER IMPACT, not technical details.`;
             error: error.message
         });
     }
+}
+
+/**
+ * Open Deep Impact Analysis Webview
+ * @param {string} nodeId - The node ID from graph
+ * @param {object} graph - Optional: The full graph data for consistent dependency/dependent lookup
+ */
+async function openImpactAnalysisWebview(nodeId, graph = null) {
+    try {
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath;
+        if (!workspaceRoot) return;
+
+        // Resolve absolute path
+        let absolutePath = nodeId;
+        if (!path.isAbsolute(nodeId)) {
+            absolutePath = path.join(workspaceRoot, nodeId);
+        }
+
+        // Create panel
+        const panel = vscode.window.createWebviewPanel(
+            'impactAnalysis',
+            `Impact: ${path.basename(absolutePath)}`,
+            vscode.ViewColumn.One, // Open in main column
+            {
+                enableScripts: true,
+                retainContextWhenHidden: true
+            }
+        );
+
+        // Load HTML content
+        const extensionPath = extensionContext ? extensionContext.extensionPath : __dirname;
+        const htmlPath = path.join(extensionPath, 'scripts', 'dependency-graph', 'impact-analysis.html');
+        let htmlContent = fs.readFileSync(htmlPath, 'utf8');
+        panel.webview.html = htmlContent;
+
+        // Handle messages
+        panel.webview.onDidReceiveMessage(async (message) => {
+            if (message.command === 'refresh') {
+                await runAnalysis();
+            }
+        });
+
+        // Run analysis
+        const runAnalysis = async () => {
+            try {
+                const analyzer = new SymbolAnalyzer();
+                // Pass graph to analyzer for consistent dependency/dependent resolution
+                const data = await analyzer.analyzeFile(absolutePath, graph);
+                
+                if (data) {
+                    panel.webview.postMessage({
+                        command: 'loadData',
+                        data: data
+                    });
+                } else {
+                    panel.webview.postMessage({
+                        command: 'error',
+                        error: 'Could not analyze file. Ensure language support is active.'
+                    });
+                }
+            } catch (error) {
+                console.error('Impact analysis error:', error);
+                panel.webview.postMessage({
+                    command: 'error',
+                    error: error.message
+                });
+            }
+        };
+
+        // Start analysis immediately
+        await runAnalysis();
+
+    } catch (error) {
+        console.error('Error opening impact analysis:', error);
+        vscode.window.showErrorMessage(`Failed to open impact analysis: ${error.message}`);
+    }
+}
+
+/**
+ * Get dependencies from graph (files that nodeId imports)
+ */
+function getGraphDependencies(nodeId, graph, workspaceRoot) {
+    const dependencies = [];
+    const dependencyEdges = graph.edges.filter(edge => {
+        const sourceId = edge.source.id || edge.source;
+        return sourceId === nodeId;
+    });
+
+    for (const edge of dependencyEdges) {
+        const targetId = edge.target.id || edge.target;
+        const targetNode = graph.nodes.find(n => n.id === targetId);
+        if (targetNode) {
+            let absolutePath = targetId;
+            if (!path.isAbsolute(targetId)) {
+                absolutePath = path.join(workspaceRoot, targetId);
+            }
+            dependencies.push({
+                path: targetId,
+                fileName: targetNode.fileName || path.basename(targetId),
+                absolutePath: absolutePath
+            });
+        }
+    }
+
+    return dependencies;
+}
+
+/**
+ * Get dependents from graph (files that import nodeId)
+ */
+function getGraphDependents(nodeId, graph, workspaceRoot) {
+    const dependents = [];
+    const dependentEdges = graph.edges.filter(edge => {
+        const targetId = edge.target.id || edge.target;
+        return targetId === nodeId;
+    });
+
+    for (const edge of dependentEdges) {
+        const sourceId = edge.source.id || edge.source;
+        const sourceNode = graph.nodes.find(n => n.id === sourceId);
+        if (sourceNode) {
+            let absolutePath = sourceId;
+            if (!path.isAbsolute(sourceId)) {
+                absolutePath = path.join(workspaceRoot, sourceId);
+            }
+            dependents.push({
+                path: sourceId,
+                fileName: sourceNode.fileName || path.basename(sourceId),
+                absolutePath: absolutePath
+            });
+        }
+    }
+
+    return dependents;
 }
 
 /**
