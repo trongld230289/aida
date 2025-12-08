@@ -10,6 +10,216 @@ class VSCodeApiDependencyAnalyzer {
         this.workspaceRoot = workspaceRoot;
         // Graph: SourcePath -> Set<TargetPaths>
         this.graph = new Map();
+        
+        // Configuration-driven language support
+        this.languageConfig = {
+            typescript: {
+                extensions: ['.ts', '.tsx', '.js', '.jsx'],
+                importPatterns: [
+                    /(?:from|import)\s+['"]([^'"]+)['"]/g,
+                    /require\s*\(\s*['"]([^'"]+)['"]\s*\)/g
+                ],
+                classPattern: /\b([A-Z][a-zA-Z0-9]*)\b/g,
+                standardLibraries: ['String', 'Number', 'Boolean', 'Object', 'Array', 'Function',
+                                   'Promise', 'Date', 'RegExp', 'Error', 'Map', 'Set', 'WeakMap',
+                                   'Component', 'Injectable', 'NgModule', 'Directive', 'Pipe'],
+                excludePatterns: [
+                    '**/node_modules/**',
+                    '**/dist/**',
+                    '**/build/**',
+                    '**/coverage/**',
+                    '**/*.spec.ts',
+                    '**/*.spec.js',
+                    '**/*.test.ts',
+                    '**/*.test.js',
+                    '**/*.min.js',
+                    '**/*.d.ts'
+                ]
+            },
+            python: {
+                extensions: ['.py'],
+                importPatterns: [
+                    /(?:import|from)\s+([a-zA-Z_][a-zA-Z0-9_.]*)/g
+                ],
+                classPattern: /class\s+([A-Z][a-zA-Z0-9_]*)/g,
+                standardLibraries: ['os', 'sys', 'json', 'urllib', 'datetime', 'collections',
+                                   'itertools', 'functools', 'typing', 're', 'math', 'random'],
+                excludePatterns: [
+                    '**/__pycache__/**',
+                    '**/venv/**',
+                    '**/env/**',
+                    '**/.venv/**',
+                    '**/dist/**',
+                    '**/build/**',
+                    '**/*.pyc',
+                    '**/test_*.py',
+                    '**/*_test.py'
+                ]
+            },
+            csharp: {
+                extensions: ['.cs'],
+                importPatterns: [
+                    /using\s+([a-zA-Z_][a-zA-Z0-9_.]*)/g
+                ],
+                classPattern: /\b([A-Z][a-zA-Z0-9]*(?:[A-Z][a-zA-Z0-9]*)*)\b/g,
+                standardLibraries: ['String', 'Int32', 'Boolean', 'Object', 'Void', 'Task', 'IEnumerable',
+                                   'List', 'Dictionary', 'HttpClient', 'JsonSerializer', 'DateTime',
+                                   'Guid', 'Exception', 'StringBuilder', 'Console', 'Math'],
+                excludePatterns: [
+                    '**/bin/**',
+                    '**/obj/**',
+                    '**/packages/**',
+                    '**/.vs/**',
+                    '**/Debug/**',
+                    '**/Release/**',
+                    '**/*.AssemblyInfo.cs',
+                    '**/*.Designer.cs'
+                ]
+            },
+            java: {
+                extensions: ['.java'],
+                importPatterns: [
+                    /import\s+([a-zA-Z_][a-zA-Z0-9_.]*)/g
+                ],
+                classPattern: /\b([A-Z][a-zA-Z0-9]*)\b/g,
+                standardLibraries: ['String', 'Integer', 'Boolean', 'Object', 'List', 'Map', 'Set',
+                                   'ArrayList', 'HashMap', 'Exception', 'System'],
+                excludePatterns: [
+                    '**/target/**',
+                    '**/build/**',
+                    '**/.gradle/**',
+                    '**/bin/**',
+                    '**/*.class',
+                    '**/Test*.java',
+                    '**/*Test.java'
+                ]
+            },
+            vue: {
+                extensions: ['.vue'],
+                importPatterns: [
+                    /(?:from|import)\s+['"]([^'"]+)['"]/g
+                ],
+                classPattern: /\b([A-Z][a-zA-Z0-9]*)\b/g,
+                standardLibraries: ['Vue', 'Vuex', 'VueRouter'],
+                excludePatterns: [
+                    '**/node_modules/**',
+                    '**/dist/**',
+                    '**/.nuxt/**',
+                    '**/coverage/**'
+                ]
+            },
+            php: {
+                extensions: ['.php'],
+                importPatterns: [
+                    /(?:use|require|include)\s+['"]?([^'";\s]+)/g
+                ],
+                classPattern: /\b([A-Z][a-zA-Z0-9]*)\b/g,
+                standardLibraries: ['stdClass', 'Exception', 'DateTime', 'PDO'],
+                excludePatterns: [
+                    '**/vendor/**',
+                    '**/cache/**',
+                    '**/storage/**',
+                    '**/*.blade.php'
+                ]
+            },
+            go: {
+                extensions: ['.go'],
+                importPatterns: [
+                    /import\s+"([^"]+)"/g
+                ],
+                classPattern: /type\s+([A-Z][a-zA-Z0-9]*)/g,
+                standardLibraries: ['fmt', 'os', 'io', 'net', 'http', 'context'],
+                excludePatterns: [
+                    '**/vendor/**',
+                    '**/*_test.go',
+                    '**/testdata/**'
+                ]
+            },
+            rust: {
+                extensions: ['.rs'],
+                importPatterns: [
+                    /use\s+([a-zA-Z_][a-zA-Z0-9_:]*)/g
+                ],
+                classPattern: /(?:struct|enum|trait)\s+([A-Z][a-zA-Z0-9]*)/g,
+                standardLibraries: ['std', 'String', 'Vec', 'Option', 'Result'],
+                excludePatterns: [
+                    '**/target/**',
+                    '**/Cargo.lock',
+                    '**/*_test.rs'
+                ]
+            },
+            kotlin: {
+                extensions: ['.kt'],
+                importPatterns: [
+                    /import\s+([a-zA-Z_][a-zA-Z0-9_.]*)/g
+                ],
+                classPattern: /\b([A-Z][a-zA-Z0-9]*)\b/g,
+                standardLibraries: ['String', 'Int', 'Boolean', 'List', 'Map', 'Any'],
+                excludePatterns: [
+                    '**/build/**',
+                    '**/.gradle/**',
+                    '**/Test*.kt',
+                    '**/*Test.kt'
+                ]
+            },
+            swift: {
+                extensions: ['.swift'],
+                importPatterns: [
+                    /import\s+([a-zA-Z_][a-zA-Z0-9_.]*)/g
+                ],
+                classPattern: /\b([A-Z][a-zA-Z0-9]*)\b/g,
+                standardLibraries: ['String', 'Int', 'Bool', 'Array', 'Dictionary', 'Foundation'],
+                excludePatterns: [
+                    '**/.build/**',
+                    '**/DerivedData/**',
+                    '**/*.xcodeproj/**',
+                    '**/*Tests.swift'
+                ]
+            },
+            dart: {
+                extensions: ['.dart'],
+                importPatterns: [
+                    /import\s+['"]([^'"]+)['"]/g
+                ],
+                classPattern: /\b([A-Z][a-zA-Z0-9]*)\b/g,
+                standardLibraries: ['String', 'int', 'bool', 'List', 'Map', 'dart:'],
+                excludePatterns: [
+                    '**/.dart_tool/**',
+                    '**/build/**',
+                    '**/*_test.dart',
+                    '**/*.g.dart'
+                ]
+            },
+            ruby: {
+                extensions: ['.rb'],
+                importPatterns: [
+                    /require\s+['"]([^'"]+)['"]/g
+                ],
+                classPattern: /class\s+([A-Z][a-zA-Z0-9]*)/g,
+                standardLibraries: ['String', 'Integer', 'Array', 'Hash', 'File'],
+                excludePatterns: [
+                    '**/vendor/**',
+                    '**/.bundle/**',
+                    '**/spec/**',
+                    '**/*_spec.rb'
+                ]
+            }
+        };
+        
+        // Build extension to language mapping for fast lookup
+        this.extensionMap = this.buildExtensionMap();
+    }
+    
+    /**
+     * Build extension to language mapping
+     * @returns {Map} - Extension to language map
+     */
+    buildExtensionMap() {
+        const map = new Map();
+        for (const [language, config] of Object.entries(this.languageConfig)) {
+            config.extensions.forEach(ext => map.set(ext, language));
+        }
+        return map;
     }
 
     /**
@@ -52,40 +262,28 @@ class VSCodeApiDependencyAnalyzer {
      * @returns {Array} - Array of file URIs
      */
     async findSourceFiles() {
-        const patterns = [
-            '**/*.ts',    // TypeScript
-            '**/*.js',    // JavaScript 
-            '**/*.tsx',   // React TypeScript
-            '**/*.jsx',   // React JavaScript
-            '**/*.cs',    // C#
-            '**/*.java',  // Java
-            '**/*.py'     // Python
-        ];
+        // Generate patterns from language config
+        const patterns = [...new Set(
+            Object.values(this.languageConfig)
+                .flatMap(config => config.extensions.map(ext => `**/*${ext}`))
+        )];
         
-        const excludePatterns = [
-            '**/node_modules/**',
-            '**/bin/**',
-            '**/obj/**',
-            '**/dist/**',
-            '**/build/**',
-            '**/out/**',
-            '**/coverage/**',
+        // Collect all exclude patterns from language configs + common excludes
+        const commonExcludes = [
             '**/.vscode/**',
             '**/.git/**',
             '**/.vs/**',
             '**/.*/**',           // Any folder starting with dot
-            '**/*.spec.ts',       // Unit test files
-            '**/*.spec.js',
-            '**/*.test.ts',
-            '**/*.test.js',
-            '**/*.unit.ts',
-            '**/*.unit.js',
-            '**/test/**',         // Test folders
-            '**/tests/**',
-            '**/spec/**',
-            '**/*.min.js',
-            '**/*.d.ts'
+            '**/test/**',         // Generic test folders
+            '**/tests/**'
         ];
+        
+        const languageExcludes = [...new Set(
+            Object.values(this.languageConfig)
+                .flatMap(config => config.excludePatterns || [])
+        )];
+        
+        const excludePatterns = [...commonExcludes, ...languageExcludes];
         
         const allFiles = [];
         
@@ -110,7 +308,7 @@ class VSCodeApiDependencyAnalyzer {
     }
 
     /**
-     * Process a single file based on extension
+     * Process a single file using configuration-driven approach
      * @param {vscode.Uri} fileUri - File to process
      */
     async processFile(fileUri) {
@@ -125,16 +323,16 @@ class VSCodeApiDependencyAnalyzer {
                 this.graph.set(sourceFile, new Set());
             }
             
-            // Apply language-specific strategies
-            if (extension === '.ts' || extension === '.tsx' || extension === '.js' || extension === '.jsx') {
-                await this.processTypeScriptFile(document, text, sourceFile);
-            } else if (extension === '.cs') {
-                await this.processCSharpFile(document, text, sourceFile);
-            } else if (extension === '.java') {
-                await this.processJavaFile(document, text, sourceFile);
-            } else if (extension === '.py') {
-                await this.processPythonFile(document, text, sourceFile);
+            // Auto-detect language from extension
+            const language = this.extensionMap.get(extension);
+            if (!language) {
+                console.warn(`⚠️ Unsupported file extension: ${extension}`);
+                return;
             }
+            
+            // Process file with language-specific configuration
+            const config = this.languageConfig[language];
+            await this.processWithConfig(document, text, sourceFile, config, language);
             
         } catch (error) {
             console.warn(`⚠️ Error processing file ${fileUri.fsPath}:`, error.message);
@@ -142,178 +340,111 @@ class VSCodeApiDependencyAnalyzer {
     }
 
     /**
-     * TypeScript/JavaScript Strategy: Scan for Import statements
+     * Generic file processor using language configuration
+     * @param {vscode.TextDocument} document - Document to process
+     * @param {string} text - File content
+     * @param {string} sourceFile - Source file relative path
+     * @param {Object} config - Language configuration
+     * @param {string} language - Language name
      */
-    async processTypeScriptFile(document, text, sourceFile) {
+    async processWithConfig(document, text, sourceFile, config, language) {
         try {
-            // Strategy: Find import paths and resolve using LSP
-            const importRegex = /(?:from|import)\s+['"]([^'"]+)['"]/g;
-            const requireRegex = /require\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
+            const processedSymbols = new Set();
             
-            let match;
-            
-            // Process import statements
-            while ((match = importRegex.exec(text)) !== null) {
-                const importPath = match[1];
-                await this.processImportMatch(document, text, match, sourceFile, importPath);
+            // Process all import patterns
+            for (const pattern of config.importPatterns) {
+                let match;
+                // Reset regex lastIndex for reuse
+                pattern.lastIndex = 0;
+                
+                while ((match = pattern.exec(text)) !== null) {
+                    const importPath = match[1];
+                    
+                    // Skip external/standard libraries
+                    if (this.isExternalImport(importPath, config.standardLibraries, language)) {
+                        continue;
+                    }
+                    
+                    await this.resolveAndAddDependency(document, text, match, sourceFile, 'import');
+                    await this.sleep(5);
+                }
             }
             
-            // Process require statements
-            while ((match = requireRegex.exec(text)) !== null) {
-                const importPath = match[1];
-                await this.processImportMatch(document, text, match, sourceFile, importPath);
+            // Process class/type references
+            if (config.classPattern) {
+                let match;
+                config.classPattern.lastIndex = 0;
+                
+                while ((match = config.classPattern.exec(text)) !== null) {
+                    const symbol = match[1];
+                    
+                    // Skip already processed symbols and standard libraries
+                    if (processedSymbols.has(symbol) || config.standardLibraries.includes(symbol)) {
+                        continue;
+                    }
+                    processedSymbols.add(symbol);
+                    
+                    await this.resolveAndAddDependency(document, text, match, sourceFile, `class: ${symbol}`);
+                    await this.sleep(5);
+                }
             }
-            
-            // Also look for class/type references (PascalCase words)
-            await this.findClassReferences(document, text, sourceFile);
             
         } catch (error) {
-            console.warn(`⚠️ Error processing TypeScript file:`, error.message);
+            console.warn(`⚠️ Error processing ${language} file:`, error.message);
         }
     }
 
     /**
-     * Helper method to process import matches
+     * Resolve symbol and add dependency to graph
+     * @param {vscode.TextDocument} document - Document
+     * @param {string} text - File content
+     * @param {Object} match - Regex match object
+     * @param {string} sourceFile - Source file path
+     * @param {string} type - Dependency type for logging
      */
-    async processImportMatch(document, text, match, sourceFile, importPath) {
-        // Skip external libraries (no ./ or ../ prefix)
-        if (!importPath.startsWith('./') && !importPath.startsWith('../') && !importPath.startsWith('@') && !importPath.startsWith('src/')) {
-            return;
+    async resolveAndAddDependency(document, text, match, sourceFile, type) {
+        try {
+            // Calculate position for LSP resolution
+            const line = text.substring(0, match.index).split('\n').length - 1;
+            const character = match.index - text.lastIndexOf('\n', match.index) - 1;
+            const position = new vscode.Position(line, character);
+            
+            // Use VS Code LSP to resolve actual file
+            const targetFile = await this.resolveDefinition(document, position);
+            if (targetFile) {
+                this.graph.get(sourceFile).add(targetFile);
+                console.log(`🔗 ${sourceFile} -> ${targetFile} (${type})`);
+            }
+        } catch (error) {
+            // Silent fail - LSP might not be available for this symbol
+        }
+    }
+
+    /**
+     * Check if import is external (standard library or node_modules)
+     * @param {string} importPath - Import path
+     * @param {Array} standardLibraries - Standard library names
+     * @param {string} language - Language name
+     * @returns {boolean} - True if external
+     */
+    isExternalImport(importPath, standardLibraries, language) {
+        // Check if it's a relative import (project files)
+        if (importPath.startsWith('./') || importPath.startsWith('../') || 
+            importPath.startsWith('@/') || importPath.startsWith('src/')) {
+            return false;
         }
         
-        // Calculate position for LSP resolution
-        const line = text.substring(0, match.index).split('\n').length - 1;
-        const character = match.index - text.lastIndexOf('\n', match.index) - 1;
-        const position = new vscode.Position(line, character);
-        
-        // Use LSP to resolve actual file
-        const targetFile = await this.resolveDefinition(document, position);
-        if (targetFile) {
-            this.graph.get(sourceFile).add(targetFile);
-            console.log(`🔗 ${sourceFile} -> ${targetFile} (import)`);
+        // For TypeScript/JavaScript, check common patterns
+        if (language === 'typescript' && (importPath.startsWith('@angular/') || 
+            importPath.startsWith('@vue/') || importPath.startsWith('react'))) {
+            return true;
         }
         
-        await this.sleep(5); // Throttle
-    }
-
-    /**
-     * C# Strategy: Scan for Class/Type usages (PascalCase)
-     */
-    async processCSharpFile(document, text, sourceFile) {
-        try {
-            // Strategy: Find PascalCase words (potential class references)
-            const classRefRegex = /\b([A-Z][a-zA-Z0-9]*(?:[A-Z][a-zA-Z0-9]*)*)\b/g;
-            
-            let match;
-            const processedWords = new Set();
-            
-            while ((match = classRefRegex.exec(text)) !== null) {
-                const className = match[1];
-                
-                // Skip common keywords and already processed words
-                if (processedWords.has(className) || this.isCSharpKeyword(className)) {
-                    continue;
-                }
-                processedWords.add(className);
-                
-                // Calculate position for LSP resolution
-                const line = text.substring(0, match.index).split('\n').length - 1;
-                const character = match.index - text.lastIndexOf('\n', match.index) - 1;
-                const position = new vscode.Position(line, character);
-                
-                // Use LSP to resolve class definition
-                const targetFile = await this.resolveDefinition(document, position);
-                if (targetFile) {
-                    this.graph.get(sourceFile).add(targetFile);
-                    console.log(`🔗 ${sourceFile} -> ${targetFile} (class: ${className})`);
-                }
-                
-                await this.sleep(5); // Throttle
-            }
-            
-        } catch (error) {
-            console.warn(`⚠️ Error processing C# file:`, error.message);
-        }
-    }
-
-    /**
-     * Java Strategy: Similar to C# - find class references
-     */
-    async processJavaFile(document, text, sourceFile) {
-        // Similar to C# strategy
-        await this.processCSharpFile(document, text, sourceFile);
-    }
-
-    /**
-     * Python Strategy: Find import statements and class references
-     */
-    async processPythonFile(document, text, sourceFile) {
-        try {
-            // Python imports
-            const importRegex = /(?:import|from)\s+([a-zA-Z_][a-zA-Z0-9_.]*)/g;
-            
-            let match;
-            while ((match = importRegex.exec(text)) !== null) {
-                const importName = match[1];
-                
-                // Skip standard library imports
-                if (this.isPythonStandardLibrary(importName)) {
-                    continue;
-                }
-                
-                const line = text.substring(0, match.index).split('\n').length - 1;
-                const character = match.index - text.lastIndexOf('\n', match.index) - 1;
-                const position = new vscode.Position(line, character);
-                
-                const targetFile = await this.resolveDefinition(document, position);
-                if (targetFile) {
-                    this.graph.get(sourceFile).add(targetFile);
-                    console.log(`🔗 ${sourceFile} -> ${targetFile} (python import)`);
-                }
-                
-                await this.sleep(5);
-            }
-            
-        } catch (error) {
-            console.warn(`⚠️ Error processing Python file:`, error.message);
-        }
-    }
-
-    /**
-     * Find class/type references in TypeScript (PascalCase words)
-     */
-    async findClassReferences(document, text, sourceFile) {
-        try {
-            const classRefRegex = /\b([A-Z][a-zA-Z0-9]*)\b/g;
-            
-            let match;
-            const processedWords = new Set();
-            
-            while ((match = classRefRegex.exec(text)) !== null) {
-                const className = match[1];
-                
-                // Skip common TS/JS keywords and already processed
-                if (processedWords.has(className) || this.isTypeScriptKeyword(className)) {
-                    continue;
-                }
-                processedWords.add(className);
-                
-                const line = text.substring(0, match.index).split('\n').length - 1;
-                const character = match.index - text.lastIndexOf('\n', match.index) - 1;
-                const position = new vscode.Position(line, character);
-                
-                const targetFile = await this.resolveDefinition(document, position);
-                if (targetFile) {
-                    this.graph.get(sourceFile).add(targetFile);
-                    console.log(`🔗 ${sourceFile} -> ${targetFile} (class: ${className})`);
-                }
-                
-                await this.sleep(5);
-            }
-            
-        } catch (error) {
-            console.warn(`⚠️ Error finding class references:`, error.message);
-        }
+        // Check if it's a standard library
+        const firstPart = importPath.split(/[./]/)[0];
+        return standardLibraries.some(lib => 
+            firstPart === lib || importPath.startsWith(lib)
+        );
     }
 
     /**
@@ -328,7 +459,12 @@ class VSCodeApiDependencyAnalyzer {
                 'vscode.executeDefinitionProvider',
                 document.uri,
                 position
-            );
+            ).catch(lspError => {
+                // C# Language Server can throw "Sequence contains no matching element"
+                // Silently ignore LSP errors and continue analysis
+                console.warn(`⚠️ LSP error for ${document.fileName}:${position.line} - ${lspError.message}`);
+                return null;
+            });
             
             if (!definitions || definitions.length === 0) {
                 return null;
@@ -397,42 +533,6 @@ class VSCodeApiDependencyAnalyzer {
      */
     async sleep(ms) {
         return new Promise(resolve => setTimeout(resolve, ms));
-    }
-
-    /**
-     * Check if word is a C# keyword (to skip)
-     */
-    isCSharpKeyword(word) {
-        const keywords = [
-            'String', 'Int32', 'Boolean', 'Object', 'Void', 'Task', 'IEnumerable',
-            'List', 'Dictionary', 'HttpClient', 'JsonSerializer', 'DateTime',
-            'Guid', 'Exception', 'StringBuilder', 'Console', 'Math'
-        ];
-        return keywords.includes(word);
-    }
-
-    /**
-     * Check if word is a TypeScript keyword (to skip)
-     */
-    isTypeScriptKeyword(word) {
-        const keywords = [
-            'String', 'Number', 'Boolean', 'Object', 'Array', 'Function',
-            'Promise', 'Date', 'RegExp', 'Error', 'Map', 'Set', 'WeakMap',
-            'Component', 'Injectable', 'NgModule', 'Directive', 'Pipe'
-        ];
-        return keywords.includes(word);
-    }
-
-    /**
-     * Check if Python import is standard library (to skip)
-     */
-    isPythonStandardLibrary(importName) {
-        const stdLib = [
-            'os', 'sys', 'json', 'urllib', 'datetime', 'collections',
-            'itertools', 'functools', 'typing', 're', 'math', 'random'
-        ];
-        const firstPart = importName.split('.')[0];
-        return stdLib.includes(firstPart);
     }
 
     /**

@@ -71,7 +71,9 @@ function renderGraph() {
   const link = g.selectAll('.link')
     .data(graphData.edges)
     .enter().append('line')
-    .attr('class', 'link');
+    .attr('class', 'link')
+    .attr('data-source', d => d.source.id || d.source)
+    .attr('data-target', d => d.target.id || d.target);
 
   const node = g.selectAll('.node-circle')
     .data(graphData.nodes)
@@ -115,12 +117,55 @@ function renderGraph() {
         `<strong>${d.displayName}</strong> (${d.entityType})<br><small>${d.fileName}</small>` :
         `<strong>${d.fileName}</strong><br><small>${d.relativePath}</small>`;
       tooltip.innerHTML = entityInfo;
+
+      // Temporarily show tooltip to measure size (but keep invisible)
+      tooltip.style.visibility = 'hidden';
       tooltip.style.opacity = '1';
-      tooltip.style.left = event.pageX + 10 + 'px';
-      tooltip.style.top = event.pageY + 10 + 'px';
+      tooltip.style.display = 'block';
+
+      // Force reflow to get accurate dimensions
+      const tooltipRect = tooltip.getBoundingClientRect();
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+
+      // Get container boundary to respect the split view
+      const container = document.querySelector('.left-panel');
+      const boundaryRight = container ? container.getBoundingClientRect().right : viewportWidth;
+
+      // Use clientX/clientY for accurate positioning relative to viewport
+      let left = event.clientX + 10;
+      let top = event.clientY + 10;
+
+      // If tooltip overflows right edge (of container), position it to the left of cursor
+      if (left + tooltipRect.width > boundaryRight) {
+        left = event.clientX - tooltipRect.width - 10;
+      }
+
+      // If tooltip overflows bottom edge, position it above cursor
+      if (top + tooltipRect.height > viewportHeight) {
+        top = event.clientY - tooltipRect.height - 10;
+      }
+
+      // Ensure tooltip doesn't go off left edge
+      if (left < 0) {
+        left = 10;
+      }
+
+      // Ensure tooltip doesn't go off top edge
+      if (top < 0) {
+        top = 10;
+      }
+
+      tooltip.style.left = left + 'px';
+      tooltip.style.top = top + 'px';
+
+      // Now make tooltip visible
+      tooltip.style.visibility = 'visible';
     })
     .on('mouseleave', () => {
-      document.getElementById('nodeTooltip').style.opacity = '0';
+      const tooltip = document.getElementById('nodeTooltip');
+      tooltip.style.opacity = '0';
+      tooltip.style.visibility = 'visible'; // Reset visibility for next hover
     })
     .call(d3.drag()
       .on('start', (event, d) => {
@@ -180,6 +225,34 @@ function updateNodeStyles() {
     .style('stroke', d => d.selected ? '#fff' : null)
     .style('stroke-width', d => d.selected ? '3px' : null)
     .classed('node-selected', d => d.selected); // Add animation class
+
+  // Update link styles based on selected node
+  const selectedNode = graphData.nodes.find(n => n.selected);
+
+  svg.selectAll('.link')
+    .classed('link-highlighted', false) // Reset all
+    .classed('link-dependency', false)
+    .classed('link-dependent', false);
+
+  if (selectedNode) {
+    // Highlight dependency links (selected -> others)
+    svg.selectAll('.link')
+      .filter(function () {
+        const sourceId = d3.select(this).attr('data-source');
+        return sourceId === selectedNode.id;
+      })
+      .classed('link-highlighted', true)
+      .classed('link-dependency', true);
+
+    // Highlight dependent links (others -> selected)
+    svg.selectAll('.link')
+      .filter(function () {
+        const targetId = d3.select(this).attr('data-target');
+        return targetId === selectedNode.id;
+      })
+      .classed('link-highlighted', true)
+      .classed('link-dependent', true);
+  }
 }
 
 function showNodeDetails(node) {
@@ -244,14 +317,14 @@ function showNodeDetails(node) {
         </div>
         
         <div class="detail-section">
-            <h4>📥 Dependencies (${dependencies.length}) - What this module needs</h4>
+            <h4 style="border-bottom: 3px solid #ff6b6b; padding-bottom: 8px;">📥 Dependencies (${dependencies.length}) - What this module needs</h4>
             <div style="max-height: 250px; overflow-y: auto;">
                 ${dependenciesHtml || '<p>No dependencies found</p>'}
             </div>
         </div>
         
         <div class="detail-section">
-            <h4>📤 Dependents (${dependents.length}) - What needs this module</h4>
+            <h4 style="border-bottom: 3px solid #ffa500; padding-bottom: 8px;">📤 Dependents (${dependents.length}) - What needs this module</h4>
             <div style="max-height: 250px; overflow-y: auto;">
                 ${dependentsHtml || '<p>No dependents found</p>'}
             </div>
@@ -448,24 +521,8 @@ function searchAndFocus() {
   });
 
   if (matchingNode) {
-    graphData.nodes.forEach(n => n.selected = false);
-    matchingNode.selected = true;
-    updateNodeStyles();
-    showNodeDetails(matchingNode);
-
-    if (matchingNode.x && matchingNode.y) {
-      const container = document.querySelector('.left-panel');
-      const width = container.clientWidth - 40;
-      const height = container.clientHeight - 140;
-
-      const transform = d3.zoomIdentity
-        .translate(width / 2 - matchingNode.x, height / 2 - matchingNode.y)
-        .scale(1.5);
-      svg.transition().duration(750).call(
-        zoom.transform,
-        transform
-      );
-    }
+    // Use the same logic as focusOnNode for consistency
+    focusOnNode(matchingNode.id);
   } else {
     alert('Module not found: ' + searchValue);
   }
@@ -747,4 +804,53 @@ function detectCircularDependencies(nodes, edges) {
   }
 
   return circularCount;
+}
+
+function copyGraphJson() {
+  try {
+    const exportData = {
+      metadata: {
+        timestamp: new Date().toISOString(),
+        workspaceRoot: workspaceRoot,
+        searchTerm: searchTerm,
+        statistics: {
+          totalFiles: graphData.nodes.length,
+          totalDependencies: graphData.edges.length,
+          circularDependencies: parseInt(document.getElementById('circularCount').textContent || '0')
+        }
+      },
+      nodes: graphData.nodes.map(node => ({
+        id: node.id,
+        label: node.label,
+        type: node.type,
+        path: node.path,
+        x: node.x,
+        y: node.y
+      })),
+      edges: graphData.edges.map(edge => ({
+        source: edge.source.id || edge.source,
+        target: edge.target.id || edge.target
+      }))
+    };
+
+    const jsonString = JSON.stringify(exportData, null, 2);
+    navigator.clipboard.writeText(jsonString).then(() => {
+      // Show success feedback
+      const btn = document.querySelector('.copy-json-btn');
+      const originalText = btn.innerHTML;
+      btn.innerHTML = '✅ Copied!';
+      btn.style.background = 'linear-gradient(135deg, #4CAF50 0%, #388E3C 100%)';
+
+      setTimeout(() => {
+        btn.innerHTML = originalText;
+        btn.style.background = '';
+      }, 2000);
+    }).catch(err => {
+      console.error('Failed to copy JSON:', err);
+      alert('Failed to copy to clipboard. Please check console for details.');
+    });
+  } catch (error) {
+    console.error('Error generating JSON:', error);
+    alert('Failed to generate JSON data.');
+  }
 }

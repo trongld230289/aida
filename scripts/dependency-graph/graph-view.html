@@ -96,6 +96,32 @@
         gap: 5px;
       }
 
+      .copy-json-btn {
+        background: linear-gradient(135deg, #007acc 0%, #005a9e 100%);
+        color: white;
+        border: none;
+        padding: 6px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 500;
+        transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        white-space: nowrap;
+      }
+
+      .copy-json-btn:hover {
+        background: linear-gradient(135deg, #005a9e 0%, #004578 100%);
+        transform: translateY(-1px);
+        box-shadow: 0 2px 8px rgba(0, 122, 204, 0.3);
+      }
+
+      .copy-json-btn:active {
+        transform: translateY(0);
+      }
+
       .legend-dot {
         width: 12px;
         height: 12px;
@@ -315,7 +341,7 @@
       .module-title {
         font-size: 18px;
         font-weight: bold;
-        color: #81c784;
+        color: #4fc3f7;
         margin-bottom: 10px;
       }
 
@@ -360,6 +386,47 @@
         stroke-opacity: 0.6;
         stroke-width: 1.5px;
         marker-end: url(#arrowhead);
+        transition: all 0.3s ease;
+      }
+
+      /* Highlighted link styles */
+      .link-highlighted {
+        stroke-width: 2.5px;
+        stroke-opacity: 1;
+      }
+
+      /* Dependency links (selected -> others) - Red flowing animation */
+      .link-dependency {
+        stroke: #ff6b6b;
+        stroke-dasharray: 10, 5;
+        animation: dash-flow 2s linear infinite;
+      }
+
+      /* Dependent links (others -> selected) - Orange flowing animation */
+      .link-dependent {
+        stroke: #ffa500;
+        stroke-dasharray: 10, 5;
+        animation: dash-flow-reverse 2s linear infinite;
+      }
+
+      @keyframes dash-flow {
+        0% {
+          stroke-dashoffset: 0;
+        }
+
+        100% {
+          stroke-dashoffset: 15;
+        }
+      }
+
+      @keyframes dash-flow-reverse {
+        0% {
+          stroke-dashoffset: 15;
+        }
+
+        100% {
+          stroke-dashoffset: 0;
+        }
       }
 
       .node-text {
@@ -370,16 +437,19 @@
       }
 
       .tooltip {
-        position: absolute;
-        background: rgba(45, 45, 48, 0.95);
-        border: 1px solid #4ecdc4;
+        position: fixed;
+        background: #252526;
+        border: 1px solid #6A9EDB;
         border-radius: 4px;
         padding: 8px;
         font-size: 12px;
-        z-index: 1000;
+        z-index: 9999;
         pointer-events: none;
         opacity: 0;
         max-width: 250px;
+        word-wrap: break-word;
+        white-space: normal;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.8);
       }
 
       /* Pulse animation for selected node */
@@ -388,17 +458,17 @@
         0%,
         100% {
           opacity: 1;
-          filter: drop-shadow(0 0 2px rgba(255, 107, 107, 0.8));
+          filter: drop-shadow(0 0 4px rgba(255, 107, 107, 1)) drop-shadow(0 0 8px rgba(255, 107, 107, 0.8));
         }
 
         50% {
-          opacity: 0.7;
-          filter: drop-shadow(0 0 8px rgba(255, 107, 107, 1)) drop-shadow(0 0 12px rgba(255, 107, 107, 0.6));
+          opacity: 0.85;
+          filter: drop-shadow(0 0 12px rgba(255, 107, 107, 1)) drop-shadow(0 0 20px rgba(255, 107, 107, 0.8)) drop-shadow(0 0 28px rgba(255, 107, 107, 0.5));
         }
       }
 
       .node-selected {
-        animation: pulse-glow 2s ease-in-out infinite;
+        animation: pulse-glow 1.5s ease-in-out infinite;
       }
 
     </style>
@@ -411,18 +481,26 @@
           <h1>🔍 Dependency Graph</h1>
         </div>
 
-        <div class="legend-info">
-          📊 <strong>Analysis Summary:</strong>
-          <span class="legend-item">📁 <span id="nodeCount">{{NODE_COUNT}}</span> Files</span>
-          <span class="legend-item">🔗 <span id="edgeCount">0</span> Dependencies</span>
-          <span class="legend-item">🔄 <span id="circularCount">0</span> Circular</span>
+        <div class="legend-info"
+             style="display: flex; justify-content: space-between; align-items: center;">
+          <div style="display: flex; align-items: center; gap: 15px; flex-wrap: nowrap;">
+            📊 <strong>Analysis Summary:</strong>
+            <span class="legend-item">📁 <span id="nodeCount">{{NODE_COUNT}}</span> Files</span>
+            <span class="legend-item">🔗 <span id="edgeCount">0</span> Dependencies</span>
+            <span class="legend-item">🔄 <span id="circularCount">0</span> Circular</span>
+          </div>
+          <button class="copy-json-btn"
+                  onclick="copyGraphJson()"
+                  title="Copy graph data as JSON">
+            📋 Copy JSON
+          </button>
         </div>
 
         <div class="controls">
           <div class="search-container">
             <input type="text"
                    id="nodeSearch"
-                   placeholder="Search modules..."
+                   placeholder="Search modules/components/files..."
                    autocomplete="off">
             <div class="search-suggestions"
                  id="searchSuggestions"></div>
@@ -435,8 +513,6 @@
         </div>
 
         <svg id="d3-graph"></svg>
-        <div class="tooltip"
-             id="nodeTooltip"></div>
       </div>
 
       <div class="resizer"
@@ -444,12 +520,14 @@
 
       <div class="right-panel">
         <div id="detailView">
-          <h3>🎯 Module Details</h3>
-          <p>Click on any module to see its dependencies and dependents</p>
+          <h3 style="color: #4fc3f7;">🎯 Module Details</h3>
+          <p>Select a node from the graph, search, or click on dependents/dependencies to explore.</p>
         </div>
       </div>
     </div>
 
+    <div class="tooltip"
+         id="nodeTooltip"></div>
     <script>
       /*__GRAPH_SCRIPT__*/
     </script>

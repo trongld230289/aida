@@ -5,12 +5,89 @@ All notable changes to the "AIDA - AI Development Assistant" extension will be d
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.34/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.41] - 2025-12-03
+## [1.1.0] - 2025-12-07
+
+### Added
+- **🕸️ Dependency Analysis**: New `@dependency` chat participant
+  - Visualizes project dependencies in an interactive graph
+  - Analyzes relationships between modules, components, and services
+  - AI-powered impact analysis for changes
+  - Detects circular dependencies and architectural issues
+
+## [1.0.46] - 2025-12-07
 
 ### Fixed
-- Fixed GitLab URL parsing to correctly extract organization namespace for token configuration
-- Consolidated duplicate PR URL parsing logic into reusable function
-- Improved GitLab MR support for nested namespaces like ds365ai/FDP/time-and-cost-project
+- **🔧 C# Language Server Error Handling**: Improved dependency analysis robustness
+  - Added defensive `.catch()` for LSP errors ("Sequence contains no matching element")
+  - LSP resolution failures now logged as warnings instead of crashing analysis
+  - Graceful handling when OmniSharp cannot resolve symbol definitions
+
+### Changed
+- **🎨 UI Enhancement**: Lighter progress indicator for dependency analysis
+  - Changed from `ProgressLocation.Notification` (popup) to `ProgressLocation.Window` (status bar)
+  - Less intrusive, non-blocking UI during background analysis
+  - User can continue working without notification popups
+
+## [1.0.45] - 2025-12-07
+
+### Changed
+- **🔧 Dependency Analysis Refactoring**: Configuration-driven architecture for multi-language support
+  - Refactored `vscode-api-analyzer.js` from hard-coded if/else to configuration-driven design
+  - Added support for 12+ languages: TypeScript, JavaScript, Python, C#, Java, Vue, PHP, Go, Rust, Kotlin, Swift, Dart, Ruby
+  - Each language has dedicated configuration: extensions, import patterns, class patterns, standard libraries, exclude patterns
+  - Reduced code from ~350 to ~180 lines (-49%) while adding 200% more language support
+  - Generic `processWithConfig()` function replaces 5+ language-specific processors
+  - Language-specific exclude patterns for more accurate file filtering
+  - Auto-generated file patterns from configuration
+  - Adding new language now requires only 6 lines of config instead of 50 lines of code
+
+### Added
+- **📚 Comprehensive Documentation**: Added `README.md` in dependency-graph folder
+  - Complete architecture diagrams (ASCII art)
+  - Processing flow explanations
+  - Language configuration guide
+  - Graph structure documentation
+  - Performance optimization details
+  - Design patterns used
+  - Usage examples and best practices
+
+### Technical Improvements
+- Configuration-Driven Design: Data over code approach for better maintainability
+- Strategy Pattern: Language-specific processing via configuration
+- DRY Principle: Single generic processor for all languages
+- Open/Closed Principle: Add languages without modifying existing code
+- Performance: Auto-build extension map for O(1) language detection
+
+## [1.0.44] - 2025-12-05
+
+### Added
+- **📊 Dependency Graph Visualization**: Interactive D3.js force-directed graph for project dependencies
+  - Real-time statistics: file count, edge count, circular dependency detection
+  - Node search with instant filtering and centering
+  - Zoom, pan, and recenter controls for easy navigation
+  - Visual node animations with pulse-glow effects on selection
+  - Animated dependency lines (red for outgoing, orange for incoming)
+  - Color-coded section headers matching dependency types
+  - Export functionality with "Copy JSON" button for graph data backup
+
+- **🤖 AI Impact Analysis**: Intelligent dependency analysis with GitHub Copilot integration
+  - Click any node to analyze dependencies and dependents
+  - AI-powered impact assessment for code changes
+  - Automatic model selection (Claude Sonnet 4.5, Gemini, GPT-4)
+  - Clean output format without streaming headers
+  - File content analysis with security and performance insights
+
+- **🔄 Circular Dependency Detection**: DFS-based algorithm to identify dependency cycles
+  - Automatic detection on graph initialization
+  - Visual counter in Analysis Summary section
+  - Helps identify architectural issues in codebase
+
+- **🎨 Enhanced UI/UX**: Modern, responsive design with consistent styling
+  - Blue accent theme (#007acc) across all sections
+  - Single-line Analysis Summary for cleaner layout
+  - Responsive panels with proper scrolling
+  - Blue gradient buttons with hover effects
+  - Border-left styling for visual hierarchy
 
 ## [1.0.40] - 2025-12-01
 

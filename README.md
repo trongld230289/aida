@@ -4,7 +4,7 @@
 
 > Transform your development workflow with AIDA - Your intelligent coding companion featuring built-in chatbot, support for your own AI API (OpenAI/Claude), and comprehensive development tools. Compatible with both VS Code and Cursor IDE. No GitHub Copilot required!
 
-[![Version](https://img.shields.io/badge/version-1.0.41-blue.svg)](https://marketplace.visualstudio.com/items?itemName=trongld232.aida-dev)
+[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://marketplace.visualstudio.com/items?itemName=trongld232.aida-dev)
 [![VS Code](https://img.shields.io/badge/VS%20Code-1.90+-green.svg)](https://code.visualstudio.com/)
 [![Cursor IDE](https://img.shields.io/badge/Cursor%20IDE-Compatible-brightgreen.svg)](https://cursor.sh/)
 [![License](https://img.shields.io/badge/license-MIT-orange.svg)](LICENSE)
@@ -62,6 +62,7 @@
 - **@review-pr**: Complete pull request review with team collaboration
 - **@sync-review-templates**: Sync AIDA review templates to workspace
 - **@scan-app**: AI-powered code scanning and duplicate detection
+- **@dependency**: Visualize and analyze project dependencies
 
 ## 🚀 Quick Start
 ### 1. Installation
@@ -178,6 +179,18 @@ AIDA Chat provides intelligent code analysis through simple chat commands. Open 
 - 📥 Downloads latest AIDA review templates to your workspace
 - 🎯 Sets up language-specific templates (Angular, React, Vue, etc.)
 - 🔄 Updates existing templates with improvements
+
+### 🕸️ **@dependency** - Dependency Analysis
+**Usage:** `@dependency`
+```
+@dependency
+```
+**What it does:**
+- 📊 Visualizes project dependencies in an interactive graph
+- 🔍 Analyzes relationships between modules, components, and services
+- 🤖 AI-powered impact analysis for changes
+- ⚠️ Detects circular dependencies and architectural issues
+- 💾 **Smart Caching**: Analysis results are cached for 24 hours for instant loading
 
 ## 🧪 **Experimental Features**
 
