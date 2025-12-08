@@ -2957,5 +2957,7 @@ module.exports = {
     showGitHubDiffInWebview,      // Function B - GitHub diff webview
     showGitLabDiffInWebview,      // Function C - GitLab diff webview
     showAzureDevOpsDiffInWebview, // Function A - Azure DevOps diff webview
-    processReviewPr               // AIDA Chatbot reusable function
+    processReviewPr,              // AIDA Chatbot reusable function
+    parsePRUrlInfo,               // Parse PR URL to extract info
+    getGitHubPR                   // Fetch GitHub PR details
 };
