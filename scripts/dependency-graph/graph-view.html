@@ -371,6 +371,43 @@
         fill: #007acc;
       }
 
+      /* PR-specific node styles */
+      .node-circle.pr-file {
+        stroke-width: 2px;
+        stroke: #ffffff;
+      }
+
+      .node-circle.pr-status-add {
+        fill: #28a745 !important;
+      }
+
+      .node-circle.pr-status-edit {
+        fill: #ffc107 !important;
+      }
+
+      .node-circle.pr-status-delete {
+        fill: #dc3545 !important;
+      }
+
+      .node-circle.pr-status-rename {
+        fill: #17a2b8 !important;
+      }
+
+      .node-circle.node-type-dependency {
+        fill: #6c757d !important;
+        opacity: 0.7;
+      }
+
+      .node-circle.node-type-dependent {
+        fill: #007bff !important;
+        opacity: 0.7;
+      }
+
+      .node-circle.node-type-both {
+        fill: #6f42c1 !important;
+        opacity: 0.8;
+      }
+
       .node-circle:hover {
         filter: drop-shadow(0 0 5px currentColor);
       }
@@ -494,6 +531,32 @@
                   title="Copy graph data as JSON">
             📋 Copy JSON
           </button>
+        </div>
+
+        <!-- PR Mode Legend -->
+        <div id="prLegend"
+             class="legend-info"
+             style="display: none; flex-direction: column; gap: 8px; background: linear-gradient(135deg, #2d2d30 0%, #1a1a1a 100%);">
+          <div style="font-weight: bold; color: #ffc107; margin-bottom: 5px;">🔖 PR Mode - Legend:</div>
+          <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+            <span class="legend-item"><span class="legend-dot"
+                    style="background: #28a745;"></span> ➕ Added</span>
+            <span class="legend-item"><span class="legend-dot"
+                    style="background: #ffc107;"></span> ✏️ Modified</span>
+            <span class="legend-item"><span class="legend-dot"
+                    style="background: #dc3545;"></span> ❌ Deleted</span>
+            <span class="legend-item"><span class="legend-dot"
+                    style="background: #17a2b8;"></span> ↔️ Renamed</span>
+          </div>
+          <div
+               style="display: flex; gap: 15px; flex-wrap: wrap; margin-top: 5px; padding-top: 5px; border-top: 1px solid #444;">
+            <span class="legend-item"><span class="legend-dot"
+                    style="background: #6c757d; opacity: 0.8;"></span> 📦 Dependency</span>
+            <span class="legend-item"><span class="legend-dot"
+                    style="background: #007bff; opacity: 0.8;"></span> 🔗 Dependent</span>
+            <span class="legend-item"><span class="legend-dot"
+                    style="background: #6f42c1; opacity: 0.9;"></span> 🔄 Both</span>
+          </div>
         </div>
 
         <div class="controls">

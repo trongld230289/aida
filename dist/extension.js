@@ -59565,6 +59565,10 @@ const fs = __webpack_require__(/*! fs */ "fs");
 const { VSCodeApiDependencyAnalyzer } = __webpack_require__(/*! ./dependency-graph/vscode-api-analyzer */ "./scripts/dependency-graph/vscode-api-analyzer.js");
 const { SymbolAnalyzer } = __webpack_require__(/*! ./dependency-graph/symbol-analyzer */ "./scripts/dependency-graph/symbol-analyzer.js");
 
+// Import PR analysis modules
+const { PRFileFetcher } = __webpack_require__(/*! ./pr-file-fetcher */ "./scripts/pr-file-fetcher.js");
+const { PRDependencyAnalyzer } = __webpack_require__(/*! ./pr-dependency-analyzer */ "./scripts/pr-dependency-analyzer.js");
+
 // Cache management
 const CACHE_VERSION = '1.0';
 let cacheFilePath = null;
@@ -59591,9 +59595,16 @@ function initializeDependencyGraph(context) {
             // Set cache file path
             cacheFilePath = path.join(workspaceRoot, '.vscode', 'dependency-cache.json');
             
+            const userMessage = request.prompt.trim();
+            
+            // ✅ NEW: Check if message contains PR URL
+            if (isPRUrl(userMessage)) {
+                await handlePRDependencyAnalysis(userMessage, stream, token, workspaceRoot);
+                return;
+            }
+            
             // Check if user explicitly requested re-analysis
-            const userMessage = request.prompt.toLowerCase();
-            const isReAnalyzeRequest = userMessage.includes('re-analyze') || userMessage.includes('reanalyze');
+            const isReAnalyzeRequest = userMessage.toLowerCase().includes('re-analyze') || userMessage.toLowerCase().includes('reanalyze');
             
             // Check for existing cache
             const cacheExists = await checkCacheExists();
@@ -60495,6 +60506,225 @@ function getNodeDisplayName(node, angularEntities) {
         name: node.fileName || 'unknown', 
         type: 'file' 
     };
+}
+
+/**
+ * Check if message contains PR URL
+ */
+function isPRUrl(message) {
+    const patterns = [
+        /github\.com\/[^\/]+\/[^\/]+\/pull\/\d+/i,
+        /dev\.azure\.com\/[^\/]+\/[^\/]+\/_git\/[^\/]+\/pullrequest\/\d+/i,
+        /gitlab\.com\/.+\/-\/merge_requests\/\d+/i
+    ];
+    return patterns.some(pattern => pattern.test(message));
+}
+
+/**
+ * Handle PR dependency analysis workflow
+ */
+async function handlePRDependencyAnalysis(prUrl, stream, token, workspaceRoot) {
+    try {
+        stream.markdown('## 🔍 PR Dependency Analysis\n\n');
+        stream.markdown(`📌 **Analyzing PR:** ${prUrl}\n\n`);
+        
+        // Step 1: Parse PR URL
+        const fetcher = new PRFileFetcher();
+        const prInfo = fetcher.parsePRUrl(prUrl);
+        
+        stream.markdown(`✅ Detected **${prInfo.repoType.toUpperCase()}** PR\n\n`);
+        
+        // Step 2: Fetch PR files
+        stream.markdown('⏳ Fetching PR file changes...\n\n');
+        
+        let prFiles;
+        try {
+            prFiles = await fetcher.fetchFiles(prInfo);
+        } catch (error) {
+            stream.markdown(`❌ **Error fetching PR files:** ${error.message}\n\n`);
+            
+            if (error.message.includes('token')) {
+                stream.markdown('💡 **Setup Required:**\n\n');
+                stream.markdown(`- Configure your ${prInfo.repoType.toUpperCase()} token in settings\n`);
+                stream.markdown('- Check AIDA documentation for token setup instructions\n\n');
+            }
+            
+            return;
+        }
+        
+        if (!prFiles || prFiles.length === 0) {
+            stream.markdown('❌ No files found in PR\n\n');
+            return;
+        }
+        
+        stream.markdown(`✅ Found **${prFiles.length} files** in PR:\n\n`);
+        
+        // Show file summary
+        const added = prFiles.filter(f => f.status === 'add').length;
+        const modified = prFiles.filter(f => f.status === 'edit').length;
+        const deleted = prFiles.filter(f => f.status === 'delete').length;
+        const renamed = prFiles.filter(f => f.status === 'rename').length;
+        
+        stream.markdown(`- ➕ Added: ${added}\n`);
+        stream.markdown(`- ✏️ Modified: ${modified}\n`);
+        stream.markdown(`- ❌ Deleted: ${deleted}\n`);
+        if (renamed > 0) stream.markdown(`- ↔️ Renamed: ${renamed}\n`);
+        stream.markdown('\n');
+        
+        // Step 3: Analyze dependencies for PR files
+        stream.markdown('🔗 Analyzing dependencies and dependents...\n\n');
+        
+        const analyzer = new PRDependencyAnalyzer(workspaceRoot);
+        let graph;
+        
+        try {
+            graph = await analyzer.analyzePRFiles(prFiles);
+        } catch (error) {
+            stream.markdown(`❌ **Analysis Error:** ${error.message}\n\n`);
+            
+            if (error.message.includes('cache') || error.message.includes('graph')) {
+                stream.markdown('💡 **Tip:** Run `@dependency` first to build the workspace dependency cache\n\n');
+            }
+            
+            return;
+        }
+        
+        // Step 4: Show summary
+        const summary = graph.prSummary;
+        stream.markdown('✨ **Analysis Complete!**\n\n');
+        stream.markdown('📊 **Impact Summary:**\n\n');
+        stream.markdown(`- PR Files: ${summary.matchedNodes}/${summary.totalPRFiles}\n`);
+        stream.markdown(`- Dependencies: ${summary.totalDependencies}\n`);
+        stream.markdown(`- Dependents: ${summary.totalDependents}\n`);
+        stream.markdown(`- Total Graph Nodes: ${summary.totalNodes}\n`);
+        stream.markdown(`- Total Changes: +${summary.totalAdditions}/-${summary.totalDeletions}\n\n`);
+        
+        // Get impact analysis
+        const impact = analyzer.getImpactAnalysis(graph);
+        stream.markdown(`🎯 **Risk Level:** ${impact.riskLevel}\n\n`);
+        
+        if (impact.recommendations.length > 0) {
+            stream.markdown('💡 **Recommendations:**\n\n');
+            impact.recommendations.forEach(rec => {
+                stream.markdown(`- ${rec}\n`);
+            });
+            stream.markdown('\n');
+        }
+        
+        // Step 5: Display graph
+        stream.markdown('🎨 Opening graph viewer...\n\n');
+        
+        await createPRGraphWebview(graph, prInfo, summary);
+        
+        stream.markdown('✅ **Graph viewer opened!** Check the new tab.\n\n');
+        
+    } catch (error) {
+        console.error('❌ PR dependency analysis error:', error);
+        stream.markdown(`❌ **Unexpected Error:** ${error.message}\n\n`);
+        stream.markdown('Please check the console for details.\n\n');
+    }
+}
+
+/**
+ * Create webview for PR dependency graph
+ */
+async function createPRGraphWebview(graph, prInfo, summary) {
+    try {
+        const panel = vscode.window.createWebviewPanel(
+            'prDependencyGraph',
+            `PR Dependency Graph - ${prInfo.repoType} #${prInfo.prId}`,
+            vscode.ViewColumn.One,
+            {
+                enableScripts: true,
+                retainContextWhenHidden: true
+            }
+        );
+        
+        // Generate HTML with PR-enhanced graph
+        const html = generatePRGraphWebviewHtml(graph, summary, prInfo);
+        panel.webview.html = html;
+        
+        // Handle messages from webview
+        panel.webview.onDidReceiveMessage(
+            async message => {
+                await handleGraphWebviewMessage(message, panel, graph);
+            },
+            undefined,
+            extensionContext.subscriptions
+        );
+        
+    } catch (error) {
+        console.error('❌ Error creating PR graph webview:', error);
+        vscode.window.showErrorMessage(`Failed to create graph viewer: ${error.message}`);
+    }
+}
+
+/**
+ * Generate HTML for PR dependency graph
+ */
+function generatePRGraphWebviewHtml(graph, summary, prInfo) {
+    const extensionPath = extensionContext ? extensionContext.extensionPath : __dirname;
+    
+    // Read HTML template
+    const htmlTemplatePath = path.join(extensionPath, 'scripts', 'dependency-graph', 'graph-view.html');
+    let htmlTemplate = fs.readFileSync(htmlTemplatePath, 'utf8');
+    
+    // Read TypeScript script
+    const scriptPath = path.join(extensionPath, 'scripts', 'dependency-graph', 'graph-view.ts');
+    let scriptContent = fs.readFileSync(scriptPath, 'utf8');
+    
+    // Prepare PR-enhanced graph data
+    const graphDataJson = JSON.stringify({
+        nodes: graph.nodes.map(node => {
+            const angularEntities = node.metadata?.angularEntities || {};
+            const primaryEntity = getNodeDisplayName(node, angularEntities);
+            
+            return {
+                id: node.id,
+                fileName: node.fileName || 'unknown',
+                relativePath: node.relativePath || '',
+                category: node.category || 'file',
+                displayName: primaryEntity.name,
+                entityType: primaryEntity.type,
+                entities: {
+                    components: angularEntities.components || [],
+                    services: angularEntities.services || [],
+                    modules: angularEntities.modules || [],
+                    models: angularEntities.models || [],
+                    interfaces: angularEntities.interfaces || []
+                },
+                // PR-specific metadata
+                isPRFile: node.isPRFile || false,
+                prStatus: node.prStatus,
+                prChanges: node.prChanges,
+                nodeType: node.nodeType || 'file'
+            };
+        }),
+        edges: graph.edges,
+        // Add PR metadata
+        prMode: true,
+        prInfo: {
+            repoType: prInfo.repoType,
+            prId: prInfo.prId,
+            summary: summary
+        }
+    });
+    
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath || '';
+    const searchTerm = `PR #${prInfo.prId}`;
+    
+    // Replace placeholders
+    htmlTemplate = htmlTemplate.replace('{{SEARCH_TERM}}', searchTerm);
+    htmlTemplate = htmlTemplate.replace('{{NODE_COUNT}}', graph.nodes.length);
+    
+    scriptContent = scriptContent.replace('__GRAPH_DATA__', graphDataJson);
+    scriptContent = scriptContent.replace('__SEARCH_TERM__', JSON.stringify(searchTerm));
+    scriptContent = scriptContent.replace('__WORKSPACE_ROOT__', JSON.stringify(workspaceRoot));
+    
+    // Inject script into HTML
+    htmlTemplate = htmlTemplate.replace('/*__GRAPH_SCRIPT__*/', scriptContent);
+    
+    return htmlTemplate;
 }
 
 
@@ -61448,6 +61678,858 @@ async function detectFromPRFiles(prFiles) {
     };
   }
 }
+
+
+/***/ }),
+
+/***/ "./scripts/pr-dependency-analyzer.js":
+/*!*******************************************!*\
+  !*** ./scripts/pr-dependency-analyzer.js ***!
+  \*******************************************/
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+const vscode = __webpack_require__(/*! vscode */ "vscode");
+const path = __webpack_require__(/*! path */ "path");
+const fs = __webpack_require__(/*! fs */ "fs");
+
+const { VSCodeApiDependencyAnalyzer } = __webpack_require__(/*! ./dependency-graph/vscode-api-analyzer */ "./scripts/dependency-graph/vscode-api-analyzer.js");
+const { SymbolAnalyzer } = __webpack_require__(/*! ./dependency-graph/symbol-analyzer */ "./scripts/dependency-graph/symbol-analyzer.js");
+
+// Cache management
+const CACHE_VERSION = '1.0';
+
+/**
+ * PR Dependency Analyzer
+ * Analyzes dependencies for files changed in a PR
+ */
+class PRDependencyAnalyzer {
+    constructor(workspaceRoot) {
+        this.workspaceRoot = workspaceRoot;
+        this.vscodeAnalyzer = new VSCodeApiDependencyAnalyzer();
+        this.symbolAnalyzer = new SymbolAnalyzer();
+        this.fullGraph = null; // Cache full graph
+        this.cacheFilePath = path.join(workspaceRoot, '.vscode', 'dependency-cache.json');
+    }
+
+    /**
+     * Build dependency graph for PR files
+     * @param {Array} prFiles - PR file changes [{path, status, additions, deletions}]
+     * @returns {Promise<object>} Graph {nodes, edges, prSummary}
+     */
+    async analyzePRFiles(prFiles) {
+        console.log(`🔍 Analyzing ${prFiles.length} PR files...`);
+
+        // Step 1: Load or build full graph (with cache)
+        await this.ensureFullGraph();
+
+        // Step 2: Find PR file nodes in full graph
+        const prNodes = this.findPRNodes(prFiles);
+        console.log(`✅ Matched ${prNodes.length} PR files to graph nodes`);
+
+        // Step 3: Scan dependencies/dependents for each PR node
+        const relevantNodeIds = new Set(prNodes.map(n => n.id));
+        
+        let totalDeps = 0;
+        let totalDependents = 0;
+
+        for (const node of prNodes) {
+            // Get direct dependencies
+            const deps = this.getDependencies(node.id);
+            deps.forEach(depId => {
+                relevantNodeIds.add(depId);
+                totalDeps++;
+            });
+            
+            // Get direct dependents
+            const dependents = this.getDependents(node.id);
+            dependents.forEach(depId => {
+                relevantNodeIds.add(depId);
+                totalDependents++;
+            });
+        }
+
+        console.log(`📊 Found ${totalDeps} dependencies and ${totalDependents} dependents`);
+        console.log(`📊 Total relevant nodes: ${relevantNodeIds.size}`);
+
+        // Step 4: Build filtered graph
+        const filteredGraph = this.buildFilteredGraph(relevantNodeIds, prNodes);
+
+        // Step 5: Add PR summary
+        filteredGraph.prSummary = {
+            totalPRFiles: prFiles.length,
+            matchedNodes: prNodes.length,
+            totalDependencies: totalDeps,
+            totalDependents: totalDependents,
+            totalNodes: filteredGraph.nodes.length,
+            totalEdges: filteredGraph.edges.length,
+            addedFiles: prFiles.filter(f => f.status === 'add').length,
+            modifiedFiles: prFiles.filter(f => f.status === 'edit').length,
+            deletedFiles: prFiles.filter(f => f.status === 'delete').length,
+            renamedFiles: prFiles.filter(f => f.status === 'rename').length,
+            totalAdditions: prFiles.reduce((sum, f) => sum + f.additions, 0),
+            totalDeletions: prFiles.reduce((sum, f) => sum + f.deletions, 0)
+        };
+
+        return filteredGraph;
+    }
+
+    /**
+     * Get or build full workspace graph
+     */
+    async ensureFullGraph() {
+        if (this.fullGraph) {
+            console.log('✅ Using cached full graph');
+            return;
+        }
+
+        // Try load from cache
+        if (fs.existsSync(this.cacheFilePath)) {
+            try {
+                const cacheData = JSON.parse(fs.readFileSync(this.cacheFilePath, 'utf8'));
+                if (cacheData.version === CACHE_VERSION && cacheData.graph) {
+                    this.fullGraph = cacheData.graph;
+                    console.log(`✅ Loaded graph from cache: ${this.fullGraph.nodes.length} nodes, ${this.fullGraph.edges.length} edges`);
+                    return;
+                }
+            } catch (error) {
+                console.log(`⚠️ Cache read error: ${error.message}`);
+            }
+        }
+
+        // Build new graph
+        console.log('🔨 Building new dependency graph...');
+        this.fullGraph = await this.buildFullGraph();
+
+        // Save cache
+        try {
+            const cacheDir = path.dirname(this.cacheFilePath);
+            if (!fs.existsSync(cacheDir)) {
+                fs.mkdirSync(cacheDir, { recursive: true });
+            }
+
+            fs.writeFileSync(this.cacheFilePath, JSON.stringify({
+                version: CACHE_VERSION,
+                timestamp: Date.now(),
+                graph: this.fullGraph
+            }, null, 2));
+
+            console.log(`✅ Saved graph cache: ${this.fullGraph.nodes.length} nodes`);
+        } catch (error) {
+            console.log(`⚠️ Cache write error: ${error.message}`);
+        }
+    }
+
+    /**
+     * Build full workspace dependency graph
+     */
+    async buildFullGraph() {
+        console.log('📊 Analyzing workspace dependencies...');
+        
+        try {
+            const graph = await this.vscodeAnalyzer.analyzeWorkspace(this.workspaceRoot);
+            console.log(`✅ Built graph: ${graph.nodes.length} nodes, ${graph.edges.length} edges`);
+            return graph;
+        } catch (error) {
+            console.error('❌ Error building graph:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Find nodes matching PR files
+     */
+    findPRNodes(prFiles) {
+        const nodes = [];
+
+        for (const prFile of prFiles) {
+            // Normalize path (handle both / and \ separators)
+            const normalizedPath = prFile.path.replace(/\\/g, '/');
+            const fileName = path.basename(normalizedPath);
+
+            // Find in full graph by relativePath or fileName
+            const node = this.fullGraph.nodes.find(n => {
+                const nodeRelPath = (n.relativePath || '').replace(/\\/g, '/');
+                const nodeFileName = path.basename(nodeRelPath);
+                
+                // Try exact match first
+                if (nodeRelPath === normalizedPath) {
+                    return true;
+                }
+                
+                // Try end-of-path match (for cases where PR path is relative)
+                if (nodeRelPath.endsWith(normalizedPath)) {
+                    return true;
+                }
+                
+                // Try filename match as last resort
+                if (nodeFileName === fileName) {
+                    return true;
+                }
+                
+                return false;
+            });
+
+            if (node) {
+                // Clone node and add PR metadata
+                nodes.push({
+                    ...node,
+                    isPRFile: true,
+                    prStatus: prFile.status,
+                    prChanges: {
+                        additions: prFile.additions,
+                        deletions: prFile.deletions,
+                        total: prFile.additions + prFile.deletions
+                    },
+                    prPath: prFile.path
+                });
+                
+                console.log(`✅ Matched PR file: ${prFile.path} → ${node.relativePath} (${prFile.status})`);
+            } else if (prFile.status !== 'delete') {
+                // Handle new files not in cache (skip deleted files)
+                const newNode = this.createNodeForNewFile(prFile);
+                nodes.push(newNode);
+                console.log(`➕ Created node for new file: ${prFile.path}`);
+            } else {
+                console.log(`⚠️ Deleted file not in graph: ${prFile.path}`);
+            }
+        }
+
+        return nodes;
+    }
+
+    /**
+     * Create node for newly added file in PR
+     */
+    createNodeForNewFile(prFile) {
+        const filePath = prFile.path.replace(/\\/g, '/');
+        const fileName = path.basename(filePath);
+        const ext = path.extname(fileName);
+
+        // Determine category based on extension
+        let category = 'file';
+        if (['.ts', '.js', '.tsx', '.jsx'].includes(ext)) {
+            category = 'typescript';
+        } else if (['.html', '.css', '.scss'].includes(ext)) {
+            category = 'style';
+        } else if (['.json', '.xml', '.yaml', '.yml'].includes(ext)) {
+            category = 'config';
+        }
+
+        return {
+            id: `pr_new_${filePath.replace(/[^a-zA-Z0-9]/g, '_')}`,
+            fileName: fileName,
+            relativePath: filePath,
+            category: category,
+            isPRFile: true,
+            isNewFile: true,
+            prStatus: 'add',
+            prChanges: {
+                additions: prFile.additions,
+                deletions: 0,
+                total: prFile.additions
+            },
+            prPath: prFile.path,
+            metadata: {
+                isNewFile: true,
+                angularEntities: {}
+            }
+        };
+    }
+
+    /**
+     * Get dependencies of a node (files that this node imports)
+     */
+    getDependencies(nodeId) {
+        const edges = this.fullGraph.edges.filter(e => e.source === nodeId);
+        return edges.map(e => e.target);
+    }
+
+    /**
+     * Get dependents of a node (files that import this node)
+     */
+    getDependents(nodeId) {
+        const edges = this.fullGraph.edges.filter(e => e.target === nodeId);
+        return edges.map(e => e.source);
+    }
+
+    /**
+     * Build filtered graph with only relevant nodes
+     */
+    buildFilteredGraph(relevantNodeIds, prNodes) {
+        // Get all relevant nodes from full graph
+        const nodes = this.fullGraph.nodes
+            .filter(n => relevantNodeIds.has(n.id))
+            .map(node => {
+                // Check if this is a PR node
+                const prNode = prNodes.find(pn => pn.id === node.id);
+                if (prNode) {
+                    // Merge PR metadata
+                    return { ...node, ...prNode };
+                }
+                return { ...node };
+            });
+
+        // Get all edges between relevant nodes
+        const edges = this.fullGraph.edges.filter(e =>
+            relevantNodeIds.has(e.source) && relevantNodeIds.has(e.target)
+        );
+
+        // Classify nodes for better visualization
+        nodes.forEach(node => {
+            if (!node.isPRFile) {
+                // Determine if this is a dependency or dependent
+                const isDependency = edges.some(e => 
+                    prNodes.some(pn => pn.id === e.source) && e.target === node.id
+                );
+                const isDependent = edges.some(e => 
+                    prNodes.some(pn => pn.id === e.target) && e.source === node.id
+                );
+
+                if (isDependency && isDependent) {
+                    node.nodeType = 'both';
+                } else if (isDependency) {
+                    node.nodeType = 'dependency';
+                } else if (isDependent) {
+                    node.nodeType = 'dependent';
+                } else {
+                    node.nodeType = 'indirect';
+                }
+            } else {
+                node.nodeType = 'pr-file';
+            }
+        });
+
+        return { nodes, edges };
+    }
+
+    /**
+     * Get impact analysis for PR files
+     */
+    getImpactAnalysis(graph) {
+        const prNodes = graph.nodes.filter(n => n.isPRFile);
+        const dependencies = graph.nodes.filter(n => n.nodeType === 'dependency');
+        const dependents = graph.nodes.filter(n => n.nodeType === 'dependent');
+
+        return {
+            prFiles: prNodes.map(n => ({
+                path: n.relativePath,
+                status: n.prStatus,
+                changes: n.prChanges
+            })),
+            affectedFiles: {
+                dependencies: dependencies.map(n => n.relativePath),
+                dependents: dependents.map(n => n.relativePath),
+                total: dependencies.length + dependents.length
+            },
+            riskLevel: this.calculateRiskLevel(graph),
+            recommendations: this.generateRecommendations(graph)
+        };
+    }
+
+    /**
+     * Calculate risk level based on graph metrics
+     */
+    calculateRiskLevel(graph) {
+        const prNodes = graph.nodes.filter(n => n.isPRFile);
+        const dependents = graph.nodes.filter(n => n.nodeType === 'dependent');
+        
+        const totalChanges = prNodes.reduce((sum, n) => sum + (n.prChanges?.total || 0), 0);
+        const dependentCount = dependents.length;
+
+        if (dependentCount > 20 || totalChanges > 1000) {
+            return 'HIGH';
+        } else if (dependentCount > 10 || totalChanges > 500) {
+            return 'MEDIUM';
+        } else {
+            return 'LOW';
+        }
+    }
+
+    /**
+     * Generate recommendations based on graph analysis
+     */
+    generateRecommendations(graph) {
+        const recommendations = [];
+        const dependents = graph.nodes.filter(n => n.nodeType === 'dependent');
+        const prNodes = graph.nodes.filter(n => n.isPRFile);
+
+        if (dependents.length > 15) {
+            recommendations.push('High impact change - Consider notifying affected teams');
+        }
+
+        if (dependents.length > 0) {
+            recommendations.push(`Test ${dependents.length} dependent file(s) for regressions`);
+        }
+
+        const totalChanges = prNodes.reduce((sum, n) => sum + (n.prChanges?.total || 0), 0);
+        if (totalChanges > 500) {
+            recommendations.push('Large PR - Consider breaking into smaller changes');
+        }
+
+        const coreFiles = prNodes.filter(n => 
+            n.relativePath.includes('core') || 
+            n.relativePath.includes('shared') ||
+            n.relativePath.includes('common')
+        );
+        
+        if (coreFiles.length > 0) {
+            recommendations.push('Core module changes detected - Extra scrutiny recommended');
+        }
+
+        return recommendations;
+    }
+}
+
+module.exports = { PRDependencyAnalyzer };
+
+
+/***/ }),
+
+/***/ "./scripts/pr-file-fetcher.js":
+/*!************************************!*\
+  !*** ./scripts/pr-file-fetcher.js ***!
+  \************************************/
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+const { getTokenForPR, showTokenConfigurationHelp } = __webpack_require__(/*! ./review-common */ "./scripts/review-common.js");
+
+/**
+ * Unified PR file fetcher for all providers
+ * Reuses logic from review-pr.js for fetching file changes
+ */
+class PRFileFetcher {
+    /**
+     * Parse PR URL and extract information
+     * @param {string} prUrl - PR URL from user
+     * @returns {object} Parsed PR info
+     */
+    parsePRUrl(prUrl) {
+        // GitHub URL pattern
+        const githubPattern = /https:\/\/github\.com\/([^\/]+)\/([^\/]+)\/pull\/(\d+)/i;
+        const githubMatch = prUrl.match(githubPattern);
+
+        if (githubMatch) {
+            return {
+                repoType: 'github',
+                owner: githubMatch[1],
+                repo: githubMatch[2],
+                prId: githubMatch[3],
+                originalUrl: githubMatch[0]
+            };
+        }
+
+        // Azure DevOps URL pattern
+        const azurePattern = /https:\/\/dev\.azure\.com\/([^\/]+)\/([^\/]+)\/_git\/([^\/]+)\/pullrequest\/(\d+)/i;
+        const azureMatch = prUrl.match(azurePattern);
+
+        if (azureMatch) {
+            return {
+                repoType: 'azure',
+                organization: azureMatch[1],
+                project: azureMatch[2],
+                repository: azureMatch[3],
+                prId: azureMatch[4],
+                originalUrl: azureMatch[0]
+            };
+        }
+
+        // GitLab URL pattern
+        const gitlabPattern = /https:\/\/([^\/]+)\/(.+?)\/-\/merge_requests\/(\d+)/i;
+        const gitlabMatch = prUrl.match(gitlabPattern);
+
+        if (gitlabMatch) {
+            const gitlabHost = gitlabMatch[1];
+            const fullPath = gitlabMatch[2];
+            const pathParts = fullPath.split('/');
+            const repo = pathParts[pathParts.length - 1];
+            const owner = pathParts.slice(0, -1).join('/');
+
+            return {
+                repoType: 'gitlab',
+                gitlabHost: gitlabHost,
+                owner: owner,
+                repo: repo,
+                prId: gitlabMatch[3],
+                originalUrl: gitlabMatch[0]
+            };
+        }
+
+        throw new Error('Unsupported PR URL format. Supported: GitHub, Azure DevOps, GitLab');
+    }
+
+    /**
+     * Fetch file changes from PR URL
+     * @param {object} prInfo - Parsed PR info
+     * @returns {Promise<Array>} File change objects
+     */
+    async fetchFiles(prInfo) {
+        console.log(`🔍 Fetching files from ${prInfo.repoType} PR...`);
+
+        switch (prInfo.repoType) {
+            case 'github':
+                return this.fetchGitHubFiles(prInfo);
+            case 'azure':
+                return this.fetchAzureFiles(prInfo);
+            case 'gitlab':
+                return this.fetchGitLabFiles(prInfo);
+            default:
+                throw new Error(`Unsupported repo type: ${prInfo.repoType}`);
+        }
+    }
+
+    /**
+     * Fetch files from GitHub PR
+     */
+    async fetchGitHubFiles(prInfo) {
+        const { owner, repo, prId, originalUrl } = prInfo;
+
+        // Get token
+        const token = getTokenForPR(originalUrl);
+        if (!token) {
+            throw new Error(`GitHub token required for ${owner}/${repo}`);
+        }
+
+        // Fetch PR data
+        const prResponse = await this.makeGitHubRequest(
+            `https://api.github.com/repos/${owner}/${repo}/pulls/${prId}`,
+            token
+        );
+
+        if (!prResponse.success) {
+            throw new Error(`Failed to fetch GitHub PR: ${prResponse.error}`);
+        }
+
+        // Fetch files
+        const filesResponse = await this.makeGitHubRequest(
+            `https://api.github.com/repos/${owner}/${repo}/pulls/${prId}/files`,
+            token
+        );
+
+        if (!filesResponse.success) {
+            throw new Error(`Failed to fetch GitHub files: ${filesResponse.error}`);
+        }
+
+        const files = filesResponse.data;
+
+        // Normalize file structure
+        return files.map(file => this.normalizeFileChange({
+            path: file.filename,
+            status: file.status,
+            additions: file.additions || 0,
+            deletions: file.deletions || 0,
+            changes: file.changes || 0,
+            patch: file.patch || '',
+            previous_filename: file.previous_filename
+        }, 'github'));
+    }
+
+    /**
+     * Fetch files from Azure DevOps PR
+     */
+    async fetchAzureFiles(prInfo) {
+        const { organization, project, repository, prId, originalUrl } = prInfo;
+
+        // Get token
+        const token = getTokenForPR(originalUrl);
+        if (!token) {
+            throw new Error(`Azure DevOps token required for ${organization}`);
+        }
+
+        // Fetch PR details
+        const prUrl = `https://dev.azure.com/${organization}/${project}/_apis/git/repositories/${repository}/pullRequests/${prId}?api-version=7.0`;
+        const prResponse = await this.makeAzureRequest(prUrl, token);
+
+        if (!prResponse.success) {
+            throw new Error(`Failed to fetch Azure PR: ${prResponse.error}`);
+        }
+
+        // Get iterations to find latest
+        const iterationsUrl = `https://dev.azure.com/${organization}/${project}/_apis/git/repositories/${repository}/pullRequests/${prId}/iterations?api-version=7.0`;
+        const iterationsResponse = await this.makeAzureRequest(iterationsUrl, token);
+
+        if (!iterationsResponse.success || !iterationsResponse.data.value?.length) {
+            throw new Error('Failed to fetch Azure PR iterations');
+        }
+
+        const iterations = iterationsResponse.data.value;
+        const latestIteration = iterations[iterations.length - 1];
+
+        // Get file changes from latest iteration
+        const changesUrl = `https://dev.azure.com/${organization}/${project}/_apis/git/repositories/${repository}/pullRequests/${prId}/iterations/${latestIteration.id}/changes?api-version=7.0&$top=1000`;
+        const changesResponse = await this.makeAzureRequest(changesUrl, token);
+
+        if (!changesResponse.success || !changesResponse.data.changeEntries) {
+            throw new Error('Failed to fetch Azure file changes');
+        }
+
+        // Filter and normalize files
+        const files = changesResponse.data.changeEntries.filter(change => {
+            const filePath = change.item?.path || change.originalPath || '';
+            return filePath &&
+                filePath.includes('.') &&
+                !filePath.endsWith('/') &&
+                filePath.split('/').pop().includes('.') &&
+                !filePath.includes('/.git/');
+        });
+
+        return files.map(change => this.normalizeFileChange({
+            path: change.item?.path || change.originalPath,
+            status: change.changeType,
+            additions: 0, // Azure doesn't provide this directly
+            deletions: 0,
+            changes: 0
+        }, 'azure'));
+    }
+
+    /**
+     * Fetch files from GitLab MR
+     */
+    async fetchGitLabFiles(prInfo) {
+        const { gitlabHost, owner, repo, prId, originalUrl } = prInfo;
+
+        // Get token
+        const token = getTokenForPR(originalUrl);
+        if (!token) {
+            throw new Error(`GitLab token required for ${gitlabHost}`);
+        }
+
+        // Build project path
+        const projectPath = encodeURIComponent(`${owner}/${repo}`);
+
+        // Fetch MR details
+        const mrUrl = `https://${gitlabHost}/api/v4/projects/${projectPath}/merge_requests/${prId}`;
+        const mrResponse = await this.makeGitLabRequest(mrUrl, token);
+
+        if (!mrResponse.success) {
+            throw new Error(`Failed to fetch GitLab MR: ${mrResponse.error}`);
+        }
+
+        // Fetch changes
+        const changesUrl = `https://${gitlabHost}/api/v4/projects/${projectPath}/merge_requests/${prId}/changes`;
+        const changesResponse = await this.makeGitLabRequest(changesUrl, token);
+
+        if (!changesResponse.success || !changesResponse.data.changes) {
+            throw new Error('Failed to fetch GitLab changes');
+        }
+
+        const changes = changesResponse.data.changes;
+
+        return changes.map(change => this.normalizeFileChange({
+            path: change.new_path || change.old_path,
+            status: change.new_file ? 'added' :
+                change.deleted_file ? 'deleted' :
+                    change.renamed_file ? 'renamed' : 'modified',
+            additions: 0, // GitLab doesn't provide this in changes API
+            deletions: 0,
+            changes: 0,
+            old_path: change.old_path,
+            new_path: change.new_path
+        }, 'gitlab'));
+    }
+
+    /**
+     * Normalize file change object across providers
+     */
+    normalizeFileChange(file, provider) {
+        const statusMap = {
+            github: { added: 'add', removed: 'delete', modified: 'edit', renamed: 'rename' },
+            azure: { add: 'add', delete: 'delete', edit: 'edit', rename: 'rename', rename2: 'rename' },
+            gitlab: { added: 'add', deleted: 'delete', modified: 'edit', renamed: 'rename' }
+        };
+
+        const normalizedStatus = statusMap[provider][file.status.toLowerCase()] || file.status.toLowerCase();
+
+        return {
+            path: file.path,
+            status: normalizedStatus,
+            additions: file.additions || 0,
+            deletions: file.deletions || 0,
+            changes: file.changes || (file.additions + file.deletions),
+            patch: file.patch || '',
+            provider: provider,
+            oldPath: file.previous_filename || file.old_path,
+            newPath: file.new_path || file.path
+        };
+    }
+
+    /**
+     * Make GitHub API request
+     */
+    async makeGitHubRequest(url, token, method = 'GET', customHeaders = {}) {
+        const https = __webpack_require__(/*! https */ "https");
+        const urlObj = new URL(url);
+
+        return new Promise((resolve) => {
+            const headers = {
+                'User-Agent': 'AIDA-VSCode-Extension',
+                'Accept': 'application/vnd.github.v3+json',
+                ...customHeaders
+            };
+
+            if (token) {
+                headers['Authorization'] = `token ${token}`;
+            }
+
+            const options = {
+                hostname: urlObj.hostname,
+                port: 443,
+                path: urlObj.pathname + urlObj.search,
+                method: method,
+                headers: headers
+            };
+
+            const req = https.request(options, (res) => {
+                let data = '';
+
+                res.on('data', (chunk) => {
+                    data += chunk;
+                });
+
+                res.on('end', () => {
+                    try {
+                        if (res.statusCode >= 200 && res.statusCode < 300) {
+                            const parsed = JSON.parse(data);
+                            resolve({ success: true, data: parsed });
+                        } else {
+                            resolve({ success: false, error: `HTTP ${res.statusCode}: ${data}` });
+                        }
+                    } catch (error) {
+                        resolve({ success: false, error: `Parse error: ${error.message}` });
+                    }
+                });
+            });
+
+            req.on('error', (error) => {
+                resolve({ success: false, error: error.message });
+            });
+
+            req.setTimeout(15000, () => {
+                req.destroy();
+                resolve({ success: false, error: 'Request timeout' });
+            });
+
+            req.end();
+        });
+    }
+
+    /**
+     * Make Azure DevOps API request
+     */
+    async makeAzureRequest(url, token, method = 'GET') {
+        const https = __webpack_require__(/*! https */ "https");
+        const urlObj = new URL(url);
+
+        return new Promise((resolve) => {
+            const auth = Buffer.from(`:${token}`).toString('base64');
+
+            const options = {
+                hostname: urlObj.hostname,
+                port: 443,
+                path: urlObj.pathname + urlObj.search,
+                method: method,
+                headers: {
+                    'Authorization': `Basic ${auth}`,
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                }
+            };
+
+            const req = https.request(options, (res) => {
+                let data = '';
+
+                res.on('data', (chunk) => {
+                    data += chunk;
+                });
+
+                res.on('end', () => {
+                    try {
+                        if (res.statusCode >= 200 && res.statusCode < 300) {
+                            const parsed = JSON.parse(data);
+                            resolve({ success: true, data: parsed });
+                        } else {
+                            resolve({ success: false, error: `HTTP ${res.statusCode}: ${data}` });
+                        }
+                    } catch (error) {
+                        resolve({ success: false, error: `Parse error: ${error.message}` });
+                    }
+                });
+            });
+
+            req.on('error', (error) => {
+                resolve({ success: false, error: error.message });
+            });
+
+            req.setTimeout(15000, () => {
+                req.destroy();
+                resolve({ success: false, error: 'Request timeout' });
+            });
+
+            req.end();
+        });
+    }
+
+    /**
+     * Make GitLab API request
+     */
+    async makeGitLabRequest(url, token, method = 'GET') {
+        const https = __webpack_require__(/*! https */ "https");
+        const urlObj = new URL(url);
+
+        return new Promise((resolve) => {
+            const headers = {
+                'User-Agent': 'AIDA-VSCode-Extension',
+                'Accept': 'application/json'
+            };
+
+            if (token) {
+                headers['PRIVATE-TOKEN'] = token;
+            }
+
+            const options = {
+                hostname: urlObj.hostname,
+                port: 443,
+                path: urlObj.pathname + urlObj.search,
+                method: method,
+                rejectUnauthorized: false,
+                headers: headers
+            };
+
+            const req = https.request(options, (res) => {
+                let data = '';
+
+                res.on('data', (chunk) => {
+                    data += chunk;
+                });
+
+                res.on('end', () => {
+                    try {
+                        if (res.statusCode >= 200 && res.statusCode < 300) {
+                            const parsed = JSON.parse(data);
+                            resolve({ success: true, data: parsed });
+                        } else {
+                            resolve({ success: false, error: `HTTP ${res.statusCode}: ${data}` });
+                        }
+                    } catch (error) {
+                        resolve({ success: false, error: `Parse error: ${error.message}` });
+                    }
+                });
+            });
+
+            req.on('error', (error) => {
+                resolve({ success: false, error: error.message });
+            });
+
+            req.setTimeout(15000, () => {
+                req.destroy();
+                resolve({ success: false, error: 'Request timeout' });
+            });
+
+            req.end();
+        });
+    }
+}
+
+module.exports = { PRFileFetcher };
 
 
 /***/ }),

@@ -29,6 +29,14 @@ function initializeGraph() {
   const circularCount = detectCircularDependencies(graphData.nodes, graphData.edges);
   document.getElementById('circularCount').textContent = circularCount;
 
+  // Show PR legend if in PR mode
+  if (graphData.prMode) {
+    const prLegend = document.getElementById('prLegend');
+    if (prLegend) {
+      prLegend.style.display = 'flex';
+    }
+  }
+
   zoom = d3.zoom()
     .scaleExtent([0.2, 3])
     .on('zoom', function (event) {
@@ -78,10 +86,16 @@ function renderGraph() {
   const node = g.selectAll('.node-circle')
     .data(graphData.nodes)
     .enter().append('circle')
-    .attr('r', 6)
+    .attr('r', d => d.isPRFile ? 8 : 6) // Larger radius for PR files
     .attr('class', d => {
       let classes = 'node-circle';
-      if (d.entityType) {
+
+      // PR-specific styling takes priority
+      if (d.isPRFile && d.prStatus) {
+        classes += ' pr-file pr-status-' + d.prStatus;
+      } else if (d.nodeType && d.nodeType !== 'pr-file') {
+        classes += ' node-type-' + d.nodeType;
+      } else if (d.entityType) {
         classes += ' ' + d.entityType;
       } else {
         const fileName = (d.fileName || d.id || '').toLowerCase();
@@ -90,6 +104,7 @@ function renderGraph() {
         else if (fileName.includes('module')) classes += ' module';
         else if (fileName.includes('model')) classes += ' model';
       }
+
       return classes;
     })
     .on('click', (event, d) => {
@@ -113,10 +128,53 @@ function renderGraph() {
     })
     .on('mouseenter', (event, d) => {
       const tooltip = document.getElementById('nodeTooltip');
-      const entityInfo = d.displayName !== d.fileName ?
-        `<strong>${d.displayName}</strong> (${d.entityType})<br><small>${d.fileName}</small>` :
-        `<strong>${d.fileName}</strong><br><small>${d.relativePath}</small>`;
-      tooltip.innerHTML = entityInfo;
+
+      // Build tooltip content with PR info if available
+      let tooltipContent = '';
+
+      if (d.isPRFile && d.prStatus) {
+        const statusIcons = {
+          add: '➕',
+          edit: '✏️',
+          delete: '❌',
+          rename: '↔️'
+        };
+        const statusLabels = {
+          add: 'Added',
+          edit: 'Modified',
+          delete: 'Deleted',
+          rename: 'Renamed'
+        };
+
+        tooltipContent += `<div style="border-bottom: 2px solid #007acc; padding-bottom: 5px; margin-bottom: 5px;">`;
+        tooltipContent += `<strong style="color: #ffc107;">${statusIcons[d.prStatus]} PR File - ${statusLabels[d.prStatus]}</strong><br>`;
+
+        if (d.prChanges) {
+          tooltipContent += `<span style="color: #28a745;">+${d.prChanges.additions}</span> / `;
+          tooltipContent += `<span style="color: #dc3545;">-${d.prChanges.deletions}</span>`;
+        }
+        tooltipContent += `</div>`;
+      }
+
+      if (d.displayName !== d.fileName) {
+        tooltipContent += `<strong>${d.displayName}</strong> (${d.entityType})<br>`;
+        tooltipContent += `<small>${d.fileName}</small>`;
+      } else {
+        tooltipContent += `<strong>${d.fileName}</strong><br>`;
+        tooltipContent += `<small>${d.relativePath}</small>`;
+      }
+
+      if (d.nodeType && !d.isPRFile) {
+        const typeLabels = {
+          dependency: '📦 Dependency',
+          dependent: '🔗 Dependent',
+          both: '🔄 Dep + Dependent',
+          indirect: '🔀 Indirect'
+        };
+        tooltipContent += `<br><span style="color: #17a2b8;">${typeLabels[d.nodeType] || ''}</span>`;
+      }
+
+      tooltip.innerHTML = tooltipContent;
 
       // Temporarily show tooltip to measure size (but keep invisible)
       tooltip.style.visibility = 'hidden';
@@ -311,6 +369,35 @@ function showNodeDetails(node) {
 
   const html = `
         <div class="module-title">${node.fileName || node.id}</div>
+        
+        ${node.isPRFile && node.prStatus ? `
+        <div class="detail-section" style="background: linear-gradient(135deg, #2d2d30 0%, #1a1a1a 100%); border-left: 4px solid ${getPRStatusColor(node.prStatus)};">
+            <h4 style="color: ${getPRStatusColor(node.prStatus)};">
+                ${getPRStatusIcon(node.prStatus)} PR File - ${getPRStatusLabel(node.prStatus)}
+            </h4>
+            ${node.prChanges ? `
+            <div style="display: flex; gap: 20px; font-size: 16px; font-weight: bold; margin-top: 10px;">
+                <span style="color: #28a745;">+${node.prChanges.additions} additions</span>
+                <span style="color: #dc3545;">-${node.prChanges.deletions} deletions</span>
+            </div>
+            ` : ''}
+            ${node.prPath ? `
+            <div style="margin-top: 10px; font-size: 11px; color: #888;">
+                PR Path: ${node.prPath}
+            </div>
+            ` : ''}
+        </div>
+        ` : ''}
+        
+        ${node.nodeType && !node.isPRFile ? `
+        <div class="detail-section" style="border-left: 4px solid #17a2b8;">
+            <h4 style="color: #17a2b8;">${getNodeTypeLabel(node.nodeType)}</h4>
+            <div style="font-size: 12px; color: #aaa;">
+                ${getNodeTypeDescription(node.nodeType)}
+            </div>
+        </div>
+        ` : ''}
+        
         <div class="detail-section">
             <h4>📂 File Path</h4>
             <div style="word-break: break-all; font-size: 0.9em; color: #ccc;">${node.relativePath || 'Unknown path'}</div>
@@ -720,6 +807,57 @@ window.addEventListener('load', function () {
   populateAutocomplete();
   setupSearchInput();
 });
+
+// PR-specific helper functions
+function getPRStatusColor(status) {
+  const colors = {
+    add: '#28a745',
+    edit: '#ffc107',
+    delete: '#dc3545',
+    rename: '#17a2b8'
+  };
+  return colors[status] || '#6c757d';
+}
+
+function getPRStatusIcon(status) {
+  const icons = {
+    add: '➕',
+    edit: '✏️',
+    delete: '❌',
+    rename: '↔️'
+  };
+  return icons[status] || '📄';
+}
+
+function getPRStatusLabel(status) {
+  const labels = {
+    add: 'Added',
+    edit: 'Modified',
+    delete: 'Deleted',
+    rename: 'Renamed'
+  };
+  return labels[status] || 'Unknown';
+}
+
+function getNodeTypeLabel(nodeType) {
+  const labels = {
+    dependency: '📦 Dependency',
+    dependent: '🔗 Dependent',
+    both: '🔄 Dependency & Dependent',
+    indirect: '🔀 Indirect Relation'
+  };
+  return labels[nodeType] || 'File';
+}
+
+function getNodeTypeDescription(nodeType) {
+  const descriptions = {
+    dependency: 'This file is imported by PR files',
+    dependent: 'This file imports PR files',
+    both: 'This file both imports and is imported by PR files',
+    indirect: 'This file has an indirect relationship with PR files'
+  };
+  return descriptions[nodeType] || '';
+}
 
 function analyzeWithAI(nodeId) {
   console.log('🤖 AI Analysis clicked for nodeId:', nodeId);

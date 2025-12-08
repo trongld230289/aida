@@ -6,6 +6,10 @@ const fs = require('fs');
 const { VSCodeApiDependencyAnalyzer } = require('./dependency-graph/vscode-api-analyzer');
 const { SymbolAnalyzer } = require('./dependency-graph/symbol-analyzer');
 
+// Import PR analysis modules
+const { PRFileFetcher } = require('./pr-file-fetcher');
+const { PRDependencyAnalyzer } = require('./pr-dependency-analyzer');
+
 // Cache management
 const CACHE_VERSION = '1.0';
 let cacheFilePath = null;
@@ -32,9 +36,16 @@ function initializeDependencyGraph(context) {
             // Set cache file path
             cacheFilePath = path.join(workspaceRoot, '.vscode', 'dependency-cache.json');
             
+            const userMessage = request.prompt.trim();
+            
+            // ✅ NEW: Check if message contains PR URL
+            if (isPRUrl(userMessage)) {
+                await handlePRDependencyAnalysis(userMessage, stream, token, workspaceRoot);
+                return;
+            }
+            
             // Check if user explicitly requested re-analysis
-            const userMessage = request.prompt.toLowerCase();
-            const isReAnalyzeRequest = userMessage.includes('re-analyze') || userMessage.includes('reanalyze');
+            const isReAnalyzeRequest = userMessage.toLowerCase().includes('re-analyze') || userMessage.toLowerCase().includes('reanalyze');
             
             // Check for existing cache
             const cacheExists = await checkCacheExists();
@@ -936,6 +947,225 @@ function getNodeDisplayName(node, angularEntities) {
         name: node.fileName || 'unknown', 
         type: 'file' 
     };
+}
+
+/**
+ * Check if message contains PR URL
+ */
+function isPRUrl(message) {
+    const patterns = [
+        /github\.com\/[^\/]+\/[^\/]+\/pull\/\d+/i,
+        /dev\.azure\.com\/[^\/]+\/[^\/]+\/_git\/[^\/]+\/pullrequest\/\d+/i,
+        /gitlab\.com\/.+\/-\/merge_requests\/\d+/i
+    ];
+    return patterns.some(pattern => pattern.test(message));
+}
+
+/**
+ * Handle PR dependency analysis workflow
+ */
+async function handlePRDependencyAnalysis(prUrl, stream, token, workspaceRoot) {
+    try {
+        stream.markdown('## 🔍 PR Dependency Analysis\n\n');
+        stream.markdown(`📌 **Analyzing PR:** ${prUrl}\n\n`);
+        
+        // Step 1: Parse PR URL
+        const fetcher = new PRFileFetcher();
+        const prInfo = fetcher.parsePRUrl(prUrl);
+        
+        stream.markdown(`✅ Detected **${prInfo.repoType.toUpperCase()}** PR\n\n`);
+        
+        // Step 2: Fetch PR files
+        stream.markdown('⏳ Fetching PR file changes...\n\n');
+        
+        let prFiles;
+        try {
+            prFiles = await fetcher.fetchFiles(prInfo);
+        } catch (error) {
+            stream.markdown(`❌ **Error fetching PR files:** ${error.message}\n\n`);
+            
+            if (error.message.includes('token')) {
+                stream.markdown('💡 **Setup Required:**\n\n');
+                stream.markdown(`- Configure your ${prInfo.repoType.toUpperCase()} token in settings\n`);
+                stream.markdown('- Check AIDA documentation for token setup instructions\n\n');
+            }
+            
+            return;
+        }
+        
+        if (!prFiles || prFiles.length === 0) {
+            stream.markdown('❌ No files found in PR\n\n');
+            return;
+        }
+        
+        stream.markdown(`✅ Found **${prFiles.length} files** in PR:\n\n`);
+        
+        // Show file summary
+        const added = prFiles.filter(f => f.status === 'add').length;
+        const modified = prFiles.filter(f => f.status === 'edit').length;
+        const deleted = prFiles.filter(f => f.status === 'delete').length;
+        const renamed = prFiles.filter(f => f.status === 'rename').length;
+        
+        stream.markdown(`- ➕ Added: ${added}\n`);
+        stream.markdown(`- ✏️ Modified: ${modified}\n`);
+        stream.markdown(`- ❌ Deleted: ${deleted}\n`);
+        if (renamed > 0) stream.markdown(`- ↔️ Renamed: ${renamed}\n`);
+        stream.markdown('\n');
+        
+        // Step 3: Analyze dependencies for PR files
+        stream.markdown('🔗 Analyzing dependencies and dependents...\n\n');
+        
+        const analyzer = new PRDependencyAnalyzer(workspaceRoot);
+        let graph;
+        
+        try {
+            graph = await analyzer.analyzePRFiles(prFiles);
+        } catch (error) {
+            stream.markdown(`❌ **Analysis Error:** ${error.message}\n\n`);
+            
+            if (error.message.includes('cache') || error.message.includes('graph')) {
+                stream.markdown('💡 **Tip:** Run `@dependency` first to build the workspace dependency cache\n\n');
+            }
+            
+            return;
+        }
+        
+        // Step 4: Show summary
+        const summary = graph.prSummary;
+        stream.markdown('✨ **Analysis Complete!**\n\n');
+        stream.markdown('📊 **Impact Summary:**\n\n');
+        stream.markdown(`- PR Files: ${summary.matchedNodes}/${summary.totalPRFiles}\n`);
+        stream.markdown(`- Dependencies: ${summary.totalDependencies}\n`);
+        stream.markdown(`- Dependents: ${summary.totalDependents}\n`);
+        stream.markdown(`- Total Graph Nodes: ${summary.totalNodes}\n`);
+        stream.markdown(`- Total Changes: +${summary.totalAdditions}/-${summary.totalDeletions}\n\n`);
+        
+        // Get impact analysis
+        const impact = analyzer.getImpactAnalysis(graph);
+        stream.markdown(`🎯 **Risk Level:** ${impact.riskLevel}\n\n`);
+        
+        if (impact.recommendations.length > 0) {
+            stream.markdown('💡 **Recommendations:**\n\n');
+            impact.recommendations.forEach(rec => {
+                stream.markdown(`- ${rec}\n`);
+            });
+            stream.markdown('\n');
+        }
+        
+        // Step 5: Display graph
+        stream.markdown('🎨 Opening graph viewer...\n\n');
+        
+        await createPRGraphWebview(graph, prInfo, summary);
+        
+        stream.markdown('✅ **Graph viewer opened!** Check the new tab.\n\n');
+        
+    } catch (error) {
+        console.error('❌ PR dependency analysis error:', error);
+        stream.markdown(`❌ **Unexpected Error:** ${error.message}\n\n`);
+        stream.markdown('Please check the console for details.\n\n');
+    }
+}
+
+/**
+ * Create webview for PR dependency graph
+ */
+async function createPRGraphWebview(graph, prInfo, summary) {
+    try {
+        const panel = vscode.window.createWebviewPanel(
+            'prDependencyGraph',
+            `PR Dependency Graph - ${prInfo.repoType} #${prInfo.prId}`,
+            vscode.ViewColumn.One,
+            {
+                enableScripts: true,
+                retainContextWhenHidden: true
+            }
+        );
+        
+        // Generate HTML with PR-enhanced graph
+        const html = generatePRGraphWebviewHtml(graph, summary, prInfo);
+        panel.webview.html = html;
+        
+        // Handle messages from webview
+        panel.webview.onDidReceiveMessage(
+            async message => {
+                await handleGraphWebviewMessage(message, panel, graph);
+            },
+            undefined,
+            extensionContext.subscriptions
+        );
+        
+    } catch (error) {
+        console.error('❌ Error creating PR graph webview:', error);
+        vscode.window.showErrorMessage(`Failed to create graph viewer: ${error.message}`);
+    }
+}
+
+/**
+ * Generate HTML for PR dependency graph
+ */
+function generatePRGraphWebviewHtml(graph, summary, prInfo) {
+    const extensionPath = extensionContext ? extensionContext.extensionPath : __dirname;
+    
+    // Read HTML template
+    const htmlTemplatePath = path.join(extensionPath, 'scripts', 'dependency-graph', 'graph-view.html');
+    let htmlTemplate = fs.readFileSync(htmlTemplatePath, 'utf8');
+    
+    // Read TypeScript script
+    const scriptPath = path.join(extensionPath, 'scripts', 'dependency-graph', 'graph-view.ts');
+    let scriptContent = fs.readFileSync(scriptPath, 'utf8');
+    
+    // Prepare PR-enhanced graph data
+    const graphDataJson = JSON.stringify({
+        nodes: graph.nodes.map(node => {
+            const angularEntities = node.metadata?.angularEntities || {};
+            const primaryEntity = getNodeDisplayName(node, angularEntities);
+            
+            return {
+                id: node.id,
+                fileName: node.fileName || 'unknown',
+                relativePath: node.relativePath || '',
+                category: node.category || 'file',
+                displayName: primaryEntity.name,
+                entityType: primaryEntity.type,
+                entities: {
+                    components: angularEntities.components || [],
+                    services: angularEntities.services || [],
+                    modules: angularEntities.modules || [],
+                    models: angularEntities.models || [],
+                    interfaces: angularEntities.interfaces || []
+                },
+                // PR-specific metadata
+                isPRFile: node.isPRFile || false,
+                prStatus: node.prStatus,
+                prChanges: node.prChanges,
+                nodeType: node.nodeType || 'file'
+            };
+        }),
+        edges: graph.edges,
+        // Add PR metadata
+        prMode: true,
+        prInfo: {
+            repoType: prInfo.repoType,
+            prId: prInfo.prId,
+            summary: summary
+        }
+    });
+    
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath || '';
+    const searchTerm = `PR #${prInfo.prId}`;
+    
+    // Replace placeholders
+    htmlTemplate = htmlTemplate.replace('{{SEARCH_TERM}}', searchTerm);
+    htmlTemplate = htmlTemplate.replace('{{NODE_COUNT}}', graph.nodes.length);
+    
+    scriptContent = scriptContent.replace('__GRAPH_DATA__', graphDataJson);
+    scriptContent = scriptContent.replace('__SEARCH_TERM__', JSON.stringify(searchTerm));
+    scriptContent = scriptContent.replace('__WORKSPACE_ROOT__', JSON.stringify(workspaceRoot));
+    
+    // Inject script into HTML
+    htmlTemplate = htmlTemplate.replace('/*__GRAPH_SCRIPT__*/', scriptContent);
+    
+    return htmlTemplate;
 }
 
 
