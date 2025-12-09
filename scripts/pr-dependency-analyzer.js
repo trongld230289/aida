@@ -36,14 +36,57 @@ class PRDependencyAnalyzer {
         const prNodes = this.findPRNodes(prFiles);
         console.log(`✅ Matched ${prNodes.length} PR files to graph nodes`);
 
-        // Step 3: Scan dependencies/dependents for each PR node
+        // Step 3: Extract changed symbols for MODIFIED files
+        // Store changedSymbols in Map<nodeId, symbols[]> for reuse by Deep Impact
+        const nodeChangedSymbols = new Map();
+
+        for (const node of prNodes) {
+            if (node.prStatus === 'edit' && node.prPatch) {
+                // Modified file: extract changed symbols from patch
+                const changedSymbols = this.extractChangedSymbols(node.prPatch);
+                
+                if (changedSymbols.length === 0) {
+                    console.log(`⚠️ No changed symbols extracted for: ${node.prPath}`);
+                    // Don't fallback - if extraction fails, log clearly
+                    nodeChangedSymbols.set(node.id, []);
+                } else {
+                    console.log(`✅ Extracted ${changedSymbols.length} changed symbols from: ${node.prPath}`);
+                    console.log(`   Symbols: ${changedSymbols.join(', ')}`);
+                    nodeChangedSymbols.set(node.id, changedSymbols);
+                }
+                
+                // Store in node for Deep Impact
+                node.changedSymbols = changedSymbols;
+            } else if (node.prStatus === 'rename' && node.prPatch) {
+                // Renamed + modified file: extract changed symbols if patch exists
+                const changedSymbols = this.extractChangedSymbols(node.prPatch);
+                
+                if (changedSymbols.length > 0) {
+                    console.log(`✅ Extracted ${changedSymbols.length} changed symbols from renamed file: ${node.prPath}`);
+                    console.log(`   Symbols: ${changedSymbols.join(', ')}`);
+                    nodeChangedSymbols.set(node.id, changedSymbols);
+                    node.changedSymbols = changedSymbols;
+                } else {
+                    // Pure rename (no content changes): full file impact (all dependents need import path updates)
+                    console.log(`📄 Full file impact for pure rename: ${node.prPath}`);
+                    node.changedSymbols = null;
+                }
+            } else {
+                // New, deleted, or pure rename file: full file impact (no symbol filtering)
+                console.log(`📄 Full file impact for ${node.prStatus}: ${node.prPath}`);
+                node.changedSymbols = null; // null indicates "scan all symbols"
+            }
+        }
+
+        // Step 4: Scan dependencies/dependents for each PR node
         const relevantNodeIds = new Set(prNodes.map(n => n.id));
         
         let totalDeps = 0;
         let totalDependents = 0;
+        let filteredDependents = 0;
 
         for (const node of prNodes) {
-            // Get direct dependencies
+            // Get direct dependencies (always include all)
             const deps = this.getDependencies(node.id);
             deps.forEach(depId => {
                 relevantNodeIds.add(depId);
@@ -51,25 +94,58 @@ class PRDependencyAnalyzer {
             });
             
             // Get direct dependents
-            const dependents = this.getDependents(node.id);
-            dependents.forEach(depId => {
-                relevantNodeIds.add(depId);
-                totalDependents++;
-            });
+            const allDependents = this.getDependents(node.id);
+            
+            if ((node.prStatus === 'edit' || node.prStatus === 'rename') && node.changedSymbols && node.changedSymbols.length > 0) {
+                // Modified/renamed file with changed symbols: filter dependents by symbol usage
+                console.log(`🔎 Filtering ${allDependents.length} dependents for ${node.prStatus} file: ${node.prPath}`);
+                
+                for (const depId of allDependents) {
+                    const depNode = this.fullGraph.nodes.find(n => n.id === depId);
+                    if (!depNode) continue;
+
+                    // Check if dependent uses ANY changed symbol
+                    const usesChangedSymbol = await this.fileUsesChangedSymbols(
+                        depNode.relativePath,
+                        node.relativePath,
+                        node.changedSymbols
+                    );
+
+                    if (usesChangedSymbol) {
+                        relevantNodeIds.add(depId);
+                        totalDependents++;
+                        filteredDependents++;
+                        console.log(`   ✅ Dependent uses changed symbols: ${depNode.relativePath}`);
+                    } else {
+                        console.log(`   ⏭️ Skipping dependent (no symbol usage): ${depNode.relativePath}`);
+                    }
+                }
+            } else {
+                // New/deleted/pure-rename file OR modified with no symbols: include all dependents
+                allDependents.forEach(depId => {
+                    relevantNodeIds.add(depId);
+                    totalDependents++;
+                });
+                console.log(`✅ Included all ${allDependents.length} dependents for ${node.prStatus}: ${node.prPath}`);
+            }
         }
 
         console.log(`📊 Found ${totalDeps} dependencies and ${totalDependents} dependents`);
+        if (filteredDependents > 0) {
+            console.log(`📊 Filtered dependents: ${filteredDependents} (symbol-level filtering applied)`);
+        }
         console.log(`📊 Total relevant nodes: ${relevantNodeIds.size}`);
 
-        // Step 4: Build filtered graph
-        const filteredGraph = this.buildFilteredGraph(relevantNodeIds, prNodes);
+        // Step 5: Build filtered graph
+        const filteredGraph = this.buildFilteredGraph(relevantNodeIds, prNodes, nodeChangedSymbols);
 
-        // Step 5: Add PR summary
+        // Step 6: Add PR summary
         filteredGraph.prSummary = {
             totalPRFiles: prFiles.length,
             matchedNodes: prNodes.length,
             totalDependencies: totalDeps,
             totalDependents: totalDependents,
+            filteredDependents: filteredDependents,
             totalNodes: filteredGraph.nodes.length,
             totalEdges: filteredGraph.edges.length,
             addedFiles: prFiles.filter(f => f.status === 'add').length,
@@ -190,7 +266,8 @@ class PRDependencyAnalyzer {
                         deletions: prFile.deletions,
                         total: prFile.additions + prFile.deletions
                     },
-                    prPath: prFile.path
+                    prPath: prFile.path,
+                    prPatch: prFile.patch || null // Add patch data for symbol extraction
                 });
                 
                 console.log(`✅ Matched PR file: ${prFile.path} → ${node.relativePath} (${prFile.status})`);
@@ -239,6 +316,7 @@ class PRDependencyAnalyzer {
                 total: prFile.additions
             },
             prPath: prFile.path,
+            prPatch: prFile.patch || null, // Add patch data
             metadata: {
                 isNewFile: true,
                 angularEntities: {}
@@ -265,7 +343,7 @@ class PRDependencyAnalyzer {
     /**
      * Build filtered graph with only relevant nodes
      */
-    buildFilteredGraph(relevantNodeIds, prNodes) {
+    buildFilteredGraph(relevantNodeIds, prNodes, nodeChangedSymbols = new Map()) {
         // Get all relevant nodes from full graph
         const nodes = this.fullGraph.nodes
             .filter(n => relevantNodeIds.has(n.id))
@@ -273,8 +351,15 @@ class PRDependencyAnalyzer {
                 // Check if this is a PR node
                 const prNode = prNodes.find(pn => pn.id === node.id);
                 if (prNode) {
-                    // Merge PR metadata
-                    return { ...node, ...prNode };
+                    // Merge PR metadata and add changedSymbols if available
+                    const merged = { ...node, ...prNode };
+                    
+                    // Add changedSymbols from Map (for Deep Impact reuse)
+                    if (nodeChangedSymbols.has(node.id)) {
+                        merged.changedSymbols = nodeChangedSymbols.get(node.id);
+                    }
+                    
+                    return merged;
                 }
                 return { ...node };
             });
@@ -387,6 +472,150 @@ class PRDependencyAnalyzer {
         }
 
         return recommendations;
+    }
+
+    /**
+     * Extract changed symbols from unified diff patch
+     * Extracts ALL identifiers from added/modified lines (not just definitions)
+     */
+    extractChangedSymbols(patch) {
+        if (!patch) {
+            return [];
+        }
+
+        const symbols = new Set();
+        
+        // JavaScript/TypeScript keywords to filter out
+        const keywords = new Set([
+            'const', 'let', 'var', 'function', 'class', 'interface', 'type', 'enum',
+            'import', 'export', 'from', 'default', 'as', 'return', 'if', 'else',
+            'for', 'while', 'do', 'switch', 'case', 'break', 'continue', 'try',
+            'catch', 'finally', 'throw', 'new', 'this', 'super', 'extends',
+            'implements', 'public', 'private', 'protected', 'static', 'readonly',
+            'async', 'await', 'void', 'null', 'undefined', 'true', 'false',
+            'typeof', 'instanceof', 'in', 'of', 'delete', 'yield', 'with'
+        ]);
+
+        const lines = patch.split('\n');
+        
+        for (const line of lines) {
+            // Only process added or modified lines
+            if (!line.startsWith('+') || line.startsWith('+++')) {
+                continue;
+            }
+
+            // Remove the '+' prefix
+            const codeLine = line.substring(1);
+
+            // Extract ALL identifiers (variables, functions, classes, properties, etc.)
+            // Match: word characters, optionally followed by property access
+            const identifierPattern = /\b([a-zA-Z_$][a-zA-Z0-9_$]*)\b/g;
+            let match;
+            
+            while ((match = identifierPattern.exec(codeLine)) !== null) {
+                const identifier = match[1];
+                
+                // Filter out keywords and very short names (likely false positives)
+                if (!keywords.has(identifier) && identifier.length > 1) {
+                    symbols.add(identifier);
+                }
+            }
+        }
+
+        return Array.from(symbols);
+    }
+
+    /**
+     * Check if a dependent file uses any of the changed symbols from a PR file
+     * @param {string} dependentPath - Path to the dependent file
+     * @param {string} prFilePath - Path to the PR file
+     * @param {string[]} changedSymbols - List of changed symbols to check
+     * @returns {Promise<boolean>} - True if the file uses any changed symbol
+     */
+    async fileUsesChangedSymbols(dependentPath, prFilePath, changedSymbols) {
+        if (!changedSymbols || changedSymbols.length === 0) {
+            return false;
+        }
+
+        try {
+            // First check: Does dependent import from PR file?
+            const importsFile = await this.fileImportsFile(dependentPath, prFilePath);
+            if (!importsFile) {
+                // No import relationship, so can't use changed symbols
+                return false;
+            }
+
+            // Second check: Read dependent file and check if it uses any changed symbols
+            const fullDependentPath = path.join(this.workspaceRoot, dependentPath);
+            
+            if (!fs.existsSync(fullDependentPath)) {
+                return false;
+            }
+
+            const content = fs.readFileSync(fullDependentPath, 'utf8');
+            
+            // Check if any changed symbol appears in the file
+            // Use word boundaries to avoid partial matches
+            for (const symbol of changedSymbols) {
+                const symbolPattern = new RegExp(`\\b${symbol}\\b`);
+                if (symbolPattern.test(content)) {
+                    return true;
+                }
+            }
+
+            return false;
+        } catch (error) {
+            console.error(`Error checking symbol usage in ${dependentPath}:`, error.message);
+            return false;
+        }
+    }
+
+    /**
+     * Check if a file imports from another file
+     * @param {string} importerPath - Path to the file doing the importing
+     * @param {string} importedPath - Path to the file being imported
+     * @returns {Promise<boolean>} - True if there's an import relationship
+     */
+    async fileImportsFile(importerPath, importedPath) {
+        try {
+            const fullImporterPath = path.join(this.workspaceRoot, importerPath);
+            
+            if (!fs.existsSync(fullImporterPath)) {
+                return false;
+            }
+
+            const content = fs.readFileSync(fullImporterPath, 'utf8');
+            
+            // Normalize paths for comparison (handle both / and \)
+            const normalizedImported = importedPath.replace(/\\/g, '/').replace(/\.[^.]+$/, ''); // Remove extension
+            
+            // Check for import statements
+            // Match: import ... from '...'  or  require('...')
+            const importPattern = /(?:import\s+.*?\s+from\s+['"]([^'"]+)['"]|require\s*\(\s*['"]([^'"]+)['"]\s*\))/g;
+            let match;
+            
+            while ((match = importPattern.exec(content)) !== null) {
+                const importPath = (match[1] || match[2]).replace(/\\/g, '/');
+                
+                // Check if the import path matches the imported file
+                if (importPath.includes(normalizedImported) || normalizedImported.includes(importPath)) {
+                    return true;
+                }
+                
+                // Also check filename match
+                const importFileName = path.basename(importPath, path.extname(importPath));
+                const importedFileName = path.basename(normalizedImported, path.extname(normalizedImported));
+                
+                if (importFileName === importedFileName) {
+                    return true;
+                }
+            }
+
+            return false;
+        } catch (error) {
+            console.error(`Error checking import relationship ${importerPath} → ${importedPath}:`, error.message);
+            return false;
+        }
     }
 }
 

@@ -1138,6 +1138,7 @@ function generatePRGraphWebviewHtml(graph, summary, prInfo) {
                 isPRFile: node.isPRFile || false,
                 prStatus: node.prStatus,
                 prChanges: node.prChanges,
+                changedSymbols: node.changedSymbols, // Add changed symbols
                 nodeType: node.nodeType || 'file'
             };
         }),

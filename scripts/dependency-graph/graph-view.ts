@@ -315,13 +315,8 @@ function updateNodeStyles() {
 
 function showNodeDetails(node) {
   console.log('showNodeDetails called with:', node);
-  const detailView = document.getElementById('detailView');
 
-  if (!detailView) {
-    console.error('Detail view element not found!');
-    return;
-  }
-
+  // Log full node JSON with dependencies/dependents
   const dependencies = graphData.edges
     .filter(edge => {
       const sourceId = edge.source.id || edge.source;
@@ -344,8 +339,52 @@ function showNodeDetails(node) {
     })
     .filter(n => n);
 
+  // 🔍 FULL JSON LOG with dependencies/dependents
+  console.log('📊 FULL NODE DETAIL JSON:', {
+    node: {
+      id: node.id,
+      fileName: node.fileName,
+      relativePath: node.relativePath,
+      category: node.category,
+      displayName: node.displayName,
+      entityType: node.entityType,
+      isPRFile: node.isPRFile,
+      prStatus: node.prStatus,
+      prChanges: node.prChanges,
+      changedSymbols: node.changedSymbols,
+      changedSymbolsCount: node.changedSymbols?.length || 0,
+      nodeType: node.nodeType,
+      entities: node.entities
+    },
+    dependencies: dependencies.map(d => ({
+      id: d.id,
+      fileName: d.fileName,
+      relativePath: d.relativePath,
+      category: d.category,
+      isPRFile: d.isPRFile
+    })),
+    dependents: dependents.map(d => ({
+      id: d.id,
+      fileName: d.fileName,
+      relativePath: d.relativePath,
+      category: d.category,
+      isPRFile: d.isPRFile
+    })),
+    stats: {
+      dependenciesCount: dependencies.length,
+      dependentsCount: dependents.length
+    }
+  });
+
   console.log('Dependencies found:', dependencies.length);
   console.log('Dependents found:', dependents.length);
+
+  const detailView = document.getElementById('detailView');
+
+  if (!detailView) {
+    console.error('Detail view element not found!');
+    return;
+  }
 
   let dependenciesHtml = '';
   dependencies.forEach(dep => {
