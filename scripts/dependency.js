@@ -998,7 +998,18 @@ async function handlePRDependencyAnalysis(prUrl, stream, token, workspaceRoot) {
             return;
         }
         
-        stream.markdown(`✅ Found **${prFiles.length} files** in PR:\n\n`);
+        // 🧪 TEST: Filter to specific files for debugging
+        prFiles = prFiles.filter(f => 
+            f.path.includes('constants.ts') || 
+            f.path.includes('message-resources.ts')
+        );
+        
+        if (prFiles.length === 0) {
+            stream.markdown('⚠️ No test files found in PR\n\n');
+            return;
+        }
+        
+        stream.markdown(`✅ Found **${prFiles.length} files** in PR (filtered for testing):\n\n`);
         
         // Show file summary
         const added = prFiles.filter(f => f.status === 'add').length;
@@ -1030,34 +1041,91 @@ async function handlePRDependencyAnalysis(prUrl, stream, token, workspaceRoot) {
             return;
         }
         
-        // Step 4: Show summary
-        const summary = graph.prSummary;
-        stream.markdown('✨ **Analysis Complete!**\n\n');
-        stream.markdown('📊 **Impact Summary:**\n\n');
-        stream.markdown(`- PR Files: ${summary.matchedNodes}/${summary.totalPRFiles}\n`);
-        stream.markdown(`- Dependencies: ${summary.totalDependencies}\n`);
-        stream.markdown(`- Dependents: ${summary.totalDependents}\n`);
-        stream.markdown(`- Total Graph Nodes: ${summary.totalNodes}\n`);
-        stream.markdown(`- Total Changes: +${summary.totalAdditions}/-${summary.totalDeletions}\n\n`);
+        // Step 4: Show extracted symbols with impact analysis
+        stream.markdown('✨ **Symbol Extraction Results:**\n\n');
         
-        // Get impact analysis
-        const impact = analyzer.getImpactAnalysis(graph);
-        stream.markdown(`🎯 **Risk Level:** ${impact.riskLevel}\n\n`);
+        const prNodesWithSymbols = graph.nodes.filter(n => n.isPRFile);
         
-        if (impact.recommendations.length > 0) {
-            stream.markdown('💡 **Recommendations:**\n\n');
-            impact.recommendations.forEach(rec => {
-                stream.markdown(`- ${rec}\n`);
-            });
+        if (prNodesWithSymbols.length === 0) {
+            stream.markdown('ℹ️ No PR files found\n\n');
+        }
+        
+        let totalSymbols = 0;
+        const symbolToDependentsMap = graph.symbolToDependentsMap || new Map();
+        
+        for (const prNode of prNodesWithSymbols) {
+            stream.markdown(`📄 **File:** ${prNode.prPath}\n\n`);
+            
+            if (!prNode.changedSymbols || prNode.changedSymbols.length === 0) {
+                stream.markdown('  ℹ️ No symbols extracted\n\n');
+                continue;
+            }
+            
+            stream.markdown(`🔤 **Symbols (${prNode.changedSymbols.length}):**\n\n`);
+            
+            for (const symbol of prNode.changedSymbols) {
+                // Handle both string and object formats
+                const symbolName = typeof symbol === 'string' ? symbol : symbol.fullName;
+                const symbolType = typeof symbol === 'object' ? symbol.type : 'unknown';
+                
+                stream.markdown(`  - \`${symbolName}\` _(${symbolType})_`);
+                
+                // Show impacted files for this symbol
+                const impactedFiles = symbolToDependentsMap.get(symbolName) || [];
+                if (impactedFiles.length > 0) {
+                    stream.markdown(` → **${impactedFiles.length} files**`);
+                }
+                
+                stream.markdown('\n');
+                totalSymbols++;
+            }
+            
             stream.markdown('\n');
         }
         
-        // Step 5: Display graph
-        stream.markdown('🎨 Opening graph viewer...\n\n');
+        // Step 5: Show Impact Analysis Summary
+        stream.markdown('\n---\n\n');
+        stream.markdown('📊 **Impact Analysis Summary:**\n\n');
+        stream.markdown(`- **Changed Symbols:** ${totalSymbols}\n`);
+        stream.markdown(`- **Total Files Analyzed:** ${graph.nodes.length}\n`);
+        stream.markdown(`- **Impacted Files:** ${graph.nodes.filter(n => n.nodeType === 'dependent').length}\n`);
+        stream.markdown(`- **Dependencies:** ${graph.nodes.filter(n => n.nodeType === 'dependency').length}\n\n`);
         
+        // Show top impacted symbols
+        if (symbolToDependentsMap.size > 0) {
+            stream.markdown('🔥 **Top Impacted Symbols:**\n\n');
+            
+            const sortedSymbols = Array.from(symbolToDependentsMap.entries())
+                .sort((a, b) => b[1].length - a[1].length)
+                .slice(0, 5);
+            
+            for (const [symbolName, dependents] of sortedSymbols) {
+                const impactLevel = dependents.length > 5 ? '🔴 HIGH' : 
+                                  dependents.length > 2 ? '🟡 MEDIUM' : '🟢 LOW';
+                stream.markdown(`  ${impactLevel} \`${symbolName}\` → **${dependents.length} files**\n`);
+                
+                // Show first 3 impacted files
+                const preview = dependents.slice(0, 3);
+                for (const file of preview) {
+                    const fileName = file.split('/').pop();
+                    stream.markdown(`    - ${fileName}\n`);
+                }
+                if (dependents.length > 3) {
+                    stream.markdown(`    - _...and ${dependents.length - 3} more_\n`);
+                }
+                stream.markdown('\n');
+            }
+        } else {
+            stream.markdown('✅ **No external files impacted** (low risk change)\n\n');
+        }
+        
+        // Step 6: Display graph
+        stream.markdown('\n🎨 Opening graph viewer...\n\n');
+        
+        const summary = graph.prSummary;
         await createPRGraphWebview(graph, prInfo, summary);
         
-        stream.markdown('✅ **Graph viewer opened!** Check the new tab.\n\n');
+        stream.markdown('✅ **Graph viewer opened!** Check the new tab for visual analysis.\n\n');
         
     } catch (error) {
         console.error('❌ PR dependency analysis error:', error);

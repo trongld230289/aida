@@ -19,6 +19,7 @@ class PRDependencyAnalyzer {
         this.symbolAnalyzer = new SymbolAnalyzer();
         this.fullGraph = null; // Cache full graph
         this.cacheFilePath = path.join(workspaceRoot, '.vscode', 'dependency-cache.json');
+        this.referenceCache = new Map(); // Cache for reference lookups
     }
 
     /**
@@ -43,7 +44,11 @@ class PRDependencyAnalyzer {
         for (const node of prNodes) {
             if (node.prStatus === 'edit' && node.prPatch) {
                 // Modified file: extract changed symbols from patch
-                const changedSymbols = this.extractChangedSymbols(node.prPatch);
+                console.log(`\n🔍 Extracting symbols from: ${node.prPath}`);
+                console.log(`   Patch length: ${node.prPatch?.length || 0} chars`);
+                console.log(`   Patch preview: ${node.prPatch?.substring(0, 200)}...`);
+                
+                const changedSymbols = this.extractChangedSymbols(node.prPatch, node.relativePath);
                 
                 if (changedSymbols.length === 0) {
                     console.log(`⚠️ No changed symbols extracted for: ${node.prPath}`);
@@ -59,7 +64,7 @@ class PRDependencyAnalyzer {
                 node.changedSymbols = changedSymbols;
             } else if (node.prStatus === 'rename' && node.prPatch) {
                 // Renamed + modified file: extract changed symbols if patch exists
-                const changedSymbols = this.extractChangedSymbols(node.prPatch);
+                const changedSymbols = this.extractChangedSymbols(node.prPatch, node.relativePath);
                 
                 if (changedSymbols.length > 0) {
                     console.log(`✅ Extracted ${changedSymbols.length} changed symbols from renamed file: ${node.prPath}`);
@@ -84,6 +89,9 @@ class PRDependencyAnalyzer {
         let totalDeps = 0;
         let totalDependents = 0;
         let filteredDependents = 0;
+        
+        // Track which files use which specific symbols
+        const symbolToDependentsMap = new Map(); // symbol → [dependent file paths]
 
         for (const node of prNodes) {
             // Get direct dependencies (always include all)
@@ -96,6 +104,12 @@ class PRDependencyAnalyzer {
             // Get direct dependents
             const allDependents = this.getDependents(node.id);
             
+            console.log(`\n🔍 Analyzing file: ${node.prPath}`);
+            console.log(`   Node ID: ${node.id}`);
+            console.log(`   Node relative path: ${node.relativePath}`);
+            console.log(`   Changed symbols: [${node.changedSymbols?.join(', ') || 'none'}]`);
+            console.log(`   Dependents found in graph: ${allDependents.length}`);
+            
             if ((node.prStatus === 'edit' || node.prStatus === 'rename') && node.changedSymbols && node.changedSymbols.length > 0) {
                 // Modified/renamed file with changed symbols: filter dependents by symbol usage
                 console.log(`🔎 Filtering ${allDependents.length} dependents for ${node.prStatus} file: ${node.prPath}`);
@@ -104,18 +118,27 @@ class PRDependencyAnalyzer {
                     const depNode = this.fullGraph.nodes.find(n => n.id === depId);
                     if (!depNode) continue;
 
-                    // Check if dependent uses ANY changed symbol
-                    const usesChangedSymbol = await this.fileUsesChangedSymbols(
+                    // Check which specific symbols this dependent uses
+                    const usedSymbols = await this.getUsedSymbols(
                         depNode.relativePath,
                         node.relativePath,
-                        node.changedSymbols
+                        node.changedSymbols // Now passing full symbol objects with positions
                     );
 
-                    if (usesChangedSymbol) {
+                    if (usedSymbols.length > 0) {
                         relevantNodeIds.add(depId);
                         totalDependents++;
                         filteredDependents++;
-                        console.log(`   ✅ Dependent uses changed symbols: ${depNode.relativePath}`);
+                        
+                        // Track which symbols are used by this dependent
+                        usedSymbols.forEach(symbolFullName => {
+                            if (!symbolToDependentsMap.has(symbolFullName)) {
+                                symbolToDependentsMap.set(symbolFullName, []);
+                            }
+                            symbolToDependentsMap.get(symbolFullName).push(depNode.relativePath);
+                        });
+                        
+                        console.log(`   ✅ Dependent uses symbols [${usedSymbols.join(', ')}]: ${depNode.relativePath}`);
                     } else {
                         console.log(`   ⏭️ Skipping dependent (no symbol usage): ${depNode.relativePath}`);
                     }
@@ -155,6 +178,9 @@ class PRDependencyAnalyzer {
             totalAdditions: prFiles.reduce((sum, f) => sum + f.additions, 0),
             totalDeletions: prFiles.reduce((sum, f) => sum + f.deletions, 0)
         };
+        
+        // Attach symbol-to-dependents mapping for detailed output
+        filteredGraph.symbolToDependentsMap = symbolToDependentsMap;
 
         return filteredGraph;
     }
@@ -475,58 +501,704 @@ class PRDependencyAnalyzer {
     }
 
     /**
-     * Extract changed symbols from unified diff patch
-     * Extracts ALL identifiers from added/modified lines (not just definitions)
+     * Extract changed symbols from diff patch with line numbers and positions
+     * Returns detailed symbol objects for VS Code Reference Provider
      */
-    extractChangedSymbols(patch) {
+    extractChangedSymbols(patch, prFilePath) {
         if (!patch) {
+            console.log(`   ⚠️ No patch data`);
             return [];
         }
 
-        const symbols = new Set();
+        console.log(`   📄 Extracting from patch (${patch.length} chars)...`);
         
-        // JavaScript/TypeScript keywords to filter out
-        const keywords = new Set([
-            'const', 'let', 'var', 'function', 'class', 'interface', 'type', 'enum',
-            'import', 'export', 'from', 'default', 'as', 'return', 'if', 'else',
-            'for', 'while', 'do', 'switch', 'case', 'break', 'continue', 'try',
-            'catch', 'finally', 'throw', 'new', 'this', 'super', 'extends',
-            'implements', 'public', 'private', 'protected', 'static', 'readonly',
-            'async', 'await', 'void', 'null', 'undefined', 'true', 'false',
-            'typeof', 'instanceof', 'in', 'of', 'delete', 'yield', 'with'
-        ]);
-
+        const allSymbols = [];
         const lines = patch.split('\n');
+        const contextStack = []; // Track nested object context
+        let currentLineNumber = 0;
         
-        for (const line of lines) {
-            // Only process added or modified lines
-            if (!line.startsWith('+') || line.startsWith('+++')) {
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            
+            // Parse hunk header to get line numbers: @@ -10,5 +12,8 @@
+            if (line.startsWith('@@')) {
+                const match = line.match(/@@ -\d+,?\d* \+(\d+),?\d* @@/);
+                if (match) {
+                    currentLineNumber = parseInt(match[1]) - 1; // 0-indexed
+                }
                 continue;
             }
-
-            // Remove the '+' prefix
-            const codeLine = line.substring(1);
-
-            // Extract ALL identifiers (variables, functions, classes, properties, etc.)
-            // Match: word characters, optionally followed by property access
-            const identifierPattern = /\b([a-zA-Z_$][a-zA-Z0-9_$]*)\b/g;
-            let match;
             
-            while ((match = identifierPattern.exec(codeLine)) !== null) {
-                const identifier = match[1];
+            // Only process added or modified lines
+            if (line.startsWith('+') && !line.startsWith('+++')) {
+                const codeLine = line.substring(1);
+                const trimmed = codeLine.trim();
                 
-                // Filter out keywords and very short names (likely false positives)
-                if (!keywords.has(identifier) && identifier.length > 1) {
-                    symbols.add(identifier);
+                // Detect object start: objectName: {
+                const objectStartMatch = trimmed.match(/^([a-zA-Z_$][a-zA-Z0-9_$]*)\s*:\s*\{/);
+                if (objectStartMatch) {
+                    const objectName = objectStartMatch[1];
+                    const column = codeLine.indexOf(objectName);
+                    contextStack.push(objectName);
+                    allSymbols.push({ 
+                        name: objectName, 
+                        fullName: objectName,
+                        type: 'object',
+                        lineNumber: currentLineNumber,
+                        column: column,
+                        filePath: prFilePath
+                    });
+                    currentLineNumber++;
+                    continue;
                 }
+                
+                // Detect object end: },
+                if (trimmed === '},' || trimmed === '}') {
+                    if (contextStack.length > 0) {
+                        contextStack.pop();
+                    }
+                    currentLineNumber++;
+                    continue;
+                }
+                
+                // Extract symbols with context and position
+                const extracted = this.extractSymbolsFromLine(codeLine, contextStack, currentLineNumber, prFilePath);
+                allSymbols.push(...extracted);
+                currentLineNumber++;
+            } else if (line.startsWith('-') && !line.startsWith('---')) {
+                // Don't increment line number for removed lines
+                continue;
+            } else if (!line.startsWith('\\')) {
+                // Context line - increment counter
+                currentLineNumber++;
             }
         }
-
-        return Array.from(symbols);
+        
+        // Deduplicate by fullName + lineNumber
+        const unique = [];
+        const seen = new Set();
+        for (const sym of allSymbols) {
+            const key = `${sym.fullName}:${sym.lineNumber}`;
+            if (!seen.has(key)) {
+                seen.add(key);
+                unique.push(sym);
+            }
+        }
+        
+        console.log(`   ✅ Found ${unique.length} symbols: ${unique.map(s => s.fullName).join(', ')}`);
+        return unique;
     }
 
     /**
-     * Check if a dependent file uses any of the changed symbols from a PR file
+     * Extract symbols from a single line of code with positions
+     * @param {string} line - The code line to extract from
+     * @param {string[]} contextStack - Current nested object context
+     * @param {number} lineNumber - Line number in file (0-indexed)
+     * @param {string} filePath - File path
+     */
+    extractSymbolsFromLine(line, contextStack = [], lineNumber = 0, filePath = '') {
+        const symbols = [];
+        const trimmedLine = line.trim();
+        
+        if (!trimmedLine || trimmedLine.length === 0) return symbols;
+        
+        // Property within object: propertyName: value
+        const propertyMatch = trimmedLine.match(/^([a-zA-Z_$][a-zA-Z0-9_$]*)\s*:\s*/);
+        if (propertyMatch) {
+            const propertyName = propertyMatch[1];
+            const column = line.indexOf(propertyName);
+            
+            if (contextStack.length > 0) {
+                // Nested property: parentObject.propertyName
+                const nestedPath = [...contextStack, propertyName].join('.');
+                symbols.push({ 
+                    name: propertyName,
+                    fullName: nestedPath,
+                    type: 'property',
+                    parentName: contextStack[contextStack.length - 1],
+                    lineNumber: lineNumber,
+                    column: column,
+                    filePath: filePath
+                });
+            } else {
+                // Top-level property
+                symbols.push({ 
+                    name: propertyName,
+                    fullName: propertyName,
+                    type: 'property',
+                    lineNumber: lineNumber,
+                    column: column,
+                    filePath: filePath
+                });
+            }
+        }
+        
+        // Function declarations: function name() {}
+        const functionMatch = trimmedLine.match(/function\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(/);
+        if (functionMatch) {
+            const funcName = functionMatch[1];
+            const column = line.indexOf(funcName);
+            symbols.push({ 
+                name: funcName,
+                fullName: funcName,
+                type: 'function',
+                lineNumber: lineNumber,
+                column: column,
+                filePath: filePath
+            });
+        }
+        
+        // Const declarations: const NAME = ...
+        const constMatch = trimmedLine.match(/const\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=/);
+        if (constMatch) {
+            const constName = constMatch[1];
+            const column = line.indexOf(constName);
+            symbols.push({ 
+                name: constName,
+                fullName: constName,
+                type: 'const',
+                lineNumber: lineNumber,
+                column: column,
+                filePath: filePath
+            });
+        }
+        
+        // Class declarations: class ClassName {}
+        const classMatch = trimmedLine.match(/class\s+([a-zA-Z_$][a-zA-Z0-9_$]*)/);
+        if (classMatch) {
+            const className = classMatch[1];
+            const column = line.indexOf(className);
+            symbols.push({ 
+                name: className,
+                fullName: className,
+                type: 'class',
+                lineNumber: lineNumber,
+                column: column,
+                filePath: filePath
+            });
+        }
+        
+        // Interface declarations: interface InterfaceName {}
+        const interfaceMatch = trimmedLine.match(/interface\s+([a-zA-Z_$][a-zA-Z0-9_$]*)/);
+        if (interfaceMatch) {
+            const interfaceName = interfaceMatch[1];
+            const column = line.indexOf(interfaceName);
+            symbols.push({ 
+                name: interfaceName,
+                fullName: interfaceName,
+                type: 'interface',
+                lineNumber: lineNumber,
+                column: column,
+                filePath: filePath
+            });
+        }
+        
+        return symbols;
+    }
+
+    /**
+     * Extract line numbers that were changed in patch
+     */
+    extractChangedLineNumbers(patch) {
+        const changedLines = [];
+        const lines = patch.split('\n');
+        let currentLineNumber = 0;
+        
+        for (const line of lines) {
+            // Parse @@ -a,b +c,d @@ headers
+            const hunkHeader = line.match(/^@@ -\d+,?\d* \+(\d+),?\d* @@/);
+            if (hunkHeader) {
+                currentLineNumber = parseInt(hunkHeader[1], 10);
+                continue;
+            }
+            
+            // Track added/modified lines
+            if (line.startsWith('+') && !line.startsWith('+++')) {
+                changedLines.push(currentLineNumber);
+                currentLineNumber++;
+            } else if (!line.startsWith('-')) {
+                currentLineNumber++;
+            }
+        }
+        
+        return changedLines;
+    }
+
+    /**
+     * Get which specific changed symbols a dependent file uses (VS Code Reference Provider with barrel resolution)
+     * @param {string} dependentPath - Path to the dependent file
+     * @param {string} prFilePath - Path to the PR file  
+     * @param {Array} changedSymbols - List of changed symbol objects with positions
+     * @returns {Promise<string[]>} - Array of symbol names that are actually used
+     */
+    async getUsedSymbols(dependentPath, prFilePath, changedSymbols) {
+        const usedSymbols = [];
+        
+        if (!changedSymbols || changedSymbols.length === 0) {
+            return usedSymbols;
+        }
+
+        try {
+            console.log(`      🔍 Checking dependent: ${dependentPath}`);
+            console.log(`         Symbols to check: [${changedSymbols.slice(0, 3).map(s => s.fullName).join(', ')}${changedSymbols.length > 3 ? '...' : ''}]`);
+            
+            const fullDependentPath = path.join(this.workspaceRoot, dependentPath);
+            const fullPRFilePath = path.join(this.workspaceRoot, prFilePath);
+            
+            if (!fs.existsSync(fullDependentPath)) {
+                console.log(`         ❌ File not found: ${fullDependentPath}`);
+                return usedSymbols;
+            }
+
+            // Check each symbol using VS Code Reference Provider with barrel resolution
+            for (const symbol of changedSymbols) {
+                const symbolFileUri = vscode.Uri.file(fullPRFilePath);
+                const symbolPosition = new vscode.Position(symbol.lineNumber, symbol.column);
+                
+                try {
+                    // ✨ Find all references through barrels recursively
+                    const result = await this.resolveBarrelReferences(
+                        symbolFileUri,
+                        symbolPosition,
+                        symbol.fullName,
+                        new Set(), // Visited barrels tracker
+                        0 // Start at level 0
+                    );
+                    
+                    const allReferences = result.references;
+                    const barrelChain = result.barrelChain;
+                    
+                    if (allReferences.length === 0) {
+                        console.log(`         ⏭️ No references found for: ${symbol.fullName}`);
+                        continue;
+                    }
+                    
+                    if (barrelChain.length > 0) {
+                        console.log(`         📍 Found ${allReferences.length} total references through ${barrelChain.length} barrel(s)`);
+                    } else {
+                        console.log(`         📍 Found ${allReferences.length} direct references`);
+                    }
+                    
+                    // Filter references to find ones in the dependent file
+                    const referencesInDependent = allReferences.filter(ref => {
+                        const refPath = ref.uri.fsPath;
+                        const isSameFile = path.normalize(refPath) === path.normalize(fullDependentPath);
+                        const isNotDefinition = ref.range.start.line !== symbol.lineNumber;
+                        return isSameFile && isNotDefinition;
+                    });
+                    
+                    if (referencesInDependent.length > 0) {
+                        // Filter out barrel exports (though should be minimal after resolution)
+                        const realRefs = [];
+                        for (const ref of referencesInDependent) {
+                            const isBarrel = await this.isBarrelExport(ref);
+                            if (!isBarrel) {
+                                realRefs.push(ref);
+                            }
+                        }
+                        
+                        if (realRefs.length > 0) {
+                            usedSymbols.push(symbol.fullName);
+                            console.log(`         ✅ Found ${realRefs.length} real references: ${symbol.fullName}`);
+                        }
+                    }
+                    
+                } catch (error) {
+                    console.error(`         ❌ Reference provider error for ${symbol.fullName}:`, error.message);
+                }
+            }
+            
+            if (usedSymbols.length === 0) {
+                console.log(`         ℹ️ No symbols from PR file used`);
+            } else {
+                console.log(`         ✅ Total confirmed: ${usedSymbols.length} symbols`);
+            }
+
+            return usedSymbols;
+        } catch (error) {
+            console.error(`      ❌ Reference analysis failed for ${dependentPath}:`, error.message);
+            return [];
+        }
+    }
+
+    /**
+     * Recursively resolve references through barrel exports
+     * @param {vscode.Uri} symbolUri - URI of the file containing the symbol
+     * @param {vscode.Position} symbolPosition - Position of the symbol
+     * @param {string} symbolName - Name of the symbol (for logging)
+     * @param {Set<string>} visitedBarrels - Set of visited barrel files to avoid infinite loops
+     * @param {number} currentLevel - Current depth in barrel chain
+     * @returns {Promise<{references: vscode.Location[], barrelChain: Array}>} - All references and barrel chain info
+     */
+    async resolveBarrelReferences(symbolUri, symbolPosition, symbolName, visitedBarrels, currentLevel = 0) {
+        const allReferences = [];
+        const barrelChain = [];
+        
+        // Protection against infinite loops
+        if (currentLevel > 10) {
+            console.warn('⚠️ Barrel chain depth exceeded 10 levels, stopping recursion');
+            return { references: allReferences, barrelChain };
+        }
+        
+        try {
+            // Check cache first
+            const cacheKey = `${symbolUri.fsPath}:${symbolPosition.line}:${symbolPosition.character}`;
+            let directReferences = this.referenceCache.get(cacheKey);
+            
+            if (!directReferences) {
+                // Get direct references
+                directReferences = await vscode.commands.executeCommand(
+                    'vscode.executeReferenceProvider',
+                    symbolUri,
+                    symbolPosition
+                );
+                
+                // Cache the result
+                if (directReferences) {
+                    this.referenceCache.set(cacheKey, directReferences);
+                }
+            }
+            
+            if (!directReferences || directReferences.length === 0) {
+                return { references: allReferences, barrelChain };
+            }
+            
+            // Process each reference
+            for (const ref of directReferences) {
+                const refPath = ref.uri.fsPath;
+                const refKey = `${refPath}:${ref.range.start.line}`;
+                
+                // Check if this reference is a barrel export
+                const isBarrel = await this.isBarrelExport(ref);
+                
+                if (isBarrel) {
+                    const indent = '  '.repeat(currentLevel);
+                    console.log(`         ${indent}🔄 Level ${currentLevel}: ${path.basename(refPath)}:${ref.range.start.line}`);
+                    
+                    // Avoid infinite loops
+                    if (visitedBarrels.has(refKey)) {
+                        console.log(`         ${indent}⏭️ Already visited barrel: ${refKey}`);
+                        continue;
+                    }
+                    
+                    visitedBarrels.add(refKey);
+                    
+                    // Find the exported symbol name in the barrel
+                    const barrelSymbolInfo = await this.getBarrelExportSymbol(ref);
+                    
+                    if (barrelSymbolInfo) {
+                        console.log(`         ${indent}🔍 Resolving through barrel: ${barrelSymbolInfo.name}`);
+                        
+                        // Add to barrel chain
+                        barrelChain.push({
+                            file: refPath,
+                            exportedAs: barrelSymbolInfo.name,
+                            level: currentLevel
+                        });
+                        
+                        // Handle wildcard exports differently
+                        if (barrelSymbolInfo.isWildcard) {
+                            console.log(`         ${indent}⭐ Wildcard export detected, finding imports...`);
+                            const wildcardRefs = await this.findImportsOfBarrelFile(ref.uri, symbolName);
+                            console.log(`         ${indent}➡️ Found ${wildcardRefs.length} imports of barrel`);
+                            allReferences.push(...wildcardRefs);
+                        } else {
+                            // Recursively find references of the barrel export
+                            const result = await this.resolveBarrelReferences(
+                                ref.uri,
+                                barrelSymbolInfo.position,
+                                barrelSymbolInfo.name,
+                                visitedBarrels,
+                                currentLevel + 1
+                            );
+                            
+                            console.log(`         ${indent}➡️ Found ${result.references.length} references through barrel`);
+                            allReferences.push(...result.references);
+                            barrelChain.push(...result.barrelChain);
+                        }
+                    }
+                } else {
+                    // Real usage - add to results
+                    allReferences.push(ref);
+                }
+            }
+            
+            return { references: allReferences, barrelChain };
+        } catch (error) {
+            console.error(`         ❌ Barrel resolution error:`, error.message);
+            return { references: allReferences, barrelChain };
+        }
+    }
+
+    /**
+     * Get the exported symbol name and position from a barrel export line
+     * @param {vscode.Location} barrelLocation - Location of barrel export
+     * @returns {Promise<{name: string, position: vscode.Position, isWildcard: boolean}|null>}
+     */
+    async getBarrelExportSymbol(barrelLocation) {
+        try {
+            const document = await vscode.workspace.openTextDocument(barrelLocation.uri);
+            const line = document.lineAt(barrelLocation.range.start.line);
+            const text = line.text.trim();
+            
+            // Pattern 1: export * from './somewhere' (wildcard)
+            if (/^export\s+\*\s+from/.test(text)) {
+                return {
+                    name: '*',
+                    position: barrelLocation.range.start,
+                    isWildcard: true
+                };
+            }
+            
+            // Pattern 2: export { Name } from './somewhere' (simple)
+            const simpleMatch = text.match(/export\s+\{\s*(\w+)\s*\}\s+from/);
+            if (simpleMatch) {
+                const symbolName = simpleMatch[1];
+                const symbolIndex = text.indexOf(symbolName, text.indexOf('{'));
+                
+                if (symbolIndex >= 0) {
+                    return {
+                        name: symbolName,
+                        position: new vscode.Position(barrelLocation.range.start.line, symbolIndex),
+                        isWildcard: false
+                    };
+                }
+            }
+            
+            // Pattern 3: export { OriginalName as NewName } from './somewhere' (aliased)
+            const aliasMatch = text.match(/export\s+\{\s*(\w+)\s+as\s+(\w+)\s*\}\s+from/);
+            if (aliasMatch) {
+                const exportedName = aliasMatch[2]; // Use the alias name
+                const symbolIndex = text.indexOf(exportedName, text.indexOf('as'));
+                
+                if (symbolIndex >= 0) {
+                    return {
+                        name: exportedName,
+                        position: new vscode.Position(barrelLocation.range.start.line, symbolIndex),
+                        isWildcard: false
+                    };
+                }
+            }
+            
+            // Pattern 4: export { Name1, Name2, ... } from './somewhere' (multiple)
+            const multiMatch = text.match(/export\s+\{([^}]+)\}\s+from/);
+            if (multiMatch) {
+                const exportList = multiMatch[1];
+                const names = exportList.split(',').map(n => n.trim());
+                
+                // Find which name is at the reference location
+                const refColumn = barrelLocation.range.start.character;
+                
+                for (const nameSpec of names) {
+                    // Handle 'Name as Alias' format
+                    const parts = nameSpec.split(/\s+as\s+/);
+                    const exportedName = parts.length === 2 ? parts[1].trim() : parts[0].trim();
+                    const nameIndex = text.indexOf(exportedName);
+                    
+                    // Check if this name is close to the reference position
+                    if (Math.abs(nameIndex - refColumn) < 20) {
+                        return {
+                            name: exportedName,
+                            position: new vscode.Position(barrelLocation.range.start.line, nameIndex),
+                            isWildcard: false
+                        };
+                    }
+                }
+                
+                // Fallback: use first name
+                if (names.length > 0) {
+                    const firstNameSpec = names[0];
+                    const parts = firstNameSpec.split(/\s+as\s+/);
+                    const exportedName = parts.length === 2 ? parts[1].trim() : parts[0].trim();
+                    const symbolIndex = text.indexOf(exportedName);
+                    
+                    return {
+                        name: exportedName,
+                        position: new vscode.Position(barrelLocation.range.start.line, symbolIndex >= 0 ? symbolIndex : 0),
+                        isWildcard: false
+                    };
+                }
+            }
+            
+            return null;
+        } catch (error) {
+            console.error(`Error parsing barrel export:`, error.message);
+            return null;
+        }
+    }
+
+    /**
+     * Find all files that import from a barrel file (for wildcard exports)
+     * @param {vscode.Uri} barrelUri - URI of the barrel file
+     * @param {string} symbolName - Original symbol name to look for
+     * @returns {Promise<vscode.Location[]>}
+     */
+    async findImportsOfBarrelFile(barrelUri, symbolName) {
+        const imports = [];
+        
+        try {
+            const barrelPath = barrelUri.fsPath;
+            const barrelDir = path.dirname(barrelPath);
+            
+            // Get all TypeScript/JavaScript files in workspace
+            const workspaceFolder = vscode.workspace.getWorkspaceFolder(barrelUri);
+            if (!workspaceFolder) return imports;
+            
+            // Get barrel path relative to workspace (for alias matching)
+            const workspacePath = workspaceFolder.uri.fsPath;
+            const barrelRelativeToWorkspace = path.relative(workspacePath, barrelDir).replace(/\\/g, '/');
+            
+            console.log(`         🔍 Looking for imports of barrel: ${barrelRelativeToWorkspace}`);
+            
+            const files = await vscode.workspace.findFiles(
+                new vscode.RelativePattern(workspaceFolder, '**/*.{ts,tsx,js,jsx}'),
+                '**/node_modules/**',
+                1000 // Increase limit
+            );
+            
+            // Search for files that import from this barrel and use the symbol
+            for (const fileUri of files) {
+                if (fileUri.fsPath === barrelPath) continue;
+                
+                try {
+                    const document = await vscode.workspace.openTextDocument(fileUri);
+                    const text = document.getText();
+                    
+                    // Calculate relative path from file to barrel
+                    const fileDir = path.dirname(fileUri.fsPath);
+                    let relativePath = path.relative(fileDir, barrelDir);
+                    
+                    // Normalize path for import statements
+                    if (!relativePath.startsWith('.')) {
+                        relativePath = './' + relativePath;
+                    }
+                    relativePath = relativePath.replace(/\\/g, '/');
+                    
+                    // Build comprehensive import patterns
+                    const importPatterns = [
+                        // Relative imports: from './shared/utilities' or '../shared/utilities'
+                        new RegExp(`from\\s+['"]${relativePath.replace(/\./g, '\\.')}['"]`, 'i'),
+                        new RegExp(`from\\s+['"]${relativePath.replace(/\./g, '\\.')}/index['"]`, 'i'),
+                        // Absolute from workspace root
+                        new RegExp(`from\\s+['"]${barrelRelativeToWorkspace}['"]`, 'i'),
+                        // Path aliases - generic pattern matching the barrel directory structure
+                        // Examples: @shared/utilities, @app/shared/utilities
+                        new RegExp(`from\\s+['"]([@\\w]+)/utilities['"]`, 'i'),
+                        new RegExp(`from\\s+['"]([@\\w]+)/shared/utilities['"]`, 'i')
+                    ];
+                    
+                    let hasImport = false;
+                    for (const pattern of importPatterns) {
+                        if (pattern.test(text)) {
+                            hasImport = true;
+                            break;
+                        }
+                    }
+                    
+                    if (!hasImport) continue;
+                    
+                    // File imports from this barrel - now check if it uses the symbol
+                    // For nested properties like 'limitedEquipment.header', search for the root object 'limitedEquipment'
+                    const searchTerm = symbolName.includes('.') ? symbolName.split('.')[0] : symbolName;
+                    const symbolPattern = new RegExp(`\\b${searchTerm.replace(/\./g, '\\.')}\\b`, 'g');
+                    let match;
+                    
+                    while ((match = symbolPattern.exec(text)) !== null) {
+                        const position = document.positionAt(match.index);
+                        const line = document.lineAt(position.line);
+                        
+                        // Skip import lines
+                        if (!line.text.trim().startsWith('import')) {
+                            imports.push(new vscode.Location(fileUri, position));
+                        }
+                    }
+                } catch (error) {
+                    // Skip files that can't be read
+                    continue;
+                }
+            }
+            
+            console.log(`         ✅ Found ${imports.length} usages of ${symbolName} through barrel`);
+            return imports;
+            
+        } catch (error) {
+            console.error(`Error finding imports of barrel:`, error.message);
+            return imports;
+        }
+    }
+
+    /**
+     * Check if a reference location is a barrel export (re-export)
+     * @param {vscode.Location} location - Reference location
+     * @returns {Promise<boolean>}
+     */
+    async isBarrelExport(location) {
+        try {
+            const document = await vscode.workspace.openTextDocument(location.uri);
+            const line = document.lineAt(location.range.start.line);
+            const text = line.text.trim();
+            
+            // Pattern 1: export { Something } from './somewhere'
+            const isReExport = /^export\s+(?:\{[^}]+\}|\*)\s+from/.test(text);
+            
+            // Pattern 2: File is named index.ts/tsx
+            const fileName = path.basename(location.uri.fsPath);
+            const isIndexFile = /^index\.(ts|tsx|js|jsx)$/.test(fileName);
+            
+            if (isReExport) {
+                return true;
+            }
+            
+            // If index file, check if it's mostly exports
+            if (isIndexFile) {
+                const fullText = document.getText();
+                const lines = fullText.split('\n').filter(l => l.trim());
+                const exportLines = lines.filter(l => 
+                    l.trim().startsWith('export') || l.trim().startsWith('//')
+                );
+                
+                // If >80% of lines are exports, likely a barrel
+                if (lines.length > 0 && exportLines.length / lines.length > 0.8) {
+                    return true;
+                }
+            }
+            
+            return false;
+        } catch (error) {
+            return false;
+        }
+    }
+
+    /**
+     * Fallback: Simple string matching (when AST fails)
+     */
+    async getUsedSymbolsFallback(dependentPath, changedSymbols) {
+        const usedSymbols = [];
+        
+        try {
+            const fullDependentPath = path.join(this.workspaceRoot, dependentPath);
+            if (!fs.existsSync(fullDependentPath)) return usedSymbols;
+
+            const content = fs.readFileSync(fullDependentPath, 'utf8');
+            
+            for (const symbol of changedSymbols) {
+                // Escape dots in symbol path for regex
+                const escapedSymbol = symbol.replace(/\\./g, '\\\\.');
+                const symbolPattern = new RegExp(`\\\\b${escapedSymbol}\\\\b`);
+                if (symbolPattern.test(content)) {
+                    usedSymbols.push(symbol);
+                }
+            }
+            
+            console.log(`      ⚠️ Fallback found ${usedSymbols.length} symbols (may have false positives)`);
+            return usedSymbols;
+        } catch (error) {
+            console.error(`Error in fallback symbol check:`, error.message);
+            return usedSymbols;
+        }
+    }
+
+    /**     * Check if a dependent file uses any of the changed symbols from a PR file
      * @param {string} dependentPath - Path to the dependent file
      * @param {string} prFilePath - Path to the PR file
      * @param {string[]} changedSymbols - List of changed symbols to check
