@@ -822,13 +822,7 @@ class PRDependencyAnalyzer {
     }
 
     /**
-     * Recursively resolve references through barrel exports
-     * @param {vscode.Uri} symbolUri - URI of the file containing the symbol
-     * @param {vscode.Position} symbolPosition - Position of the symbol
-     * @param {string} symbolName - Name of the symbol (for logging)
-     * @param {Set<string>} visitedBarrels - Set of visited barrel files to avoid infinite loops
-     * @param {number} currentLevel - Current depth in barrel chain
-     * @returns {Promise<{references: vscode.Location[], barrelChain: Array}>} - All references and barrel chain info
+     * 🔥 IMPROVED: Recursively resolve references through barrel exports with better error handling
      */
     async resolveBarrelReferences(symbolUri, symbolPosition, symbolName, visitedBarrels, currentLevel = 0) {
         const allReferences = [];
@@ -841,20 +835,31 @@ class PRDependencyAnalyzer {
         }
         
         try {
-            // Check cache first
-            const cacheKey = `${symbolUri.fsPath}:${symbolPosition.line}:${symbolPosition.character}`;
+            // Check cache first with version key
+            const cacheKey = `${symbolUri.fsPath}:${symbolPosition.line}:${symbolPosition.character}:v2`;
             let directReferences = this.referenceCache.get(cacheKey);
             
             if (!directReferences) {
-                // Get direct references
-                directReferences = await vscode.commands.executeCommand(
+                // 🔥 IMPROVED: Add timeout to prevent hanging
+                const timeout = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Reference provider timeout')), 5000)
+                );
+                
+                const refPromise = vscode.commands.executeCommand(
                     'vscode.executeReferenceProvider',
                     symbolUri,
                     symbolPosition
                 );
                 
+                try {
+                    directReferences = await Promise.race([refPromise, timeout]);
+                } catch (timeoutError) {
+                    console.warn(`         ⚠️ Timeout finding references for ${symbolName}`);
+                    return { references: allReferences, barrelChain };
+                }
+                
                 // Cache the result
-                if (directReferences) {
+                if (directReferences && directReferences.length > 0) {
                     this.referenceCache.set(cacheKey, directReferences);
                 }
             }
@@ -863,69 +868,94 @@ class PRDependencyAnalyzer {
                 return { references: allReferences, barrelChain };
             }
             
-            // Process each reference
+            // 🔥 IMPROVED: Separate barrels and real usages first
+            const barrels = [];
+            const realUsages = [];
+            
             for (const ref of directReferences) {
-                const refPath = ref.uri.fsPath;
-                const refKey = `${refPath}:${ref.range.start.line}`;
-                
-                // Check if this reference is a barrel export
                 const isBarrel = await this.isBarrelExport(ref);
-                
                 if (isBarrel) {
-                    const indent = '  '.repeat(currentLevel);
-                    console.log(`         ${indent}🔄 Level ${currentLevel}: ${path.basename(refPath)}:${ref.range.start.line}`);
-                    
-                    // Avoid infinite loops
-                    if (visitedBarrels.has(refKey)) {
-                        console.log(`         ${indent}⏭️ Already visited barrel: ${refKey}`);
-                        continue;
-                    }
-                    
-                    visitedBarrels.add(refKey);
-                    
-                    // Find the exported symbol name in the barrel
-                    const barrelSymbolInfo = await this.getBarrelExportSymbol(ref);
-                    
-                    if (barrelSymbolInfo) {
-                        console.log(`         ${indent}🔍 Resolving through barrel: ${barrelSymbolInfo.name}`);
-                        
-                        // Add to barrel chain
-                        barrelChain.push({
-                            file: refPath,
-                            exportedAs: barrelSymbolInfo.name,
-                            level: currentLevel
-                        });
-                        
-                        // Handle wildcard exports differently
-                        if (barrelSymbolInfo.isWildcard) {
-                            console.log(`         ${indent}⭐ Wildcard export detected, finding imports...`);
-                            const wildcardRefs = await this.findImportsOfBarrelFile(ref.uri, symbolName);
-                            console.log(`         ${indent}➡️ Found ${wildcardRefs.length} imports of barrel`);
-                            allReferences.push(...wildcardRefs);
-                        } else {
-                            // Recursively find references of the barrel export
-                            const result = await this.resolveBarrelReferences(
-                                ref.uri,
-                                barrelSymbolInfo.position,
-                                barrelSymbolInfo.name,
-                                visitedBarrels,
-                                currentLevel + 1
-                            );
-                            
-                            console.log(`         ${indent}➡️ Found ${result.references.length} references through barrel`);
-                            allReferences.push(...result.references);
-                            barrelChain.push(...result.barrelChain);
-                        }
-                    }
+                    barrels.push(ref);
                 } else {
-                    // Real usage - add to results
-                    allReferences.push(ref);
+                    // Skip definition itself
+                    if (ref.uri.fsPath !== symbolUri.fsPath || 
+                        ref.range.start.line !== symbolPosition.line) {
+                        realUsages.push(ref);
+                    }
+                }
+            }
+            
+            // Add real usages immediately
+            allReferences.push(...realUsages);
+            
+            const indent = '  '.repeat(currentLevel);
+            console.log(`         ${indent}📍 Level ${currentLevel}: ${barrels.length} barrels, ${realUsages.length} real usages`);
+            
+            // Process barrels
+            for (const barrelRef of barrels) {
+                const refPath = barrelRef.uri.fsPath;
+                const refKey = `${refPath}:${barrelRef.range.start.line}:${barrelRef.range.start.character}`;
+                
+                console.log(`         ${indent}🔄 Barrel: ${path.basename(refPath)}:${barrelRef.range.start.line}`);
+                
+                // Avoid infinite loops
+                if (visitedBarrels.has(refKey)) {
+                    console.log(`         ${indent}⏭️ Already visited, skipping`);
+                    continue;
+                }
+                
+                visitedBarrels.add(refKey);
+                
+                // 🔥 IMPROVED: Get barrel export info with fallback
+                const barrelSymbolInfo = await this.getBarrelExportSymbolImproved(barrelRef, symbolName);
+                
+                if (!barrelSymbolInfo) {
+                    console.log(`         ${indent}⚠️ Could not parse barrel export`);
+                    continue;
+                }
+                
+                // Add to barrel chain
+                barrelChain.push({
+                    file: refPath,
+                    exportedAs: barrelSymbolInfo.name,
+                    level: currentLevel,
+                    isWildcard: barrelSymbolInfo.isWildcard
+                });
+                
+                // Handle wildcard exports
+                if (barrelSymbolInfo.isWildcard) {
+                    console.log(`         ${indent}⭐ Wildcard: finding imports of barrel...`);
+                    const wildcardRefs = await this.findImportsOfBarrelFileImproved(
+                        barrelRef.uri, 
+                        symbolName,
+                        currentLevel
+                    );
+                    console.log(`         ${indent}✅ Found ${wildcardRefs.length} usages through wildcard`);
+                    allReferences.push(...wildcardRefs);
+                } else {
+                    // Recursively resolve named exports
+                    console.log(`         ${indent}🔍 Following named export: ${barrelSymbolInfo.name}`);
+                    const result = await this.resolveBarrelReferences(
+                        barrelRef.uri,
+                        barrelSymbolInfo.position,
+                        barrelSymbolInfo.name,
+                        visitedBarrels,
+                        currentLevel + 1
+                    );
+                    
+                    console.log(`         ${indent}✅ Found ${result.references.length} refs through chain`);
+                    allReferences.push(...result.references);
+                    barrelChain.push(...result.barrelChain);
                 }
             }
             
             return { references: allReferences, barrelChain };
+            
         } catch (error) {
-            console.error(`         ❌ Barrel resolution error:`, error.message);
+            console.error(`         ❌ Barrel resolution error at level ${currentLevel}:`, error.message);
+            // 🔥 IMPROVED: Clear cache on error
+            const cacheKey = `${symbolUri.fsPath}:${symbolPosition.line}:${symbolPosition.character}:v2`;
+            this.referenceCache.delete(cacheKey);
             return { references: allReferences, barrelChain };
         }
     }
@@ -936,87 +966,115 @@ class PRDependencyAnalyzer {
      * @returns {Promise<{name: string, position: vscode.Position, isWildcard: boolean}|null>}
      */
     async getBarrelExportSymbol(barrelLocation) {
+        // Delegate to improved version
+        return await this.getBarrelExportSymbolImproved(barrelLocation, null);
+    }
+
+    /**
+     * 🔥 NEW: Improved barrel export symbol parsing with better multi-export handling
+     */
+    async getBarrelExportSymbolImproved(barrelLocation, originalSymbolName) {
         try {
             const document = await vscode.workspace.openTextDocument(barrelLocation.uri);
             const line = document.lineAt(barrelLocation.range.start.line);
             const text = line.text.trim();
+            const refColumn = barrelLocation.range.start.character;
             
-            // Pattern 1: export * from './somewhere' (wildcard)
+            // Pattern 1: export * from './somewhere'
             if (/^export\s+\*\s+from/.test(text)) {
                 return {
-                    name: '*',
+                    name: originalSymbolName || '*', // Use original name for wildcard
                     position: barrelLocation.range.start,
                     isWildcard: true
                 };
             }
             
-            // Pattern 2: export { Name } from './somewhere' (simple)
+            // Pattern 2: export { Name } from './somewhere'
             const simpleMatch = text.match(/export\s+\{\s*(\w+)\s*\}\s+from/);
             if (simpleMatch) {
                 const symbolName = simpleMatch[1];
                 const symbolIndex = text.indexOf(symbolName, text.indexOf('{'));
                 
-                if (symbolIndex >= 0) {
-                    return {
-                        name: symbolName,
-                        position: new vscode.Position(barrelLocation.range.start.line, symbolIndex),
-                        isWildcard: false
-                    };
-                }
+                return {
+                    name: symbolName,
+                    position: new vscode.Position(
+                        barrelLocation.range.start.line, 
+                        symbolIndex >= 0 ? symbolIndex : refColumn
+                    ),
+                    isWildcard: false
+                };
             }
             
-            // Pattern 3: export { OriginalName as NewName } from './somewhere' (aliased)
+            // Pattern 3: export { Name as Alias } from './somewhere'
             const aliasMatch = text.match(/export\s+\{\s*(\w+)\s+as\s+(\w+)\s*\}\s+from/);
             if (aliasMatch) {
-                const exportedName = aliasMatch[2]; // Use the alias name
-                const symbolIndex = text.indexOf(exportedName, text.indexOf('as'));
+                const originalName = aliasMatch[1];
+                const aliasName = aliasMatch[2];
+                const symbolIndex = text.indexOf(aliasName, text.indexOf('as'));
                 
-                if (symbolIndex >= 0) {
-                    return {
-                        name: exportedName,
-                        position: new vscode.Position(barrelLocation.range.start.line, symbolIndex),
-                        isWildcard: false
-                    };
-                }
+                return {
+                    name: aliasName, // Use alias for next lookup
+                    position: new vscode.Position(
+                        barrelLocation.range.start.line,
+                        symbolIndex >= 0 ? symbolIndex : refColumn
+                    ),
+                    isWildcard: false
+                };
             }
             
-            // Pattern 4: export { Name1, Name2, ... } from './somewhere' (multiple)
+            // Pattern 4: export { Name1, Name2, ... } from './somewhere'
             const multiMatch = text.match(/export\s+\{([^}]+)\}\s+from/);
             if (multiMatch) {
                 const exportList = multiMatch[1];
-                const names = exportList.split(',').map(n => n.trim());
+                const specs = exportList.split(',').map(s => s.trim());
                 
-                // Find which name is at the reference location
-                const refColumn = barrelLocation.range.start.character;
+                // 🔥 IMPROVED: Find the export spec closest to reference position
+                let bestMatch = null;
+                let minDistance = Infinity;
                 
-                for (const nameSpec of names) {
-                    // Handle 'Name as Alias' format
-                    const parts = nameSpec.split(/\s+as\s+/);
-                    const exportedName = parts.length === 2 ? parts[1].trim() : parts[0].trim();
-                    const nameIndex = text.indexOf(exportedName);
+                for (const spec of specs) {
+                    // Parse 'Name' or 'Name as Alias'
+                    const parts = spec.split(/\s+as\s+/);
+                    const originalName = parts[0].trim();
+                    const exportedName = parts.length === 2 ? parts[1].trim() : originalName;
                     
-                    // Check if this name is close to the reference position
-                    if (Math.abs(nameIndex - refColumn) < 20) {
-                        return {
-                            name: exportedName,
-                            position: new vscode.Position(barrelLocation.range.start.line, nameIndex),
-                            isWildcard: false
-                        };
+                    // Find position of this export in the line
+                    const nameIndex = text.indexOf(exportedName, text.indexOf('{'));
+                    if (nameIndex >= 0) {
+                        const distance = Math.abs(nameIndex - refColumn);
+                        if (distance < minDistance) {
+                            minDistance = distance;
+                            bestMatch = {
+                                name: exportedName,
+                                position: new vscode.Position(barrelLocation.range.start.line, nameIndex),
+                                isWildcard: false
+                            };
+                        }
                     }
                 }
                 
-                // Fallback: use first name
-                if (names.length > 0) {
-                    const firstNameSpec = names[0];
-                    const parts = firstNameSpec.split(/\s+as\s+/);
-                    const exportedName = parts.length === 2 ? parts[1].trim() : parts[0].trim();
-                    const symbolIndex = text.indexOf(exportedName);
-                    
-                    return {
-                        name: exportedName,
-                        position: new vscode.Position(barrelLocation.range.start.line, symbolIndex >= 0 ? symbolIndex : 0),
-                        isWildcard: false
-                    };
+                if (bestMatch) {
+                    return bestMatch;
+                }
+                
+                // Fallback: use original symbol name if present
+                if (originalSymbolName) {
+                    for (const spec of specs) {
+                        if (spec.includes(originalSymbolName)) {
+                            const parts = spec.split(/\s+as\s+/);
+                            const exportedName = parts.length === 2 ? parts[1].trim() : parts[0].trim();
+                            const nameIndex = text.indexOf(exportedName, text.indexOf('{'));
+                            
+                            return {
+                                name: exportedName,
+                                position: new vscode.Position(
+                                    barrelLocation.range.start.line,
+                                    nameIndex >= 0 ? nameIndex : refColumn
+                                ),
+                                isWildcard: false
+                            };
+                        }
+                    }
                 }
             }
             
@@ -1125,6 +1183,93 @@ class PRDependencyAnalyzer {
             console.error(`Error finding imports of barrel:`, error.message);
             return imports;
         }
+    }
+
+    /**
+     * 🔥 NEW: Load TypeScript path aliases from tsconfig.json
+     */
+    async loadTSConfigAliases(workspacePath) {
+        const aliases = new Map();
+        
+        try {
+            const tsconfigPath = path.join(workspacePath, 'tsconfig.json');
+            if (!fs.existsSync(tsconfigPath)) {
+                return aliases;
+            }
+            
+            const tsconfigContent = fs.readFileSync(tsconfigPath, 'utf8');
+            // Remove comments (simple approach)
+            const jsonContent = tsconfigContent.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, '');
+            const tsconfig = JSON.parse(jsonContent);
+            
+            const paths = tsconfig.compilerOptions?.paths;
+            if (paths) {
+                for (const [alias, targets] of Object.entries(paths)) {
+                    // Remove /* from alias and target
+                    const cleanAlias = alias.replace(/\/\*$/, '');
+                    const cleanTarget = targets[0].replace(/\/\*$/, '');
+                    aliases.set(cleanAlias, cleanTarget);
+                }
+                
+                console.log(`✅ Loaded ${aliases.size} path aliases from tsconfig.json`);
+            }
+            
+        } catch (error) {
+            console.log(`⚠️ Could not load tsconfig.json:`, error.message);
+        }
+        
+        return aliases;
+    }
+
+    /**
+     * 🔥 NEW: Build comprehensive import patterns including path aliases
+     */
+    buildImportPatterns(importerPath, barrelDir, barrelRelativeToWorkspace, pathAliases) {
+        const patterns = [];
+        const fileDir = path.dirname(importerPath);
+        
+        // 1. Relative path import
+        let relativePath = path.relative(fileDir, barrelDir);
+        if (!relativePath.startsWith('.')) {
+            relativePath = './' + relativePath;
+        }
+        relativePath = relativePath.replace(/\\/g, '/');
+        
+        patterns.push(
+            new RegExp(`from\\s+['"]${relativePath.replace(/\./g, '\\.')}['"]`, 'i'),
+            new RegExp(`from\\s+['"]${relativePath.replace(/\./g, '\\.')}/index['"]`, 'i')
+        );
+        
+        // 2. Absolute from workspace root
+        patterns.push(
+            new RegExp(`from\\s+['"]${barrelRelativeToWorkspace}['"]`, 'i'),
+            new RegExp(`from\\s+['"]${barrelRelativeToWorkspace}/index['"]`, 'i')
+        );
+        
+        // 3. Path aliases from tsconfig.json
+        for (const [alias, target] of pathAliases.entries()) {
+            if (barrelRelativeToWorkspace.startsWith(target)) {
+                const aliasedPath = barrelRelativeToWorkspace.replace(target, alias);
+                patterns.push(
+                    new RegExp(`from\\s+['"]${aliasedPath}['"]`, 'i'),
+                    new RegExp(`from\\s+['"]${aliasedPath}/index['"]`, 'i')
+                );
+            }
+        }
+        
+        // 4. Common alias patterns (fallback)
+        const barrelParts = barrelRelativeToWorkspace.split('/');
+        if (barrelParts.length >= 2) {
+            const commonAliases = ['@app', '@shared', '@core', '@modules'];
+            for (const aliasPrefix of commonAliases) {
+                const aliasedPath = `${aliasPrefix}/${barrelParts.slice(1).join('/')}`;
+                patterns.push(
+                    new RegExp(`from\\s+['"]${aliasedPath}['"]`, 'i')
+                );
+            }
+        }
+        
+        return patterns;
     }
 
     /**
