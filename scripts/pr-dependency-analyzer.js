@@ -501,7 +501,7 @@ class PRDependencyAnalyzer {
     }
 
     /**
-     * Extract changed symbols from diff patch with line numbers and positions
+     * 🔥 FIX 1: Extract changed symbols from diff patch with improved root object tracking
      * Returns detailed symbol objects for VS Code Reference Provider
      */
     extractChangedSymbols(patch, prFilePath) {
@@ -516,6 +516,9 @@ class PRDependencyAnalyzer {
         const lines = patch.split('\n');
         const contextStack = []; // Track nested object context
         let currentLineNumber = 0;
+        
+        // 🔥 Track root objects for nested properties
+        const rootObjects = new Set();
         
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i];
@@ -540,13 +543,16 @@ class PRDependencyAnalyzer {
                     const objectName = objectStartMatch[1];
                     const column = codeLine.indexOf(objectName);
                     contextStack.push(objectName);
+                    rootObjects.add(objectName); // 🔥 Track root object
+                    
                     allSymbols.push({ 
                         name: objectName, 
                         fullName: objectName,
                         type: 'object',
                         lineNumber: currentLineNumber,
                         column: column,
-                        filePath: prFilePath
+                        filePath: prFilePath,
+                        isRoot: true // 🔥 Mark as root
                     });
                     currentLineNumber++;
                     continue;
@@ -564,6 +570,14 @@ class PRDependencyAnalyzer {
                 // Extract symbols with context and position
                 const extracted = this.extractSymbolsFromLine(codeLine, contextStack, currentLineNumber, prFilePath);
                 allSymbols.push(...extracted);
+                
+                // 🔥 For nested properties, also track the root object
+                for (const sym of extracted) {
+                    if (sym.parentName && !rootObjects.has(sym.parentName)) {
+                        rootObjects.add(sym.parentName);
+                    }
+                }
+                
                 currentLineNumber++;
             } else if (line.startsWith('-') && !line.startsWith('---')) {
                 // Don't increment line number for removed lines
@@ -574,18 +588,41 @@ class PRDependencyAnalyzer {
             }
         }
         
+        // 🔥 IMPORTANT: When searching for references, we need to search for ROOT objects
+        // For nested properties like DIALOG_RESOURCES.removeEquipmentFromTab,
+        // we should search for DIALOG_RESOURCES usage
+        
         // Deduplicate by fullName + lineNumber
         const unique = [];
         const seen = new Set();
+        
         for (const sym of allSymbols) {
             const key = `${sym.fullName}:${sym.lineNumber}`;
             if (!seen.has(key)) {
                 seen.add(key);
+                
+                // 🔥 Add searchName for reference lookup
+                if (sym.parentName) {
+                    // For nested: search for root object
+                    sym.searchName = sym.parentName;
+                } else {
+                    // For root: search for itself
+                    sym.searchName = sym.name;
+                }
+                
                 unique.push(sym);
             }
         }
         
-        console.log(`   ✅ Found ${unique.length} symbols: ${unique.map(s => s.fullName).join(', ')}`);
+        console.log(`   ✅ Found ${unique.length} symbols:`);
+        unique.forEach(s => {
+            if (s.parentName) {
+                console.log(`      - ${s.fullName} (search for: ${s.searchName})`);
+            } else {
+                console.log(`      - ${s.fullName}`);
+            }
+        });
+        
         return unique;
     }
 
@@ -725,7 +762,8 @@ class PRDependencyAnalyzer {
     }
 
     /**
-     * Get which specific changed symbols a dependent file uses (VS Code Reference Provider with barrel resolution)
+     * 🔥 FIX 2: Get which specific changed symbols a dependent file uses
+     * Groups symbols by searchName to avoid duplicate searches
      * @param {string} dependentPath - Path to the dependent file
      * @param {string} prFilePath - Path to the PR file  
      * @param {Array} changedSymbols - List of changed symbol objects with positions
@@ -740,7 +778,6 @@ class PRDependencyAnalyzer {
 
         try {
             console.log(`      🔍 Checking dependent: ${dependentPath}`);
-            console.log(`         Symbols to check: [${changedSymbols.slice(0, 3).map(s => s.fullName).join(', ')}${changedSymbols.length > 3 ? '...' : ''}]`);
             
             const fullDependentPath = path.join(this.workspaceRoot, dependentPath);
             const fullPRFilePath = path.join(this.workspaceRoot, prFilePath);
@@ -750,45 +787,55 @@ class PRDependencyAnalyzer {
                 return usedSymbols;
             }
 
-            // Check each symbol using VS Code Reference Provider with barrel resolution
+            // 🔥 Group symbols by searchName to avoid duplicate searches
+            const symbolsBySearchName = new Map();
             for (const symbol of changedSymbols) {
+                const searchName = symbol.searchName || symbol.name;
+                if (!symbolsBySearchName.has(searchName)) {
+                    symbolsBySearchName.set(searchName, []);
+                }
+                symbolsBySearchName.get(searchName).push(symbol);
+            }
+
+            console.log(`         Unique symbols to search: ${symbolsBySearchName.size}`);
+
+            // Check each unique search name
+            for (const [searchName, symbols] of symbolsBySearchName.entries()) {
+                // Use the first symbol's position for reference search
+                const primarySymbol = symbols[0];
+                
                 const symbolFileUri = vscode.Uri.file(fullPRFilePath);
-                const symbolPosition = new vscode.Position(symbol.lineNumber, symbol.column);
+                const symbolPosition = new vscode.Position(primarySymbol.lineNumber, primarySymbol.column);
+                
+                console.log(`         🔍 Searching for: ${searchName} (${symbols.length} related symbols)`);
                 
                 try {
-                    // ✨ Find all references through barrels recursively
                     const result = await this.resolveBarrelReferences(
                         symbolFileUri,
                         symbolPosition,
-                        symbol.fullName,
-                        new Set(), // Visited barrels tracker
-                        0 // Start at level 0
+                        searchName, // 🔥 Use searchName instead of fullName
+                        new Set(),
+                        0
                     );
                     
                     const allReferences = result.references;
-                    const barrelChain = result.barrelChain;
                     
                     if (allReferences.length === 0) {
-                        console.log(`         ⏭️ No references found for: ${symbol.fullName}`);
+                        console.log(`         ⏭️ No references found for: ${searchName}`);
                         continue;
                     }
                     
-                    if (barrelChain.length > 0) {
-                        console.log(`         📍 Found ${allReferences.length} total references through ${barrelChain.length} barrel(s)`);
-                    } else {
-                        console.log(`         📍 Found ${allReferences.length} direct references`);
-                    }
+                    console.log(`         📍 Found ${allReferences.length} references for ${searchName}`);
                     
-                    // Filter references to find ones in the dependent file
+                    // Filter references in this dependent file
                     const referencesInDependent = allReferences.filter(ref => {
                         const refPath = ref.uri.fsPath;
                         const isSameFile = path.normalize(refPath) === path.normalize(fullDependentPath);
-                        const isNotDefinition = ref.range.start.line !== symbol.lineNumber;
+                        const isNotDefinition = ref.range.start.line !== primarySymbol.lineNumber;
                         return isSameFile && isNotDefinition;
                     });
                     
                     if (referencesInDependent.length > 0) {
-                        // Filter out barrel exports (though should be minimal after resolution)
                         const realRefs = [];
                         for (const ref of referencesInDependent) {
                             const isBarrel = await this.isBarrelExport(ref);
@@ -798,20 +845,23 @@ class PRDependencyAnalyzer {
                         }
                         
                         if (realRefs.length > 0) {
-                            usedSymbols.push(symbol.fullName);
-                            console.log(`         ✅ Found ${realRefs.length} real references: ${symbol.fullName}`);
+                            // Add all related symbols (nested properties)
+                            for (const sym of symbols) {
+                                if (!usedSymbols.includes(sym.fullName)) {
+                                    usedSymbols.push(sym.fullName);
+                                }
+                            }
+                            console.log(`         ✅ Found ${realRefs.length} usages of ${searchName} → marking ${symbols.length} related symbols`);
                         }
                     }
                     
                 } catch (error) {
-                    console.error(`         ❌ Reference provider error for ${symbol.fullName}:`, error.message);
+                    console.error(`         ❌ Reference error for ${searchName}:`, error.message);
                 }
             }
             
-            if (usedSymbols.length === 0) {
-                console.log(`         ℹ️ No symbols from PR file used`);
-            } else {
-                console.log(`         ✅ Total confirmed: ${usedSymbols.length} symbols`);
+            if (usedSymbols.length > 0) {
+                console.log(`         ✅ Total confirmed: ${usedSymbols.length} symbols: [${usedSymbols.join(', ')}]`);
             }
 
             return usedSymbols;
@@ -1222,7 +1272,7 @@ class PRDependencyAnalyzer {
     }
 
     /**
-     * 🔥 NEW: Build comprehensive import patterns including path aliases
+     * 🔥 FIX 3: Build comprehensive import patterns with improved Angular alias support
      */
     buildImportPatterns(importerPath, barrelDir, barrelRelativeToWorkspace, pathAliases) {
         const patterns = [];
@@ -1242,8 +1292,7 @@ class PRDependencyAnalyzer {
         
         // 2. Absolute from workspace root
         patterns.push(
-            new RegExp(`from\\s+['"]${barrelRelativeToWorkspace}['"]`, 'i'),
-            new RegExp(`from\\s+['"]${barrelRelativeToWorkspace}/index['"]`, 'i')
+            new RegExp(`from\\s+['"]${barrelRelativeToWorkspace}['"]`, 'i')
         );
         
         // 3. Path aliases from tsconfig.json
@@ -1251,20 +1300,39 @@ class PRDependencyAnalyzer {
             if (barrelRelativeToWorkspace.startsWith(target)) {
                 const aliasedPath = barrelRelativeToWorkspace.replace(target, alias);
                 patterns.push(
-                    new RegExp(`from\\s+['"]${aliasedPath}['"]`, 'i'),
-                    new RegExp(`from\\s+['"]${aliasedPath}/index['"]`, 'i')
+                    new RegExp(`from\\s+['"]${aliasedPath}['"]`, 'i')
                 );
             }
         }
         
-        // 4. Common alias patterns (fallback)
-        const barrelParts = barrelRelativeToWorkspace.split('/');
-        if (barrelParts.length >= 2) {
-            const commonAliases = ['@app', '@shared', '@core', '@modules'];
-            for (const aliasPrefix of commonAliases) {
-                const aliasedPath = `${aliasPrefix}/${barrelParts.slice(1).join('/')}`;
+        // 🔥 FIX 4: Special handling for common Angular patterns
+        // Based on typical Angular structure: src/app/shared/utilities
+        if (barrelRelativeToWorkspace.includes('shared/utilities')) {
+            patterns.push(
+                // @shared/utilities
+                new RegExp(`from\\s+['"]@shared/utilities['"]`, 'i'),
+                // @app/shared/utilities
+                new RegExp(`from\\s+['"]@app/shared/utilities['"]`, 'i'),
+                // ~/shared/utilities (Nuxt style)
+                new RegExp(`from\\s+['"]~/shared/utilities['"]`, 'i')
+            );
+        }
+        
+        // Generic pattern for any @alias
+        const pathParts = barrelRelativeToWorkspace.split('/');
+        if (pathParts.length >= 2) {
+            // If path is src/app/shared/utilities, try @shared/utilities
+            const withoutApp = pathParts.slice(1).join('/');
+            patterns.push(
+                new RegExp(`from\\s+['"]@${withoutApp}['"]`, 'i')
+            );
+            
+            // Also try with first folder as alias
+            if (pathParts.length >= 3) {
+                // src/app/shared/utilities → @shared/utilities
+                const aliased = `@${pathParts[1]}/${pathParts.slice(2).join('/')}`;
                 patterns.push(
-                    new RegExp(`from\\s+['"]${aliasedPath}['"]`, 'i')
+                    new RegExp(`from\\s+['"]${aliased}['"]`, 'i')
                 );
             }
         }
