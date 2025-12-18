@@ -1000,8 +1000,9 @@ async function handlePRDependencyAnalysis(prUrl, stream, token, workspaceRoot) {
         
         // 🧪 TEST: Filter to specific files for debugging
         prFiles = prFiles.filter(f => 
-            f.path.includes('constants.ts') || 
-            f.path.includes('message-resources.ts')
+            // f.path.includes('constants.ts') || 
+            // f.path.includes('message-resources.ts') ||
+            f.path.includes('tab-management.store.ts')
         );
         
         if (prFiles.length === 0) {
@@ -1182,9 +1183,102 @@ function generatePRGraphWebviewHtml(graph, summary, prInfo) {
     const scriptPath = path.join(extensionPath, 'scripts', 'dependency-graph', 'graph-view.ts');
     let scriptContent = fs.readFileSync(scriptPath, 'utf8');
     
+    // 🔥 Filter graph to show only impacted nodes in PR mode
+    const symbolToDependentsMap = graph.symbolToDependentsMap;
+    let filteredNodes = graph.nodes;
+    let filteredEdges = graph.edges;
+    
+    console.log(`📊 Original graph: ${graph.nodes.length} nodes, ${graph.edges.length} edges`);
+    console.log(`📊 symbolToDependentsMap type:`, symbolToDependentsMap?.constructor?.name, 'size:', symbolToDependentsMap?.size);
+    
+    // Check if symbolToDependentsMap exists and has data (could be Map or Object)
+    const hasImpactData = symbolToDependentsMap && (
+        (symbolToDependentsMap instanceof Map && symbolToDependentsMap.size > 0) ||
+        (typeof symbolToDependentsMap === 'object' && Object.keys(symbolToDependentsMap).length > 0)
+    );
+    
+    if (hasImpactData) {
+        // Collect all impacted file paths
+        const impactedPaths = new Set();
+        
+        // Handle both Map and Object formats
+        if (symbolToDependentsMap instanceof Map) {
+            for (const [symbol, files] of symbolToDependentsMap) {
+                console.log(`   Symbol: ${symbol} → ${files.length} files`);
+                files.forEach(f => impactedPaths.add(f));
+            }
+        } else {
+            for (const [symbol, files] of Object.entries(symbolToDependentsMap)) {
+                console.log(`   Symbol: ${symbol} → ${files.length} files`);
+                files.forEach(f => impactedPaths.add(f));
+            }
+        }
+        
+        console.log(`🎯 Total impacted files from symbols: ${impactedPaths.size}`);
+        console.log(`🎯 Impacted paths:`, Array.from(impactedPaths));
+        
+        // Keep: PR files + dependencies + actually impacted dependents
+        const keepNodeIds = new Set();
+        filteredNodes = graph.nodes.filter(node => {
+            console.log(`   Checking node: ${node.id}, type: ${node.nodeType}, isPR: ${node.isPRFile}`);
+            
+            // Always keep PR files
+            if (node.isPRFile) {
+                keepNodeIds.add(node.id);
+                console.log(`      ✅ Keep (PR file)`);
+                return true;
+            }
+            // 🚫 HIDE dependencies in PR mode (user doesn't need to see what PR file imports)
+            if (node.nodeType === 'dependency') {
+                console.log(`      ❌ Filter out (dependency - not needed in PR mode)`);
+                return false;
+            }
+            // Keep dependents that are actually impacted
+            if (node.nodeType === 'dependent') {
+                const nodePath = node.relativePath || node.id;
+                const isImpacted = impactedPaths.has(nodePath);
+                console.log(`      Path: ${nodePath}, Impacted: ${isImpacted}`);
+                if (isImpacted) {
+                    keepNodeIds.add(node.id);
+                    console.log(`      ✅ Keep (impacted dependent)`);
+                    return true;
+                }
+                console.log(`      ❌ Filter out (non-impacted dependent)`);
+                return false;
+            }
+            // Handle "both" type (dependency + dependent)
+            if (node.nodeType === 'both') {
+                const nodePath = node.relativePath || node.id;
+                const isImpacted = impactedPaths.has(nodePath);
+                console.log(`      Path: ${nodePath}, Impacted: ${isImpacted}`);
+                if (isImpacted) {
+                    keepNodeIds.add(node.id);
+                    console.log(`      ✅ Keep (impacted both)`);
+                    return true;
+                }
+                console.log(`      ❌ Filter out (non-impacted both)`);
+                return false;
+            }
+            // Filter out other types by default
+            console.log(`      ❌ Filter out (other type)`);
+            return false;
+        });
+        
+        // Filter edges to only include connections between kept nodes
+        filteredEdges = graph.edges.filter(edge => {
+            const sourceId = edge.source.id || edge.source;
+            const targetId = edge.target.id || edge.target;
+            return keepNodeIds.has(sourceId) && keepNodeIds.has(targetId);
+        });
+        
+        console.log(`🎯 Filtered graph: ${filteredNodes.length} nodes (from ${graph.nodes.length}), ${filteredEdges.length} edges (from ${graph.edges.length})`);
+    } else {
+        console.log(`⚠️ No impact data available, showing all nodes`);
+    }
+    
     // Prepare PR-enhanced graph data
     const graphDataJson = JSON.stringify({
-        nodes: graph.nodes.map(node => {
+        nodes: filteredNodes.map(node => {
             const angularEntities = node.metadata?.angularEntities || {};
             const primaryEntity = getNodeDisplayName(node, angularEntities);
             
@@ -1210,14 +1304,17 @@ function generatePRGraphWebviewHtml(graph, summary, prInfo) {
                 nodeType: node.nodeType || 'file'
             };
         }),
-        edges: graph.edges,
+        edges: filteredEdges,
         // Add PR metadata
         prMode: true,
         prInfo: {
             repoType: prInfo.repoType,
             prId: prInfo.prId,
             summary: summary
-        }
+        },
+        // Add symbol impact mapping for accurate dependent filtering
+        symbolToDependentsMap: graph.symbolToDependentsMap ? 
+            Object.fromEntries(graph.symbolToDependentsMap) : null
     });
     
     const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath || '';

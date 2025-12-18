@@ -328,7 +328,7 @@ function showNodeDetails(node) {
     })
     .filter(n => n);
 
-  const dependents = graphData.edges
+  let dependents = graphData.edges
     .filter(edge => {
       const targetId = edge.target.id || edge.target;
       return targetId === node.id;
@@ -338,6 +338,28 @@ function showNodeDetails(node) {
       return graphData.nodes.find(n => n.id === sourceId);
     })
     .filter(n => n);
+
+  // 🔥 Filter by actual impact in PR mode
+  if (graphData.prMode && graphData.symbolToDependentsMap && node.isPRFile && node.changedSymbols) {
+    // Get all files that use ANY changed symbol from this PR file
+    const impactedFiles = new Set();
+    for (const symbol of node.changedSymbols) {
+      const symbolName = typeof symbol === 'string' ? symbol : symbol.fullName;
+      const files = graphData.symbolToDependentsMap[symbolName];
+      if (files) {
+        files.forEach(f => impactedFiles.add(f));
+      }
+    }
+
+    // Filter dependents to only those actually impacted
+    const totalDependents = dependents.length;
+    dependents = dependents.filter(dep => {
+      const depPath = dep.relativePath || dep.id;
+      return impactedFiles.has(depPath);
+    });
+
+    console.log(`🎯 PR Mode: Filtered to ${dependents.length} actual impacted files (from ${totalDependents} total dependents)`);
+  }
 
   // 🔍 FULL JSON LOG with dependencies/dependents
   console.log('📊 FULL NODE DETAIL JSON:', {
@@ -456,16 +478,16 @@ function showNodeDetails(node) {
         </div>
         
         <div class="detail-section">
-            <h4 style="border-bottom: 3px solid #ff6b6b; padding-bottom: 8px;">📥 Dependencies (${dependencies.length}) - What I Need</h4>
-            <div style="max-height: 250px; overflow-y: auto;">
-                ${dependenciesHtml || '<p style="opacity:0.6; font-style:italic;">No dependencies found</p>'}
+            <h4 style="border-bottom: 3px solid #ffa500; padding-bottom: 8px;">📤 Dependents (${dependents.length}) - Who Needs Me</h4>
+            <div style="max-height: 400px; overflow-y: auto;">
+                ${dependentsHtml || '<p style="opacity:0.6; font-style:italic;">No dependents found</p>'}
             </div>
         </div>
-        
+
         <div class="detail-section">
-            <h4 style="border-bottom: 3px solid #ffa500; padding-bottom: 8px;">📤 Dependents (${dependents.length}) - Who Needs Me</h4>
-            <div style="max-height: 250px; overflow-y: auto;">
-                ${dependentsHtml || '<p style="opacity:0.6; font-style:italic;">No dependents found</p>'}
+            <h4 style="border-bottom: 3px solid #ff6b6b; padding-bottom: 8px;">📥 Dependencies (${dependencies.length}) - What I Need</h4>
+            <div style="max-height: 400px; overflow-y: auto;">
+                ${dependenciesHtml || '<p style="opacity:0.6; font-style:italic;">No dependencies found</p>'}
             </div>
         </div>
     `;

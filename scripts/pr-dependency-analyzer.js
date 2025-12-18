@@ -578,6 +578,34 @@ class PRDependencyAnalyzer {
             relevantNodeIds.has(e.source) && relevantNodeIds.has(e.target)
         );
 
+        // 🔥 NEW: Add edges for barrel export detected files (not in original graph)
+        // These are files found via resolveBarrelReferences that were added dynamically
+        for (const prNode of prNodes) {
+            if (prNode.changedSymbols && Array.isArray(prNode.changedSymbols)) {
+                // For each impacted file found via barrel resolution
+                for (const nodeId of relevantNodeIds) {
+                    if (nodeId === prNode.id) continue; // Skip self
+                    
+                    const targetNode = nodes.find(n => n.id === nodeId);
+                    if (!targetNode || targetNode.isPRFile) continue;
+                    
+                    // Check if edge already exists
+                    const edgeExists = edges.some(e => 
+                        e.source === nodeId && e.target === prNode.id
+                    );
+                    
+                    if (!edgeExists) {
+                        // Create edge from impacted file to PR file (dependent relationship)
+                        edges.push({
+                            source: nodeId,
+                            target: prNode.id,
+                            type: 'uses'
+                        });
+                    }
+                }
+            }
+        }
+
         // Classify nodes for better visualization
         nodes.forEach(node => {
             if (!node.isPRFile) {
