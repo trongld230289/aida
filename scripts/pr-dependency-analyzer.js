@@ -107,40 +107,223 @@ class PRDependencyAnalyzer {
             console.log(`\n🔍 Analyzing file: ${node.prPath}`);
             console.log(`   Node ID: ${node.id}`);
             console.log(`   Node relative path: ${node.relativePath}`);
-            console.log(`   Changed symbols: [${node.changedSymbols?.join(', ') || 'none'}]`);
+            console.log(`   Changed symbols: [${node.changedSymbols?.map(s => s.fullName).join(', ') || 'none'}]`);
             console.log(`   Dependents found in graph: ${allDependents.length}`);
             
             if ((node.prStatus === 'edit' || node.prStatus === 'rename') && node.changedSymbols && node.changedSymbols.length > 0) {
-                // Modified/renamed file with changed symbols: filter dependents by symbol usage
-                console.log(`🔎 Filtering ${allDependents.length} dependents for ${node.prStatus} file: ${node.prPath}`);
-                
-                for (const depId of allDependents) {
-                    const depNode = this.fullGraph.nodes.find(n => n.id === depId);
-                    if (!depNode) continue;
-
-                    // Check which specific symbols this dependent uses
-                    const usedSymbols = await this.getUsedSymbols(
-                        depNode.relativePath,
-                        node.relativePath,
-                        node.changedSymbols // Now passing full symbol objects with positions
-                    );
-
-                    if (usedSymbols.length > 0) {
-                        relevantNodeIds.add(depId);
-                        totalDependents++;
-                        filteredDependents++;
+                // 🔥 NEW: If no direct dependents, check if this is a barrel export source
+                if (allDependents.length === 0) {
+                    console.log(`🔍 No direct dependents → Checking for barrel export usage`);
+                    
+                    const fullPRFilePath = path.join(this.workspaceRoot, node.relativePath);
+                    const symbolFileUri = vscode.Uri.file(fullPRFilePath);
+                    
+                    // Try to find users through barrel exports
+                    for (const symbol of node.changedSymbols) {
+                        const symbolPosition = new vscode.Position(symbol.lineNumber, symbol.column);
                         
-                        // Track which symbols are used by this dependent
-                        usedSymbols.forEach(symbolFullName => {
-                            if (!symbolToDependentsMap.has(symbolFullName)) {
-                                symbolToDependentsMap.set(symbolFullName, []);
+                        console.log(`         🔍 Finding users of: ${symbol.fullName} via barrel chain`);
+                        
+                        try {
+                            const result = await this.resolveBarrelReferences(
+                                symbolFileUri,
+                                symbolPosition,
+                                symbol.fullName,
+                                new Set(),
+                                0
+                            );
+                            
+                            if (result.references.length > 0) {
+                                console.log(`            📍 Found ${result.references.length} references through barrel`);
+                                
+                                // Extract unique file paths (excluding definition and barrel files)
+                                const userFiles = new Set();
+                                for (const ref of result.references) {
+                                    const refPath = ref.uri.fsPath;
+                                    const isDefinition = path.normalize(refPath) === path.normalize(fullPRFilePath);
+                                    const isBarrel = await this.isBarrelExport(ref);
+                                    
+                                    console.log(`               🔍 Checking ref: ${path.basename(refPath)} (def=${isDefinition}, barrel=${isBarrel})`);
+                                    
+                                    if (!isDefinition && !isBarrel) {
+                                        const relativePath = path.relative(this.workspaceRoot, refPath).replace(/\\/g, '/');
+                                        userFiles.add(relativePath);
+                                    }
+                                }
+                                
+                                console.log(`            ✅ Found ${userFiles.size} actual user files`);
+                                
+                                // 🔥 NEW: If no users found via references, try wildcard search through barrel
+                                if (userFiles.size === 0 && result.barrelChain && result.barrelChain.length > 0) {
+                                    console.log(`            🔍 No users via references → Trying wildcard search through barrel`);
+                                    
+                                    // Find barrel file in chain
+                                    for (const barrelInfo of result.barrelChain) {
+                                        if (barrelInfo.isWildcard) {
+                                            console.log(`               📦 Found wildcard barrel: ${path.basename(barrelInfo.location.uri.fsPath)}`);
+                                            
+                                            const wildcardRefs = await this.findImportsOfBarrelFile(
+                                                barrelInfo.location.uri,
+                                                symbol.fullName
+                                            );
+                                            
+                                            console.log(`               ✅ Wildcard search found ${wildcardRefs.length} usages`);
+                                            
+                                            for (const ref of wildcardRefs) {
+                                                const refPath = ref.uri.fsPath;
+                                                const isDefinition = path.normalize(refPath) === path.normalize(fullPRFilePath);
+                                                
+                                                if (!isDefinition) {
+                                                    const relativePath = path.relative(this.workspaceRoot, refPath).replace(/\\/g, '/');
+                                                    userFiles.add(relativePath);
+                                                }
+                                            }
+                                            
+                                            break; // Only use first wildcard barrel
+                                        }
+                                    }
+                                }
+                                
+                                // Add these files to dependents
+                                for (const userFilePath of userFiles) {
+                                    // Find or create node for this file
+                                    let userNode = this.fullGraph.nodes.find(n => n.relativePath === userFilePath);
+                                    if (!userNode) {
+                                        // Create temporary node for files not in graph
+                                        userNode = {
+                                            id: userFilePath,
+                                            relativePath: userFilePath,
+                                            label: path.basename(userFilePath),
+                                            type: 'dependency'
+                                        };
+                                        this.fullGraph.nodes.push(userNode);
+                                    }
+                                    
+                                    relevantNodeIds.add(userNode.id);
+                                    totalDependents++;
+                                    filteredDependents++;
+                                    
+                                    // Track symbols
+                                    const symbolFullName = symbol.fullName;
+                                    if (!symbolToDependentsMap.has(symbolFullName)) {
+                                        symbolToDependentsMap.set(symbolFullName, []);
+                                    }
+                                    symbolToDependentsMap.get(symbolFullName).push(userFilePath);
+                                    
+                                    // Add children if any
+                                    if (symbol.children && symbol.children.length > 0) {
+                                        symbol.children.forEach(childName => {
+                                            if (!symbolToDependentsMap.has(childName)) {
+                                                symbolToDependentsMap.set(childName, []);
+                                            }
+                                            symbolToDependentsMap.get(childName).push(userFilePath);
+                                        });
+                                    }
+                                    
+                                    console.log(`            ✅ Added: ${userFilePath}`);
+                                }
+                            } else {
+                                console.log(`            ⚠️ No references found via VS Code API → Trying wildcard search`);
+                                
+                                // 🔥 NEW: Fallback to wildcard search if no references at all
+                                // Find barrel file that re-exports this symbol
+                                const prDir = path.dirname(fullPRFilePath);
+                                const barrelPath = path.join(prDir, 'index.ts');
+                                
+                                if (fs.existsSync(barrelPath)) {
+                                    console.log(`               📦 Found barrel: ${path.basename(barrelPath)}`);
+                                    
+                                    const barrelUri = vscode.Uri.file(barrelPath);
+                                    const wildcardRefs = await this.findImportsOfBarrelFile(
+                                        barrelUri,
+                                        symbol.fullName
+                                    );
+                                    
+                                    console.log(`               ✅ Wildcard search found ${wildcardRefs.length} usages`);
+                                    
+                                    const userFiles = new Set();
+                                    for (const ref of wildcardRefs) {
+                                        const refPath = ref.uri.fsPath;
+                                        const isDefinition = path.normalize(refPath) === path.normalize(fullPRFilePath);
+                                        
+                                        if (!isDefinition) {
+                                            const relativePath = path.relative(this.workspaceRoot, refPath).replace(/\\/g, '/');
+                                            userFiles.add(relativePath);
+                                        }
+                                    }
+                                    
+                                    // Add these files
+                                    for (const userFilePath of userFiles) {
+                                        let userNode = this.fullGraph.nodes.find(n => n.relativePath === userFilePath);
+                                        if (!userNode) {
+                                            userNode = {
+                                                id: userFilePath,
+                                                relativePath: userFilePath,
+                                                label: path.basename(userFilePath),
+                                                type: 'dependency'
+                                            };
+                                            this.fullGraph.nodes.push(userNode);
+                                        }
+                                        
+                                        relevantNodeIds.add(userNode.id);
+                                        totalDependents++;
+                                        filteredDependents++;
+                                        
+                                        const symbolFullName = symbol.fullName;
+                                        if (!symbolToDependentsMap.has(symbolFullName)) {
+                                            symbolToDependentsMap.set(symbolFullName, []);
+                                        }
+                                        symbolToDependentsMap.get(symbolFullName).push(userFilePath);
+                                        
+                                        if (symbol.children && symbol.children.length > 0) {
+                                            symbol.children.forEach(childName => {
+                                                if (!symbolToDependentsMap.has(childName)) {
+                                                    symbolToDependentsMap.set(childName, []);
+                                                }
+                                                symbolToDependentsMap.get(childName).push(userFilePath);
+                                            });
+                                        }
+                                        
+                                        console.log(`            ✅ Added via fallback: ${userFilePath}`);
+                                    }
+                                }
                             }
-                            symbolToDependentsMap.get(symbolFullName).push(depNode.relativePath);
-                        });
-                        
-                        console.log(`   ✅ Dependent uses symbols [${usedSymbols.join(', ')}]: ${depNode.relativePath}`);
-                    } else {
-                        console.log(`   ⏭️ Skipping dependent (no symbol usage): ${depNode.relativePath}`);
+                        } catch (error) {
+                            console.error(`            ❌ Error finding barrel references: ${error.message}`);
+                        }
+                    }
+                } else {
+                    // Has direct dependents - filter them normally
+                    console.log(`🔎 Filtering ${allDependents.length} dependents for ${node.prStatus} file: ${node.prPath}`);
+                    
+                    for (const depId of allDependents) {
+                        const depNode = this.fullGraph.nodes.find(n => n.id === depId);
+                        if (!depNode) continue;
+
+                        // Check which specific symbols this dependent uses
+                        const usedSymbols = await this.getUsedSymbols(
+                            depNode.relativePath,
+                            node.relativePath,
+                            node.changedSymbols // Now passing full symbol objects with positions
+                        );
+
+                        if (usedSymbols.length > 0) {
+                            relevantNodeIds.add(depId);
+                            totalDependents++;
+                            filteredDependents++;
+                            
+                            // Track which symbols are used by this dependent
+                            usedSymbols.forEach(symbolFullName => {
+                                if (!symbolToDependentsMap.has(symbolFullName)) {
+                                    symbolToDependentsMap.set(symbolFullName, []);
+                                }
+                                symbolToDependentsMap.get(symbolFullName).push(depNode.relativePath);
+                            });
+                            
+                            console.log(`   ✅ Dependent uses symbols [${usedSymbols.join(', ')}]: ${depNode.relativePath}`);
+                        } else {
+                            console.log(`   ⏭️ Skipping dependent (no symbol usage): ${depNode.relativePath}`);
+                        }
                     }
                 }
             } else {
@@ -896,7 +1079,7 @@ class PRDependencyAnalyzer {
             if (!directReferences) {
                 // 🔥 IMPROVED: Add timeout to prevent hanging
                 const timeout = new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('Reference provider timeout')), 5000)
+                    setTimeout(() => reject(new Error('Reference provider timeout')), 10000)
                 );
                 
                 const refPromise = vscode.commands.executeCommand(
@@ -1161,6 +1344,11 @@ class PRDependencyAnalyzer {
             const barrelRelativeToWorkspace = path.relative(workspacePath, barrelDir).replace(/\\/g, '/');
             
             console.log(`         🔍 Looking for imports of barrel: ${barrelRelativeToWorkspace}`);
+            console.log(`         🎯 Searching for symbol: ${symbolName}`);
+            
+            // Load tsconfig aliases for better matching
+            const pathAliases = await this.loadTSConfigAliases(workspacePath);
+            console.log(`         📋 Loaded ${pathAliases.size} path aliases`);
             
             const files = await vscode.workspace.findFiles(
                 new vscode.RelativePattern(workspaceFolder, '**/*.{ts,tsx,js,jsx}'),
@@ -1176,28 +1364,15 @@ class PRDependencyAnalyzer {
                     const document = await vscode.workspace.openTextDocument(fileUri);
                     const text = document.getText();
                     
-                    // Calculate relative path from file to barrel
                     const fileDir = path.dirname(fileUri.fsPath);
-                    let relativePath = path.relative(fileDir, barrelDir);
                     
-                    // Normalize path for import statements
-                    if (!relativePath.startsWith('.')) {
-                        relativePath = './' + relativePath;
-                    }
-                    relativePath = relativePath.replace(/\\/g, '/');
-                    
-                    // Build comprehensive import patterns
-                    const importPatterns = [
-                        // Relative imports: from './shared/utilities' or '../shared/utilities'
-                        new RegExp(`from\\s+['"]${relativePath.replace(/\./g, '\\.')}['"]`, 'i'),
-                        new RegExp(`from\\s+['"]${relativePath.replace(/\./g, '\\.')}/index['"]`, 'i'),
-                        // Absolute from workspace root
-                        new RegExp(`from\\s+['"]${barrelRelativeToWorkspace}['"]`, 'i'),
-                        // Path aliases - generic pattern matching the barrel directory structure
-                        // Examples: @shared/utilities, @app/shared/utilities
-                        new RegExp(`from\\s+['"]([@\\w]+)/utilities['"]`, 'i'),
-                        new RegExp(`from\\s+['"]([@\\w]+)/shared/utilities['"]`, 'i')
-                    ];
+                    // 🔥 Use buildImportPatterns for comprehensive matching
+                    const importPatterns = this.buildImportPatterns(
+                        fileUri.fsPath,
+                        barrelDir,
+                        barrelRelativeToWorkspace,
+                        pathAliases
+                    );
                     
                     let hasImport = false;
                     for (const pattern of importPatterns) {
@@ -1210,19 +1385,25 @@ class PRDependencyAnalyzer {
                     if (!hasImport) continue;
                     
                     // File imports from this barrel - now check if it uses the symbol
-                    // For nested properties like 'limitedEquipment.header', search for the root object 'limitedEquipment'
-                    const searchTerm = symbolName.includes('.') ? symbolName.split('.')[0] : symbolName;
-                    const symbolPattern = new RegExp(`\\b${searchTerm.replace(/\./g, '\\.')}\\b`, 'g');
+                    // symbolName is already the root object (e.g., 'limitedEquipment')
+                    const symbolPattern = new RegExp(`\\b${symbolName.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}\\b`, 'g');
                     let match;
+                    let foundInFile = 0;
                     
                     while ((match = symbolPattern.exec(text)) !== null) {
                         const position = document.positionAt(match.index);
                         const line = document.lineAt(position.line);
                         
-                        // Skip import lines
-                        if (!line.text.trim().startsWith('import')) {
+                        // Skip import/export lines
+                        const lineText = line.text.trim();
+                        if (!lineText.startsWith('import') && !lineText.startsWith('export')) {
                             imports.push(new vscode.Location(fileUri, position));
+                            foundInFile++;
                         }
+                    }
+                    
+                    if (foundInFile > 0) {
+                        console.log(`         ✅ ${path.basename(fileUri.fsPath)}: ${foundInFile} usages`);
                     }
                 } catch (error) {
                     // Skip files that can't be read
@@ -1383,126 +1564,6 @@ class PRDependencyAnalyzer {
         }
     }
 
-    /**
-     * Fallback: Simple string matching (when AST fails)
-     */
-    async getUsedSymbolsFallback(dependentPath, changedSymbols) {
-        const usedSymbols = [];
-        
-        try {
-            const fullDependentPath = path.join(this.workspaceRoot, dependentPath);
-            if (!fs.existsSync(fullDependentPath)) return usedSymbols;
-
-            const content = fs.readFileSync(fullDependentPath, 'utf8');
-            
-            for (const symbol of changedSymbols) {
-                // Escape dots in symbol path for regex
-                const escapedSymbol = symbol.replace(/\\./g, '\\\\.');
-                const symbolPattern = new RegExp(`\\\\b${escapedSymbol}\\\\b`);
-                if (symbolPattern.test(content)) {
-                    usedSymbols.push(symbol);
-                }
-            }
-            
-            console.log(`      ⚠️ Fallback found ${usedSymbols.length} symbols (may have false positives)`);
-            return usedSymbols;
-        } catch (error) {
-            console.error(`Error in fallback symbol check:`, error.message);
-            return usedSymbols;
-        }
-    }
-
-    /**     * Check if a dependent file uses any of the changed symbols from a PR file
-     * @param {string} dependentPath - Path to the dependent file
-     * @param {string} prFilePath - Path to the PR file
-     * @param {string[]} changedSymbols - List of changed symbols to check
-     * @returns {Promise<boolean>} - True if the file uses any changed symbol
-     */
-    async fileUsesChangedSymbols(dependentPath, prFilePath, changedSymbols) {
-        if (!changedSymbols || changedSymbols.length === 0) {
-            return false;
-        }
-
-        try {
-            // First check: Does dependent import from PR file?
-            const importsFile = await this.fileImportsFile(dependentPath, prFilePath);
-            if (!importsFile) {
-                // No import relationship, so can't use changed symbols
-                return false;
-            }
-
-            // Second check: Read dependent file and check if it uses any changed symbols
-            const fullDependentPath = path.join(this.workspaceRoot, dependentPath);
-            
-            if (!fs.existsSync(fullDependentPath)) {
-                return false;
-            }
-
-            const content = fs.readFileSync(fullDependentPath, 'utf8');
-            
-            // Check if any changed symbol appears in the file
-            // Use word boundaries to avoid partial matches
-            for (const symbol of changedSymbols) {
-                const symbolPattern = new RegExp(`\\b${symbol}\\b`);
-                if (symbolPattern.test(content)) {
-                    return true;
-                }
-            }
-
-            return false;
-        } catch (error) {
-            console.error(`Error checking symbol usage in ${dependentPath}:`, error.message);
-            return false;
-        }
-    }
-
-    /**
-     * Check if a file imports from another file
-     * @param {string} importerPath - Path to the file doing the importing
-     * @param {string} importedPath - Path to the file being imported
-     * @returns {Promise<boolean>} - True if there's an import relationship
-     */
-    async fileImportsFile(importerPath, importedPath) {
-        try {
-            const fullImporterPath = path.join(this.workspaceRoot, importerPath);
-            
-            if (!fs.existsSync(fullImporterPath)) {
-                return false;
-            }
-
-            const content = fs.readFileSync(fullImporterPath, 'utf8');
-            
-            // Normalize paths for comparison (handle both / and \)
-            const normalizedImported = importedPath.replace(/\\/g, '/').replace(/\.[^.]+$/, ''); // Remove extension
-            
-            // Check for import statements
-            // Match: import ... from '...'  or  require('...')
-            const importPattern = /(?:import\s+.*?\s+from\s+['"]([^'"]+)['"]|require\s*\(\s*['"]([^'"]+)['"]\s*\))/g;
-            let match;
-            
-            while ((match = importPattern.exec(content)) !== null) {
-                const importPath = (match[1] || match[2]).replace(/\\/g, '/');
-                
-                // Check if the import path matches the imported file
-                if (importPath.includes(normalizedImported) || normalizedImported.includes(importPath)) {
-                    return true;
-                }
-                
-                // Also check filename match
-                const importFileName = path.basename(importPath, path.extname(importPath));
-                const importedFileName = path.basename(normalizedImported, path.extname(normalizedImported));
-                
-                if (importFileName === importedFileName) {
-                    return true;
-                }
-            }
-
-            return false;
-        } catch (error) {
-            console.error(`Error checking import relationship ${importerPath} → ${importedPath}:`, error.message);
-            return false;
-        }
-    }
 }
 
 module.exports = { PRDependencyAnalyzer };
