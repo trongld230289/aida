@@ -93,6 +93,8 @@ function renderGraph() {
       // PR-specific styling takes priority
       if (d.isPRFile && d.prStatus) {
         classes += ' pr-file pr-status-' + d.prStatus;
+      } else if (d.isHiddenImpact) {
+        classes += ' pr-impact-hidden';
       } else if (d.nodeType && d.nodeType !== 'pr-file') {
         classes += ' node-type-' + d.nodeType;
       } else if (d.entityType) {

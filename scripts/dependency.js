@@ -999,11 +999,16 @@ async function handlePRDependencyAnalysis(prUrl, stream, token, workspaceRoot) {
         }
         
         // 🧪 TEST: Filter to specific files for debugging
-        prFiles = prFiles.filter(f => 
-            // f.path.includes('constants.ts') || 
-            // f.path.includes('message-resources.ts') ||
-            f.path.includes('tab-management.store.ts')
-        );
+        // prFiles = prFiles.filter(f => 
+        //     f.path.includes('constants.ts')
+        //      || 
+        //     f.path.includes('message-resources.ts') ||
+        //     f.path.includes('tab-management.store.ts') 
+        //      ||
+        //      f.path.includes('tab-management.service.ts') 
+        //      ||
+        //     f.path.includes('maintain-equipment-list.component.ts')
+        // );
         
         if (prFiles.length === 0) {
             stream.markdown('⚠️ No test files found in PR\n\n');
@@ -1187,6 +1192,7 @@ function generatePRGraphWebviewHtml(graph, summary, prInfo) {
     const symbolToDependentsMap = graph.symbolToDependentsMap;
     let filteredNodes = graph.nodes;
     let filteredEdges = graph.edges;
+    let impactedPaths = new Set(); // ✅ Moved outside for access in map()
     
     console.log(`📊 Original graph: ${graph.nodes.length} nodes, ${graph.edges.length} edges`);
     console.log(`📊 symbolToDependentsMap type:`, symbolToDependentsMap?.constructor?.name, 'size:', symbolToDependentsMap?.size);
@@ -1199,7 +1205,7 @@ function generatePRGraphWebviewHtml(graph, summary, prInfo) {
     
     if (hasImpactData) {
         // Collect all impacted file paths
-        const impactedPaths = new Set();
+        // impactedPaths is already defined
         
         // Handle both Map and Object formats
         if (symbolToDependentsMap instanceof Map) {
@@ -1273,7 +1279,11 @@ function generatePRGraphWebviewHtml(graph, summary, prInfo) {
         
         console.log(`🎯 Filtered graph: ${filteredNodes.length} nodes (from ${graph.nodes.length}), ${filteredEdges.length} edges (from ${graph.edges.length})`);
     } else {
-        console.log(`⚠️ No impact data available, showing all nodes`);
+        console.log(`⚠️ No impact data available, filtering to show ONLY PR files`);
+        // If no impact data, we still want to hide dependencies in PR mode
+        // Only show the PR files themselves
+        filteredNodes = graph.nodes.filter(node => node.isPRFile);
+        filteredEdges = []; // No edges if no impacts
     }
     
     // Prepare PR-enhanced graph data
@@ -1298,6 +1308,7 @@ function generatePRGraphWebviewHtml(graph, summary, prInfo) {
                 },
                 // PR-specific metadata
                 isPRFile: node.isPRFile || false,
+                isHiddenImpact: !node.isPRFile && impactedPaths.has(node.relativePath || node.id), // 🔴 Mark hidden impacts
                 prStatus: node.prStatus,
                 prChanges: node.prChanges,
                 changedSymbols: node.changedSymbols, // Add changed symbols

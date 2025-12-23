@@ -48,7 +48,8 @@ class PRDependencyAnalyzer {
                 console.log(`   Patch length: ${node.prPatch?.length || 0} chars`);
                 console.log(`   Patch preview: ${node.prPatch?.substring(0, 200)}...`);
                 
-                const changedSymbols = this.extractChangedSymbols(node.prPatch, node.relativePath);
+                // 🔥 Use async extraction with VS Code API
+                const changedSymbols = await this.extractChangedSymbols(node.prPatch, node.relativePath);
                 
                 if (changedSymbols.length === 0) {
                     console.log(`⚠️ No changed symbols extracted for: ${node.prPath}`);
@@ -56,7 +57,7 @@ class PRDependencyAnalyzer {
                     nodeChangedSymbols.set(node.id, []);
                 } else {
                     console.log(`✅ Extracted ${changedSymbols.length} changed symbols from: ${node.prPath}`);
-                    console.log(`   Symbols: ${changedSymbols.join(', ')}`);
+                    console.log(`   Symbols: ${changedSymbols.map(s => s.fullName).join(', ')}`);
                     nodeChangedSymbols.set(node.id, changedSymbols);
                 }
                 
@@ -64,11 +65,11 @@ class PRDependencyAnalyzer {
                 node.changedSymbols = changedSymbols;
             } else if (node.prStatus === 'rename' && node.prPatch) {
                 // Renamed + modified file: extract changed symbols if patch exists
-                const changedSymbols = this.extractChangedSymbols(node.prPatch, node.relativePath);
+                const changedSymbols = await this.extractChangedSymbols(node.prPatch, node.relativePath);
                 
                 if (changedSymbols.length > 0) {
                     console.log(`✅ Extracted ${changedSymbols.length} changed symbols from renamed file: ${node.prPath}`);
-                    console.log(`   Symbols: ${changedSymbols.join(', ')}`);
+                    console.log(`   Symbols: ${changedSymbols.map(s => s.fullName).join(', ')}`);
                     nodeChangedSymbols.set(node.id, changedSymbols);
                     node.changedSymbols = changedSymbols;
                 } else {
@@ -715,7 +716,194 @@ class PRDependencyAnalyzer {
      * 🔥 FIX: Extract and deduplicate to root objects only
      * Returns root symbols with children array for nested properties
      */
-    extractChangedSymbols(patch, prFilePath) {
+    /**
+     * Main entry point for symbol extraction
+     * Combines Regex (fast, robust for fragments) and VS Code API (accurate for structure)
+     */
+    async extractChangedSymbols(patch, prFilePath) {
+        console.log(`   🔍 Extracting symbols using Hybrid approach (Regex + VS Code API)...`);
+        
+        // 1. Run Regex extraction (using the existing method)
+        const regexSymbols = await this.extractChangedSymbolsRegex(patch, prFilePath);
+        
+        // 2. Run VS Code API extraction
+        const vscodeSymbols = await this.extractChangedSymbolsVscode(patch, prFilePath);
+        
+        // 3. Merge and Deduplicate
+        const mergedMap = new Map();
+        
+        // Helper to add symbol if valid
+        const addSymbol = (sym, source) => {
+            // Filter out symbols that match the filename (likely module wrappers)
+            const fileName = path.basename(prFilePath, path.extname(prFilePath));
+            if (sym.name.toLowerCase() === fileName.toLowerCase()) {
+                console.log(`   🚫 Ignoring symbol '${sym.name}' (matches filename) from ${source}`);
+                return;
+            }
+            
+            if (!mergedMap.has(sym.fullName)) {
+                mergedMap.set(sym.fullName, sym);
+            } else {
+                // If we already have it, maybe update metadata?
+                // Prefer VS Code API type info if available
+                if (source === 'VSCode' && mergedMap.get(sym.fullName).type === 'unknown') {
+                    mergedMap.set(sym.fullName, sym);
+                }
+            }
+        };
+        
+        regexSymbols.forEach(s => addSymbol(s, 'Regex'));
+        vscodeSymbols.forEach(s => addSymbol(s, 'VSCode'));
+        
+        const finalSymbols = Array.from(mergedMap.values());
+        console.log(`   ✅ Hybrid extraction found ${finalSymbols.length} unique symbols`);
+        return finalSymbols;
+    }
+
+    /**
+     * Extract changed symbols using VS Code DocumentSymbolProvider on Virtual Document
+     * @param {string} patch - The git patch
+     * @param {string} prFilePath - Relative path to file
+     */
+    async extractChangedSymbolsVscode(patch, prFilePath) {
+        if (!patch) {
+            return [];
+        }
+
+        console.log(`   📄 Extracting symbols from patch content (VS Code API)...`);
+        
+        // 1. Extract "New Code" from patch (lines starting with +)
+        const lines = patch.split('\n');
+        let newCodeContent = '';
+        let hasContent = false;
+        
+        for (const line of lines) {
+            if (line.startsWith('+++') || line.startsWith('---') || line.startsWith('@@')) {
+                continue;
+            }
+            if (line.startsWith('+')) {
+                const cleanLine = line.substring(1);
+                newCodeContent += cleanLine + '\n';
+                hasContent = true;
+            } 
+        }
+        
+        if (!hasContent || !newCodeContent.trim()) {
+            return [];
+        }
+
+        // 2. Create Virtual Document
+        try {
+            const ext = path.extname(prFilePath).toLowerCase();
+            let languageId = 'typescript';
+            if (ext === '.html') languageId = 'html';
+            else if (ext === '.css' || ext === '.scss') languageId = 'scss';
+            else if (ext === '.json') languageId = 'json';
+            else if (ext === '.py') languageId = 'python';
+            
+            const doc = await vscode.workspace.openTextDocument({
+                content: newCodeContent,
+                language: languageId
+            });
+            
+            // 3. Execute Symbol Provider
+            const symbols = await vscode.commands.executeCommand(
+                'vscode.executeDocumentSymbolProvider',
+                doc.uri
+            );
+            
+            if (!symbols || symbols.length === 0) {
+                return [];
+            }
+            
+            // 4. Process Symbols
+            const extractedSymbols = [];
+            
+            const processSymbol = (symbol, parentName = null) => {
+                const typeMap = {
+                    [vscode.SymbolKind.File]: 'file',
+                    [vscode.SymbolKind.Module]: 'module',
+                    [vscode.SymbolKind.Namespace]: 'namespace',
+                    [vscode.SymbolKind.Package]: 'package',
+                    [vscode.SymbolKind.Class]: 'class',
+                    [vscode.SymbolKind.Method]: 'method',
+                    [vscode.SymbolKind.Property]: 'property',
+                    [vscode.SymbolKind.Field]: 'field',
+                    [vscode.SymbolKind.Constructor]: 'constructor',
+                    [vscode.SymbolKind.Enum]: 'enum',
+                    [vscode.SymbolKind.Interface]: 'interface',
+                    [vscode.SymbolKind.Function]: 'function',
+                    [vscode.SymbolKind.Variable]: 'variable',
+                    [vscode.SymbolKind.Constant]: 'const',
+                    [vscode.SymbolKind.String]: 'string',
+                    [vscode.SymbolKind.Number]: 'number',
+                    [vscode.SymbolKind.Boolean]: 'boolean',
+                    [vscode.SymbolKind.Array]: 'array',
+                    [vscode.SymbolKind.Object]: 'object',
+                    [vscode.SymbolKind.Key]: 'key',
+                    [vscode.SymbolKind.Null]: 'null',
+                    [vscode.SymbolKind.EnumMember]: 'enum-member',
+                    [vscode.SymbolKind.Struct]: 'struct',
+                    [vscode.SymbolKind.Event]: 'event',
+                    [vscode.SymbolKind.Operator]: 'operator',
+                    [vscode.SymbolKind.TypeParameter]: 'type-param'
+                };
+                
+                const typeStr = typeMap[symbol.kind] || 'unknown';
+                
+                const isSignificant = [
+                    vscode.SymbolKind.Class,
+                    vscode.SymbolKind.Method,
+                    vscode.SymbolKind.Property,
+                    vscode.SymbolKind.Function,
+                    vscode.SymbolKind.Variable,
+                    vscode.SymbolKind.Constant,
+                    vscode.SymbolKind.Interface,
+                    vscode.SymbolKind.Enum
+                ].includes(symbol.kind);
+
+                if (isSignificant) {
+                    extractedSymbols.push({
+                        name: symbol.name,
+                        fullName: parentName ? `${parentName}.${symbol.name}` : symbol.name,
+                        type: typeStr,
+                        lineNumber: 0, 
+                        column: 0,
+                        filePath: prFilePath,
+                        isRoot: !parentName,
+                        kind: symbol.kind
+                    });
+                }
+                
+                if (symbol.children && symbol.children.length > 0) {
+                    symbol.children.forEach(child => processSymbol(child, symbol.name));
+                }
+            };
+            
+            symbols.forEach(s => processSymbol(s));
+            
+            // Deduplicate
+            const uniqueSymbols = [];
+            const seenNames = new Set();
+            for (const sym of extractedSymbols) {
+                if (!seenNames.has(sym.fullName)) {
+                    seenNames.add(sym.fullName);
+                    uniqueSymbols.push(sym);
+                }
+            }
+            
+            return uniqueSymbols;
+            
+        } catch (error) {
+            console.error(`   ❌ Error in VS Code symbol extraction: ${error.message}`);
+            return [];
+        }
+    }
+
+    /**
+     * Legacy regex-based extraction (kept for reference or fallback)
+     */
+    extractChangedSymbolsRegex(patch, prFilePath) {
         if (!patch) {
             console.log(`   ⚠️ No patch data`);
             return [];
