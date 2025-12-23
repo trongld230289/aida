@@ -19,7 +19,8 @@ class VSCodeApiDependencyAnalyzer {
                     /(?:from|import)\s+['"]([^'"]+)['"]/g,
                     /require\s*\(\s*['"]([^'"]+)['"]\s*\)/g
                 ],
-                classPattern: /\b([A-Z][a-zA-Z0-9]*)\b/g,
+                // Expanded pattern to catch CONSTANTS and camelCase functions
+                classPattern: /\b([a-zA-Z_][a-zA-Z0-9_]*)\b/g,
                 standardLibraries: ['String', 'Number', 'Boolean', 'Object', 'Array', 'Function',
                                    'Promise', 'Date', 'RegExp', 'Error', 'Map', 'Set', 'WeakMap',
                                    'Component', 'Injectable', 'NgModule', 'Directive', 'Pipe'],
@@ -351,26 +352,47 @@ class VSCodeApiDependencyAnalyzer {
         try {
             const processedSymbols = new Set();
             
-            // Process all import patterns
+            // 1. Try VS Code Link Provider (High Accuracy for Imports)
+            try {
+                const links = await vscode.commands.executeCommand('vscode.executeLinkProvider', document.uri);
+                if (links && links.length > 0) {
+                    for (const link of links) {
+                        if (!link.target) continue;
+                        
+                        const targetPath = link.target.fsPath;
+                        
+                        // Filter out external dependencies & self-references
+                        if (this.isExternalDependency(targetPath) || targetPath === document.uri.fsPath) {
+                            continue;
+                        }
+
+                        // Add to graph if it's in workspace
+                        if (targetPath.startsWith(this.workspaceRoot)) {
+                            const targetFile = this.getRelativePath(targetPath);
+                            this.graph.get(sourceFile).add(targetFile);
+                        }
+                    }
+                }
+            } catch (e) {
+                // Link provider failed, continue to regex
+            }
+
+            // 2. Process import patterns (Fallback & Complementary)
             for (const pattern of config.importPatterns) {
                 let match;
                 // Reset regex lastIndex for reuse
                 pattern.lastIndex = 0;
                 
                 while ((match = pattern.exec(text)) !== null) {
-                    const importPath = match[1];
-                    
-                    // Skip external/standard libraries
-                    if (this.isExternalImport(importPath, config.standardLibraries, language)) {
-                        continue;
-                    }
+                    // We no longer filter by isExternalImport here
+                    // We let the LSP resolve it and check the final path
                     
                     await this.resolveAndAddDependency(document, text, match, sourceFile, 'import');
                     await this.sleep(5);
                 }
             }
             
-            // Process class/type references
+            // 3. Process class/type references (Symbol Crawling)
             if (config.classPattern) {
                 let match;
                 config.classPattern.lastIndex = 0;
@@ -378,8 +400,9 @@ class VSCodeApiDependencyAnalyzer {
                 while ((match = config.classPattern.exec(text)) !== null) {
                     const symbol = match[1];
                     
-                    // Skip already processed symbols and standard libraries
-                    if (processedSymbols.has(symbol) || config.standardLibraries.includes(symbol)) {
+                    // Skip already processed symbols
+                    // We no longer filter by standardLibraries here
+                    if (processedSymbols.has(symbol)) {
                         continue;
                     }
                     processedSymbols.add(symbol);
@@ -405,8 +428,18 @@ class VSCodeApiDependencyAnalyzer {
     async resolveAndAddDependency(document, text, match, sourceFile, type) {
         try {
             // Calculate position for LSP resolution
-            const line = text.substring(0, match.index).split('\n').length - 1;
-            const character = match.index - text.lastIndexOf('\n', match.index) - 1;
+            // FIX: Point to the captured group (the path/symbol) instead of the start of the match
+            // This ensures VS Code API receives the correct context
+            let absoluteIndex = match.index;
+            if (match[1]) {
+                const offset = match[0].indexOf(match[1]);
+                if (offset !== -1) {
+                    absoluteIndex += offset;
+                }
+            }
+
+            const line = text.substring(0, absoluteIndex).split('\n').length - 1;
+            const character = absoluteIndex - text.lastIndexOf('\n', absoluteIndex) - 1;
             const position = new vscode.Position(line, character);
             
             // Use VS Code LSP to resolve actual file
@@ -421,39 +454,16 @@ class VSCodeApiDependencyAnalyzer {
     }
 
     /**
-     * Check if import is external (standard library or node_modules)
-     * @param {string} importPath - Import path
-     * @param {Array} standardLibraries - Standard library names
-     * @param {string} language - Language name
-     * @returns {boolean} - True if external
-     */
-    isExternalImport(importPath, standardLibraries, language) {
-        // Check if it's a relative import (project files)
-        if (importPath.startsWith('./') || importPath.startsWith('../') || 
-            importPath.startsWith('@/') || importPath.startsWith('src/')) {
-            return false;
-        }
-        
-        // For TypeScript/JavaScript, check common patterns
-        if (language === 'typescript' && (importPath.startsWith('@angular/') || 
-            importPath.startsWith('@vue/') || importPath.startsWith('react'))) {
-            return true;
-        }
-        
-        // Check if it's a standard library
-        const firstPart = importPath.split(/[./]/)[0];
-        return standardLibraries.some(lib => 
-            firstPart === lib || importPath.startsWith(lib)
-        );
-    }
-
-    /**
      * The "Magic" function - calls VS Code API to find where a symbol is defined
      * @param {vscode.TextDocument} document 
      * @param {vscode.Position} position 
+     * @param {number} depth - Recursion depth for barrel files
      * @returns {string|null} - Relative path to target file or null
      */
-    async resolveDefinition(document, position) {
+    async resolveDefinition(document, position, depth = 0) {
+        // Prevent infinite recursion
+        if (depth > 3) return null;
+
         try {
             const definitions = await vscode.commands.executeCommand(
                 'vscode.executeDefinitionProvider',
@@ -492,6 +502,21 @@ class VSCodeApiDependencyAnalyzer {
                 
                 // Return first valid workspace file
                 if (targetPath.startsWith(this.workspaceRoot)) {
+                    // Check if it's a barrel file (index.ts/js)
+                    const fileName = path.basename(targetPath).toLowerCase();
+                    if (fileName.startsWith('index.') && (fileName.endsWith('.ts') || fileName.endsWith('.js'))) {
+                        // It's a barrel file! We need to dig deeper.
+                        // But we can't just "dig" without knowing WHAT symbol we are looking for.
+                        // Since we don't have the symbol name easily here, we accept the barrel file as a dependency.
+                        // The consumer -> barrel link is valid.
+                        // Ideally, we should also link barrel -> implementation, which happens when we scan the barrel file itself.
+                        
+                        // However, if the user wants "Consumer -> Implementation" direct link, we would need to parse the barrel.
+                        // For now, let's return the barrel file. The graph will be Consumer -> Barrel -> Implementation.
+                        // This is technically correct for a dependency graph.
+                        return this.getRelativePath(targetPath);
+                    }
+
                     return this.getRelativePath(targetPath);
                 }
             }

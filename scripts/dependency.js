@@ -737,24 +737,52 @@ function getGraphDependents(nodeId, graph, workspaceRoot) {
 async function loadAngularAssets(absolutePath, fileContent, workspaceRoot) {
     const result = {};
 
-    // Parse templateUrl (HTML)
-    const templateUrlMatch = fileContent.match(/templateUrl\s*:\s*['"`]([^'"`]+)['"`]/);
-    if (templateUrlMatch) {
-        const htmlPath = path.resolve(path.dirname(absolutePath), templateUrlMatch[1]);
-        if (fs.existsSync(htmlPath)) {
-            result.html = path.relative(workspaceRoot, htmlPath);
+    // Try VS Code Link Provider API first (more accurate for aliases)
+    try {
+        const uri = vscode.Uri.file(absolutePath);
+        const links = await vscode.commands.executeCommand('vscode.executeLinkProvider', uri);
+        
+        if (links && links.length > 0) {
+            for (const link of links) {
+                if (!link.target) continue;
+                
+                const targetPath = link.target.fsPath;
+                const ext = path.extname(targetPath).toLowerCase();
+                
+                if (ext === '.html') {
+                    result.html = path.relative(workspaceRoot, targetPath);
+                } else if (['.css', '.scss', '.sass', '.less'].includes(ext)) {
+                    result.css = path.relative(workspaceRoot, targetPath);
+                }
+            }
+        }
+    } catch (error) {
+        // API might fail if extension not active, fallback to regex
+    }
+
+    // Fallback to regex if API missed it
+    if (!result.html) {
+        // Parse templateUrl (HTML)
+        const templateUrlMatch = fileContent.match(/templateUrl\s*:\s*['"`]([^'"`]+)['"`]/);
+        if (templateUrlMatch) {
+            const htmlPath = path.resolve(path.dirname(absolutePath), templateUrlMatch[1]);
+            if (fs.existsSync(htmlPath)) {
+                result.html = path.relative(workspaceRoot, htmlPath);
+            }
         }
     }
 
-    // Parse styleUrls (CSS/SCSS)
-    const styleUrlsMatch = fileContent.match(/styleUrls\s*:\s*\[([\s\S]*?)\]/);
-    if (styleUrlsMatch) {
-        const styleUrls = styleUrlsMatch[1].match(/['"`]([^'"`]+)['"`]/g);
-        if (styleUrls && styleUrls.length > 0) {
-            const cleanUrl = styleUrls[0].replace(/['"`]/g, '');
-            const cssPath = path.resolve(path.dirname(absolutePath), cleanUrl);
-            if (fs.existsSync(cssPath)) {
-                result.css = path.relative(workspaceRoot, cssPath);
+    if (!result.css) {
+        // Parse styleUrls (CSS/SCSS)
+        const styleUrlsMatch = fileContent.match(/styleUrls\s*:\s*\[([\s\S]*?)\]/);
+        if (styleUrlsMatch) {
+            const styleUrls = styleUrlsMatch[1].match(/['"`]([^'"`]+)['"`]/g);
+            if (styleUrls && styleUrls.length > 0) {
+                const cleanUrl = styleUrls[0].replace(/['"`]/g, '');
+                const cssPath = path.resolve(path.dirname(absolutePath), cleanUrl);
+                if (fs.existsSync(cssPath)) {
+                    result.css = path.relative(workspaceRoot, cssPath);
+                }
             }
         }
     }
@@ -769,19 +797,43 @@ async function loadReactAssets(absolutePath, fileContent, workspaceRoot) {
     const result = {};
     const dirPath = path.dirname(absolutePath);
 
-    // Find CSS/SCSS imports
-    // import './Component.css'
-    // import styles from './Component.module.css'
-    // import './styles.scss'
-    const cssImports = fileContent.matchAll(/import\s+(?:['"`]([^'"`]+\.(?:css|scss|sass|less))['"`]|.*?from\s+['"`]([^'"`]+\.(?:css|scss|sass|less))['"`])/gi);
-    
-    for (const match of cssImports) {
-        const cssFile = match[1] || match[2];
-        if (cssFile) {
-            const cssPath = path.resolve(dirPath, cssFile);
-            if (fs.existsSync(cssPath)) {
-                result.css = path.relative(workspaceRoot, cssPath);
-                break; // Take first CSS file found
+    // Try VS Code Link Provider API first
+    try {
+        const uri = vscode.Uri.file(absolutePath);
+        const links = await vscode.commands.executeCommand('vscode.executeLinkProvider', uri);
+        
+        if (links && links.length > 0) {
+            for (const link of links) {
+                if (!link.target) continue;
+                
+                const targetPath = link.target.fsPath;
+                const ext = path.extname(targetPath).toLowerCase();
+                
+                if (['.css', '.scss', '.sass', '.less'].includes(ext)) {
+                    result.css = path.relative(workspaceRoot, targetPath);
+                    break; // Take first CSS file found
+                }
+            }
+        }
+    } catch (error) {
+        // Fallback to regex
+    }
+
+    if (!result.css) {
+        // Find CSS/SCSS imports
+        // import './Component.css'
+        // import styles from './Component.module.css'
+        // import './styles.scss'
+        const cssImports = fileContent.matchAll(/import\s+(?:['"`]([^'"`]+\.(?:css|scss|sass|less))['"`]|.*?from\s+['"`]([^'"`]+\.(?:css|scss|sass|less))['"`])/gi);
+        
+        for (const match of cssImports) {
+            const cssFile = match[1] || match[2];
+            if (cssFile) {
+                const cssPath = path.resolve(dirPath, cssFile);
+                if (fs.existsSync(cssPath)) {
+                    result.css = path.relative(workspaceRoot, cssPath);
+                    break; // Take first CSS file found
+                }
             }
         }
     }
