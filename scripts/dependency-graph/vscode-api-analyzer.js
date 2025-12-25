@@ -1,5 +1,6 @@
 const vscode = require('vscode');
 const path = require('path');
+const { BarrelResolver } = require('./barrel-resolver');
 
 /**
  * Enhanced Dependency Analyzer using VS Code Language Server APIs
@@ -10,6 +11,8 @@ class VSCodeApiDependencyAnalyzer {
         this.workspaceRoot = workspaceRoot;
         // Graph: SourcePath -> Set<TargetPaths>
         this.graph = new Map();
+        // 🔥 NEW: Barrel resolver for advanced barrel file handling
+        this.barrelResolver = new BarrelResolver();
         
         // Configuration-driven language support
         this.languageConfig = {
@@ -826,6 +829,43 @@ class VSCodeApiDependencyAnalyzer {
         }
         
         return recommendations;
+    }
+
+    // 🔥 ===== BARREL RESOLVER INTEGRATION =====
+    // Helper methods to access BarrelResolver functionality
+
+    /**
+     * Resolve barrel references recursively
+     * @returns {Promise<{references: Location[], barrelChain: Array}>}
+     */
+    async resolveBarrelReferences(symbolUri, symbolPosition, symbolName, visitedBarrels = new Set(), currentLevel = 0) {
+        return await this.barrelResolver.resolveBarrelReferences(
+            symbolUri, symbolPosition, symbolName, visitedBarrels, currentLevel
+        );
+    }
+
+    /**
+     * Parse barrel export symbol
+     * @returns {Promise<{name: string, position: Position, isWildcard: boolean}|null>}
+     */
+    async getBarrelExportSymbol(barrelLocation, originalSymbolName = null) {
+        return await this.barrelResolver.getBarrelExportSymbolImproved(barrelLocation, originalSymbolName);
+    }
+
+    /**
+     * Find imports of barrel file (for wildcard exports)
+     * @returns {Promise<Location[]>}
+     */
+    async findImportsOfBarrelFile(barrelUri, symbolName, currentLevel = 0) {
+        return await this.barrelResolver.findImportsOfBarrelFileImproved(barrelUri, symbolName, currentLevel);
+    }
+
+    /**
+     * Check if location is a barrel export
+     * @returns {Promise<boolean>}
+     */
+    async isBarrelExport(location) {
+        return await this.barrelResolver.isBarrelExport(location);
     }
 }
 

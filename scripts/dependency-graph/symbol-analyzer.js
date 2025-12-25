@@ -2,11 +2,14 @@ const vscode = require('vscode');
 const path = require('path');
 const fs = require('fs');
 const { VSCodeApiDependencyAnalyzer } = require('./vscode-api-analyzer');
+const { BarrelResolver } = require('./barrel-resolver');
 
 class SymbolAnalyzer {
     constructor() {
         // Initialize analyzer to access language config
         this.apiAnalyzer = new VSCodeApiDependencyAnalyzer('');
+        // 🔥 NEW: Barrel resolver for advanced barrel file handling
+        this.barrelResolver = new BarrelResolver();
     }
 
     /**
@@ -346,10 +349,24 @@ class SymbolAnalyzer {
 
     /**
      * Check if file is a barrel file (index.ts/js)
+     * 🔥 Now uses BarrelResolver for more sophisticated detection
      */
-    isBarrelFile(filePath) {
-        return filePath.endsWith('index.ts') || filePath.endsWith('index.js') || 
-               filePath.endsWith('index.tsx') || filePath.endsWith('index.jsx');
+    async isBarrelFile(filePath) {
+        // Simple filename check (legacy behavior)
+        const isIndexFile = filePath.endsWith('index.ts') || filePath.endsWith('index.js') || 
+                           filePath.endsWith('index.tsx') || filePath.endsWith('index.jsx');
+        
+        if (!isIndexFile) return false;
+        
+        // 🔥 Use BarrelResolver for deeper analysis
+        try {
+            const uri = vscode.Uri.file(filePath);
+            const location = new vscode.Location(uri, new vscode.Position(0, 0));
+            return await this.barrelResolver.isBarrelExport(location);
+        } catch (error) {
+            // Fallback to simple check
+            return isIndexFile;
+        }
     }
 
     /**
@@ -467,6 +484,43 @@ class SymbolAnalyzer {
             const cleanPattern = pattern.replace(/\*\*\//g, '').replace(/\*\*/g, '').replace(/\*/g, '');
             return lowerPath.includes(cleanPattern.toLowerCase());
         });
+    }
+
+    // 🔥 ===== BARREL RESOLVER INTEGRATION =====
+    // Helper methods to access BarrelResolver functionality
+
+    /**
+     * Resolve barrel references recursively
+     * @returns {Promise<{references: Location[], barrelChain: Array}>}
+     */
+    async resolveBarrelReferences(symbolUri, symbolPosition, symbolName, visitedBarrels = new Set(), currentLevel = 0) {
+        return await this.barrelResolver.resolveBarrelReferences(
+            symbolUri, symbolPosition, symbolName, visitedBarrels, currentLevel
+        );
+    }
+
+    /**
+     * Parse barrel export symbol
+     * @returns {Promise<{name: string, position: Position, isWildcard: boolean}|null>}
+     */
+    async getBarrelExportSymbol(barrelLocation, originalSymbolName = null) {
+        return await this.barrelResolver.getBarrelExportSymbolImproved(barrelLocation, originalSymbolName);
+    }
+
+    /**
+     * Find imports of barrel file (for wildcard exports)
+     * @returns {Promise<Location[]>}
+     */
+    async findImportsOfBarrelFile(barrelUri, symbolName, currentLevel = 0) {
+        return await this.barrelResolver.findImportsOfBarrelFileImproved(barrelUri, symbolName, currentLevel);
+    }
+
+    /**
+     * Check if location is a barrel export (enhanced version)
+     * @returns {Promise<boolean>}
+     */
+    async isBarrelExportAdvanced(location) {
+        return await this.barrelResolver.isBarrelExport(location);
     }
 }
 
