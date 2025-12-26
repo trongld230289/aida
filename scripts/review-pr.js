@@ -1208,6 +1208,15 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
                 allFileChanges = await Promise.all(allActualFiles.map(async (change) => {
                     const filePath = change.item?.path || change.originalPath || 'Unknown';
                     console.log(`📁 Processing file: ${filePath} (${change.changeType})`);
+                    
+                    // 🔥 FIX: Detect rename when Azure reports 'edit' but paths differ
+                    let effectiveChangeType = change.changeType?.toLowerCase() || 'edit';
+                    if (change.originalPath && change.item?.path && change.originalPath !== change.item.path) {
+                        effectiveChangeType = 'rename';
+                        console.log(`🔄 Detected rename: ${change.originalPath} -> ${change.item.path}`);
+                    }
+
+                    console.log(`📁 Processing file: ${filePath} (${effectiveChangeType})`);
 
                     let diffContent = '';
                     let additions = 0;
@@ -1221,10 +1230,14 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
                             console.log(`  📍 Base commit (merge base): ${baseCommit.substring(0, 7)} - branch point where ${targetBranch} and feature branch diverged`);
                             console.log(`  📍 Source commit (PR): ${sourceCommit.substring(0, 7)} - latest commit in feature branch`);
                             console.log(`  💡 This shows ONLY changes made in feature branch, not full diff vs current ${targetBranch}`);
+
+                            // FIX: Use correct paths for rename
+                            const basePath = (effectiveChangeType === 'rename' && change.originalPath) ? change.originalPath : filePath;
+                            const sourcePath = filePath;
                             
                             // Get file content from both commits
-                            const baseContent = await getFileContent(organization, project, repository, filePath, baseCommit, token);
-                            const sourceContent = await getFileContent(organization, project, repository, filePath, sourceCommit, token);
+                            const baseContent = await getFileContent(organization, project, repository, basePath, baseCommit, token);
+                            const sourceContent = await getFileContent(organization, project, repository, sourcePath, sourceCommit, token);
                             
                             // Store for Monaco diff viewer
                             fileBaseContent = baseContent;
@@ -1240,7 +1253,7 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
                             if (baseContent !== null || sourceContent !== null) {
                                 // Generate unified diff using diff library
                                 console.log(`🎯 Calling generateUnifiedDiff for ${filePath} with CORRECTED commits...`);
-                                diffContent = generateUnifiedDiff(filePath, baseContent || '', sourceContent || '', change.changeType);
+                                diffContent = generateUnifiedDiff(filePath, baseContent || '', sourceContent || '', effectiveChangeType);
 
                                 // Count changes using our counting function
                                 const counts = countDiffLines(diffContent);
@@ -1264,7 +1277,8 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
                     // For new files (add/new), store full content for detailed review (like review-file.js)
                     const fileObj = {
                         path: filePath,
-                        changeType: change.changeType?.toLowerCase() || 'edit',
+                        changeType: effectiveChangeType,
+                        previousFilename: change.originalPath,
                         sourceCommit: baseCommit?.substring(0, 7) || 'target',
                         targetCommit: sourceCommit?.substring(0, 7) || 'source',
                         additions: additions,
