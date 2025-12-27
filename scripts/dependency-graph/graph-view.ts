@@ -13,6 +13,9 @@ let g;
 let zoom;
 let physicsEnabled = true;
 let isHierarchyView = false;
+let isolatedNodeIds = new Set();
+let graphCenter = { x: 0, y: 0 };
+let isolatedAnchor = { x: 0, y: 0 };
 
 function initializeGraph() {
   svg = d3.select('#d3-graph');
@@ -21,6 +24,12 @@ function initializeGraph() {
   const height = container.clientHeight - 140;
 
   svg.attr('width', width).attr('height', height);
+  graphCenter = { x: width / 2, y: height / 2 };
+  const anchorYOffset = Math.min(height * 0.3, 200);
+  isolatedAnchor = {
+    x: graphCenter.x,
+    y: Math.min(height - 60, graphCenter.y + anchorYOffset)
+  };
 
   // Update summary statistics
   document.getElementById('edgeCount').textContent = graphData.edges.length;
@@ -69,8 +78,11 @@ function initializeGraph() {
   simulation = d3.forceSimulation(graphData.nodes)
     .force('link', d3.forceLink(graphData.edges).id(d => d.id).distance(200))
     .force('charge', d3.forceManyBody().strength(-800))
-    .force('center', d3.forceCenter(width / 2, height / 2))
+    .force('center', d3.forceCenter(graphCenter.x, graphCenter.y))
     .force('collision', d3.forceCollide().radius(50));
+
+  identifyIsolatedNodes();
+  simulation.force('isolatedPull', createIsolatedNodeForce(graphData.nodes));
 
   renderGraph();
 }
@@ -230,6 +242,7 @@ function renderGraph() {
     .call(d3.drag()
       .on('start', (event, d) => {
         if (!event.active) simulation.alphaTarget(0.3).restart();
+        d.isDragging = true;
         d.fx = d.x;
         d.fy = d.y;
       })
@@ -239,6 +252,7 @@ function renderGraph() {
       })
       .on('end', (event, d) => {
         if (!event.active) simulation.alphaTarget(0);
+        d.isDragging = false;
         if (!physicsEnabled) {
           d.fx = d.x;
           d.fy = d.y;
@@ -263,6 +277,7 @@ function renderGraph() {
   );
 
   simulation.on('tick', () => {
+    applyIsolatedNodeClamping();
     link
       .attr('x1', d => d.source.x)
       .attr('y1', d => d.source.y)
@@ -276,6 +291,57 @@ function renderGraph() {
     nodeText
       .attr('x', d => d.x)
       .attr('y', d => d.y);
+  });
+}
+
+function identifyIsolatedNodes() {
+  if (!graphData.edges || graphData.edges.length === 0) {
+    isolatedNodeIds = new Set(graphData.nodes.map(node => node.id));
+    return;
+  }
+  const connected = new Set();
+  graphData.edges.forEach(edge => {
+    const sourceId = typeof edge.source === 'object' ? edge.source.id : edge.source;
+    const targetId = typeof edge.target === 'object' ? edge.target.id : edge.target;
+    if (sourceId) connected.add(sourceId);
+    if (targetId) connected.add(targetId);
+  });
+
+  isolatedNodeIds = new Set(
+    graphData.nodes
+      .filter(node => !connected.has(node.id))
+      .map(node => node.id)
+  );
+}
+
+function createIsolatedNodeForce(nodes) {
+  const force = (alpha) => {
+    if (!isolatedNodeIds.size) return;
+    nodes.forEach(node => {
+      if (isolatedNodeIds.has(node.id) && !node.isDragging) {
+        node.vx += (isolatedAnchor.x - node.x) * 0.0015 * alpha;
+        node.vy += (isolatedAnchor.y - node.y) * 0.0015 * alpha;
+      }
+    });
+  };
+  force.initialize = () => { };
+  return force;
+}
+
+function applyIsolatedNodeClamping() {
+  if (!isolatedNodeIds.size) return;
+  graphData.nodes.forEach(node => {
+    if (isolatedNodeIds.has(node.id) && !node.isDragging) {
+      const maxRadius = Math.min(graphCenter.x, graphCenter.y) * 0.6;
+      const dx = node.x - isolatedAnchor.x;
+      const dy = node.y - isolatedAnchor.y;
+      const distance = Math.sqrt(dx * dx + dy * dy) || 1;
+      if (distance > maxRadius) {
+        const scale = maxRadius / distance;
+        node.x = isolatedAnchor.x + dx * scale;
+        node.y = isolatedAnchor.y + dy * scale;
+      }
+    }
   });
 }
 

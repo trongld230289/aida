@@ -4,6 +4,7 @@ const fs = require('fs');
 
 const { VSCodeApiDependencyAnalyzer } = require('./dependency-graph/vscode-api-analyzer');
 const { SymbolAnalyzer } = require('./dependency-graph/symbol-analyzer');
+const { BarrelResolver } = require('./dependency-graph/barrel-resolver');
 
 // Cache management
 const CACHE_VERSION = '1.0';
@@ -17,9 +18,10 @@ class PRDependencyAnalyzer {
         this.workspaceRoot = workspaceRoot;
         this.vscodeAnalyzer = new VSCodeApiDependencyAnalyzer();
         this.symbolAnalyzer = new SymbolAnalyzer();
+        this.barrelResolver = new BarrelResolver(); // 🔥 NEW: Barrel resolver
         this.fullGraph = null; // Cache full graph
         this.cacheFilePath = path.join(workspaceRoot, '.vscode', 'dependency-cache.json');
-        this.referenceCache = new Map(); // Cache for reference lookups
+        this.referenceCache = new Map(); // Cache for reference lookups (legacy, will be deprecated)
     }
 
     /**
@@ -95,6 +97,10 @@ class PRDependencyAnalyzer {
         const symbolToDependentsMap = new Map(); // symbol → [dependent file paths]
 
         for (const node of prNodes) {
+            if (node.prStatus === 'delete') {
+                console.log(`🚫 Skipping dependency/dependent scan for deleted file: ${node.prPath}`);
+                continue;
+            }
             // Get direct dependencies (always include all)
             const deps = this.getDependencies(node.id);
             deps.forEach(depId => {
@@ -422,7 +428,7 @@ class PRDependencyAnalyzer {
         console.log('📊 Analyzing workspace dependencies...');
         
         try {
-            const graph = await this.vscodeAnalyzer.analyzeWorkspace(this.workspaceRoot);
+            const graph = await this.vscodeAnalyzer.analyze();
             console.log(`✅ Built graph: ${graph.nodes.length} nodes, ${graph.edges.length} edges`);
             return graph;
         } catch (error) {
@@ -481,13 +487,13 @@ class PRDependencyAnalyzer {
                 });
                 
                 console.log(`✅ Matched PR file: ${prFile.path} → ${node.relativePath} (${prFile.status})`);
-            } else if (prFile.status !== 'delete') {
-                // Handle new files not in cache (skip deleted files)
-                const newNode = this.createNodeForNewFile(prFile);
-                nodes.push(newNode);
-                console.log(`➕ Created node for new file: ${prFile.path}`);
             } else {
-                console.log(`⚠️ Deleted file not in graph: ${prFile.path}`);
+                // Handle files not present in cached graph (new or deleted)
+                const placeholderNode = prFile.status === 'delete'
+                    ? this.createNodeForDeletedFile(prFile)
+                    : this.createNodeForNewFile(prFile);
+                nodes.push(placeholderNode);
+                console.log(`➕ Created node for ${prFile.status} file: ${prFile.path}`);
             }
         }
 
@@ -535,6 +541,35 @@ class PRDependencyAnalyzer {
     }
 
     /**
+     * Create node for deleted file (no longer present in cache)
+     */
+    createNodeForDeletedFile(prFile) {
+        const filePath = prFile.path.replace(/\\/g, '/');
+        const fileName = path.basename(filePath);
+
+        return {
+            id: `pr_delete_${filePath.replace(/[^a-zA-Z0-9]/g, '_')}`,
+            fileName: fileName,
+            relativePath: filePath,
+            category: 'file',
+            isPRFile: true,
+            isDeletedFile: true,
+            prStatus: 'delete',
+            prChanges: {
+                additions: 0,
+                deletions: prFile.deletions || 0,
+                total: prFile.deletions || 0
+            },
+            prPath: prFile.path,
+            prPatch: null,
+            metadata: {
+                isDeletedFile: true,
+                angularEntities: {}
+            }
+        };
+    }
+
+    /**
      * Get dependencies of a node (files that this node imports)
      */
     getDependencies(nodeId) {
@@ -574,14 +609,37 @@ class PRDependencyAnalyzer {
                 return { ...node };
             });
 
-        // Get all edges between relevant nodes
+        // Ensure PR nodes that are not part of the cached graph (e.g., deleted files) are included
+        const existingIds = new Set(nodes.map(n => n.id));
+        for (const prNode of prNodes) {
+            if (!existingIds.has(prNode.id)) {
+                const clonedNode = { ...prNode };
+                if (nodeChangedSymbols.has(prNode.id)) {
+                    clonedNode.changedSymbols = nodeChangedSymbols.get(prNode.id);
+                }
+                nodes.push(clonedNode);
+                existingIds.add(prNode.id);
+            }
+        }
+
+        const deletedNodeIds = new Set(
+            prNodes.filter(n => n.prStatus === 'delete').map(n => n.id)
+        );
+
+        // Get all edges between relevant nodes excluding those touching deleted files
         const edges = this.fullGraph.edges.filter(e =>
-            relevantNodeIds.has(e.source) && relevantNodeIds.has(e.target)
+            relevantNodeIds.has(e.source) &&
+            relevantNodeIds.has(e.target) &&
+            !deletedNodeIds.has(e.source) &&
+            !deletedNodeIds.has(e.target)
         );
 
         // 🔥 NEW: Add edges for barrel export detected files (not in original graph)
         // These are files found via resolveBarrelReferences that were added dynamically
         for (const prNode of prNodes) {
+            if (prNode.prStatus === 'delete') {
+                continue;
+            }
             if (prNode.changedSymbols && Array.isArray(prNode.changedSymbols)) {
                 // For each impacted file found via barrel resolution
                 for (const nodeId of relevantNodeIds) {
@@ -1278,139 +1336,14 @@ class PRDependencyAnalyzer {
      * 🔥 IMPROVED: Recursively resolve references through barrel exports with better error handling
      */
     async resolveBarrelReferences(symbolUri, symbolPosition, symbolName, visitedBarrels, currentLevel = 0) {
-        const allReferences = [];
-        const barrelChain = [];
-        
-        // Protection against infinite loops
-        if (currentLevel > 10) {
-            console.warn('⚠️ Barrel chain depth exceeded 10 levels, stopping recursion');
-            return { references: allReferences, barrelChain };
-        }
-        
-        try {
-            // Check cache first with version key
-            const cacheKey = `${symbolUri.fsPath}:${symbolPosition.line}:${symbolPosition.character}:v2`;
-            let directReferences = this.referenceCache.get(cacheKey);
-            
-            if (!directReferences) {
-                // 🔥 IMPROVED: Add timeout to prevent hanging
-                const timeout = new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('Reference provider timeout')), 10000)
-                );
-                
-                const refPromise = vscode.commands.executeCommand(
-                    'vscode.executeReferenceProvider',
-                    symbolUri,
-                    symbolPosition
-                );
-                
-                try {
-                    directReferences = await Promise.race([refPromise, timeout]);
-                } catch (timeoutError) {
-                    console.warn(`         ⚠️ Timeout finding references for ${symbolName}`);
-                    return { references: allReferences, barrelChain };
-                }
-                
-                // Cache the result
-                if (directReferences && directReferences.length > 0) {
-                    this.referenceCache.set(cacheKey, directReferences);
-                }
-            }
-            
-            if (!directReferences || directReferences.length === 0) {
-                return { references: allReferences, barrelChain };
-            }
-            
-            // 🔥 IMPROVED: Separate barrels and real usages first
-            const barrels = [];
-            const realUsages = [];
-            
-            for (const ref of directReferences) {
-                const isBarrel = await this.isBarrelExport(ref);
-                if (isBarrel) {
-                    barrels.push(ref);
-                } else {
-                    // Skip definition itself
-                    if (ref.uri.fsPath !== symbolUri.fsPath || 
-                        ref.range.start.line !== symbolPosition.line) {
-                        realUsages.push(ref);
-                    }
-                }
-            }
-            
-            // Add real usages immediately
-            allReferences.push(...realUsages);
-            
-            const indent = '  '.repeat(currentLevel);
-            console.log(`         ${indent}📍 Level ${currentLevel}: ${barrels.length} barrels, ${realUsages.length} real usages`);
-            
-            // Process barrels
-            for (const barrelRef of barrels) {
-                const refPath = barrelRef.uri.fsPath;
-                const refKey = `${refPath}:${barrelRef.range.start.line}:${barrelRef.range.start.character}`;
-                
-                console.log(`         ${indent}🔄 Barrel: ${path.basename(refPath)}:${barrelRef.range.start.line}`);
-                
-                // Avoid infinite loops
-                if (visitedBarrels.has(refKey)) {
-                    console.log(`         ${indent}⏭️ Already visited, skipping`);
-                    continue;
-                }
-                
-                visitedBarrels.add(refKey);
-                
-                // 🔥 IMPROVED: Get barrel export info with fallback
-                const barrelSymbolInfo = await this.getBarrelExportSymbolImproved(barrelRef, symbolName);
-                
-                if (!barrelSymbolInfo) {
-                    console.log(`         ${indent}⚠️ Could not parse barrel export`);
-                    continue;
-                }
-                
-                // Add to barrel chain
-                barrelChain.push({
-                    file: refPath,
-                    exportedAs: barrelSymbolInfo.name,
-                    level: currentLevel,
-                    isWildcard: barrelSymbolInfo.isWildcard
-                });
-                
-                // Handle wildcard exports
-                if (barrelSymbolInfo.isWildcard) {
-                    console.log(`         ${indent}⭐ Wildcard: finding imports of barrel...`);
-                    const wildcardRefs = await this.findImportsOfBarrelFileImproved(
-                        barrelRef.uri, 
-                        symbolName,
-                        currentLevel
-                    );
-                    console.log(`         ${indent}✅ Found ${wildcardRefs.length} usages through wildcard`);
-                    allReferences.push(...wildcardRefs);
-                } else {
-                    // Recursively resolve named exports
-                    console.log(`         ${indent}🔍 Following named export: ${barrelSymbolInfo.name}`);
-                    const result = await this.resolveBarrelReferences(
-                        barrelRef.uri,
-                        barrelSymbolInfo.position,
-                        barrelSymbolInfo.name,
-                        visitedBarrels,
-                        currentLevel + 1
-                    );
-                    
-                    console.log(`         ${indent}✅ Found ${result.references.length} refs through chain`);
-                    allReferences.push(...result.references);
-                    barrelChain.push(...result.barrelChain);
-                }
-            }
-            
-            return { references: allReferences, barrelChain };
-            
-        } catch (error) {
-            console.error(`         ❌ Barrel resolution error at level ${currentLevel}:`, error.message);
-            // 🔥 IMPROVED: Clear cache on error
-            const cacheKey = `${symbolUri.fsPath}:${symbolPosition.line}:${symbolPosition.character}:v2`;
-            this.referenceCache.delete(cacheKey);
-            return { references: allReferences, barrelChain };
-        }
+        // 🔥 Delegate to BarrelResolver
+        return await this.barrelResolver.resolveBarrelReferences(
+            symbolUri, 
+            symbolPosition, 
+            symbolName, 
+            visitedBarrels, 
+            currentLevel
+        );
     }
 
     /**
@@ -1419,123 +1352,16 @@ class PRDependencyAnalyzer {
      * @returns {Promise<{name: string, position: vscode.Position, isWildcard: boolean}|null>}
      */
     async getBarrelExportSymbol(barrelLocation) {
-        // Delegate to improved version
-        return await this.getBarrelExportSymbolImproved(barrelLocation, null);
+        // 🔥 Delegate to BarrelResolver
+        return await this.barrelResolver.getBarrelExportSymbolImproved(barrelLocation, null);
     }
 
     /**
-     * 🔥 NEW: Improved barrel export symbol parsing with better multi-export handling
+     * 🔥 Improved barrel export symbol parsing (delegated to BarrelResolver)
      */
     async getBarrelExportSymbolImproved(barrelLocation, originalSymbolName) {
-        try {
-            const document = await vscode.workspace.openTextDocument(barrelLocation.uri);
-            const line = document.lineAt(barrelLocation.range.start.line);
-            const text = line.text.trim();
-            const refColumn = barrelLocation.range.start.character;
-            
-            // Pattern 1: export * from './somewhere'
-            if (/^export\s+\*\s+from/.test(text)) {
-                return {
-                    name: originalSymbolName || '*', // Use original name for wildcard
-                    position: barrelLocation.range.start,
-                    isWildcard: true
-                };
-            }
-            
-            // Pattern 2: export { Name } from './somewhere'
-            const simpleMatch = text.match(/export\s+\{\s*(\w+)\s*\}\s+from/);
-            if (simpleMatch) {
-                const symbolName = simpleMatch[1];
-                const symbolIndex = text.indexOf(symbolName, text.indexOf('{'));
-                
-                return {
-                    name: symbolName,
-                    position: new vscode.Position(
-                        barrelLocation.range.start.line, 
-                        symbolIndex >= 0 ? symbolIndex : refColumn
-                    ),
-                    isWildcard: false
-                };
-            }
-            
-            // Pattern 3: export { Name as Alias } from './somewhere'
-            const aliasMatch = text.match(/export\s+\{\s*(\w+)\s+as\s+(\w+)\s*\}\s+from/);
-            if (aliasMatch) {
-                const originalName = aliasMatch[1];
-                const aliasName = aliasMatch[2];
-                const symbolIndex = text.indexOf(aliasName, text.indexOf('as'));
-                
-                return {
-                    name: aliasName, // Use alias for next lookup
-                    position: new vscode.Position(
-                        barrelLocation.range.start.line,
-                        symbolIndex >= 0 ? symbolIndex : refColumn
-                    ),
-                    isWildcard: false
-                };
-            }
-            
-            // Pattern 4: export { Name1, Name2, ... } from './somewhere'
-            const multiMatch = text.match(/export\s+\{([^}]+)\}\s+from/);
-            if (multiMatch) {
-                const exportList = multiMatch[1];
-                const specs = exportList.split(',').map(s => s.trim());
-                
-                // 🔥 IMPROVED: Find the export spec closest to reference position
-                let bestMatch = null;
-                let minDistance = Infinity;
-                
-                for (const spec of specs) {
-                    // Parse 'Name' or 'Name as Alias'
-                    const parts = spec.split(/\s+as\s+/);
-                    const originalName = parts[0].trim();
-                    const exportedName = parts.length === 2 ? parts[1].trim() : originalName;
-                    
-                    // Find position of this export in the line
-                    const nameIndex = text.indexOf(exportedName, text.indexOf('{'));
-                    if (nameIndex >= 0) {
-                        const distance = Math.abs(nameIndex - refColumn);
-                        if (distance < minDistance) {
-                            minDistance = distance;
-                            bestMatch = {
-                                name: exportedName,
-                                position: new vscode.Position(barrelLocation.range.start.line, nameIndex),
-                                isWildcard: false
-                            };
-                        }
-                    }
-                }
-                
-                if (bestMatch) {
-                    return bestMatch;
-                }
-                
-                // Fallback: use original symbol name if present
-                if (originalSymbolName) {
-                    for (const spec of specs) {
-                        if (spec.includes(originalSymbolName)) {
-                            const parts = spec.split(/\s+as\s+/);
-                            const exportedName = parts.length === 2 ? parts[1].trim() : parts[0].trim();
-                            const nameIndex = text.indexOf(exportedName, text.indexOf('{'));
-                            
-                            return {
-                                name: exportedName,
-                                position: new vscode.Position(
-                                    barrelLocation.range.start.line,
-                                    nameIndex >= 0 ? nameIndex : refColumn
-                                ),
-                                isWildcard: false
-                            };
-                        }
-                    }
-                }
-            }
-            
-            return null;
-        } catch (error) {
-            console.error(`Error parsing barrel export:`, error.message);
-            return null;
-        }
+        // 🔥 Delegate to BarrelResolver
+        return await this.barrelResolver.getBarrelExportSymbolImproved(barrelLocation, originalSymbolName);
     }
 
     /**
@@ -1545,239 +1371,47 @@ class PRDependencyAnalyzer {
      * @returns {Promise<vscode.Location[]>}
      */
     async findImportsOfBarrelFile(barrelUri, symbolName) {
-        const imports = [];
-        
-        try {
-            const barrelPath = barrelUri.fsPath;
-            const barrelDir = path.dirname(barrelPath);
-            
-            // Get all TypeScript/JavaScript files in workspace
-            const workspaceFolder = vscode.workspace.getWorkspaceFolder(barrelUri);
-            if (!workspaceFolder) return imports;
-            
-            // Get barrel path relative to workspace (for alias matching)
-            const workspacePath = workspaceFolder.uri.fsPath;
-            const barrelRelativeToWorkspace = path.relative(workspacePath, barrelDir).replace(/\\/g, '/');
-            
-            console.log(`         🔍 Looking for imports of barrel: ${barrelRelativeToWorkspace}`);
-            console.log(`         🎯 Searching for symbol: ${symbolName}`);
-            
-            // Load tsconfig aliases for better matching
-            const pathAliases = await this.loadTSConfigAliases(workspacePath);
-            console.log(`         📋 Loaded ${pathAliases.size} path aliases`);
-            
-            const files = await vscode.workspace.findFiles(
-                new vscode.RelativePattern(workspaceFolder, '**/*.{ts,tsx,js,jsx}'),
-                '**/node_modules/**',
-                1000 // Increase limit
-            );
-            
-            // Search for files that import from this barrel and use the symbol
-            for (const fileUri of files) {
-                if (fileUri.fsPath === barrelPath) continue;
-                
-                try {
-                    const document = await vscode.workspace.openTextDocument(fileUri);
-                    const text = document.getText();
-                    
-                    const fileDir = path.dirname(fileUri.fsPath);
-                    
-                    // 🔥 Use buildImportPatterns for comprehensive matching
-                    const importPatterns = this.buildImportPatterns(
-                        fileUri.fsPath,
-                        barrelDir,
-                        barrelRelativeToWorkspace,
-                        pathAliases
-                    );
-                    
-                    let hasImport = false;
-                    for (const pattern of importPatterns) {
-                        if (pattern.test(text)) {
-                            hasImport = true;
-                            break;
-                        }
-                    }
-                    
-                    if (!hasImport) continue;
-                    
-                    // File imports from this barrel - now check if it uses the symbol
-                    // symbolName is already the root object (e.g., 'limitedEquipment')
-                    const symbolPattern = new RegExp(`\\b${symbolName.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}\\b`, 'g');
-                    let match;
-                    let foundInFile = 0;
-                    
-                    while ((match = symbolPattern.exec(text)) !== null) {
-                        const position = document.positionAt(match.index);
-                        const line = document.lineAt(position.line);
-                        
-                        // Skip import/export lines
-                        const lineText = line.text.trim();
-                        if (!lineText.startsWith('import') && !lineText.startsWith('export')) {
-                            imports.push(new vscode.Location(fileUri, position));
-                            foundInFile++;
-                        }
-                    }
-                    
-                    if (foundInFile > 0) {
-                        console.log(`         ✅ ${path.basename(fileUri.fsPath)}: ${foundInFile} usages`);
-                    }
-                } catch (error) {
-                    // Skip files that can't be read
-                    continue;
-                }
-            }
-            
-            console.log(`         ✅ Found ${imports.length} usages of ${symbolName} through barrel`);
-            return imports;
-            
-        } catch (error) {
-            console.error(`Error finding imports of barrel:`, error.message);
-            return imports;
-        }
+        // 🔥 Delegate to BarrelResolver
+        return await this.barrelResolver.findImportsOfBarrelFileImproved(barrelUri, symbolName, 0);
     }
 
     /**
-     * 🔥 NEW: Load TypeScript path aliases from tsconfig.json
+     * 🔥 Improved version (delegated to BarrelResolver)
+     */
+    async findImportsOfBarrelFileImproved(barrelUri, symbolName, currentLevel = 0) {
+        // 🔥 Delegate to BarrelResolver
+        return await this.barrelResolver.findImportsOfBarrelFileImproved(barrelUri, symbolName, currentLevel);
+    }
+
+    /**
+     * 🔥 Load TypeScript path aliases (delegated to BarrelResolver)
      */
     async loadTSConfigAliases(workspacePath) {
-        const aliases = new Map();
-        
-        try {
-            const tsconfigPath = path.join(workspacePath, 'tsconfig.json');
-            if (!fs.existsSync(tsconfigPath)) {
-                return aliases;
-            }
-            
-            const tsconfigContent = fs.readFileSync(tsconfigPath, 'utf8');
-            // Remove comments (simple approach)
-            const jsonContent = tsconfigContent.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, '');
-            const tsconfig = JSON.parse(jsonContent);
-            
-            const paths = tsconfig.compilerOptions?.paths;
-            if (paths) {
-                for (const [alias, targets] of Object.entries(paths)) {
-                    // Remove /* from alias and target
-                    const cleanAlias = alias.replace(/\/\*$/, '');
-                    const cleanTarget = targets[0].replace(/\/\*$/, '');
-                    aliases.set(cleanAlias, cleanTarget);
-                }
-                
-                console.log(`✅ Loaded ${aliases.size} path aliases from tsconfig.json`);
-            }
-            
-        } catch (error) {
-            console.log(`⚠️ Could not load tsconfig.json:`, error.message);
-        }
-        
-        return aliases;
+        // 🔥 Delegate to BarrelResolver
+        return await this.barrelResolver.loadTSConfigAliases(workspacePath);
     }
 
     /**
-     * 🔥 IMPROVED: Better barrel path patterns for Angular
+     * 🔥 Build import patterns (delegated to BarrelResolver)
      */
     buildImportPatterns(importerPath, barrelDir, barrelRelativeToWorkspace, pathAliases) {
-        const patterns = [];
-        const fileDir = path.dirname(importerPath);
-        
-        // 1. Relative imports
-        let relativePath = path.relative(fileDir, barrelDir);
-        if (!relativePath.startsWith('.')) {
-            relativePath = './' + relativePath;
-        }
-        relativePath = relativePath.replace(/\\/g, '/');
-        
-        patterns.push(
-            new RegExp(`from\\s+['"]${relativePath.replace(/\./g, '\\.')}['"]`, 'i'),
-            new RegExp(`from\\s+['"]${relativePath.replace(/\./g, '\\.')}/index['"]`, 'i')
+        // 🔥 Delegate to BarrelResolver
+        return this.barrelResolver.buildImportPatterns(
+            importerPath, 
+            barrelDir, 
+            barrelRelativeToWorkspace, 
+            pathAliases
         );
-        
-        // 2. Absolute from workspace
-        patterns.push(
-            new RegExp(`from\\s+['"]${barrelRelativeToWorkspace}['"]`, 'i')
-        );
-        
-        // 3. TypeScript path aliases
-        for (const [alias, target] of pathAliases.entries()) {
-            if (barrelRelativeToWorkspace.startsWith(target)) {
-                const aliasedPath = barrelRelativeToWorkspace.replace(target, alias);
-                patterns.push(
-                    new RegExp(`from\\s+['"]${aliasedPath}['"]`, 'i')
-                );
-            }
-        }
-        
-        // 🔥 4. Angular common patterns
-        // Based on typical path: app/shared/utilities
-        const pathParts = barrelRelativeToWorkspace.split('/');
-        
-        // If path contains 'shared/utilities', add common Angular aliases
-        if (barrelRelativeToWorkspace.includes('shared/utilities')) {
-            patterns.push(
-                new RegExp(`from\\s+['"]@shared/utilities['"]`, 'i'),
-                new RegExp(`from\\s+['"]@app/shared/utilities['"]`, 'i')
-            );
-        }
-        
-        // Generic: extract pattern from path
-        // app/shared/utilities → @shared/utilities
-        if (pathParts.length >= 3 && pathParts[0] === 'app') {
-            const aliased = `@${pathParts[1]}/${pathParts.slice(2).join('/')}`;
-            patterns.push(
-                new RegExp(`from\\s+['"]${aliased}['"]`, 'i')
-            );
-        }
-        
-        // Also try: src/app/shared/utilities → @shared/utilities
-        if (pathParts.length >= 4 && pathParts[0] === 'src' && pathParts[1] === 'app') {
-            const aliased = `@${pathParts[2]}/${pathParts.slice(3).join('/')}`;
-            patterns.push(
-                new RegExp(`from\\s+['"]${aliased}['"]`, 'i')
-            );
-        }
-        
-        return patterns;
     }
 
     /**
-     * Check if a reference location is a barrel export (re-export)
+     * Check if a reference location is a barrel export (delegated to BarrelResolver)
      * @param {vscode.Location} location - Reference location
      * @returns {Promise<boolean>}
      */
     async isBarrelExport(location) {
-        try {
-            const document = await vscode.workspace.openTextDocument(location.uri);
-            const line = document.lineAt(location.range.start.line);
-            const text = line.text.trim();
-            
-            // Pattern 1: export { Something } from './somewhere'
-            const isReExport = /^export\s+(?:\{[^}]+\}|\*)\s+from/.test(text);
-            
-            // Pattern 2: File is named index.ts/tsx
-            const fileName = path.basename(location.uri.fsPath);
-            const isIndexFile = /^index\.(ts|tsx|js|jsx)$/.test(fileName);
-            
-            if (isReExport) {
-                return true;
-            }
-            
-            // If index file, check if it's mostly exports
-            if (isIndexFile) {
-                const fullText = document.getText();
-                const lines = fullText.split('\n').filter(l => l.trim());
-                const exportLines = lines.filter(l => 
-                    l.trim().startsWith('export') || l.trim().startsWith('//')
-                );
-                
-                // If >80% of lines are exports, likely a barrel
-                if (lines.length > 0 && exportLines.length / lines.length > 0.8) {
-                    return true;
-                }
-            }
-            
-            return false;
-        } catch (error) {
-            return false;
-        }
+        // 🔥 Delegate to BarrelResolver
+        return await this.barrelResolver.isBarrelExport(location);
     }
 
 }
