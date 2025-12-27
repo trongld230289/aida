@@ -135,6 +135,17 @@ function activate(context) {
     // Store extension path globally
     global.extensionPath = context.extensionPath;
     
+    // Register Virtual Content Provider for in-memory files (aida-memory scheme)
+    try {
+        const { virtualContentProvider } = require('./scripts/virtual-content-provider');
+        context.subscriptions.push(
+            vscode.workspace.registerTextDocumentContentProvider('aida-memory', virtualContentProvider)
+        );
+        console.log('✅ Registered aida-memory content provider');
+    } catch (error) {
+        console.error('❌ Failed to register virtual content provider:', error);
+    }
+    
     // Make business docs state accessible globally
     global.businessDocsState = businessDocsState;
 

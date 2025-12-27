@@ -852,23 +852,23 @@ class PRDependencyAnalyzer {
 
         // 2. Create Virtual Document
         try {
-            const ext = path.extname(prFilePath).toLowerCase();
-            let languageId = 'typescript';
-            if (ext === '.html') languageId = 'html';
-            else if (ext === '.css' || ext === '.scss') languageId = 'scss';
-            else if (ext === '.json') languageId = 'json';
-            else if (ext === '.py') languageId = 'python';
+            // 🔥 IMPROVED: Use virtual content provider to avoid opening "Untitled" tabs
+            const { virtualContentProvider } = require('./virtual-content-provider');
             
-            const doc = await vscode.workspace.openTextDocument({
-                content: newCodeContent,
-                language: languageId
-            });
+            // Store content in memory and get URI (scheme: aida-memory)
+            const virtualUri = virtualContentProvider.setFileContent(prFilePath, newCodeContent);
+            
+            // Open the virtual document (read-only, no tab opened)
+            const doc = await vscode.workspace.openTextDocument(virtualUri);
             
             // 3. Execute Symbol Provider
             const symbols = await vscode.commands.executeCommand(
                 'vscode.executeDocumentSymbolProvider',
                 doc.uri
             );
+            
+            // Clean up memory
+            virtualContentProvider.clearFileContent(prFilePath);
             
             if (!symbols || symbols.length === 0) {
                 return [];
