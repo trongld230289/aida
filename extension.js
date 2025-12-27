@@ -189,7 +189,7 @@ function activate(context) {
     });
 
     // Register test command to get Copilot models
-    const testModelsModule = require('./scripts/test-get-copilot-models.js');
+    const testModelsModule = require('./scripts/test/test-get-copilot-models.js');
     testModelsModule.registerTestCommand(context);
 
     let closeChatSidebarCommand = vscode.commands.registerCommand('aida.closeChatSidebar', async () => {

@@ -235,63 +235,74 @@ class PRDependencyAnalyzer {
                                 // 🔥 NEW: Fallback to wildcard search if no references at all
                                 // Find barrel file that re-exports this symbol
                                 const prDir = path.dirname(fullPRFilePath);
-                                const barrelPath = path.join(prDir, 'index.ts');
                                 
-                                if (fs.existsSync(barrelPath)) {
-                                    console.log(`               📦 Found barrel: ${path.basename(barrelPath)}`);
+                                // 🔥 FIX: Use configuration for barrel files
+                                const possibleBarrelFiles = this.getBarrelFiles(fullPRFilePath);
+                                
+                                for (const barrelName of possibleBarrelFiles) {
+                                    const barrelPath = path.join(prDir, barrelName);
                                     
-                                    const barrelUri = vscode.Uri.file(barrelPath);
-                                    const wildcardRefs = await this.findImportsOfBarrelFile(
-                                        barrelUri,
-                                        symbol.fullName
-                                    );
-                                    
-                                    console.log(`               ✅ Wildcard search found ${wildcardRefs.length} usages`);
-                                    
-                                    const userFiles = new Set();
-                                    for (const ref of wildcardRefs) {
-                                        const refPath = ref.uri.fsPath;
-                                        const isDefinition = path.normalize(refPath) === path.normalize(fullPRFilePath);
+                                    if (fs.existsSync(barrelPath)) {
+                                        console.log(`               📦 Found barrel: ${path.basename(barrelPath)}`);
                                         
-                                        if (!isDefinition) {
-                                            const relativePath = path.relative(this.workspaceRoot, refPath).replace(/\\/g, '/');
-                                            userFiles.add(relativePath);
-                                        }
-                                    }
-                                    
-                                    // Add these files
-                                    for (const userFilePath of userFiles) {
-                                        let userNode = this.fullGraph.nodes.find(n => n.relativePath === userFilePath);
-                                        if (!userNode) {
-                                            userNode = {
-                                                id: userFilePath,
-                                                relativePath: userFilePath,
-                                                label: path.basename(userFilePath),
-                                                type: 'dependency'
-                                            };
-                                            this.fullGraph.nodes.push(userNode);
-                                        }
+                                        const barrelUri = vscode.Uri.file(barrelPath);
+                                        const wildcardRefs = await this.findImportsOfBarrelFile(
+                                            barrelUri,
+                                            symbol.fullName
+                                        );
                                         
-                                        relevantNodeIds.add(userNode.id);
-                                        totalDependents++;
-                                        filteredDependents++;
-                                        
-                                        const symbolFullName = symbol.fullName;
-                                        if (!symbolToDependentsMap.has(symbolFullName)) {
-                                            symbolToDependentsMap.set(symbolFullName, []);
-                                        }
-                                        symbolToDependentsMap.get(symbolFullName).push(userFilePath);
-                                        
-                                        if (symbol.children && symbol.children.length > 0) {
-                                            symbol.children.forEach(childName => {
-                                                if (!symbolToDependentsMap.has(childName)) {
-                                                    symbolToDependentsMap.set(childName, []);
+                                        if (wildcardRefs.length > 0) {
+                                            console.log(`               ✅ Wildcard search found ${wildcardRefs.length} usages`);
+                                            
+                                            const userFiles = new Set();
+                                            for (const ref of wildcardRefs) {
+                                                const refPath = ref.uri.fsPath;
+                                                const isDefinition = path.normalize(refPath) === path.normalize(fullPRFilePath);
+                                                
+                                                if (!isDefinition) {
+                                                    const relativePath = path.relative(this.workspaceRoot, refPath).replace(/\\/g, '/');
+                                                    userFiles.add(relativePath);
                                                 }
-                                                symbolToDependentsMap.get(childName).push(userFilePath);
-                                            });
+                                            }
+                                            
+                                            // Add these files
+                                            for (const userFilePath of userFiles) {
+                                                let userNode = this.fullGraph.nodes.find(n => n.relativePath === userFilePath);
+                                                if (!userNode) {
+                                                    userNode = {
+                                                        id: userFilePath,
+                                                        relativePath: userFilePath,
+                                                        label: path.basename(userFilePath),
+                                                        type: 'dependency'
+                                                    };
+                                                    this.fullGraph.nodes.push(userNode);
+                                                }
+                                                
+                                                relevantNodeIds.add(userNode.id);
+                                                totalDependents++;
+                                                filteredDependents++;
+                                                
+                                                const symbolFullName = symbol.fullName;
+                                                if (!symbolToDependentsMap.has(symbolFullName)) {
+                                                    symbolToDependentsMap.set(symbolFullName, []);
+                                                }
+                                                symbolToDependentsMap.get(symbolFullName).push(userFilePath);
+                                                
+                                                if (symbol.children && symbol.children.length > 0) {
+                                                    symbol.children.forEach(childName => {
+                                                        if (!symbolToDependentsMap.has(childName)) {
+                                                            symbolToDependentsMap.set(childName, []);
+                                                        }
+                                                        symbolToDependentsMap.get(childName).push(userFilePath);
+                                                    });
+                                                }
+                                                
+                                                console.log(`            ✅ Added via fallback: ${userFilePath}`);
+                                            }
+                                            
+                                            // Stop after finding the first valid barrel with usages
+                                            break;
                                         }
-                                        
-                                        console.log(`            ✅ Added via fallback: ${userFilePath}`);
                                     }
                                 }
                             }
@@ -506,16 +517,19 @@ class PRDependencyAnalyzer {
     createNodeForNewFile(prFile) {
         const filePath = prFile.path.replace(/\\/g, '/');
         const fileName = path.basename(filePath);
-        const ext = path.extname(fileName);
+        const ext = path.extname(fileName).toLowerCase();
 
         // Determine category based on extension
         let category = 'file';
-        if (['.ts', '.js', '.tsx', '.jsx'].includes(ext)) {
-            category = 'typescript';
-        } else if (['.html', '.css', '.scss'].includes(ext)) {
-            category = 'style';
-        } else if (['.json', '.xml', '.yaml', '.yml'].includes(ext)) {
-            category = 'config';
+        
+        // 🔥 FIX: Configuration-driven category detection
+        if (this.vscodeAnalyzer && this.vscodeAnalyzer.languageConfig) {
+            for (const [lang, config] of Object.entries(this.vscodeAnalyzer.languageConfig)) {
+                if (config.extensions && config.extensions.includes(ext)) {
+                    category = lang;
+                    break;
+                }
+            }
         }
 
         return {
@@ -878,47 +892,41 @@ class PRDependencyAnalyzer {
             const extractedSymbols = [];
             
             const processSymbol = (symbol, parentName = null) => {
-                const typeMap = {
-                    [vscode.SymbolKind.File]: 'file',
-                    [vscode.SymbolKind.Module]: 'module',
-                    [vscode.SymbolKind.Namespace]: 'namespace',
-                    [vscode.SymbolKind.Package]: 'package',
-                    [vscode.SymbolKind.Class]: 'class',
-                    [vscode.SymbolKind.Method]: 'method',
-                    [vscode.SymbolKind.Property]: 'property',
-                    [vscode.SymbolKind.Field]: 'field',
-                    [vscode.SymbolKind.Constructor]: 'constructor',
-                    [vscode.SymbolKind.Enum]: 'enum',
-                    [vscode.SymbolKind.Interface]: 'interface',
-                    [vscode.SymbolKind.Function]: 'function',
-                    [vscode.SymbolKind.Variable]: 'variable',
-                    [vscode.SymbolKind.Constant]: 'const',
-                    [vscode.SymbolKind.String]: 'string',
-                    [vscode.SymbolKind.Number]: 'number',
-                    [vscode.SymbolKind.Boolean]: 'boolean',
-                    [vscode.SymbolKind.Array]: 'array',
-                    [vscode.SymbolKind.Object]: 'object',
-                    [vscode.SymbolKind.Key]: 'key',
-                    [vscode.SymbolKind.Null]: 'null',
-                    [vscode.SymbolKind.EnumMember]: 'enum-member',
-                    [vscode.SymbolKind.Struct]: 'struct',
-                    [vscode.SymbolKind.Event]: 'event',
-                    [vscode.SymbolKind.Operator]: 'operator',
-                    [vscode.SymbolKind.TypeParameter]: 'type-param'
-                };
+                // 🔥 FIX: Dynamic symbol type mapping
+                let typeStr = vscode.SymbolKind[symbol.kind] ? vscode.SymbolKind[symbol.kind].toLowerCase() : 'unknown';
                 
-                const typeStr = typeMap[symbol.kind] || 'unknown';
+                // Handle special cases
+                if (typeStr === 'enummember') typeStr = 'enum-member';
+                if (typeStr === 'typeparameter') typeStr = 'type-param';
                 
-                const isSignificant = [
-                    vscode.SymbolKind.Class,
-                    vscode.SymbolKind.Method,
-                    vscode.SymbolKind.Property,
-                    vscode.SymbolKind.Function,
-                    vscode.SymbolKind.Variable,
-                    vscode.SymbolKind.Constant,
-                    vscode.SymbolKind.Interface,
-                    vscode.SymbolKind.Enum
-                ].includes(symbol.kind);
+                // 🔥 FIX: Configuration-driven significance check
+                let isSignificant = false;
+                const patterns = this.getLanguagePatterns(prFilePath);
+                
+                if (patterns) {
+                    // Check if type is configured in patterns
+                    if (patterns[typeStr]) {
+                        isSignificant = true;
+                    } else {
+                        // Map related types
+                        if (typeStr === 'method' && patterns['function']) isSignificant = true;
+                        if (typeStr === 'field' && patterns['property']) isSignificant = true;
+                        // Always include containers if they have children?
+                        if (['class', 'interface', 'module', 'namespace'].includes(typeStr)) isSignificant = true;
+                    }
+                } else {
+                    // Fallback to hardcoded list
+                    isSignificant = [
+                        vscode.SymbolKind.Class,
+                        vscode.SymbolKind.Method,
+                        vscode.SymbolKind.Property,
+                        vscode.SymbolKind.Function,
+                        vscode.SymbolKind.Variable,
+                        vscode.SymbolKind.Constant,
+                        vscode.SymbolKind.Interface,
+                        vscode.SymbolKind.Enum
+                    ].includes(symbol.kind);
+                }
 
                 if (isSignificant) {
                     extractedSymbols.push({
@@ -1109,7 +1117,50 @@ class PRDependencyAnalyzer {
         const trimmedLine = line.trim();
         
         if (!trimmedLine || trimmedLine.length === 0) return symbols;
+
+        // 🔥 FIX: Use configuration-driven patterns
+        const patterns = this.getLanguagePatterns(filePath);
         
+        if (patterns) {
+            for (const [type, regex] of Object.entries(patterns)) {
+                if (type === 'objectStart' || type === 'blockEnd') continue;
+                
+                try {
+                    const pattern = regex instanceof RegExp ? regex : new RegExp(regex);
+                    const match = trimmedLine.match(pattern);
+                    
+                    if (match) {
+                        const name = match[1];
+                        const column = line.indexOf(name);
+                        
+                        if (type === 'property' && contextStack.length > 0) {
+                            const nestedPath = [...contextStack, name].join('.');
+                            symbols.push({ 
+                                name: name,
+                                fullName: nestedPath,
+                                type: 'property',
+                                parentName: contextStack[contextStack.length - 1],
+                                lineNumber: lineNumber,
+                                column: column,
+                                filePath: filePath
+                            });
+                        } else {
+                            symbols.push({ 
+                                name: name,
+                                fullName: name,
+                                type: type,
+                                lineNumber: lineNumber,
+                                column: column,
+                                filePath: filePath
+                            });
+                        }
+                    }
+                } catch (e) {}
+            }
+            return symbols;
+        }
+        
+        // Fallback to hardcoded JS/TS regexes
         // Property within object: propertyName: value
         const propertyMatch = trimmedLine.match(/^([a-zA-Z_$][a-zA-Z0-9_$]*)\s*:\s*/);
         if (propertyMatch) {
@@ -1402,6 +1453,42 @@ class PRDependencyAnalyzer {
             barrelRelativeToWorkspace, 
             pathAliases
         );
+    }
+
+    /**
+     * Get language configuration patterns for a file
+     */
+    getLanguagePatterns(filePath) {
+        const ext = path.extname(filePath).toLowerCase();
+        
+        if (this.vscodeAnalyzer && this.vscodeAnalyzer.languageConfig) {
+            for (const [lang, config] of Object.entries(this.vscodeAnalyzer.languageConfig)) {
+                if (config.extensions && config.extensions.includes(ext)) {
+                    return config.symbolPatterns;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Get barrel/entry files for a specific language
+     */
+    getBarrelFiles(filePath) {
+        const ext = path.extname(filePath).toLowerCase();
+        
+        if (this.vscodeAnalyzer && this.vscodeAnalyzer.languageConfig) {
+            for (const [lang, config] of Object.entries(this.vscodeAnalyzer.languageConfig)) {
+                if (config.extensions && config.extensions.includes(ext)) {
+                    if (config.barrelFiles) {
+                        return config.barrelFiles;
+                    }
+                }
+            }
+        }
+
+        // Fallback default
+        return ['index.ts', 'index.js', 'index.jsx', 'index.tsx'];
     }
 
     /**

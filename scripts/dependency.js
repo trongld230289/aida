@@ -423,28 +423,13 @@ async function buildSelectedNodeObject(nodeId, graph, panel) {
             const fileContent = fs.readFileSync(absolutePath, 'utf8');
 
             // Detect framework and load assets accordingly
-            if (fileName.endsWith('.ts') || fileName.endsWith('.tsx')) {
-                // Angular or React TypeScript
-                if (fileContent.includes('@Component') || fileContent.includes('templateUrl')) {
-                    // Angular component
-                    Object.assign(result, await loadAngularAssets(absolutePath, fileContent, workspaceRoot));
-                } else if (fileName.endsWith('.tsx') || fileContent.includes('import React')) {
-                    // React component
-                    Object.assign(result, await loadReactAssets(absolutePath, fileContent, workspaceRoot));
-                }
-            } else if (fileName.endsWith('.jsx') || fileName.endsWith('.js')) {
-                // JavaScript - React or Node.js
-                if (fileContent.includes('import React') || fileContent.includes('from \'react\'')) {
-                    Object.assign(result, await loadReactAssets(absolutePath, fileContent, workspaceRoot));
-                } else {
-                    Object.assign(result, await loadNodeJsAssets(absolutePath, fileContent, workspaceRoot));
-                }
-            } else if (fileName.endsWith('.cs')) {
-                // C# file
-                Object.assign(result, await loadCSharpAssets(absolutePath, fileContent, workspaceRoot));
-            } else if (fileName.endsWith('.cshtml') || fileName.endsWith('.razor')) {
-                // C# view files
-                Object.assign(result, await loadCSharpViewAssets(absolutePath, fileContent, workspaceRoot));
+            // 🔥 REFACTORED: Use AssetLoaderStrategy pattern instead of hardcoded if/else
+            const { AssetLoaderFactory } = require('./dependency-graph/asset-loader-factory');
+            const assetLoader = AssetLoaderFactory.getLoader(fileName);
+            
+            if (assetLoader) {
+                const assets = await assetLoader.loadAssets(absolutePath, fileContent, workspaceRoot);
+                Object.assign(result, assets);
             }
 
             return result;

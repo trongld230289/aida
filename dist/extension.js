@@ -162,6 +162,17 @@ function activate(context) {
     // Store extension path globally
     global.extensionPath = context.extensionPath;
     
+    // Register Virtual Content Provider for in-memory files (aida-memory scheme)
+    try {
+        const { virtualContentProvider } = __webpack_require__(/*! ./scripts/virtual-content-provider */ "./scripts/virtual-content-provider.js");
+        context.subscriptions.push(
+            vscode.workspace.registerTextDocumentContentProvider('aida-memory', virtualContentProvider)
+        );
+        console.log('✅ Registered aida-memory content provider');
+    } catch (error) {
+        console.error('❌ Failed to register virtual content provider:', error);
+    }
+    
     // Make business docs state accessible globally
     global.businessDocsState = businessDocsState;
 
@@ -205,7 +216,7 @@ function activate(context) {
     });
 
     // Register test command to get Copilot models
-    const testModelsModule = __webpack_require__(/*! ./scripts/test-get-copilot-models.js */ "./scripts/test-get-copilot-models.js");
+    const testModelsModule = __webpack_require__(/*! ./scripts/test/test-get-copilot-models.js */ "./scripts/test/test-get-copilot-models.js");
     testModelsModule.registerTestCommand(context);
 
     let closeChatSidebarCommand = vscode.commands.registerCommand('aida.closeChatSidebar', async () => {
@@ -58250,6 +58261,738 @@ if (__webpack_require__.c[__webpack_require__.s] === module) {
 
 /***/ }),
 
+/***/ "./scripts/dependency-graph/asset-loader-factory.js":
+/*!**********************************************************!*\
+  !*** ./scripts/dependency-graph/asset-loader-factory.js ***!
+  \**********************************************************/
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+const path = __webpack_require__(/*! path */ "path");
+const fs = __webpack_require__(/*! fs */ "fs");
+const vscode = __webpack_require__(/*! vscode */ "vscode");
+const { VSCodeApiDependencyAnalyzer } = __webpack_require__(/*! ./vscode-api-analyzer */ "./scripts/dependency-graph/vscode-api-analyzer.js");
+
+/**
+ * Factory to get appropriate asset loader based on file type
+ */
+class AssetLoaderFactory {
+    static getLoader(fileName) {
+        // 🔥 NEW: Use Generic Configurable Loader
+        return new ConfigurableAssetLoader();
+    }
+}
+
+/**
+ * Generic Asset Loader driven by VSCodeApiDependencyAnalyzer config
+ */
+class ConfigurableAssetLoader {
+    constructor() {
+        // Initialize analyzer to access config
+        // Note: In a real DI system, this should be injected
+        this.analyzer = new VSCodeApiDependencyAnalyzer();
+    }
+
+    async loadAssets(absolutePath, fileContent, workspaceRoot) {
+        const result = {};
+        const fileName = path.basename(absolutePath);
+        const ext = path.extname(fileName).toLowerCase();
+        
+        // 1. Find matching language config
+        let langConfig = null;
+        if (this.analyzer && this.analyzer.languageConfig) {
+            for (const [lang, config] of Object.entries(this.analyzer.languageConfig)) {
+                if (config.extensions && config.extensions.includes(ext)) {
+                    langConfig = config;
+                    break;
+                }
+            }
+        }
+
+        if (!langConfig) return result;
+
+        // 2. Process Regex Patterns from Config
+        if (langConfig.assetPatterns) {
+            for (const patternConfig of langConfig.assetPatterns) {
+                const regex = patternConfig.regex;
+                if (!regex) continue;
+
+                // Reset regex state
+                regex.lastIndex = 0;
+
+                if (patternConfig.multi) {
+                    // Handle multi-match (e.g. styleUrls: ['a.css', 'b.css'])
+                    const match = fileContent.match(regex);
+                    if (match && match[1]) {
+                        // Extract inner content (e.g. 'a.css', 'b.css')
+                        const innerContent = match[1];
+                        // Simple extraction of quoted strings
+                        const urlMatches = innerContent.match(/['"`]([^'"`]+)['"`]/g);
+                        if (urlMatches) {
+                            for (const urlMatch of urlMatches) {
+                                const cleanUrl = urlMatch.replace(/['"`]/g, '');
+                                await this.resolveAndAddAsset(result, patternConfig.type, cleanUrl, absolutePath, workspaceRoot);
+                            }
+                        }
+                    }
+                } else {
+                    // Handle single match (e.g. templateUrl: 'a.html')
+                    // Use matchAll to find all occurrences in file
+                    const matches = fileContent.matchAll(new RegExp(regex, 'g'));
+                    for (const match of matches) {
+                        const url = match[1];
+                        if (url) {
+                            await this.resolveAndAddAsset(result, patternConfig.type, url, absolutePath, workspaceRoot);
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Handle Co-location Conventions (Hard to config purely via regex)
+        // We can keep some generic convention logic here or add 'conventions' to config later
+        // For now, let's keep the React/C# co-location logic as a fallback or "Convention Strategy"
+        
+        // React/C# Co-location fallback
+        if (['.tsx', '.jsx', '.js', '.cs', '.razor', '.cshtml'].includes(ext)) {
+            await this.applyConventions(result, absolutePath, workspaceRoot, ext);
+        }
+
+        return result;
+    }
+
+    async resolveAndAddAsset(result, type, relativeUrl, sourcePath, workspaceRoot) {
+        try {
+            const dirPath = path.dirname(sourcePath);
+            const assetPath = path.resolve(dirPath, relativeUrl);
+            
+            if (fs.existsSync(assetPath)) {
+                // Store relative to workspace
+                result[type] = path.relative(workspaceRoot, assetPath);
+            }
+        } catch (e) {
+            // Ignore resolution errors
+        }
+    }
+
+    async applyConventions(result, absolutePath, workspaceRoot, ext) {
+        const dirPath = path.dirname(absolutePath);
+        const baseName = path.basename(absolutePath, ext);
+        
+        // React/General CSS Co-location
+        if (!result.css && ['.tsx', '.jsx', '.js'].includes(ext)) {
+            const possibleCssFiles = [
+                `${baseName}.module.css`, `${baseName}.module.scss`,
+                `${baseName}.css`, `${baseName}.scss`,
+                'styles.module.css', 'styles.css'
+            ];
+            for (const cssFile of possibleCssFiles) {
+                const cssPath = path.join(dirPath, cssFile);
+                if (fs.existsSync(cssPath)) {
+                    result.css = path.relative(workspaceRoot, cssPath);
+                    break;
+                }
+            }
+        }
+
+        // C# View Conventions (Controller -> View)
+        if (ext === '.cs' && baseName.endsWith('Controller')) {
+            const viewName = baseName.replace('Controller', '');
+            const possibleViewPaths = [
+                path.join(dirPath, '..', 'Views', viewName, 'Index.cshtml'),
+                path.join(dirPath, '..', 'Views', viewName, `${viewName}.cshtml`),
+                path.join(dirPath, 'Views', viewName, 'Index.cshtml')
+            ];
+            for (const viewPath of possibleViewPaths) {
+                if (fs.existsSync(viewPath)) {
+                    result.view = path.relative(workspaceRoot, viewPath);
+                    break;
+                }
+            }
+        }
+    }
+}
+
+module.exports = {
+    AssetLoaderFactory
+};
+
+/***/ }),
+
+/***/ "./scripts/dependency-graph/barrel-resolver.js":
+/*!*****************************************************!*\
+  !*** ./scripts/dependency-graph/barrel-resolver.js ***!
+  \*****************************************************/
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+const vscode = __webpack_require__(/*! vscode */ "vscode");
+const path = __webpack_require__(/*! path */ "path");
+const fs = __webpack_require__(/*! fs */ "fs");
+
+/**
+ * BarrelResolver - Module xử lý barrel files (index.ts re-exports)
+ * 
+ * Module này chứa các hàm để:
+ * - Resolve references qua các barrel files (đệ quy)
+ * - Parse barrel export symbols
+ * - Tìm imports của barrel files (wildcard exports)
+ * - Build import patterns với path aliases
+ */
+class BarrelResolver {
+    constructor() {
+        this.referenceCache = new Map(); // Cache for reference lookups
+        this.tsconfigAliasCache = new Map(); // Cache for tsconfig aliases
+    }
+
+    /**
+     * 🔥 Main function: Resolve barrel references đệ quy
+     * @param {vscode.Uri} symbolUri - URI của file chứa symbol
+     * @param {vscode.Position} symbolPosition - Position của symbol
+     * @param {string} symbolName - Tên symbol cần resolve
+     * @param {Set<string>} visitedBarrels - Set các barrels đã visit (tránh infinite loop)
+     * @param {number} currentLevel - Level hiện tại (limit depth)
+     * @returns {Promise<{references: vscode.Location[], barrelChain: Array}>}
+     */
+    async resolveBarrelReferences(symbolUri, symbolPosition, symbolName, visitedBarrels = new Set(), currentLevel = 0) {
+        const allReferences = [];
+        const barrelChain = [];
+        
+        // Protection against infinite loops
+        if (currentLevel > 10) {
+            console.warn('⚠️ Barrel chain depth exceeded 10 levels, stopping recursion');
+            return { references: allReferences, barrelChain };
+        }
+        
+        try {
+            // Check cache first with version key
+            const cacheKey = `${symbolUri.fsPath}:${symbolPosition.line}:${symbolPosition.character}:v2`;
+            let directReferences = this.referenceCache.get(cacheKey);
+            
+            if (!directReferences) {
+                // 🔥 IMPROVED: Add timeout to prevent hanging
+                const timeout = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Reference provider timeout')), 10000)
+                );
+                
+                const refPromise = vscode.commands.executeCommand(
+                    'vscode.executeReferenceProvider',
+                    symbolUri,
+                    symbolPosition
+                );
+                
+                try {
+                    directReferences = await Promise.race([refPromise, timeout]);
+                } catch (timeoutError) {
+                    console.warn(`         ⚠️ Timeout finding references for ${symbolName}`);
+                    return { references: allReferences, barrelChain };
+                }
+                
+                // Cache the result
+                if (directReferences && directReferences.length > 0) {
+                    this.referenceCache.set(cacheKey, directReferences);
+                }
+            }
+            
+            if (!directReferences || directReferences.length === 0) {
+                return { references: allReferences, barrelChain };
+            }
+            
+            // 🔥 IMPROVED: Separate barrels and real usages first
+            const barrels = [];
+            const realUsages = [];
+            
+            for (const ref of directReferences) {
+                const isBarrel = await this.isBarrelExport(ref);
+                if (isBarrel) {
+                    barrels.push(ref);
+                } else {
+                    // Skip definition itself
+                    if (ref.uri.fsPath !== symbolUri.fsPath || 
+                        ref.range.start.line !== symbolPosition.line) {
+                        realUsages.push(ref);
+                    }
+                }
+            }
+            
+            // Add real usages immediately
+            allReferences.push(...realUsages);
+            
+            const indent = '  '.repeat(currentLevel);
+            console.log(`         ${indent}📍 Level ${currentLevel}: ${barrels.length} barrels, ${realUsages.length} real usages`);
+            
+            // Process barrels
+            for (const barrelRef of barrels) {
+                const refPath = barrelRef.uri.fsPath;
+                const refKey = `${refPath}:${barrelRef.range.start.line}:${barrelRef.range.start.character}`;
+                
+                console.log(`         ${indent}🔄 Barrel: ${path.basename(refPath)}:${barrelRef.range.start.line}`);
+                
+                // Avoid infinite loops
+                if (visitedBarrels.has(refKey)) {
+                    console.log(`         ${indent}⏭️ Already visited, skipping`);
+                    continue;
+                }
+                
+                visitedBarrels.add(refKey);
+                
+                // 🔥 IMPROVED: Get barrel export info with fallback
+                const barrelSymbolInfo = await this.getBarrelExportSymbolImproved(barrelRef, symbolName);
+                
+                if (!barrelSymbolInfo) {
+                    console.log(`         ${indent}⚠️ Could not parse barrel export`);
+                    continue;
+                }
+                
+                // Add to barrel chain
+                barrelChain.push({
+                    file: refPath,
+                    exportedAs: barrelSymbolInfo.name,
+                    level: currentLevel,
+                    isWildcard: barrelSymbolInfo.isWildcard
+                });
+                
+                // Handle wildcard exports
+                if (barrelSymbolInfo.isWildcard) {
+                    console.log(`         ${indent}⭐ Wildcard: finding imports of barrel...`);
+                    const wildcardRefs = await this.findImportsOfBarrelFileImproved(
+                        barrelRef.uri, 
+                        symbolName,
+                        currentLevel
+                    );
+                    console.log(`         ${indent}✅ Found ${wildcardRefs.length} usages through wildcard`);
+                    allReferences.push(...wildcardRefs);
+                } else {
+                    // Recursively resolve named exports
+                    console.log(`         ${indent}🔍 Following named export: ${barrelSymbolInfo.name}`);
+                    const result = await this.resolveBarrelReferences(
+                        barrelRef.uri,
+                        barrelSymbolInfo.position,
+                        barrelSymbolInfo.name,
+                        visitedBarrels,
+                        currentLevel + 1
+                    );
+                    
+                    console.log(`         ${indent}✅ Found ${result.references.length} refs through chain`);
+                    allReferences.push(...result.references);
+                    barrelChain.push(...result.barrelChain);
+                }
+            }
+            
+            return { references: allReferences, barrelChain };
+            
+        } catch (error) {
+            console.error(`         ❌ Barrel resolution error at level ${currentLevel}:`, error.message);
+            // 🔥 IMPROVED: Clear cache on error
+            const cacheKey = `${symbolUri.fsPath}:${symbolPosition.line}:${symbolPosition.character}:v2`;
+            this.referenceCache.delete(cacheKey);
+            return { references: allReferences, barrelChain };
+        }
+    }
+
+    /**
+     * 🔥 Parse barrel export symbol (improved version)
+     * Xử lý các patterns:
+     * - export * from './somewhere'
+     * - export { Name } from './somewhere'
+     * - export { Name as Alias } from './somewhere'
+     * - export { Name1, Name2, ... } from './somewhere'
+     * 
+     * @param {vscode.Location} barrelLocation - Location của barrel export
+     * @param {string} originalSymbolName - Tên symbol gốc (optional, dùng cho multi-export)
+     * @returns {Promise<{name: string, position: vscode.Position, isWildcard: boolean}|null>}
+     */
+    async getBarrelExportSymbolImproved(barrelLocation, originalSymbolName = null) {
+        try {
+            const document = await vscode.workspace.openTextDocument(barrelLocation.uri);
+            const line = document.lineAt(barrelLocation.range.start.line);
+            const text = line.text.trim();
+            const refColumn = barrelLocation.range.start.character;
+            
+            // Pattern 1: export * from './somewhere'
+            if (/^export\s+\*\s+from/.test(text)) {
+                return {
+                    name: originalSymbolName || '*', // Use original name for wildcard
+                    position: barrelLocation.range.start,
+                    isWildcard: true
+                };
+            }
+            
+            // Pattern 2: export { Name } from './somewhere'
+            const simpleMatch = text.match(/export\s+\{\s*(\w+)\s*\}\s+from/);
+            if (simpleMatch) {
+                const symbolName = simpleMatch[1];
+                const symbolIndex = text.indexOf(symbolName, text.indexOf('{'));
+                
+                return {
+                    name: symbolName,
+                    position: new vscode.Position(
+                        barrelLocation.range.start.line, 
+                        symbolIndex >= 0 ? symbolIndex : refColumn
+                    ),
+                    isWildcard: false
+                };
+            }
+            
+            // Pattern 3: export { Name as Alias } from './somewhere'
+            const aliasMatch = text.match(/export\s+\{\s*(\w+)\s+as\s+(\w+)\s*\}\s+from/);
+            if (aliasMatch) {
+                const originalName = aliasMatch[1];
+                const aliasName = aliasMatch[2];
+                const symbolIndex = text.indexOf(aliasName, text.indexOf('as'));
+                
+                return {
+                    name: aliasName, // Use alias for next lookup
+                    position: new vscode.Position(
+                        barrelLocation.range.start.line,
+                        symbolIndex >= 0 ? symbolIndex : refColumn
+                    ),
+                    isWildcard: false
+                };
+            }
+            
+            // Pattern 4: export { Name1, Name2, ... } from './somewhere'
+            const multiMatch = text.match(/export\s+\{([^}]+)\}\s+from/);
+            if (multiMatch) {
+                const exportList = multiMatch[1];
+                const specs = exportList.split(',').map(s => s.trim());
+                
+                // 🔥 IMPROVED: Find the export spec closest to reference position
+                let bestMatch = null;
+                let minDistance = Infinity;
+                
+                for (const spec of specs) {
+                    // Parse 'Name' or 'Name as Alias'
+                    const parts = spec.split(/\s+as\s+/);
+                    const originalName = parts[0].trim();
+                    const exportedName = parts.length === 2 ? parts[1].trim() : originalName;
+                    
+                    // Find position of this export in the line
+                    const nameIndex = text.indexOf(exportedName, text.indexOf('{'));
+                    if (nameIndex >= 0) {
+                        const distance = Math.abs(nameIndex - refColumn);
+                        if (distance < minDistance) {
+                            minDistance = distance;
+                            bestMatch = {
+                                name: exportedName,
+                                position: new vscode.Position(barrelLocation.range.start.line, nameIndex),
+                                isWildcard: false
+                            };
+                        }
+                    }
+                }
+                
+                if (bestMatch) {
+                    return bestMatch;
+                }
+                
+                // Fallback: use original symbol name if present
+                if (originalSymbolName) {
+                    for (const spec of specs) {
+                        if (spec.includes(originalSymbolName)) {
+                            const parts = spec.split(/\s+as\s+/);
+                            const exportedName = parts.length === 2 ? parts[1].trim() : parts[0].trim();
+                            const nameIndex = text.indexOf(exportedName, text.indexOf('{'));
+                            
+                            return {
+                                name: exportedName,
+                                position: new vscode.Position(
+                                    barrelLocation.range.start.line,
+                                    nameIndex >= 0 ? nameIndex : refColumn
+                                ),
+                                isWildcard: false
+                            };
+                        }
+                    }
+                }
+            }
+            
+            return null;
+        } catch (error) {
+            console.error(`Error parsing barrel export:`, error.message);
+            return null;
+        }
+    }
+
+    /**
+     * 🔥 Tìm imports của barrel file (xử lý wildcard exports)
+     * Search tất cả files import từ barrel và sử dụng symbol
+     * 
+     * @param {vscode.Uri} barrelUri - URI của barrel file
+     * @param {string} symbolName - Tên symbol cần tìm
+     * @param {number} currentLevel - Level hiện tại (for logging)
+     * @returns {Promise<vscode.Location[]>}
+     */
+    async findImportsOfBarrelFileImproved(barrelUri, symbolName, currentLevel = 0) {
+        const imports = [];
+        
+        try {
+            const barrelPath = barrelUri.fsPath;
+            const barrelDir = path.dirname(barrelPath);
+            
+            // Get all TypeScript/JavaScript files in workspace
+            const workspaceFolder = vscode.workspace.getWorkspaceFolder(barrelUri);
+            if (!workspaceFolder) return imports;
+            
+            // Get barrel path relative to workspace (for alias matching)
+            const workspacePath = workspaceFolder.uri.fsPath;
+            const barrelRelativeToWorkspace = path.relative(workspacePath, barrelDir).replace(/\\/g, '/');
+            
+            const indent = '  '.repeat(currentLevel);
+            console.log(`${indent}         🔍 Looking for imports of barrel: ${barrelRelativeToWorkspace}`);
+            console.log(`${indent}         🎯 Searching for symbol: ${symbolName}`);
+            
+            // Load tsconfig aliases for better matching
+            const pathAliases = await this.loadTSConfigAliases(workspacePath);
+            console.log(`${indent}         📋 Loaded ${pathAliases.size} path aliases`);
+            
+            const files = await vscode.workspace.findFiles(
+                new vscode.RelativePattern(workspaceFolder, '**/*.{ts,tsx,js,jsx}'),
+                '**/node_modules/**',
+                1000 // Increase limit
+            );
+            
+            // Search for files that import from this barrel and use the symbol
+            for (const fileUri of files) {
+                if (fileUri.fsPath === barrelPath) continue;
+                
+                try {
+                    const document = await vscode.workspace.openTextDocument(fileUri);
+                    const text = document.getText();
+                    
+                    const fileDir = path.dirname(fileUri.fsPath);
+                    
+                    // 🔥 Use buildImportPatterns for comprehensive matching
+                    const importPatterns = this.buildImportPatterns(
+                        fileUri.fsPath,
+                        barrelDir,
+                        barrelRelativeToWorkspace,
+                        pathAliases
+                    );
+                    
+                    let hasImport = false;
+                    for (const pattern of importPatterns) {
+                        if (pattern.test(text)) {
+                            hasImport = true;
+                            break;
+                        }
+                    }
+                    
+                    if (!hasImport) continue;
+                    
+                    // File imports from this barrel - now check if it uses the symbol
+                    // symbolName is already the root object (e.g., 'limitedEquipment')
+                    const symbolPattern = new RegExp(`\\b${symbolName.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}\\b`, 'g');
+                    let match;
+                    let foundInFile = 0;
+                    
+                    while ((match = symbolPattern.exec(text)) !== null) {
+                        const position = document.positionAt(match.index);
+                        const line = document.lineAt(position.line);
+                        
+                        // Skip import/export lines
+                        const lineText = line.text.trim();
+                        if (!lineText.startsWith('import') && !lineText.startsWith('export')) {
+                            imports.push(new vscode.Location(fileUri, position));
+                            foundInFile++;
+                        }
+                    }
+                    
+                    if (foundInFile > 0) {
+                        console.log(`${indent}         ✅ ${path.basename(fileUri.fsPath)}: ${foundInFile} usages`);
+                    }
+                } catch (error) {
+                    // Skip files that can't be read
+                    continue;
+                }
+            }
+            
+            console.log(`${indent}         ✅ Found ${imports.length} usages of ${symbolName} through barrel`);
+            return imports;
+            
+        } catch (error) {
+            console.error(`Error finding imports of barrel:`, error.message);
+            return imports;
+        }
+    }
+
+    /**
+     * 🔥 Build import patterns (xử lý alias và Angular patterns)
+     * Tạo các regex patterns để match imports với:
+     * - Relative paths
+     * - Absolute paths
+     * - TypeScript path aliases
+     * - Angular common patterns (@shared, @app, etc.)
+     * 
+     * @param {string} importerPath - Path của file đang import
+     * @param {string} barrelDir - Directory của barrel file
+     * @param {string} barrelRelativeToWorkspace - Path của barrel relative to workspace
+     * @param {Map} pathAliases - Map của tsconfig path aliases
+     * @returns {RegExp[]} Array of regex patterns
+     */
+    buildImportPatterns(importerPath, barrelDir, barrelRelativeToWorkspace, pathAliases) {
+        const patterns = [];
+        const fileDir = path.dirname(importerPath);
+        
+        // 1. Relative imports
+        let relativePath = path.relative(fileDir, barrelDir);
+        if (!relativePath.startsWith('.')) {
+            relativePath = './' + relativePath;
+        }
+        relativePath = relativePath.replace(/\\/g, '/');
+        
+        patterns.push(
+            new RegExp(`from\\s+['"]${relativePath.replace(/\./g, '\\.')}['"]`, 'i'),
+            new RegExp(`from\\s+['"]${relativePath.replace(/\./g, '\\.')}/index['"]`, 'i')
+        );
+        
+        // 2. Absolute from workspace
+        patterns.push(
+            new RegExp(`from\\s+['"]${barrelRelativeToWorkspace}['"]`, 'i')
+        );
+        
+        // 3. TypeScript path aliases
+        for (const [alias, target] of pathAliases.entries()) {
+            if (barrelRelativeToWorkspace.startsWith(target)) {
+                const aliasedPath = barrelRelativeToWorkspace.replace(target, alias);
+                patterns.push(
+                    new RegExp(`from\\s+['"]${aliasedPath}['"]`, 'i')
+                );
+            }
+        }
+        
+        // 🔥 4. Angular common patterns
+        // Based on typical path: app/shared/utilities
+        const pathParts = barrelRelativeToWorkspace.split('/');
+        
+        // If path contains 'shared/utilities', add common Angular aliases
+        if (barrelRelativeToWorkspace.includes('shared/utilities')) {
+            patterns.push(
+                new RegExp(`from\\s+['"]@shared/utilities['"]`, 'i'),
+                new RegExp(`from\\s+['"]@app/shared/utilities['"]`, 'i')
+            );
+        }
+        
+        // Generic: extract pattern from path
+        // app/shared/utilities → @shared/utilities
+        if (pathParts.length >= 3 && pathParts[0] === 'app') {
+            const aliased = `@${pathParts[1]}/${pathParts.slice(2).join('/')}`;
+            patterns.push(
+                new RegExp(`from\\s+['"]${aliased}['"]`, 'i')
+            );
+        }
+        
+        // Also try: src/app/shared/utilities → @shared/utilities
+        if (pathParts.length >= 4 && pathParts[0] === 'src' && pathParts[1] === 'app') {
+            const aliased = `@${pathParts[2]}/${pathParts.slice(3).join('/')}`;
+            patterns.push(
+                new RegExp(`from\\s+['"]${aliased}['"]`, 'i')
+            );
+        }
+        
+        return patterns;
+    }
+
+    /**
+     * 🔥 Helper: Load TypeScript path aliases from tsconfig.json
+     * @param {string} workspacePath - Workspace root path
+     * @returns {Promise<Map<string, string>>}
+     */
+    async loadTSConfigAliases(workspacePath) {
+        // Check cache first
+        if (this.tsconfigAliasCache.has(workspacePath)) {
+            return this.tsconfigAliasCache.get(workspacePath);
+        }
+
+        const aliases = new Map();
+        
+        try {
+            const tsconfigPath = path.join(workspacePath, 'tsconfig.json');
+            if (!fs.existsSync(tsconfigPath)) {
+                this.tsconfigAliasCache.set(workspacePath, aliases);
+                return aliases;
+            }
+            
+            const tsconfigContent = fs.readFileSync(tsconfigPath, 'utf8');
+            // Remove comments (simple approach)
+            const jsonContent = tsconfigContent.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, '');
+            const tsconfig = JSON.parse(jsonContent);
+            
+            const paths = tsconfig.compilerOptions?.paths;
+            if (paths) {
+                for (const [alias, targets] of Object.entries(paths)) {
+                    // Remove /* from alias and target
+                    const cleanAlias = alias.replace(/\/\*$/, '');
+                    const cleanTarget = targets[0].replace(/\/\*$/, '');
+                    aliases.set(cleanAlias, cleanTarget);
+                }
+                
+                console.log(`✅ Loaded ${aliases.size} path aliases from tsconfig.json`);
+            }
+            
+        } catch (error) {
+            console.log(`⚠️ Could not load tsconfig.json:`, error.message);
+        }
+        
+        // Cache the result
+        this.tsconfigAliasCache.set(workspacePath, aliases);
+        return aliases;
+    }
+
+    /**
+     * 🔥 Helper: Check if a reference location is a barrel export (re-export)
+     * @param {vscode.Location} location - Reference location
+     * @returns {Promise<boolean>}
+     */
+    async isBarrelExport(location) {
+        try {
+            const document = await vscode.workspace.openTextDocument(location.uri);
+            const line = document.lineAt(location.range.start.line);
+            const text = line.text.trim();
+            
+            // Pattern 1: export { Something } from './somewhere'
+            const isReExport = /^export\s+(?:\{[^}]+\}|\*)\s+from/.test(text);
+            
+            // Pattern 2: File is named index.ts/tsx
+            const fileName = path.basename(location.uri.fsPath);
+            const isIndexFile = /^index\.(ts|tsx|js|jsx)$/.test(fileName);
+            
+            if (isReExport) {
+                return true;
+            }
+            
+            // If index file, check if it's mostly exports
+            if (isIndexFile) {
+                const fullText = document.getText();
+                const lines = fullText.split('\n').filter(l => l.trim());
+                const exportLines = lines.filter(l => 
+                    l.trim().startsWith('export') || l.trim().startsWith('//')
+                );
+                
+                // If >80% of lines are exports, likely a barrel
+                if (lines.length > 0 && exportLines.length / lines.length > 0.8) {
+                    return true;
+                }
+            }
+            
+            return false;
+        } catch (error) {
+            return false;
+        }
+    }
+
+    /**
+     * Clear all caches
+     */
+    clearCache() {
+        this.referenceCache.clear();
+        this.tsconfigAliasCache.clear();
+    }
+}
+
+module.exports = { BarrelResolver };
+
+
+/***/ }),
+
 /***/ "./scripts/dependency-graph/symbol-analyzer.js":
 /*!*****************************************************!*\
   !*** ./scripts/dependency-graph/symbol-analyzer.js ***!
@@ -58260,11 +59003,14 @@ const vscode = __webpack_require__(/*! vscode */ "vscode");
 const path = __webpack_require__(/*! path */ "path");
 const fs = __webpack_require__(/*! fs */ "fs");
 const { VSCodeApiDependencyAnalyzer } = __webpack_require__(/*! ./vscode-api-analyzer */ "./scripts/dependency-graph/vscode-api-analyzer.js");
+const { BarrelResolver } = __webpack_require__(/*! ./barrel-resolver */ "./scripts/dependency-graph/barrel-resolver.js");
 
 class SymbolAnalyzer {
     constructor() {
         // Initialize analyzer to access language config
         this.apiAnalyzer = new VSCodeApiDependencyAnalyzer('');
+        // 🔥 NEW: Barrel resolver for advanced barrel file handling
+        this.barrelResolver = new BarrelResolver();
     }
 
     /**
@@ -58604,10 +59350,24 @@ class SymbolAnalyzer {
 
     /**
      * Check if file is a barrel file (index.ts/js)
+     * 🔥 Now uses BarrelResolver for more sophisticated detection
      */
-    isBarrelFile(filePath) {
-        return filePath.endsWith('index.ts') || filePath.endsWith('index.js') || 
-               filePath.endsWith('index.tsx') || filePath.endsWith('index.jsx');
+    async isBarrelFile(filePath) {
+        // Simple filename check (legacy behavior)
+        const isIndexFile = filePath.endsWith('index.ts') || filePath.endsWith('index.js') || 
+                           filePath.endsWith('index.tsx') || filePath.endsWith('index.jsx');
+        
+        if (!isIndexFile) return false;
+        
+        // 🔥 Use BarrelResolver for deeper analysis
+        try {
+            const uri = vscode.Uri.file(filePath);
+            const location = new vscode.Location(uri, new vscode.Position(0, 0));
+            return await this.barrelResolver.isBarrelExport(location);
+        } catch (error) {
+            // Fallback to simple check
+            return isIndexFile;
+        }
     }
 
     /**
@@ -58726,6 +59486,43 @@ class SymbolAnalyzer {
             return lowerPath.includes(cleanPattern.toLowerCase());
         });
     }
+
+    // 🔥 ===== BARREL RESOLVER INTEGRATION =====
+    // Helper methods to access BarrelResolver functionality
+
+    /**
+     * Resolve barrel references recursively
+     * @returns {Promise<{references: Location[], barrelChain: Array}>}
+     */
+    async resolveBarrelReferences(symbolUri, symbolPosition, symbolName, visitedBarrels = new Set(), currentLevel = 0) {
+        return await this.barrelResolver.resolveBarrelReferences(
+            symbolUri, symbolPosition, symbolName, visitedBarrels, currentLevel
+        );
+    }
+
+    /**
+     * Parse barrel export symbol
+     * @returns {Promise<{name: string, position: Position, isWildcard: boolean}|null>}
+     */
+    async getBarrelExportSymbol(barrelLocation, originalSymbolName = null) {
+        return await this.barrelResolver.getBarrelExportSymbolImproved(barrelLocation, originalSymbolName);
+    }
+
+    /**
+     * Find imports of barrel file (for wildcard exports)
+     * @returns {Promise<Location[]>}
+     */
+    async findImportsOfBarrelFile(barrelUri, symbolName, currentLevel = 0) {
+        return await this.barrelResolver.findImportsOfBarrelFileImproved(barrelUri, symbolName, currentLevel);
+    }
+
+    /**
+     * Check if location is a barrel export (enhanced version)
+     * @returns {Promise<boolean>}
+     */
+    async isBarrelExportAdvanced(location) {
+        return await this.barrelResolver.isBarrelExport(location);
+    }
 }
 
 module.exports = { SymbolAnalyzer };
@@ -58741,6 +59538,7 @@ module.exports = { SymbolAnalyzer };
 
 const vscode = __webpack_require__(/*! vscode */ "vscode");
 const path = __webpack_require__(/*! path */ "path");
+const { BarrelResolver } = __webpack_require__(/*! ./barrel-resolver */ "./scripts/dependency-graph/barrel-resolver.js");
 
 /**
  * Enhanced Dependency Analyzer using VS Code Language Server APIs
@@ -58751,16 +59549,40 @@ class VSCodeApiDependencyAnalyzer {
         this.workspaceRoot = workspaceRoot;
         // Graph: SourcePath -> Set<TargetPaths>
         this.graph = new Map();
+        // 🔥 NEW: Barrel resolver for advanced barrel file handling
+        this.barrelResolver = new BarrelResolver();
         
         // Configuration-driven language support
         this.languageConfig = {
             typescript: {
                 extensions: ['.ts', '.tsx', '.js', '.jsx'],
+                // 🔥 NEW: Barrel/Entry file names
+                barrelFiles: ['index.ts', 'index.tsx', 'index.js', 'index.jsx', 'public_api.ts'],
                 importPatterns: [
                     /(?:from|import)\s+['"]([^'"]+)['"]/g,
                     /require\s*\(\s*['"]([^'"]+)['"]\s*\)/g
                 ],
-                classPattern: /\b([A-Z][a-zA-Z0-9]*)\b/g,
+                // 🔥 NEW: Asset patterns for UI templates/styles
+                assetPatterns: [
+                    // Angular
+                    { type: 'html', regex: /templateUrl\s*:\s*['"`]([^'"`]+)['"`]/ },
+                    { type: 'css', regex: /styleUrls\s*:\s*\[([\s\S]*?)\]/, multi: true },
+                    // React/General
+                    { type: 'css', regex: /import\s+['"`]([^'"`]+\.(?:css|scss|sass|less))['"`]/ },
+                    { type: 'css', regex: /import\s+.*?from\s+['"`]([^'"`]+\.(?:css|scss|sass|less))['"`]/ }
+                ],
+                // Expanded pattern to catch CONSTANTS and camelCase functions
+                classPattern: /\b([a-zA-Z_][a-zA-Z0-9_]*)\b/g,
+                // 🔥 NEW: Regex patterns for symbol extraction from patches
+                symbolPatterns: {
+                    objectStart: /^([a-zA-Z_$][a-zA-Z0-9_$]*)\s*:\s*\{/,
+                    blockEnd: /^\},?$/,
+                    property: /^([a-zA-Z_$][a-zA-Z0-9_$]*)\s*:\s*/,
+                    function: /function\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(/,
+                    const: /const\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=/,
+                    class: /class\s+([a-zA-Z_$][a-zA-Z0-9_$]*)/,
+                    interface: /interface\s+([a-zA-Z_$][a-zA-Z0-9_$]*)/
+                },
                 standardLibraries: ['String', 'Number', 'Boolean', 'Object', 'Array', 'Function',
                                    'Promise', 'Date', 'RegExp', 'Error', 'Map', 'Set', 'WeakMap',
                                    'Component', 'Injectable', 'NgModule', 'Directive', 'Pipe'],
@@ -58779,10 +59601,22 @@ class VSCodeApiDependencyAnalyzer {
             },
             python: {
                 extensions: ['.py'],
+                // 🔥 NEW: Barrel/Entry file names
+                barrelFiles: ['__init__.py'],
                 importPatterns: [
                     /(?:import|from)\s+([a-zA-Z_][a-zA-Z0-9_.]*)/g
                 ],
+                // 🔥 NEW: Asset patterns
+                assetPatterns: [
+                    // Flask/Django templates
+                    { type: 'template', regex: /render_template\s*\(\s*['"`]([^'"`]+)['"`]/ }
+                ],
                 classPattern: /class\s+([A-Z][a-zA-Z0-9_]*)/g,
+                // 🔥 NEW: Regex patterns for symbol extraction from patches
+                symbolPatterns: {
+                    class: /class\s+([a-zA-Z_][a-zA-Z0-9_]*)/,
+                    function: /def\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/,
+                },
                 standardLibraries: ['os', 'sys', 'json', 'urllib', 'datetime', 'collections',
                                    'itertools', 'functools', 'typing', 're', 'math', 'random'],
                 excludePatterns: [
@@ -58802,7 +59636,21 @@ class VSCodeApiDependencyAnalyzer {
                 importPatterns: [
                     /using\s+([a-zA-Z_][a-zA-Z0-9_.]*)/g
                 ],
+                // 🔥 NEW: Asset patterns for Views/Layouts
+                assetPatterns: [
+                    { type: 'view', regex: /View\s*\(\s*['"]([^'"]+)['"]/ },
+                    { type: 'view', regex: /PartialView\s*\(\s*['"]([^'"]+)['"]/ },
+                    { type: 'layout', regex: /Layout\s*=\s*['"]([^'"]+)['"]/ }
+                ],
                 classPattern: /\b([A-Z][a-zA-Z0-9]*(?:[A-Z][a-zA-Z0-9]*)*)\b/g,
+                // 🔥 NEW: Regex patterns for symbol extraction from patches
+                symbolPatterns: {
+                    class: /class\s+([a-zA-Z_][a-zA-Z0-9_]*)/,
+                    interface: /interface\s+([a-zA-Z_][a-zA-Z0-9_]*)/,
+                    function: /(?:public|private|protected|internal|static|\s)+[\w<>[\]]+\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/,
+                    const: /const\s+[\w<>[\]]+\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=/,
+                    blockEnd: /^\s*\}\s*$/
+                },
                 standardLibraries: ['String', 'Int32', 'Boolean', 'Object', 'Void', 'Task', 'IEnumerable',
                                    'List', 'Dictionary', 'HttpClient', 'JsonSerializer', 'DateTime',
                                    'Guid', 'Exception', 'StringBuilder', 'Console', 'Math'],
@@ -58822,7 +59670,20 @@ class VSCodeApiDependencyAnalyzer {
                 importPatterns: [
                     /import\s+([a-zA-Z_][a-zA-Z0-9_.]*)/g
                 ],
+                // 🔥 NEW: Asset patterns for Views/JSP
+                assetPatterns: [
+                    { type: 'view', regex: /return\s+['"]([^'"]+)['"]\s*;/ },
+                    { type: 'jsp', regex: /<jsp:include\s+page=['"]([^'"]+)['"]/ }
+                ],
                 classPattern: /\b([A-Z][a-zA-Z0-9]*)\b/g,
+                // 🔥 NEW: Regex patterns for symbol extraction from patches
+                symbolPatterns: {
+                    class: /class\s+([a-zA-Z_][a-zA-Z0-9_]*)/,
+                    interface: /interface\s+([a-zA-Z_][a-zA-Z0-9_]*)/,
+                    function: /(?:public|private|protected|static|\s)+[\w<>[\]]+\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/,
+                    const: /(?:final|static)\s+[\w<>[\]]+\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=/,
+                    blockEnd: /^\s*\}\s*$/
+                },
                 standardLibraries: ['String', 'Integer', 'Boolean', 'Object', 'List', 'Map', 'Set',
                                    'ArrayList', 'HashMap', 'Exception', 'System'],
                 excludePatterns: [
@@ -58840,7 +59701,21 @@ class VSCodeApiDependencyAnalyzer {
                 importPatterns: [
                     /(?:from|import)\s+['"]([^'"]+)['"]/g
                 ],
+                // 🔥 NEW: Asset patterns for external templates/styles
+                assetPatterns: [
+                    { type: 'template', regex: /<template\s+src=['"]([^'"]+)['"]/ },
+                    { type: 'style', regex: /<style\s+src=['"]([^'"]+)['"]/ }
+                ],
                 classPattern: /\b([A-Z][a-zA-Z0-9]*)\b/g,
+                // 🔥 NEW: Regex patterns for symbol extraction from patches (similar to JS/TS)
+                symbolPatterns: {
+                    objectStart: /^([a-zA-Z_$][a-zA-Z0-9_$]*)\s*:\s*\{/,
+                    blockEnd: /^\},?$/,
+                    property: /^([a-zA-Z_$][a-zA-Z0-9_$]*)\s*:\s*/,
+                    function: /(?:function\s+)?([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(/,
+                    const: /(?:const|let|var)\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=/,
+                    class: /class\s+([a-zA-Z_$][a-zA-Z0-9_$]*)/
+                },
                 standardLibraries: ['Vue', 'Vuex', 'VueRouter'],
                 excludePatterns: [
                     '**/node_modules/**',
@@ -58851,10 +59726,26 @@ class VSCodeApiDependencyAnalyzer {
             },
             php: {
                 extensions: ['.php'],
+                // 🔥 NEW: Barrel/Entry file names
+                barrelFiles: ['index.php'],
                 importPatterns: [
                     /(?:use|require|include)\s+['"]?([^'";\s]+)/g
                 ],
+                // 🔥 NEW: Asset patterns for Views/Includes
+                assetPatterns: [
+                    { type: 'view', regex: /view\s*\(\s*['"]([^'"]+)['"]/ },
+                    { type: 'include', regex: /(?:include|require)(?:_once)?\s*['"]([^'"]+)['"]/ }
+                ],
                 classPattern: /\b([A-Z][a-zA-Z0-9]*)\b/g,
+                // 🔥 NEW: Regex patterns for symbol extraction from patches
+                symbolPatterns: {
+                    class: /class\s+([a-zA-Z_][a-zA-Z0-9_]*)/,
+                    interface: /interface\s+([a-zA-Z_][a-zA-Z0-9_]*)/,
+                    function: /function\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/,
+                    const: /const\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=/,
+                    property: /(?:public|private|protected|var)\s+\$([a-zA-Z_][a-zA-Z0-9_]*)/,
+                    blockEnd: /^\s*\}\s*$/
+                },
                 standardLibraries: ['stdClass', 'Exception', 'DateTime', 'PDO'],
                 excludePatterns: [
                     '**/vendor/**',
@@ -58868,7 +59759,18 @@ class VSCodeApiDependencyAnalyzer {
                 importPatterns: [
                     /import\s+"([^"]+)"/g
                 ],
+                // 🔥 NEW: Asset patterns for templates
+                assetPatterns: [
+                    { type: 'template', regex: /template\.ParseFiles\s*\(\s*['"]([^'"]+)['"]/ }
+                ],
                 classPattern: /type\s+([A-Z][a-zA-Z0-9]*)/g,
+                // 🔥 NEW: Regex patterns for symbol extraction from patches
+                symbolPatterns: {
+                    class: /type\s+([a-zA-Z_][a-zA-Z0-9_]*)\s+(?:struct|interface)/,
+                    function: /func\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/,
+                    const: /const\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=/,
+                    blockEnd: /^\s*\}\s*$/
+                },
                 standardLibraries: ['fmt', 'os', 'io', 'net', 'http', 'context'],
                 excludePatterns: [
                     '**/vendor/**',
@@ -58878,10 +59780,23 @@ class VSCodeApiDependencyAnalyzer {
             },
             rust: {
                 extensions: ['.rs'],
+                // 🔥 NEW: Barrel/Entry file names
+                barrelFiles: ['mod.rs', 'lib.rs', 'main.rs'],
                 importPatterns: [
                     /use\s+([a-zA-Z_][a-zA-Z0-9_:]*)/g
                 ],
+                // 🔥 NEW: Asset patterns for includes
+                assetPatterns: [
+                    { type: 'include', regex: /include_(?:str|bytes)!\s*\(\s*['"]([^'"]+)['"]\s*\)/ }
+                ],
                 classPattern: /(?:struct|enum|trait)\s+([A-Z][a-zA-Z0-9]*)/g,
+                // 🔥 NEW: Regex patterns for symbol extraction from patches
+                symbolPatterns: {
+                    class: /(?:struct|enum|trait)\s+([a-zA-Z_][a-zA-Z0-9_]*)/,
+                    function: /fn\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/,
+                    const: /const\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*:/,
+                    blockEnd: /^\s*\}\s*$/
+                },
                 standardLibraries: ['std', 'String', 'Vec', 'Option', 'Result'],
                 excludePatterns: [
                     '**/target/**',
@@ -58894,7 +59809,18 @@ class VSCodeApiDependencyAnalyzer {
                 importPatterns: [
                     /import\s+([a-zA-Z_][a-zA-Z0-9_.]*)/g
                 ],
+                // 🔥 NEW: Asset patterns for Android layouts
+                assetPatterns: [
+                    { type: 'layout', regex: /R\.layout\.([a-zA-Z0-9_]+)/ }
+                ],
                 classPattern: /\b([A-Z][a-zA-Z0-9]*)\b/g,
+                // 🔥 NEW: Regex patterns for symbol extraction from patches
+                symbolPatterns: {
+                    class: /(?:class|interface|object)\s+([a-zA-Z_][a-zA-Z0-9_]*)/,
+                    function: /fun\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/,
+                    const: /(?:val|const\s+val)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=/,
+                    blockEnd: /^\s*\}\s*$/
+                },
                 standardLibraries: ['String', 'Int', 'Boolean', 'List', 'Map', 'Any'],
                 excludePatterns: [
                     '**/build/**',
@@ -58908,7 +59834,19 @@ class VSCodeApiDependencyAnalyzer {
                 importPatterns: [
                     /import\s+([a-zA-Z_][a-zA-Z0-9_.]*)/g
                 ],
+                // 🔥 NEW: Asset patterns for Nibs/Storyboards
+                assetPatterns: [
+                    { type: 'nib', regex: /nibName:\s*['"]([^'"]+)['"]/ },
+                    { type: 'storyboard', regex: /name:\s*['"]([^'"]+)['"]/ }
+                ],
                 classPattern: /\b([A-Z][a-zA-Z0-9]*)\b/g,
+                // 🔥 NEW: Regex patterns for symbol extraction from patches
+                symbolPatterns: {
+                    class: /(?:class|struct|enum|protocol)\s+([a-zA-Z_][a-zA-Z0-9_]*)/,
+                    function: /func\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/,
+                    const: /let\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=/,
+                    blockEnd: /^\s*\}\s*$/
+                },
                 standardLibraries: ['String', 'Int', 'Bool', 'Array', 'Dictionary', 'Foundation'],
                 excludePatterns: [
                     '**/.build/**',
@@ -58921,6 +59859,11 @@ class VSCodeApiDependencyAnalyzer {
                 extensions: ['.dart'],
                 importPatterns: [
                     /import\s+['"]([^'"]+)['"]/g
+                ],
+                // 🔥 NEW: Asset patterns for Flutter assets
+                assetPatterns: [
+                    { type: 'asset', regex: /asset\s*\(\s*['"]([^'"]+)['"]/ },
+                    { type: 'image', regex: /Image\.asset\s*\(\s*['"]([^'"]+)['"]/ }
                 ],
                 classPattern: /\b([A-Z][a-zA-Z0-9]*)\b/g,
                 standardLibraries: ['String', 'int', 'bool', 'List', 'Map', 'dart:'],
@@ -58936,6 +59879,11 @@ class VSCodeApiDependencyAnalyzer {
                 importPatterns: [
                     /require\s+['"]([^'"]+)['"]/g
                 ],
+                // 🔥 NEW: Asset patterns for Rails views
+                assetPatterns: [
+                    { type: 'view', regex: /render\s+['"]([^'"]+)['"]/ },
+                    { type: 'partial', regex: /render\s+partial:\s*['"]([^'"]+)['"]/ }
+                ],
                 classPattern: /class\s+([A-Z][a-zA-Z0-9]*)/g,
                 standardLibraries: ['String', 'Integer', 'Array', 'Hash', 'File'],
                 excludePatterns: [
@@ -58944,6 +59892,32 @@ class VSCodeApiDependencyAnalyzer {
                     '**/spec/**',
                     '**/*_spec.rb'
                 ]
+            },
+            // 🔥 NEW: Style files (CSS, SCSS, etc.)
+            style: {
+                extensions: ['.css', '.scss', '.less', '.sass', '.html'],
+                importPatterns: [
+                    /@import\s+['"]([^'"]+)['"]/g,
+                    /url\s*\(\s*['"]?([^'")]+)['"]?\s*\)/g
+                ],
+                // 🔥 NEW: Asset patterns for CSS imports/urls
+                assetPatterns: [
+                    { type: 'import', regex: /@import\s+['"]([^'"]+)['"]/ },
+                    { type: 'url', regex: /url\s*\(\s*['"]?([^'")]+)['"]?\s*\)/ }
+                ],
+                // No class pattern for styles
+                symbolPatterns: {},
+                standardLibraries: [],
+                excludePatterns: []
+            },
+            // 🔥 NEW: Config files (JSON, XML, etc.)
+            config: {
+                extensions: ['.json', '.xml', '.yaml', '.yml', '.env', '.config', '.ini'],
+                importPatterns: [], // No regex imports for config files
+                // No class pattern
+                symbolPatterns: {},
+                standardLibraries: [],
+                excludePatterns: []
             }
         };
         
@@ -59092,26 +60066,47 @@ class VSCodeApiDependencyAnalyzer {
         try {
             const processedSymbols = new Set();
             
-            // Process all import patterns
+            // 1. Try VS Code Link Provider (High Accuracy for Imports)
+            try {
+                const links = await vscode.commands.executeCommand('vscode.executeLinkProvider', document.uri);
+                if (links && links.length > 0) {
+                    for (const link of links) {
+                        if (!link.target) continue;
+                        
+                        const targetPath = link.target.fsPath;
+                        
+                        // Filter out external dependencies & self-references
+                        if (this.isExternalDependency(targetPath) || targetPath === document.uri.fsPath) {
+                            continue;
+                        }
+
+                        // Add to graph if it's in workspace
+                        if (targetPath.startsWith(this.workspaceRoot)) {
+                            const targetFile = this.getRelativePath(targetPath);
+                            this.graph.get(sourceFile).add(targetFile);
+                        }
+                    }
+                }
+            } catch (e) {
+                // Link provider failed, continue to regex
+            }
+
+            // 2. Process import patterns (Fallback & Complementary)
             for (const pattern of config.importPatterns) {
                 let match;
                 // Reset regex lastIndex for reuse
                 pattern.lastIndex = 0;
                 
                 while ((match = pattern.exec(text)) !== null) {
-                    const importPath = match[1];
-                    
-                    // Skip external/standard libraries
-                    if (this.isExternalImport(importPath, config.standardLibraries, language)) {
-                        continue;
-                    }
+                    // We no longer filter by isExternalImport here
+                    // We let the LSP resolve it and check the final path
                     
                     await this.resolveAndAddDependency(document, text, match, sourceFile, 'import');
                     await this.sleep(5);
                 }
             }
             
-            // Process class/type references
+            // 3. Process class/type references (Symbol Crawling)
             if (config.classPattern) {
                 let match;
                 config.classPattern.lastIndex = 0;
@@ -59119,8 +60114,9 @@ class VSCodeApiDependencyAnalyzer {
                 while ((match = config.classPattern.exec(text)) !== null) {
                     const symbol = match[1];
                     
-                    // Skip already processed symbols and standard libraries
-                    if (processedSymbols.has(symbol) || config.standardLibraries.includes(symbol)) {
+                    // Skip already processed symbols
+                    // We no longer filter by standardLibraries here
+                    if (processedSymbols.has(symbol)) {
                         continue;
                     }
                     processedSymbols.add(symbol);
@@ -59146,8 +60142,18 @@ class VSCodeApiDependencyAnalyzer {
     async resolveAndAddDependency(document, text, match, sourceFile, type) {
         try {
             // Calculate position for LSP resolution
-            const line = text.substring(0, match.index).split('\n').length - 1;
-            const character = match.index - text.lastIndexOf('\n', match.index) - 1;
+            // FIX: Point to the captured group (the path/symbol) instead of the start of the match
+            // This ensures VS Code API receives the correct context
+            let absoluteIndex = match.index;
+            if (match[1]) {
+                const offset = match[0].indexOf(match[1]);
+                if (offset !== -1) {
+                    absoluteIndex += offset;
+                }
+            }
+
+            const line = text.substring(0, absoluteIndex).split('\n').length - 1;
+            const character = absoluteIndex - text.lastIndexOf('\n', absoluteIndex) - 1;
             const position = new vscode.Position(line, character);
             
             // Use VS Code LSP to resolve actual file
@@ -59162,39 +60168,16 @@ class VSCodeApiDependencyAnalyzer {
     }
 
     /**
-     * Check if import is external (standard library or node_modules)
-     * @param {string} importPath - Import path
-     * @param {Array} standardLibraries - Standard library names
-     * @param {string} language - Language name
-     * @returns {boolean} - True if external
-     */
-    isExternalImport(importPath, standardLibraries, language) {
-        // Check if it's a relative import (project files)
-        if (importPath.startsWith('./') || importPath.startsWith('../') || 
-            importPath.startsWith('@/') || importPath.startsWith('src/')) {
-            return false;
-        }
-        
-        // For TypeScript/JavaScript, check common patterns
-        if (language === 'typescript' && (importPath.startsWith('@angular/') || 
-            importPath.startsWith('@vue/') || importPath.startsWith('react'))) {
-            return true;
-        }
-        
-        // Check if it's a standard library
-        const firstPart = importPath.split(/[./]/)[0];
-        return standardLibraries.some(lib => 
-            firstPart === lib || importPath.startsWith(lib)
-        );
-    }
-
-    /**
      * The "Magic" function - calls VS Code API to find where a symbol is defined
      * @param {vscode.TextDocument} document 
      * @param {vscode.Position} position 
+     * @param {number} depth - Recursion depth for barrel files
      * @returns {string|null} - Relative path to target file or null
      */
-    async resolveDefinition(document, position) {
+    async resolveDefinition(document, position, depth = 0) {
+        // Prevent infinite recursion
+        if (depth > 3) return null;
+
         try {
             const definitions = await vscode.commands.executeCommand(
                 'vscode.executeDefinitionProvider',
@@ -59233,6 +60216,21 @@ class VSCodeApiDependencyAnalyzer {
                 
                 // Return first valid workspace file
                 if (targetPath.startsWith(this.workspaceRoot)) {
+                    // Check if it's a barrel file (index.ts/js)
+                    const fileName = path.basename(targetPath).toLowerCase();
+                    if (fileName.startsWith('index.') && (fileName.endsWith('.ts') || fileName.endsWith('.js'))) {
+                        // It's a barrel file! We need to dig deeper.
+                        // But we can't just "dig" without knowing WHAT symbol we are looking for.
+                        // Since we don't have the symbol name easily here, we accept the barrel file as a dependency.
+                        // The consumer -> barrel link is valid.
+                        // Ideally, we should also link barrel -> implementation, which happens when we scan the barrel file itself.
+                        
+                        // However, if the user wants "Consumer -> Implementation" direct link, we would need to parse the barrel.
+                        // For now, let's return the barrel file. The graph will be Consumer -> Barrel -> Implementation.
+                        // This is technically correct for a dependency graph.
+                        return this.getRelativePath(targetPath);
+                    }
+
                     return this.getRelativePath(targetPath);
                 }
             }
@@ -59542,6 +60540,43 @@ class VSCodeApiDependencyAnalyzer {
         }
         
         return recommendations;
+    }
+
+    // 🔥 ===== BARREL RESOLVER INTEGRATION =====
+    // Helper methods to access BarrelResolver functionality
+
+    /**
+     * Resolve barrel references recursively
+     * @returns {Promise<{references: Location[], barrelChain: Array}>}
+     */
+    async resolveBarrelReferences(symbolUri, symbolPosition, symbolName, visitedBarrels = new Set(), currentLevel = 0) {
+        return await this.barrelResolver.resolveBarrelReferences(
+            symbolUri, symbolPosition, symbolName, visitedBarrels, currentLevel
+        );
+    }
+
+    /**
+     * Parse barrel export symbol
+     * @returns {Promise<{name: string, position: Position, isWildcard: boolean}|null>}
+     */
+    async getBarrelExportSymbol(barrelLocation, originalSymbolName = null) {
+        return await this.barrelResolver.getBarrelExportSymbolImproved(barrelLocation, originalSymbolName);
+    }
+
+    /**
+     * Find imports of barrel file (for wildcard exports)
+     * @returns {Promise<Location[]>}
+     */
+    async findImportsOfBarrelFile(barrelUri, symbolName, currentLevel = 0) {
+        return await this.barrelResolver.findImportsOfBarrelFileImproved(barrelUri, symbolName, currentLevel);
+    }
+
+    /**
+     * Check if location is a barrel export
+     * @returns {Promise<boolean>}
+     */
+    async isBarrelExport(location) {
+        return await this.barrelResolver.isBarrelExport(location);
     }
 }
 
@@ -59982,28 +61017,13 @@ async function buildSelectedNodeObject(nodeId, graph, panel) {
             const fileContent = fs.readFileSync(absolutePath, 'utf8');
 
             // Detect framework and load assets accordingly
-            if (fileName.endsWith('.ts') || fileName.endsWith('.tsx')) {
-                // Angular or React TypeScript
-                if (fileContent.includes('@Component') || fileContent.includes('templateUrl')) {
-                    // Angular component
-                    Object.assign(result, await loadAngularAssets(absolutePath, fileContent, workspaceRoot));
-                } else if (fileName.endsWith('.tsx') || fileContent.includes('import React')) {
-                    // React component
-                    Object.assign(result, await loadReactAssets(absolutePath, fileContent, workspaceRoot));
-                }
-            } else if (fileName.endsWith('.jsx') || fileName.endsWith('.js')) {
-                // JavaScript - React or Node.js
-                if (fileContent.includes('import React') || fileContent.includes('from \'react\'')) {
-                    Object.assign(result, await loadReactAssets(absolutePath, fileContent, workspaceRoot));
-                } else {
-                    Object.assign(result, await loadNodeJsAssets(absolutePath, fileContent, workspaceRoot));
-                }
-            } else if (fileName.endsWith('.cs')) {
-                // C# file
-                Object.assign(result, await loadCSharpAssets(absolutePath, fileContent, workspaceRoot));
-            } else if (fileName.endsWith('.cshtml') || fileName.endsWith('.razor')) {
-                // C# view files
-                Object.assign(result, await loadCSharpViewAssets(absolutePath, fileContent, workspaceRoot));
+            // 🔥 REFACTORED: Use AssetLoaderStrategy pattern instead of hardcoded if/else
+            const { AssetLoaderFactory } = __webpack_require__(/*! ./dependency-graph/asset-loader-factory */ "./scripts/dependency-graph/asset-loader-factory.js");
+            const assetLoader = AssetLoaderFactory.getLoader(fileName);
+            
+            if (assetLoader) {
+                const assets = await assetLoader.loadAssets(absolutePath, fileContent, workspaceRoot);
+                Object.assign(result, assets);
             }
 
             return result;
@@ -60296,24 +61316,52 @@ function getGraphDependents(nodeId, graph, workspaceRoot) {
 async function loadAngularAssets(absolutePath, fileContent, workspaceRoot) {
     const result = {};
 
-    // Parse templateUrl (HTML)
-    const templateUrlMatch = fileContent.match(/templateUrl\s*:\s*['"`]([^'"`]+)['"`]/);
-    if (templateUrlMatch) {
-        const htmlPath = path.resolve(path.dirname(absolutePath), templateUrlMatch[1]);
-        if (fs.existsSync(htmlPath)) {
-            result.html = path.relative(workspaceRoot, htmlPath);
+    // Try VS Code Link Provider API first (more accurate for aliases)
+    try {
+        const uri = vscode.Uri.file(absolutePath);
+        const links = await vscode.commands.executeCommand('vscode.executeLinkProvider', uri);
+        
+        if (links && links.length > 0) {
+            for (const link of links) {
+                if (!link.target) continue;
+                
+                const targetPath = link.target.fsPath;
+                const ext = path.extname(targetPath).toLowerCase();
+                
+                if (ext === '.html') {
+                    result.html = path.relative(workspaceRoot, targetPath);
+                } else if (['.css', '.scss', '.sass', '.less'].includes(ext)) {
+                    result.css = path.relative(workspaceRoot, targetPath);
+                }
+            }
+        }
+    } catch (error) {
+        // API might fail if extension not active, fallback to regex
+    }
+
+    // Fallback to regex if API missed it
+    if (!result.html) {
+        // Parse templateUrl (HTML)
+        const templateUrlMatch = fileContent.match(/templateUrl\s*:\s*['"`]([^'"`]+)['"`]/);
+        if (templateUrlMatch) {
+            const htmlPath = path.resolve(path.dirname(absolutePath), templateUrlMatch[1]);
+            if (fs.existsSync(htmlPath)) {
+                result.html = path.relative(workspaceRoot, htmlPath);
+            }
         }
     }
 
-    // Parse styleUrls (CSS/SCSS)
-    const styleUrlsMatch = fileContent.match(/styleUrls\s*:\s*\[([\s\S]*?)\]/);
-    if (styleUrlsMatch) {
-        const styleUrls = styleUrlsMatch[1].match(/['"`]([^'"`]+)['"`]/g);
-        if (styleUrls && styleUrls.length > 0) {
-            const cleanUrl = styleUrls[0].replace(/['"`]/g, '');
-            const cssPath = path.resolve(path.dirname(absolutePath), cleanUrl);
-            if (fs.existsSync(cssPath)) {
-                result.css = path.relative(workspaceRoot, cssPath);
+    if (!result.css) {
+        // Parse styleUrls (CSS/SCSS)
+        const styleUrlsMatch = fileContent.match(/styleUrls\s*:\s*\[([\s\S]*?)\]/);
+        if (styleUrlsMatch) {
+            const styleUrls = styleUrlsMatch[1].match(/['"`]([^'"`]+)['"`]/g);
+            if (styleUrls && styleUrls.length > 0) {
+                const cleanUrl = styleUrls[0].replace(/['"`]/g, '');
+                const cssPath = path.resolve(path.dirname(absolutePath), cleanUrl);
+                if (fs.existsSync(cssPath)) {
+                    result.css = path.relative(workspaceRoot, cssPath);
+                }
             }
         }
     }
@@ -60328,19 +61376,43 @@ async function loadReactAssets(absolutePath, fileContent, workspaceRoot) {
     const result = {};
     const dirPath = path.dirname(absolutePath);
 
-    // Find CSS/SCSS imports
-    // import './Component.css'
-    // import styles from './Component.module.css'
-    // import './styles.scss'
-    const cssImports = fileContent.matchAll(/import\s+(?:['"`]([^'"`]+\.(?:css|scss|sass|less))['"`]|.*?from\s+['"`]([^'"`]+\.(?:css|scss|sass|less))['"`])/gi);
-    
-    for (const match of cssImports) {
-        const cssFile = match[1] || match[2];
-        if (cssFile) {
-            const cssPath = path.resolve(dirPath, cssFile);
-            if (fs.existsSync(cssPath)) {
-                result.css = path.relative(workspaceRoot, cssPath);
-                break; // Take first CSS file found
+    // Try VS Code Link Provider API first
+    try {
+        const uri = vscode.Uri.file(absolutePath);
+        const links = await vscode.commands.executeCommand('vscode.executeLinkProvider', uri);
+        
+        if (links && links.length > 0) {
+            for (const link of links) {
+                if (!link.target) continue;
+                
+                const targetPath = link.target.fsPath;
+                const ext = path.extname(targetPath).toLowerCase();
+                
+                if (['.css', '.scss', '.sass', '.less'].includes(ext)) {
+                    result.css = path.relative(workspaceRoot, targetPath);
+                    break; // Take first CSS file found
+                }
+            }
+        }
+    } catch (error) {
+        // Fallback to regex
+    }
+
+    if (!result.css) {
+        // Find CSS/SCSS imports
+        // import './Component.css'
+        // import styles from './Component.module.css'
+        // import './styles.scss'
+        const cssImports = fileContent.matchAll(/import\s+(?:['"`]([^'"`]+\.(?:css|scss|sass|less))['"`]|.*?from\s+['"`]([^'"`]+\.(?:css|scss|sass|less))['"`])/gi);
+        
+        for (const match of cssImports) {
+            const cssFile = match[1] || match[2];
+            if (cssFile) {
+                const cssPath = path.resolve(dirPath, cssFile);
+                if (fs.existsSync(cssPath)) {
+                    result.css = path.relative(workspaceRoot, cssPath);
+                    break; // Take first CSS file found
+                }
             }
         }
     }
@@ -60557,7 +61629,24 @@ async function handlePRDependencyAnalysis(prUrl, stream, token, workspaceRoot) {
             return;
         }
         
-        stream.markdown(`✅ Found **${prFiles.length} files** in PR:\n\n`);
+        // 🧪 TEST: Filter to specific files for debugging
+        // prFiles = prFiles.filter(f => 
+        //     f.path.includes('constants.ts')
+        //      || 
+        //     f.path.includes('message-resources.ts') ||
+        //     f.path.includes('tab-management.store.ts') 
+        //      ||
+        //      f.path.includes('tab-management.service.ts') 
+        //      ||
+        //     f.path.includes('maintain-equipment-list.component.ts')
+        // );
+        
+        if (prFiles.length === 0) {
+            stream.markdown('⚠️ No test files found in PR\n\n');
+            return;
+        }
+        
+        stream.markdown(`✅ Found **${prFiles.length} files** in PR (filtered for testing):\n\n`);
         
         // Show file summary
         const added = prFiles.filter(f => f.status === 'add').length;
@@ -60589,34 +61678,91 @@ async function handlePRDependencyAnalysis(prUrl, stream, token, workspaceRoot) {
             return;
         }
         
-        // Step 4: Show summary
-        const summary = graph.prSummary;
-        stream.markdown('✨ **Analysis Complete!**\n\n');
-        stream.markdown('📊 **Impact Summary:**\n\n');
-        stream.markdown(`- PR Files: ${summary.matchedNodes}/${summary.totalPRFiles}\n`);
-        stream.markdown(`- Dependencies: ${summary.totalDependencies}\n`);
-        stream.markdown(`- Dependents: ${summary.totalDependents}\n`);
-        stream.markdown(`- Total Graph Nodes: ${summary.totalNodes}\n`);
-        stream.markdown(`- Total Changes: +${summary.totalAdditions}/-${summary.totalDeletions}\n\n`);
+        // Step 4: Show extracted symbols with impact analysis
+        stream.markdown('✨ **Symbol Extraction Results:**\n\n');
         
-        // Get impact analysis
-        const impact = analyzer.getImpactAnalysis(graph);
-        stream.markdown(`🎯 **Risk Level:** ${impact.riskLevel}\n\n`);
+        const prNodesWithSymbols = graph.nodes.filter(n => n.isPRFile);
         
-        if (impact.recommendations.length > 0) {
-            stream.markdown('💡 **Recommendations:**\n\n');
-            impact.recommendations.forEach(rec => {
-                stream.markdown(`- ${rec}\n`);
-            });
+        if (prNodesWithSymbols.length === 0) {
+            stream.markdown('ℹ️ No PR files found\n\n');
+        }
+        
+        let totalSymbols = 0;
+        const symbolToDependentsMap = graph.symbolToDependentsMap || new Map();
+        
+        for (const prNode of prNodesWithSymbols) {
+            stream.markdown(`📄 **File:** ${prNode.prPath}\n\n`);
+            
+            if (!prNode.changedSymbols || prNode.changedSymbols.length === 0) {
+                stream.markdown('  ℹ️ No symbols extracted\n\n');
+                continue;
+            }
+            
+            stream.markdown(`🔤 **Symbols (${prNode.changedSymbols.length}):**\n\n`);
+            
+            for (const symbol of prNode.changedSymbols) {
+                // Handle both string and object formats
+                const symbolName = typeof symbol === 'string' ? symbol : symbol.fullName;
+                const symbolType = typeof symbol === 'object' ? symbol.type : 'unknown';
+                
+                stream.markdown(`  - \`${symbolName}\` _(${symbolType})_`);
+                
+                // Show impacted files for this symbol
+                const impactedFiles = symbolToDependentsMap.get(symbolName) || [];
+                if (impactedFiles.length > 0) {
+                    stream.markdown(` → **${impactedFiles.length} files**`);
+                }
+                
+                stream.markdown('\n');
+                totalSymbols++;
+            }
+            
             stream.markdown('\n');
         }
         
-        // Step 5: Display graph
-        stream.markdown('🎨 Opening graph viewer...\n\n');
+        // Step 5: Show Impact Analysis Summary
+        stream.markdown('\n---\n\n');
+        stream.markdown('📊 **Impact Analysis Summary:**\n\n');
+        stream.markdown(`- **Changed Symbols:** ${totalSymbols}\n`);
+        stream.markdown(`- **Total Files Analyzed:** ${graph.nodes.length}\n`);
+        stream.markdown(`- **Impacted Files:** ${graph.nodes.filter(n => n.nodeType === 'dependent').length}\n`);
+        stream.markdown(`- **Dependencies:** ${graph.nodes.filter(n => n.nodeType === 'dependency').length}\n\n`);
         
+        // Show top impacted symbols
+        if (symbolToDependentsMap.size > 0) {
+            stream.markdown('🔥 **Top Impacted Symbols:**\n\n');
+            
+            const sortedSymbols = Array.from(symbolToDependentsMap.entries())
+                .sort((a, b) => b[1].length - a[1].length)
+                .slice(0, 5);
+            
+            for (const [symbolName, dependents] of sortedSymbols) {
+                const impactLevel = dependents.length > 5 ? '🔴 HIGH' : 
+                                  dependents.length > 2 ? '🟡 MEDIUM' : '🟢 LOW';
+                stream.markdown(`  ${impactLevel} \`${symbolName}\` → **${dependents.length} files**\n`);
+                
+                // Show first 3 impacted files
+                const preview = dependents.slice(0, 3);
+                for (const file of preview) {
+                    const fileName = file.split('/').pop();
+                    stream.markdown(`    - ${fileName}\n`);
+                }
+                if (dependents.length > 3) {
+                    stream.markdown(`    - _...and ${dependents.length - 3} more_\n`);
+                }
+                stream.markdown('\n');
+            }
+        } else {
+            stream.markdown('✅ **No external files impacted** (low risk change)\n\n');
+        }
+        
+        // Step 6: Display graph
+        stream.markdown('\n🎨 Opening graph viewer...\n\n');
+        
+        const summary = graph.prSummary;
         await createPRGraphWebview(graph, prInfo, summary);
         
-        stream.markdown('✅ **Graph viewer opened!** Check the new tab.\n\n');
+        stream.markdown('✅ **Graph viewer opened!** Check the new tab for visual analysis.\n\n');
         
     } catch (error) {
         console.error('❌ PR dependency analysis error:', error);
@@ -60673,9 +61819,107 @@ function generatePRGraphWebviewHtml(graph, summary, prInfo) {
     const scriptPath = path.join(extensionPath, 'scripts', 'dependency-graph', 'graph-view.ts');
     let scriptContent = fs.readFileSync(scriptPath, 'utf8');
     
+    // 🔥 Filter graph to show only impacted nodes in PR mode
+    const symbolToDependentsMap = graph.symbolToDependentsMap;
+    let filteredNodes = graph.nodes;
+    let filteredEdges = graph.edges;
+    let impactedPaths = new Set(); // ✅ Moved outside for access in map()
+    
+    console.log(`📊 Original graph: ${graph.nodes.length} nodes, ${graph.edges.length} edges`);
+    console.log(`📊 symbolToDependentsMap type:`, symbolToDependentsMap?.constructor?.name, 'size:', symbolToDependentsMap?.size);
+    
+    // Check if symbolToDependentsMap exists and has data (could be Map or Object)
+    const hasImpactData = symbolToDependentsMap && (
+        (symbolToDependentsMap instanceof Map && symbolToDependentsMap.size > 0) ||
+        (typeof symbolToDependentsMap === 'object' && Object.keys(symbolToDependentsMap).length > 0)
+    );
+    
+    if (hasImpactData) {
+        // Collect all impacted file paths
+        // impactedPaths is already defined
+        
+        // Handle both Map and Object formats
+        if (symbolToDependentsMap instanceof Map) {
+            for (const [symbol, files] of symbolToDependentsMap) {
+                console.log(`   Symbol: ${symbol} → ${files.length} files`);
+                files.forEach(f => impactedPaths.add(f));
+            }
+        } else {
+            for (const [symbol, files] of Object.entries(symbolToDependentsMap)) {
+                console.log(`   Symbol: ${symbol} → ${files.length} files`);
+                files.forEach(f => impactedPaths.add(f));
+            }
+        }
+        
+        console.log(`🎯 Total impacted files from symbols: ${impactedPaths.size}`);
+        console.log(`🎯 Impacted paths:`, Array.from(impactedPaths));
+        
+        // Keep: PR files + dependencies + actually impacted dependents
+        const keepNodeIds = new Set();
+        filteredNodes = graph.nodes.filter(node => {
+            console.log(`   Checking node: ${node.id}, type: ${node.nodeType}, isPR: ${node.isPRFile}`);
+            
+            // Always keep PR files
+            if (node.isPRFile) {
+                keepNodeIds.add(node.id);
+                console.log(`      ✅ Keep (PR file)`);
+                return true;
+            }
+            // 🚫 HIDE dependencies in PR mode (user doesn't need to see what PR file imports)
+            if (node.nodeType === 'dependency') {
+                console.log(`      ❌ Filter out (dependency - not needed in PR mode)`);
+                return false;
+            }
+            // Keep dependents that are actually impacted
+            if (node.nodeType === 'dependent') {
+                const nodePath = node.relativePath || node.id;
+                const isImpacted = impactedPaths.has(nodePath);
+                console.log(`      Path: ${nodePath}, Impacted: ${isImpacted}`);
+                if (isImpacted) {
+                    keepNodeIds.add(node.id);
+                    console.log(`      ✅ Keep (impacted dependent)`);
+                    return true;
+                }
+                console.log(`      ❌ Filter out (non-impacted dependent)`);
+                return false;
+            }
+            // Handle "both" type (dependency + dependent)
+            if (node.nodeType === 'both') {
+                const nodePath = node.relativePath || node.id;
+                const isImpacted = impactedPaths.has(nodePath);
+                console.log(`      Path: ${nodePath}, Impacted: ${isImpacted}`);
+                if (isImpacted) {
+                    keepNodeIds.add(node.id);
+                    console.log(`      ✅ Keep (impacted both)`);
+                    return true;
+                }
+                console.log(`      ❌ Filter out (non-impacted both)`);
+                return false;
+            }
+            // Filter out other types by default
+            console.log(`      ❌ Filter out (other type)`);
+            return false;
+        });
+        
+        // Filter edges to only include connections between kept nodes
+        filteredEdges = graph.edges.filter(edge => {
+            const sourceId = edge.source.id || edge.source;
+            const targetId = edge.target.id || edge.target;
+            return keepNodeIds.has(sourceId) && keepNodeIds.has(targetId);
+        });
+        
+        console.log(`🎯 Filtered graph: ${filteredNodes.length} nodes (from ${graph.nodes.length}), ${filteredEdges.length} edges (from ${graph.edges.length})`);
+    } else {
+        console.log(`⚠️ No impact data available, filtering to show ONLY PR files`);
+        // If no impact data, we still want to hide dependencies in PR mode
+        // Only show the PR files themselves
+        filteredNodes = graph.nodes.filter(node => node.isPRFile);
+        filteredEdges = []; // No edges if no impacts
+    }
+    
     // Prepare PR-enhanced graph data
     const graphDataJson = JSON.stringify({
-        nodes: graph.nodes.map(node => {
+        nodes: filteredNodes.map(node => {
             const angularEntities = node.metadata?.angularEntities || {};
             const primaryEntity = getNodeDisplayName(node, angularEntities);
             
@@ -60695,19 +61939,24 @@ function generatePRGraphWebviewHtml(graph, summary, prInfo) {
                 },
                 // PR-specific metadata
                 isPRFile: node.isPRFile || false,
+                isHiddenImpact: !node.isPRFile && impactedPaths.has(node.relativePath || node.id), // 🔴 Mark hidden impacts
                 prStatus: node.prStatus,
                 prChanges: node.prChanges,
+                changedSymbols: node.changedSymbols, // Add changed symbols
                 nodeType: node.nodeType || 'file'
             };
         }),
-        edges: graph.edges,
+        edges: filteredEdges,
         // Add PR metadata
         prMode: true,
         prInfo: {
             repoType: prInfo.repoType,
             prId: prInfo.prId,
             summary: summary
-        }
+        },
+        // Add symbol impact mapping for accurate dependent filtering
+        symbolToDependentsMap: graph.symbolToDependentsMap ? 
+            Object.fromEntries(graph.symbolToDependentsMap) : null
     });
     
     const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath || '';
@@ -61694,6 +62943,7 @@ const fs = __webpack_require__(/*! fs */ "fs");
 
 const { VSCodeApiDependencyAnalyzer } = __webpack_require__(/*! ./dependency-graph/vscode-api-analyzer */ "./scripts/dependency-graph/vscode-api-analyzer.js");
 const { SymbolAnalyzer } = __webpack_require__(/*! ./dependency-graph/symbol-analyzer */ "./scripts/dependency-graph/symbol-analyzer.js");
+const { BarrelResolver } = __webpack_require__(/*! ./dependency-graph/barrel-resolver */ "./scripts/dependency-graph/barrel-resolver.js");
 
 // Cache management
 const CACHE_VERSION = '1.0';
@@ -61707,8 +62957,10 @@ class PRDependencyAnalyzer {
         this.workspaceRoot = workspaceRoot;
         this.vscodeAnalyzer = new VSCodeApiDependencyAnalyzer();
         this.symbolAnalyzer = new SymbolAnalyzer();
+        this.barrelResolver = new BarrelResolver(); // 🔥 NEW: Barrel resolver
         this.fullGraph = null; // Cache full graph
         this.cacheFilePath = path.join(workspaceRoot, '.vscode', 'dependency-cache.json');
+        this.referenceCache = new Map(); // Cache for reference lookups (legacy, will be deprecated)
     }
 
     /**
@@ -61726,14 +62978,69 @@ class PRDependencyAnalyzer {
         const prNodes = this.findPRNodes(prFiles);
         console.log(`✅ Matched ${prNodes.length} PR files to graph nodes`);
 
-        // Step 3: Scan dependencies/dependents for each PR node
+        // Step 3: Extract changed symbols for MODIFIED files
+        // Store changedSymbols in Map<nodeId, symbols[]> for reuse by Deep Impact
+        const nodeChangedSymbols = new Map();
+
+        for (const node of prNodes) {
+            if (node.prStatus === 'edit' && node.prPatch) {
+                // Modified file: extract changed symbols from patch
+                console.log(`\n🔍 Extracting symbols from: ${node.prPath}`);
+                console.log(`   Patch length: ${node.prPatch?.length || 0} chars`);
+                console.log(`   Patch preview: ${node.prPatch?.substring(0, 200)}...`);
+                
+                // 🔥 Use async extraction with VS Code API
+                const changedSymbols = await this.extractChangedSymbols(node.prPatch, node.relativePath);
+                
+                if (changedSymbols.length === 0) {
+                    console.log(`⚠️ No changed symbols extracted for: ${node.prPath}`);
+                    // Don't fallback - if extraction fails, log clearly
+                    nodeChangedSymbols.set(node.id, []);
+                } else {
+                    console.log(`✅ Extracted ${changedSymbols.length} changed symbols from: ${node.prPath}`);
+                    console.log(`   Symbols: ${changedSymbols.map(s => s.fullName).join(', ')}`);
+                    nodeChangedSymbols.set(node.id, changedSymbols);
+                }
+                
+                // Store in node for Deep Impact
+                node.changedSymbols = changedSymbols;
+            } else if (node.prStatus === 'rename' && node.prPatch) {
+                // Renamed + modified file: extract changed symbols if patch exists
+                const changedSymbols = await this.extractChangedSymbols(node.prPatch, node.relativePath);
+                
+                if (changedSymbols.length > 0) {
+                    console.log(`✅ Extracted ${changedSymbols.length} changed symbols from renamed file: ${node.prPath}`);
+                    console.log(`   Symbols: ${changedSymbols.map(s => s.fullName).join(', ')}`);
+                    nodeChangedSymbols.set(node.id, changedSymbols);
+                    node.changedSymbols = changedSymbols;
+                } else {
+                    // Pure rename (no content changes): full file impact (all dependents need import path updates)
+                    console.log(`📄 Full file impact for pure rename: ${node.prPath}`);
+                    node.changedSymbols = null;
+                }
+            } else {
+                // New, deleted, or pure rename file: full file impact (no symbol filtering)
+                console.log(`📄 Full file impact for ${node.prStatus}: ${node.prPath}`);
+                node.changedSymbols = null; // null indicates "scan all symbols"
+            }
+        }
+
+        // Step 4: Scan dependencies/dependents for each PR node
         const relevantNodeIds = new Set(prNodes.map(n => n.id));
         
         let totalDeps = 0;
         let totalDependents = 0;
+        let filteredDependents = 0;
+        
+        // Track which files use which specific symbols
+        const symbolToDependentsMap = new Map(); // symbol → [dependent file paths]
 
         for (const node of prNodes) {
-            // Get direct dependencies
+            if (node.prStatus === 'delete') {
+                console.log(`🚫 Skipping dependency/dependent scan for deleted file: ${node.prPath}`);
+                continue;
+            }
+            // Get direct dependencies (always include all)
             const deps = this.getDependencies(node.id);
             deps.forEach(depId => {
                 relevantNodeIds.add(depId);
@@ -61741,25 +63048,267 @@ class PRDependencyAnalyzer {
             });
             
             // Get direct dependents
-            const dependents = this.getDependents(node.id);
-            dependents.forEach(depId => {
-                relevantNodeIds.add(depId);
-                totalDependents++;
-            });
+            const allDependents = this.getDependents(node.id);
+            
+            console.log(`\n🔍 Analyzing file: ${node.prPath}`);
+            console.log(`   Node ID: ${node.id}`);
+            console.log(`   Node relative path: ${node.relativePath}`);
+            console.log(`   Changed symbols: [${node.changedSymbols?.map(s => s.fullName).join(', ') || 'none'}]`);
+            console.log(`   Dependents found in graph: ${allDependents.length}`);
+            
+            if ((node.prStatus === 'edit' || node.prStatus === 'rename') && node.changedSymbols && node.changedSymbols.length > 0) {
+                // 🔥 NEW: If no direct dependents, check if this is a barrel export source
+                if (allDependents.length === 0) {
+                    console.log(`🔍 No direct dependents → Checking for barrel export usage`);
+                    
+                    const fullPRFilePath = path.join(this.workspaceRoot, node.relativePath);
+                    const symbolFileUri = vscode.Uri.file(fullPRFilePath);
+                    
+                    // Try to find users through barrel exports
+                    for (const symbol of node.changedSymbols) {
+                        const symbolPosition = new vscode.Position(symbol.lineNumber, symbol.column);
+                        
+                        console.log(`         🔍 Finding users of: ${symbol.fullName} via barrel chain`);
+                        
+                        try {
+                            const result = await this.resolveBarrelReferences(
+                                symbolFileUri,
+                                symbolPosition,
+                                symbol.fullName,
+                                new Set(),
+                                0
+                            );
+                            
+                            if (result.references.length > 0) {
+                                console.log(`            📍 Found ${result.references.length} references through barrel`);
+                                
+                                // Extract unique file paths (excluding definition and barrel files)
+                                const userFiles = new Set();
+                                for (const ref of result.references) {
+                                    const refPath = ref.uri.fsPath;
+                                    const isDefinition = path.normalize(refPath) === path.normalize(fullPRFilePath);
+                                    const isBarrel = await this.isBarrelExport(ref);
+                                    
+                                    console.log(`               🔍 Checking ref: ${path.basename(refPath)} (def=${isDefinition}, barrel=${isBarrel})`);
+                                    
+                                    if (!isDefinition && !isBarrel) {
+                                        const relativePath = path.relative(this.workspaceRoot, refPath).replace(/\\/g, '/');
+                                        userFiles.add(relativePath);
+                                    }
+                                }
+                                
+                                console.log(`            ✅ Found ${userFiles.size} actual user files`);
+                                
+                                // 🔥 NEW: If no users found via references, try wildcard search through barrel
+                                if (userFiles.size === 0 && result.barrelChain && result.barrelChain.length > 0) {
+                                    console.log(`            🔍 No users via references → Trying wildcard search through barrel`);
+                                    
+                                    // Find barrel file in chain
+                                    for (const barrelInfo of result.barrelChain) {
+                                        if (barrelInfo.isWildcard) {
+                                            console.log(`               📦 Found wildcard barrel: ${path.basename(barrelInfo.location.uri.fsPath)}`);
+                                            
+                                            const wildcardRefs = await this.findImportsOfBarrelFile(
+                                                barrelInfo.location.uri,
+                                                symbol.fullName
+                                            );
+                                            
+                                            console.log(`               ✅ Wildcard search found ${wildcardRefs.length} usages`);
+                                            
+                                            for (const ref of wildcardRefs) {
+                                                const refPath = ref.uri.fsPath;
+                                                const isDefinition = path.normalize(refPath) === path.normalize(fullPRFilePath);
+                                                
+                                                if (!isDefinition) {
+                                                    const relativePath = path.relative(this.workspaceRoot, refPath).replace(/\\/g, '/');
+                                                    userFiles.add(relativePath);
+                                                }
+                                            }
+                                            
+                                            break; // Only use first wildcard barrel
+                                        }
+                                    }
+                                }
+                                
+                                // Add these files to dependents
+                                for (const userFilePath of userFiles) {
+                                    // Find or create node for this file
+                                    let userNode = this.fullGraph.nodes.find(n => n.relativePath === userFilePath);
+                                    if (!userNode) {
+                                        // Create temporary node for files not in graph
+                                        userNode = {
+                                            id: userFilePath,
+                                            relativePath: userFilePath,
+                                            label: path.basename(userFilePath),
+                                            type: 'dependency'
+                                        };
+                                        this.fullGraph.nodes.push(userNode);
+                                    }
+                                    
+                                    relevantNodeIds.add(userNode.id);
+                                    totalDependents++;
+                                    filteredDependents++;
+                                    
+                                    // Track symbols
+                                    const symbolFullName = symbol.fullName;
+                                    if (!symbolToDependentsMap.has(symbolFullName)) {
+                                        symbolToDependentsMap.set(symbolFullName, []);
+                                    }
+                                    symbolToDependentsMap.get(symbolFullName).push(userFilePath);
+                                    
+                                    // Add children if any
+                                    if (symbol.children && symbol.children.length > 0) {
+                                        symbol.children.forEach(childName => {
+                                            if (!symbolToDependentsMap.has(childName)) {
+                                                symbolToDependentsMap.set(childName, []);
+                                            }
+                                            symbolToDependentsMap.get(childName).push(userFilePath);
+                                        });
+                                    }
+                                    
+                                    console.log(`            ✅ Added: ${userFilePath}`);
+                                }
+                            } else {
+                                console.log(`            ⚠️ No references found via VS Code API → Trying wildcard search`);
+                                
+                                // 🔥 NEW: Fallback to wildcard search if no references at all
+                                // Find barrel file that re-exports this symbol
+                                const prDir = path.dirname(fullPRFilePath);
+                                
+                                // 🔥 FIX: Use configuration for barrel files
+                                const possibleBarrelFiles = this.getBarrelFiles(fullPRFilePath);
+                                
+                                for (const barrelName of possibleBarrelFiles) {
+                                    const barrelPath = path.join(prDir, barrelName);
+                                    
+                                    if (fs.existsSync(barrelPath)) {
+                                        console.log(`               📦 Found barrel: ${path.basename(barrelPath)}`);
+                                        
+                                        const barrelUri = vscode.Uri.file(barrelPath);
+                                        const wildcardRefs = await this.findImportsOfBarrelFile(
+                                            barrelUri,
+                                            symbol.fullName
+                                        );
+                                        
+                                        if (wildcardRefs.length > 0) {
+                                            console.log(`               ✅ Wildcard search found ${wildcardRefs.length} usages`);
+                                            
+                                            const userFiles = new Set();
+                                            for (const ref of wildcardRefs) {
+                                                const refPath = ref.uri.fsPath;
+                                                const isDefinition = path.normalize(refPath) === path.normalize(fullPRFilePath);
+                                                
+                                                if (!isDefinition) {
+                                                    const relativePath = path.relative(this.workspaceRoot, refPath).replace(/\\/g, '/');
+                                                    userFiles.add(relativePath);
+                                                }
+                                            }
+                                            
+                                            // Add these files
+                                            for (const userFilePath of userFiles) {
+                                                let userNode = this.fullGraph.nodes.find(n => n.relativePath === userFilePath);
+                                                if (!userNode) {
+                                                    userNode = {
+                                                        id: userFilePath,
+                                                        relativePath: userFilePath,
+                                                        label: path.basename(userFilePath),
+                                                        type: 'dependency'
+                                                    };
+                                                    this.fullGraph.nodes.push(userNode);
+                                                }
+                                                
+                                                relevantNodeIds.add(userNode.id);
+                                                totalDependents++;
+                                                filteredDependents++;
+                                                
+                                                const symbolFullName = symbol.fullName;
+                                                if (!symbolToDependentsMap.has(symbolFullName)) {
+                                                    symbolToDependentsMap.set(symbolFullName, []);
+                                                }
+                                                symbolToDependentsMap.get(symbolFullName).push(userFilePath);
+                                                
+                                                if (symbol.children && symbol.children.length > 0) {
+                                                    symbol.children.forEach(childName => {
+                                                        if (!symbolToDependentsMap.has(childName)) {
+                                                            symbolToDependentsMap.set(childName, []);
+                                                        }
+                                                        symbolToDependentsMap.get(childName).push(userFilePath);
+                                                    });
+                                                }
+                                                
+                                                console.log(`            ✅ Added via fallback: ${userFilePath}`);
+                                            }
+                                            
+                                            // Stop after finding the first valid barrel with usages
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        } catch (error) {
+                            console.error(`            ❌ Error finding barrel references: ${error.message}`);
+                        }
+                    }
+                } else {
+                    // Has direct dependents - filter them normally
+                    console.log(`🔎 Filtering ${allDependents.length} dependents for ${node.prStatus} file: ${node.prPath}`);
+                    
+                    for (const depId of allDependents) {
+                        const depNode = this.fullGraph.nodes.find(n => n.id === depId);
+                        if (!depNode) continue;
+
+                        // Check which specific symbols this dependent uses
+                        const usedSymbols = await this.getUsedSymbols(
+                            depNode.relativePath,
+                            node.relativePath,
+                            node.changedSymbols // Now passing full symbol objects with positions
+                        );
+
+                        if (usedSymbols.length > 0) {
+                            relevantNodeIds.add(depId);
+                            totalDependents++;
+                            filteredDependents++;
+                            
+                            // Track which symbols are used by this dependent
+                            usedSymbols.forEach(symbolFullName => {
+                                if (!symbolToDependentsMap.has(symbolFullName)) {
+                                    symbolToDependentsMap.set(symbolFullName, []);
+                                }
+                                symbolToDependentsMap.get(symbolFullName).push(depNode.relativePath);
+                            });
+                            
+                            console.log(`   ✅ Dependent uses symbols [${usedSymbols.join(', ')}]: ${depNode.relativePath}`);
+                        } else {
+                            console.log(`   ⏭️ Skipping dependent (no symbol usage): ${depNode.relativePath}`);
+                        }
+                    }
+                }
+            } else {
+                // New/deleted/pure-rename file OR modified with no symbols: include all dependents
+                allDependents.forEach(depId => {
+                    relevantNodeIds.add(depId);
+                    totalDependents++;
+                });
+                console.log(`✅ Included all ${allDependents.length} dependents for ${node.prStatus}: ${node.prPath}`);
+            }
         }
 
         console.log(`📊 Found ${totalDeps} dependencies and ${totalDependents} dependents`);
+        if (filteredDependents > 0) {
+            console.log(`📊 Filtered dependents: ${filteredDependents} (symbol-level filtering applied)`);
+        }
         console.log(`📊 Total relevant nodes: ${relevantNodeIds.size}`);
 
-        // Step 4: Build filtered graph
-        const filteredGraph = this.buildFilteredGraph(relevantNodeIds, prNodes);
+        // Step 5: Build filtered graph
+        const filteredGraph = this.buildFilteredGraph(relevantNodeIds, prNodes, nodeChangedSymbols);
 
-        // Step 5: Add PR summary
+        // Step 6: Add PR summary
         filteredGraph.prSummary = {
             totalPRFiles: prFiles.length,
             matchedNodes: prNodes.length,
             totalDependencies: totalDeps,
             totalDependents: totalDependents,
+            filteredDependents: filteredDependents,
             totalNodes: filteredGraph.nodes.length,
             totalEdges: filteredGraph.edges.length,
             addedFiles: prFiles.filter(f => f.status === 'add').length,
@@ -61769,6 +63318,9 @@ class PRDependencyAnalyzer {
             totalAdditions: prFiles.reduce((sum, f) => sum + f.additions, 0),
             totalDeletions: prFiles.reduce((sum, f) => sum + f.deletions, 0)
         };
+        
+        // Attach symbol-to-dependents mapping for detailed output
+        filteredGraph.symbolToDependentsMap = symbolToDependentsMap;
 
         return filteredGraph;
     }
@@ -61826,7 +63378,7 @@ class PRDependencyAnalyzer {
         console.log('📊 Analyzing workspace dependencies...');
         
         try {
-            const graph = await this.vscodeAnalyzer.analyzeWorkspace(this.workspaceRoot);
+            const graph = await this.vscodeAnalyzer.analyze();
             console.log(`✅ Built graph: ${graph.nodes.length} nodes, ${graph.edges.length} edges`);
             return graph;
         } catch (error) {
@@ -61880,17 +63432,18 @@ class PRDependencyAnalyzer {
                         deletions: prFile.deletions,
                         total: prFile.additions + prFile.deletions
                     },
-                    prPath: prFile.path
+                    prPath: prFile.path,
+                    prPatch: prFile.patch || null // Add patch data for symbol extraction
                 });
                 
                 console.log(`✅ Matched PR file: ${prFile.path} → ${node.relativePath} (${prFile.status})`);
-            } else if (prFile.status !== 'delete') {
-                // Handle new files not in cache (skip deleted files)
-                const newNode = this.createNodeForNewFile(prFile);
-                nodes.push(newNode);
-                console.log(`➕ Created node for new file: ${prFile.path}`);
             } else {
-                console.log(`⚠️ Deleted file not in graph: ${prFile.path}`);
+                // Handle files not present in cached graph (new or deleted)
+                const placeholderNode = prFile.status === 'delete'
+                    ? this.createNodeForDeletedFile(prFile)
+                    : this.createNodeForNewFile(prFile);
+                nodes.push(placeholderNode);
+                console.log(`➕ Created node for ${prFile.status} file: ${prFile.path}`);
             }
         }
 
@@ -61903,16 +63456,19 @@ class PRDependencyAnalyzer {
     createNodeForNewFile(prFile) {
         const filePath = prFile.path.replace(/\\/g, '/');
         const fileName = path.basename(filePath);
-        const ext = path.extname(fileName);
+        const ext = path.extname(fileName).toLowerCase();
 
         // Determine category based on extension
         let category = 'file';
-        if (['.ts', '.js', '.tsx', '.jsx'].includes(ext)) {
-            category = 'typescript';
-        } else if (['.html', '.css', '.scss'].includes(ext)) {
-            category = 'style';
-        } else if (['.json', '.xml', '.yaml', '.yml'].includes(ext)) {
-            category = 'config';
+        
+        // 🔥 FIX: Configuration-driven category detection
+        if (this.vscodeAnalyzer && this.vscodeAnalyzer.languageConfig) {
+            for (const [lang, config] of Object.entries(this.vscodeAnalyzer.languageConfig)) {
+                if (config.extensions && config.extensions.includes(ext)) {
+                    category = lang;
+                    break;
+                }
+            }
         }
 
         return {
@@ -61929,8 +63485,38 @@ class PRDependencyAnalyzer {
                 total: prFile.additions
             },
             prPath: prFile.path,
+            prPatch: prFile.patch || null, // Add patch data
             metadata: {
                 isNewFile: true,
+                angularEntities: {}
+            }
+        };
+    }
+
+    /**
+     * Create node for deleted file (no longer present in cache)
+     */
+    createNodeForDeletedFile(prFile) {
+        const filePath = prFile.path.replace(/\\/g, '/');
+        const fileName = path.basename(filePath);
+
+        return {
+            id: `pr_delete_${filePath.replace(/[^a-zA-Z0-9]/g, '_')}`,
+            fileName: fileName,
+            relativePath: filePath,
+            category: 'file',
+            isPRFile: true,
+            isDeletedFile: true,
+            prStatus: 'delete',
+            prChanges: {
+                additions: 0,
+                deletions: prFile.deletions || 0,
+                total: prFile.deletions || 0
+            },
+            prPath: prFile.path,
+            prPatch: null,
+            metadata: {
+                isDeletedFile: true,
                 angularEntities: {}
             }
         };
@@ -61955,7 +63541,7 @@ class PRDependencyAnalyzer {
     /**
      * Build filtered graph with only relevant nodes
      */
-    buildFilteredGraph(relevantNodeIds, prNodes) {
+    buildFilteredGraph(relevantNodeIds, prNodes, nodeChangedSymbols = new Map()) {
         // Get all relevant nodes from full graph
         const nodes = this.fullGraph.nodes
             .filter(n => relevantNodeIds.has(n.id))
@@ -61963,16 +63549,74 @@ class PRDependencyAnalyzer {
                 // Check if this is a PR node
                 const prNode = prNodes.find(pn => pn.id === node.id);
                 if (prNode) {
-                    // Merge PR metadata
-                    return { ...node, ...prNode };
+                    // Merge PR metadata and add changedSymbols if available
+                    const merged = { ...node, ...prNode };
+                    
+                    // Add changedSymbols from Map (for Deep Impact reuse)
+                    if (nodeChangedSymbols.has(node.id)) {
+                        merged.changedSymbols = nodeChangedSymbols.get(node.id);
+                    }
+                    
+                    return merged;
                 }
                 return { ...node };
             });
 
-        // Get all edges between relevant nodes
-        const edges = this.fullGraph.edges.filter(e =>
-            relevantNodeIds.has(e.source) && relevantNodeIds.has(e.target)
+        // Ensure PR nodes that are not part of the cached graph (e.g., deleted files) are included
+        const existingIds = new Set(nodes.map(n => n.id));
+        for (const prNode of prNodes) {
+            if (!existingIds.has(prNode.id)) {
+                const clonedNode = { ...prNode };
+                if (nodeChangedSymbols.has(prNode.id)) {
+                    clonedNode.changedSymbols = nodeChangedSymbols.get(prNode.id);
+                }
+                nodes.push(clonedNode);
+                existingIds.add(prNode.id);
+            }
+        }
+
+        const deletedNodeIds = new Set(
+            prNodes.filter(n => n.prStatus === 'delete').map(n => n.id)
         );
+
+        // Get all edges between relevant nodes excluding those touching deleted files
+        const edges = this.fullGraph.edges.filter(e =>
+            relevantNodeIds.has(e.source) &&
+            relevantNodeIds.has(e.target) &&
+            !deletedNodeIds.has(e.source) &&
+            !deletedNodeIds.has(e.target)
+        );
+
+        // 🔥 NEW: Add edges for barrel export detected files (not in original graph)
+        // These are files found via resolveBarrelReferences that were added dynamically
+        for (const prNode of prNodes) {
+            if (prNode.prStatus === 'delete') {
+                continue;
+            }
+            if (prNode.changedSymbols && Array.isArray(prNode.changedSymbols)) {
+                // For each impacted file found via barrel resolution
+                for (const nodeId of relevantNodeIds) {
+                    if (nodeId === prNode.id) continue; // Skip self
+                    
+                    const targetNode = nodes.find(n => n.id === nodeId);
+                    if (!targetNode || targetNode.isPRFile) continue;
+                    
+                    // Check if edge already exists
+                    const edgeExists = edges.some(e => 
+                        e.source === nodeId && e.target === prNode.id
+                    );
+                    
+                    if (!edgeExists) {
+                        // Create edge from impacted file to PR file (dependent relationship)
+                        edges.push({
+                            source: nodeId,
+                            target: prNode.id,
+                            type: 'uses'
+                        });
+                    }
+                }
+            }
+        }
 
         // Classify nodes for better visualization
         nodes.forEach(node => {
@@ -62078,10 +63722,727 @@ class PRDependencyAnalyzer {
 
         return recommendations;
     }
+
+    /**
+     * 🔥 FIX: Extract and deduplicate to root objects only
+     * Returns root symbols with children array for nested properties
+     */
+    /**
+     * Main entry point for symbol extraction
+     * Combines Regex (fast, robust for fragments) and VS Code API (accurate for structure)
+     */
+    async extractChangedSymbols(patch, prFilePath) {
+        console.log(`   🔍 Extracting symbols using Hybrid approach (Regex + VS Code API)...`);
+        
+        // 1. Run Regex extraction (using the existing method)
+        const regexSymbols = await this.extractChangedSymbolsRegex(patch, prFilePath);
+        
+        // 2. Run VS Code API extraction
+        const vscodeSymbols = await this.extractChangedSymbolsVscode(patch, prFilePath);
+        
+        // 3. Merge and Deduplicate
+        const mergedMap = new Map();
+        
+        // Helper to add symbol if valid
+        const addSymbol = (sym, source) => {
+            // Filter out symbols that match the filename (likely module wrappers)
+            const fileName = path.basename(prFilePath, path.extname(prFilePath));
+            if (sym.name.toLowerCase() === fileName.toLowerCase()) {
+                console.log(`   🚫 Ignoring symbol '${sym.name}' (matches filename) from ${source}`);
+                return;
+            }
+            
+            if (!mergedMap.has(sym.fullName)) {
+                mergedMap.set(sym.fullName, sym);
+            } else {
+                // If we already have it, maybe update metadata?
+                // Prefer VS Code API type info if available
+                if (source === 'VSCode' && mergedMap.get(sym.fullName).type === 'unknown') {
+                    mergedMap.set(sym.fullName, sym);
+                }
+            }
+        };
+        
+        regexSymbols.forEach(s => addSymbol(s, 'Regex'));
+        vscodeSymbols.forEach(s => addSymbol(s, 'VSCode'));
+        
+        const finalSymbols = Array.from(mergedMap.values());
+        console.log(`   ✅ Hybrid extraction found ${finalSymbols.length} unique symbols`);
+        return finalSymbols;
+    }
+
+    /**
+     * Extract changed symbols using VS Code DocumentSymbolProvider on Virtual Document
+     * @param {string} patch - The git patch
+     * @param {string} prFilePath - Relative path to file
+     */
+    async extractChangedSymbolsVscode(patch, prFilePath) {
+        if (!patch) {
+            return [];
+        }
+
+        console.log(`   📄 Extracting symbols from patch content (VS Code API)...`);
+        
+        // 1. Extract "New Code" from patch (lines starting with +)
+        const lines = patch.split('\n');
+        let newCodeContent = '';
+        let hasContent = false;
+        
+        for (const line of lines) {
+            if (line.startsWith('+++') || line.startsWith('---') || line.startsWith('@@')) {
+                continue;
+            }
+            if (line.startsWith('+')) {
+                const cleanLine = line.substring(1);
+                newCodeContent += cleanLine + '\n';
+                hasContent = true;
+            } 
+        }
+        
+        if (!hasContent || !newCodeContent.trim()) {
+            return [];
+        }
+
+        // 2. Create Virtual Document
+        try {
+            // 🔥 IMPROVED: Use virtual content provider to avoid opening "Untitled" tabs
+            const { virtualContentProvider } = __webpack_require__(/*! ./virtual-content-provider */ "./scripts/virtual-content-provider.js");
+            
+            // Store content in memory and get URI (scheme: aida-memory)
+            const virtualUri = virtualContentProvider.setFileContent(prFilePath, newCodeContent);
+            
+            // Open the virtual document (read-only, no tab opened)
+            const doc = await vscode.workspace.openTextDocument(virtualUri);
+            
+            // 3. Execute Symbol Provider
+            const symbols = await vscode.commands.executeCommand(
+                'vscode.executeDocumentSymbolProvider',
+                doc.uri
+            );
+            
+            // Clean up memory
+            virtualContentProvider.clearFileContent(prFilePath);
+            
+            if (!symbols || symbols.length === 0) {
+                return [];
+            }
+            
+            // 4. Process Symbols
+            const extractedSymbols = [];
+            
+            const processSymbol = (symbol, parentName = null) => {
+                // 🔥 FIX: Dynamic symbol type mapping
+                let typeStr = vscode.SymbolKind[symbol.kind] ? vscode.SymbolKind[symbol.kind].toLowerCase() : 'unknown';
+                
+                // Handle special cases
+                if (typeStr === 'enummember') typeStr = 'enum-member';
+                if (typeStr === 'typeparameter') typeStr = 'type-param';
+                
+                // 🔥 FIX: Configuration-driven significance check
+                let isSignificant = false;
+                const patterns = this.getLanguagePatterns(prFilePath);
+                
+                if (patterns) {
+                    // Check if type is configured in patterns
+                    if (patterns[typeStr]) {
+                        isSignificant = true;
+                    } else {
+                        // Map related types
+                        if (typeStr === 'method' && patterns['function']) isSignificant = true;
+                        if (typeStr === 'field' && patterns['property']) isSignificant = true;
+                        // Always include containers if they have children?
+                        if (['class', 'interface', 'module', 'namespace'].includes(typeStr)) isSignificant = true;
+                    }
+                } else {
+                    // Fallback to hardcoded list
+                    isSignificant = [
+                        vscode.SymbolKind.Class,
+                        vscode.SymbolKind.Method,
+                        vscode.SymbolKind.Property,
+                        vscode.SymbolKind.Function,
+                        vscode.SymbolKind.Variable,
+                        vscode.SymbolKind.Constant,
+                        vscode.SymbolKind.Interface,
+                        vscode.SymbolKind.Enum
+                    ].includes(symbol.kind);
+                }
+
+                if (isSignificant) {
+                    extractedSymbols.push({
+                        name: symbol.name,
+                        fullName: parentName ? `${parentName}.${symbol.name}` : symbol.name,
+                        type: typeStr,
+                        lineNumber: 0, 
+                        column: 0,
+                        filePath: prFilePath,
+                        isRoot: !parentName,
+                        kind: symbol.kind
+                    });
+                }
+                
+                if (symbol.children && symbol.children.length > 0) {
+                    symbol.children.forEach(child => processSymbol(child, symbol.name));
+                }
+            };
+            
+            symbols.forEach(s => processSymbol(s));
+            
+            // Deduplicate
+            const uniqueSymbols = [];
+            const seenNames = new Set();
+            for (const sym of extractedSymbols) {
+                if (!seenNames.has(sym.fullName)) {
+                    seenNames.add(sym.fullName);
+                    uniqueSymbols.push(sym);
+                }
+            }
+            
+            return uniqueSymbols;
+            
+        } catch (error) {
+            console.error(`   ❌ Error in VS Code symbol extraction: ${error.message}`);
+            return [];
+        }
+    }
+
+    /**
+     * Legacy regex-based extraction (kept for reference or fallback)
+     */
+    extractChangedSymbolsRegex(patch, prFilePath) {
+        if (!patch) {
+            console.log(`   ⚠️ No patch data`);
+            return [];
+        }
+
+        console.log(`   📄 Extracting from patch (${patch.length} chars)...`);
+        
+        const allSymbols = [];
+        const lines = patch.split('\n');
+        const contextStack = [];
+        let currentLineNumber = 0;
+        
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            
+            if (line.startsWith('@@')) {
+                const match = line.match(/@@ -\d+,?\d* \+(\d+),?\d* @@/);
+                if (match) {
+                    currentLineNumber = parseInt(match[1]) - 1;
+                }
+                continue;
+            }
+            
+            if (line.startsWith('+') && !line.startsWith('+++')) {
+                const codeLine = line.substring(1);
+                const trimmed = codeLine.trim();
+                
+                // Detect object start
+                const objectStartMatch = trimmed.match(/^([a-zA-Z_$][a-zA-Z0-9_$]*)\s*:\s*\{/);
+                if (objectStartMatch) {
+                    const objectName = objectStartMatch[1];
+                    const column = codeLine.indexOf(objectName);
+                    contextStack.push(objectName);
+                    
+                    allSymbols.push({ 
+                        name: objectName, 
+                        fullName: objectName,
+                        type: 'object',
+                        lineNumber: currentLineNumber,
+                        column: column,
+                        filePath: prFilePath,
+                        isRoot: true
+                    });
+                    currentLineNumber++;
+                    continue;
+                }
+                
+                if (trimmed === '},' || trimmed === '}') {
+                    if (contextStack.length > 0) {
+                        contextStack.pop();
+                    }
+                    currentLineNumber++;
+                    continue;
+                }
+                
+                const extracted = this.extractSymbolsFromLine(codeLine, contextStack, currentLineNumber, prFilePath);
+                allSymbols.push(...extracted);
+                currentLineNumber++;
+            } else if (line.startsWith('-') && !line.startsWith('---')) {
+                continue;
+            } else if (!line.startsWith('\\')) {
+                currentLineNumber++;
+            }
+        }
+        
+        // 🔥 KEY FIX: Group by root object
+        const rootSymbolMap = new Map();
+        
+        for (const sym of allSymbols) {
+            let rootName;
+            let rootSymbol;
+            
+            if (sym.type === 'object' && sym.isRoot) {
+                // This is a root object
+                rootName = sym.name;
+                rootSymbol = sym;
+            } else if (sym.parentName) {
+                // This is a nested property - find its root
+                rootName = sym.parentName;
+                
+                // Find the root object definition
+                rootSymbol = allSymbols.find(s => 
+                    s.name === rootName && s.isRoot
+                );
+                
+                if (!rootSymbol) {
+                    // Create virtual root if not found
+                    rootSymbol = {
+                        name: rootName,
+                        fullName: rootName,
+                        type: 'object',
+                        lineNumber: sym.lineNumber,
+                        column: 0,
+                        filePath: sym.filePath,
+                        isRoot: true,
+                        children: []
+                    };
+                }
+            } else {
+                // Top-level symbol (function, const, etc.)
+                rootName = sym.name;
+                rootSymbol = sym;
+            }
+            
+            if (!rootSymbolMap.has(rootName)) {
+                rootSymbolMap.set(rootName, {
+                    ...rootSymbol,
+                    children: []
+                });
+            }
+            
+            // Track child properties
+            if (sym.parentName && sym.parentName === rootName) {
+                rootSymbolMap.get(rootName).children.push(sym.fullName);
+            }
+        }
+        
+        // Convert to array
+        const uniqueRootSymbols = Array.from(rootSymbolMap.values());
+        
+        console.log(`   ✅ Found ${uniqueRootSymbols.length} root symbols:`);
+        uniqueRootSymbols.forEach(s => {
+            if (s.children && s.children.length > 0) {
+                console.log(`      - ${s.fullName} (object with ${s.children.length} properties)`);
+                s.children.forEach(child => {
+                    console.log(`         └─ ${child}`);
+                });
+            } else {
+                console.log(`      - ${s.fullName}`);
+            }
+        });
+        
+        return uniqueRootSymbols;
+    }
+
+    /**
+     * Extract symbols from a single line of code with positions
+     * @param {string} line - The code line to extract from
+     * @param {string[]} contextStack - Current nested object context
+     * @param {number} lineNumber - Line number in file (0-indexed)
+     * @param {string} filePath - File path
+     */
+    extractSymbolsFromLine(line, contextStack = [], lineNumber = 0, filePath = '') {
+        const symbols = [];
+        const trimmedLine = line.trim();
+        
+        if (!trimmedLine || trimmedLine.length === 0) return symbols;
+
+        // 🔥 FIX: Use configuration-driven patterns
+        const patterns = this.getLanguagePatterns(filePath);
+        
+        if (patterns) {
+            for (const [type, regex] of Object.entries(patterns)) {
+                if (type === 'objectStart' || type === 'blockEnd') continue;
+                
+                try {
+                    const pattern = regex instanceof RegExp ? regex : new RegExp(regex);
+                    const match = trimmedLine.match(pattern);
+                    
+                    if (match) {
+                        const name = match[1];
+                        const column = line.indexOf(name);
+                        
+                        if (type === 'property' && contextStack.length > 0) {
+                            const nestedPath = [...contextStack, name].join('.');
+                            symbols.push({ 
+                                name: name,
+                                fullName: nestedPath,
+                                type: 'property',
+                                parentName: contextStack[contextStack.length - 1],
+                                lineNumber: lineNumber,
+                                column: column,
+                                filePath: filePath
+                            });
+                        } else {
+                            symbols.push({ 
+                                name: name,
+                                fullName: name,
+                                type: type,
+                                lineNumber: lineNumber,
+                                column: column,
+                                filePath: filePath
+                            });
+                        }
+                    }
+                } catch (e) {}
+            }
+            return symbols;
+        }
+        
+        // Fallback to hardcoded JS/TS regexes
+        // Property within object: propertyName: value
+        const propertyMatch = trimmedLine.match(/^([a-zA-Z_$][a-zA-Z0-9_$]*)\s*:\s*/);
+        if (propertyMatch) {
+            const propertyName = propertyMatch[1];
+            const column = line.indexOf(propertyName);
+            
+            if (contextStack.length > 0) {
+                // Nested property: parentObject.propertyName
+                const nestedPath = [...contextStack, propertyName].join('.');
+                symbols.push({ 
+                    name: propertyName,
+                    fullName: nestedPath,
+                    type: 'property',
+                    parentName: contextStack[contextStack.length - 1],
+                    lineNumber: lineNumber,
+                    column: column,
+                    filePath: filePath
+                });
+            } else {
+                // Top-level property
+                symbols.push({ 
+                    name: propertyName,
+                    fullName: propertyName,
+                    type: 'property',
+                    lineNumber: lineNumber,
+                    column: column,
+                    filePath: filePath
+                });
+            }
+        }
+        
+        // Function declarations: function name() {}
+        const functionMatch = trimmedLine.match(/function\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(/);
+        if (functionMatch) {
+            const funcName = functionMatch[1];
+            const column = line.indexOf(funcName);
+            symbols.push({ 
+                name: funcName,
+                fullName: funcName,
+                type: 'function',
+                lineNumber: lineNumber,
+                column: column,
+                filePath: filePath
+            });
+        }
+        
+        // Const declarations: const NAME = ...
+        const constMatch = trimmedLine.match(/const\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=/);
+        if (constMatch) {
+            const constName = constMatch[1];
+            const column = line.indexOf(constName);
+            symbols.push({ 
+                name: constName,
+                fullName: constName,
+                type: 'const',
+                lineNumber: lineNumber,
+                column: column,
+                filePath: filePath
+            });
+        }
+        
+        // Class declarations: class ClassName {}
+        const classMatch = trimmedLine.match(/class\s+([a-zA-Z_$][a-zA-Z0-9_$]*)/);
+        if (classMatch) {
+            const className = classMatch[1];
+            const column = line.indexOf(className);
+            symbols.push({ 
+                name: className,
+                fullName: className,
+                type: 'class',
+                lineNumber: lineNumber,
+                column: column,
+                filePath: filePath
+            });
+        }
+        
+        // Interface declarations: interface InterfaceName {}
+        const interfaceMatch = trimmedLine.match(/interface\s+([a-zA-Z_$][a-zA-Z0-9_$]*)/);
+        if (interfaceMatch) {
+            const interfaceName = interfaceMatch[1];
+            const column = line.indexOf(interfaceName);
+            symbols.push({ 
+                name: interfaceName,
+                fullName: interfaceName,
+                type: 'interface',
+                lineNumber: lineNumber,
+                column: column,
+                filePath: filePath
+            });
+        }
+        
+        return symbols;
+    }
+
+    /**
+     * Extract line numbers that were changed in patch
+     */
+    extractChangedLineNumbers(patch) {
+        const changedLines = [];
+        const lines = patch.split('\n');
+        let currentLineNumber = 0;
+        
+        for (const line of lines) {
+            // Parse @@ -a,b +c,d @@ headers
+            const hunkHeader = line.match(/^@@ -\d+,?\d* \+(\d+),?\d* @@/);
+            if (hunkHeader) {
+                currentLineNumber = parseInt(hunkHeader[1], 10);
+                continue;
+            }
+            
+            // Track added/modified lines
+            if (line.startsWith('+') && !line.startsWith('+++')) {
+                changedLines.push(currentLineNumber);
+                currentLineNumber++;
+            } else if (!line.startsWith('-')) {
+                currentLineNumber++;
+            }
+        }
+        
+        return changedLines;
+    }
+
+    /**
+     * 🔥 UPDATE: Simplified getUsedSymbols - now works with root symbols only
+     * When root symbol is found, automatically includes all child properties
+     */
+    async getUsedSymbols(dependentPath, prFilePath, changedSymbols) {
+        const usedSymbols = [];
+        
+        if (!changedSymbols || changedSymbols.length === 0) {
+            return usedSymbols;
+        }
+
+        try {
+            console.log(`      🔍 Checking dependent: ${dependentPath}`);
+            console.log(`         Root symbols to check: [${changedSymbols.map(s => s.fullName).join(', ')}]`);
+            
+            const fullDependentPath = path.join(this.workspaceRoot, dependentPath);
+            const fullPRFilePath = path.join(this.workspaceRoot, prFilePath);
+            
+            if (!fs.existsSync(fullDependentPath)) {
+                console.log(`         ❌ File not found: ${fullDependentPath}`);
+                return usedSymbols;
+            }
+
+            const symbolFileUri = vscode.Uri.file(fullPRFilePath);
+
+            // Check each root symbol
+            for (const symbol of changedSymbols) {
+                const symbolPosition = new vscode.Position(symbol.lineNumber, symbol.column);
+                
+                console.log(`         🔍 Searching: ${symbol.fullName}`);
+                
+                try {
+                    const result = await this.resolveBarrelReferences(
+                        symbolFileUri,
+                        symbolPosition,
+                        symbol.fullName,
+                        new Set(),
+                        0
+                    );
+                    
+                    const allReferences = result.references;
+                    
+                    if (allReferences.length === 0) {
+                        console.log(`            ⏭️ No references found`);
+                        continue;
+                    }
+                    
+                    console.log(`            📍 Found ${allReferences.length} total references`);
+                    
+                    // Filter to this dependent file only
+                    const referencesInDependent = allReferences.filter(ref => {
+                        const refPath = ref.uri.fsPath;
+                        const isSameFile = path.normalize(refPath) === path.normalize(fullDependentPath);
+                        const isNotDefinition = ref.range.start.line !== symbol.lineNumber;
+                        return isSameFile && isNotDefinition;
+                    });
+                    
+                    if (referencesInDependent.length > 0) {
+                        // Filter out barrel exports
+                        const realRefs = [];
+                        for (const ref of referencesInDependent) {
+                            const isBarrel = await this.isBarrelExport(ref);
+                            if (!isBarrel) {
+                                realRefs.push(ref);
+                            }
+                        }
+                        
+                        if (realRefs.length > 0) {
+                            usedSymbols.push(symbol.fullName);
+                            
+                            // Also add all child properties
+                            if (symbol.children && symbol.children.length > 0) {
+                                usedSymbols.push(...symbol.children);
+                            }
+                            
+                            console.log(`            ✅ Found ${realRefs.length} real usages`);
+                            if (symbol.children && symbol.children.length > 0) {
+                                console.log(`            ✅ Including ${symbol.children.length} child properties`);
+                            }
+                        }
+                    }
+                    
+                } catch (error) {
+                    console.error(`            ❌ Reference error: ${error.message}`);
+                }
+            }
+            
+            if (usedSymbols.length > 0) {
+                console.log(`         ✅ Total confirmed: ${usedSymbols.length} symbols`);
+            } else {
+                console.log(`         ℹ️ No symbols from PR file used`);
+            }
+
+            return usedSymbols;
+        } catch (error) {
+            console.error(`      ❌ Analysis failed for ${dependentPath}:`, error.message);
+            return [];
+        }
+    }
+
+    /**
+     * 🔥 IMPROVED: Recursively resolve references through barrel exports with better error handling
+     */
+    async resolveBarrelReferences(symbolUri, symbolPosition, symbolName, visitedBarrels, currentLevel = 0) {
+        // 🔥 Delegate to BarrelResolver
+        return await this.barrelResolver.resolveBarrelReferences(
+            symbolUri, 
+            symbolPosition, 
+            symbolName, 
+            visitedBarrels, 
+            currentLevel
+        );
+    }
+
+    /**
+     * Get the exported symbol name and position from a barrel export line
+     * @param {vscode.Location} barrelLocation - Location of barrel export
+     * @returns {Promise<{name: string, position: vscode.Position, isWildcard: boolean}|null>}
+     */
+    async getBarrelExportSymbol(barrelLocation) {
+        // 🔥 Delegate to BarrelResolver
+        return await this.barrelResolver.getBarrelExportSymbolImproved(barrelLocation, null);
+    }
+
+    /**
+     * 🔥 Improved barrel export symbol parsing (delegated to BarrelResolver)
+     */
+    async getBarrelExportSymbolImproved(barrelLocation, originalSymbolName) {
+        // 🔥 Delegate to BarrelResolver
+        return await this.barrelResolver.getBarrelExportSymbolImproved(barrelLocation, originalSymbolName);
+    }
+
+    /**
+     * Find all files that import from a barrel file (for wildcard exports)
+     * @param {vscode.Uri} barrelUri - URI of the barrel file
+     * @param {string} symbolName - Original symbol name to look for
+     * @returns {Promise<vscode.Location[]>}
+     */
+    async findImportsOfBarrelFile(barrelUri, symbolName) {
+        // 🔥 Delegate to BarrelResolver
+        return await this.barrelResolver.findImportsOfBarrelFileImproved(barrelUri, symbolName, 0);
+    }
+
+    /**
+     * 🔥 Improved version (delegated to BarrelResolver)
+     */
+    async findImportsOfBarrelFileImproved(barrelUri, symbolName, currentLevel = 0) {
+        // 🔥 Delegate to BarrelResolver
+        return await this.barrelResolver.findImportsOfBarrelFileImproved(barrelUri, symbolName, currentLevel);
+    }
+
+    /**
+     * 🔥 Load TypeScript path aliases (delegated to BarrelResolver)
+     */
+    async loadTSConfigAliases(workspacePath) {
+        // 🔥 Delegate to BarrelResolver
+        return await this.barrelResolver.loadTSConfigAliases(workspacePath);
+    }
+
+    /**
+     * 🔥 Build import patterns (delegated to BarrelResolver)
+     */
+    buildImportPatterns(importerPath, barrelDir, barrelRelativeToWorkspace, pathAliases) {
+        // 🔥 Delegate to BarrelResolver
+        return this.barrelResolver.buildImportPatterns(
+            importerPath, 
+            barrelDir, 
+            barrelRelativeToWorkspace, 
+            pathAliases
+        );
+    }
+
+    /**
+     * Get language configuration patterns for a file
+     */
+    getLanguagePatterns(filePath) {
+        const ext = path.extname(filePath).toLowerCase();
+        
+        if (this.vscodeAnalyzer && this.vscodeAnalyzer.languageConfig) {
+            for (const [lang, config] of Object.entries(this.vscodeAnalyzer.languageConfig)) {
+                if (config.extensions && config.extensions.includes(ext)) {
+                    return config.symbolPatterns;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Get barrel/entry files for a specific language
+     */
+    getBarrelFiles(filePath) {
+        const ext = path.extname(filePath).toLowerCase();
+        
+        if (this.vscodeAnalyzer && this.vscodeAnalyzer.languageConfig) {
+            for (const [lang, config] of Object.entries(this.vscodeAnalyzer.languageConfig)) {
+                if (config.extensions && config.extensions.includes(ext)) {
+                    if (config.barrelFiles) {
+                        return config.barrelFiles;
+                    }
+                }
+            }
+        }
+
+        // Fallback default
+        return ['index.ts', 'index.js', 'index.jsx', 'index.tsx'];
+    }
+
+    /**
+     * Check if a reference location is a barrel export (delegated to BarrelResolver)
+     * @param {vscode.Location} location - Reference location
+     * @returns {Promise<boolean>}
+     */
+    async isBarrelExport(location) {
+        // 🔥 Delegate to BarrelResolver
+        return await this.barrelResolver.isBarrelExport(location);
+    }
+
 }
 
 module.exports = { PRDependencyAnalyzer };
-
 
 /***/ }),
 
@@ -69454,6 +71815,15 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
                 allFileChanges = await Promise.all(allActualFiles.map(async (change) => {
                     const filePath = change.item?.path || change.originalPath || 'Unknown';
                     console.log(`📁 Processing file: ${filePath} (${change.changeType})`);
+                    
+                    // 🔥 FIX: Detect rename when Azure reports 'edit' but paths differ
+                    let effectiveChangeType = change.changeType?.toLowerCase() || 'edit';
+                    if (change.originalPath && change.item?.path && change.originalPath !== change.item.path) {
+                        effectiveChangeType = 'rename';
+                        console.log(`🔄 Detected rename: ${change.originalPath} -> ${change.item.path}`);
+                    }
+
+                    console.log(`📁 Processing file: ${filePath} (${effectiveChangeType})`);
 
                     let diffContent = '';
                     let additions = 0;
@@ -69467,10 +71837,14 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
                             console.log(`  📍 Base commit (merge base): ${baseCommit.substring(0, 7)} - branch point where ${targetBranch} and feature branch diverged`);
                             console.log(`  📍 Source commit (PR): ${sourceCommit.substring(0, 7)} - latest commit in feature branch`);
                             console.log(`  💡 This shows ONLY changes made in feature branch, not full diff vs current ${targetBranch}`);
+
+                            // FIX: Use correct paths for rename
+                            const basePath = (effectiveChangeType === 'rename' && change.originalPath) ? change.originalPath : filePath;
+                            const sourcePath = filePath;
                             
                             // Get file content from both commits
-                            const baseContent = await getFileContent(organization, project, repository, filePath, baseCommit, token);
-                            const sourceContent = await getFileContent(organization, project, repository, filePath, sourceCommit, token);
+                            const baseContent = await getFileContent(organization, project, repository, basePath, baseCommit, token);
+                            const sourceContent = await getFileContent(organization, project, repository, sourcePath, sourceCommit, token);
                             
                             // Store for Monaco diff viewer
                             fileBaseContent = baseContent;
@@ -69486,7 +71860,7 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
                             if (baseContent !== null || sourceContent !== null) {
                                 // Generate unified diff using diff library
                                 console.log(`🎯 Calling generateUnifiedDiff for ${filePath} with CORRECTED commits...`);
-                                diffContent = generateUnifiedDiff(filePath, baseContent || '', sourceContent || '', change.changeType);
+                                diffContent = generateUnifiedDiff(filePath, baseContent || '', sourceContent || '', effectiveChangeType);
 
                                 // Count changes using our counting function
                                 const counts = countDiffLines(diffContent);
@@ -69510,7 +71884,8 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
                     // For new files (add/new), store full content for detailed review (like review-file.js)
                     const fileObj = {
                         path: filePath,
-                        changeType: change.changeType?.toLowerCase() || 'edit',
+                        changeType: effectiveChangeType,
+                        previousFilename: change.originalPath,
                         sourceCommit: baseCommit?.substring(0, 7) || 'target',
                         targetCommit: sourceCommit?.substring(0, 7) || 'source',
                         additions: additions,
@@ -72887,10 +75262,10 @@ async function aiSyncReviewTemplates(messageWithoutParticipant, stream, token, c
 
 /***/ }),
 
-/***/ "./scripts/test-get-copilot-models.js":
-/*!********************************************!*\
-  !*** ./scripts/test-get-copilot-models.js ***!
-  \********************************************/
+/***/ "./scripts/test/test-get-copilot-models.js":
+/*!*************************************************!*\
+  !*** ./scripts/test/test-get-copilot-models.js ***!
+  \*************************************************/
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
 const vscode = __webpack_require__(/*! vscode */ "vscode");
@@ -73053,6 +75428,94 @@ module.exports = {
     testGetCopilotModels,
     getCurrentChatModel,
     registerTestCommand
+};
+
+
+/***/ }),
+
+/***/ "./scripts/virtual-content-provider.js":
+/*!*********************************************!*\
+  !*** ./scripts/virtual-content-provider.js ***!
+  \*********************************************/
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+const vscode = __webpack_require__(/*! vscode */ "vscode");
+
+/**
+ * VirtualContentProvider
+ * Implements a read-only file system for in-memory content.
+ * Used to analyze file content (like PR patches) without creating "Untitled" tabs.
+ * Scheme: aida-memory
+ */
+class VirtualContentProvider {
+    constructor() {
+        // Event emitter to notify VS Code when content changes
+        this._onDidChange = new vscode.EventEmitter();
+        this.onDidChange = this._onDidChange.event;
+        
+        // Store content in memory: path -> content
+        this.fileContentMap = new Map();
+    }
+
+    /**
+     * Required method for TextDocumentContentProvider
+     * Returns the content for a given URI
+     */
+    provideTextDocumentContent(uri) {
+        // uri.path comes with a leading slash, e.g., /src/app.ts
+        return this.fileContentMap.get(uri.path) || '';
+    }
+
+    /**
+     * Store content for a file path and return the URI
+     * @param {string} filePath - The file path (e.g., src/app.ts)
+     * @param {string} content - The file content
+     * @returns {vscode.Uri} - The URI to access this content
+     */
+    setFileContent(filePath, content) {
+        // Ensure path starts with / for URI consistency
+        // Windows paths might need normalization, but for virtual URIs we want forward slashes
+        let normalizedPath = filePath.replace(/\\/g, '/');
+        if (!normalizedPath.startsWith('/')) {
+            normalizedPath = '/' + normalizedPath;
+        }
+        
+        this.fileContentMap.set(normalizedPath, content);
+        
+        const uri = vscode.Uri.parse(`aida-memory:${normalizedPath}`);
+        
+        // Notify listeners that content has changed (updates the editor if open)
+        this._onDidChange.fire(uri);
+        
+        return uri;
+    }
+
+    /**
+     * Remove content from memory
+     * @param {string} filePath 
+     */
+    clearFileContent(filePath) {
+        let normalizedPath = filePath.replace(/\\/g, '/');
+        if (!normalizedPath.startsWith('/')) {
+            normalizedPath = '/' + normalizedPath;
+        }
+        this.fileContentMap.delete(normalizedPath);
+    }
+    
+    /**
+     * Clear all stored content
+     */
+    clearAll() {
+        this.fileContentMap.clear();
+    }
+}
+
+// Export a singleton instance to be shared across the extension
+const virtualContentProvider = new VirtualContentProvider();
+
+module.exports = {
+    VirtualContentProvider,
+    virtualContentProvider
 };
 
 
