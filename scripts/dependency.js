@@ -490,28 +490,116 @@ async function buildSelectedNodeObject(nodeId, graph, panel) {
 }
 
 /**
- * Analyze impact with AI using selected node data
+ * Analyze impact with AI using selected node data or PR context
  */
-async function analyzeImpactWithAI(selectedNodeData, panel) {
+async function analyzeImpactWithAI(data, originalPanel) {
+    // Create NEW panel aside
+    const analysisPanel = vscode.window.createWebviewPanel(
+        'aiImpactAnalysis',
+        `AI Analysis: ${data.fileName}`,
+        vscode.ViewColumn.Beside,
+        {
+            enableScripts: true,
+            retainContextWhenHidden: true
+        }
+    );
+
+    // Helper to format markdown
+    const formatMarkdown = (text) => {
+        if (!text) return '';
+        return text
+            .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+            .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+            .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.*?)\*/g, '<em>$1</em>')
+            .replace(/^- (.*$)/gim, '<li>$1</li>')
+            // Wrap consecutive li elements in ul
+            .replace(/((?:<li>.*?<\/li>\s*)+)/g, '<ul>$1</ul>')
+            .replace(/\n{3,}/g, '\n\n') // Collapse multiple newlines
+            .replace(/\n\n/g, '<br>') // Reduced spacing
+            .replace(/\n/g, '<br>'); // Handle single newlines
+    };
+
+    // Helper to generate HTML
+    const getHtml = (content) => `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Analysis: ${data.fileName}</title>
+    <style>
+        body {
+            font-family: var(--vscode-font-family);
+            background-color: var(--vscode-editor-background);
+            color: var(--vscode-editor-foreground);
+            padding: 20px;
+            line-height: 1.5;
+            font-size: 13px;
+        }
+        h1 { color: #3794ff; margin-top: 15px; margin-bottom: 10px; font-size: 1.4em; display: block; }
+        h2 { color: #3794ff; margin-top: 15px; margin-bottom: 10px; font-size: 1.2em; display: block; clear: both; }
+        h3 { color: #3794ff; margin-top: 10px; margin-bottom: 8px; font-size: 1.1em; display: block; clear: both; }
+        h4 { color: #3794ff; margin-top: 10px; margin-bottom: 8px; font-size: 1em; display: block; clear: both; }
+        strong { color: #e0e0e0; }
+        ul { padding-left: 20px; margin-top: 5px; margin-bottom: 10px; }
+        li { margin-bottom: 4px; }
+        .loading { display: flex; align-items: center; gap: 10px; font-style: italic; color: #cccccc; }
+    </style>
+</head>
+<body>
+    <h2 style="margin-top: 0;">🤖 AI Analysis: ${data.fileName}</h2>
+    <hr style="border: 0; border-top: 1px solid #333; margin: 15px 0;">
+    <div id="content">${content}</div>
+</body>
+</html>`;
+
+    // Set initial loading state
+    analysisPanel.webview.html = getHtml('<div class="loading">🤖 Analyzing impact... Please wait...</div>');
+
     try {
         // Import review-common for executeAIReview and getUnifiedModel
         const { executeAIReview, getUnifiedModel } = require('./review-common');
         
-        // Build a simple, non-technical prompt for AI
-        const prompt = `You are analyzing a code change impact. A developer wants to modify a file and needs to know what to test.
+        let prompt = '';
+        
+        if (data.isPRAnalysis) {
+            // PR Analysis Prompt
+            prompt = `You are an expert code reviewer and architect.
+Analyze the impact of this Pull Request based on the dependency graph data.
 
-**File being modified:** ${selectedNodeData.fileName}
+PR Context:
+${JSON.stringify({
+    summary: data.prSummary,
+    changes: data.changes,
+    impact: data.impact,
+    // Limit symbol map to avoid token limits if necessary
+    symbolMap: data.symbolMap
+}, null, 2)}
 
-**This file uses these components/modules (${selectedNodeData.dependencies.length} dependencies):**
-${selectedNodeData.dependencies.map(dep => {
+Please provide a comprehensive report covering:
+1. **Summary of Changes**: What is being changed at a high level?
+2. **Impact Analysis**: Which components are affected and how critical is the impact?
+3. **Risk Assessment**: Are there any high-risk changes (e.g., modifying core services, circular dependencies)?
+4. **Testing Recommendations**: What should be tested to ensure no regressions?
+
+Keep the language simple and focus on USER IMPACT.`;
+        } else {
+            // Single Node Analysis Prompt
+            prompt = `You are analyzing a code change impact. A developer wants to modify a file and needs to know what to test.
+
+**File being modified:** ${data.fileName}
+
+**This file uses these components/modules (${data.dependencies.length} dependencies):**
+${data.dependencies.map(dep => {
     let parts = [`- ${dep.main}`];
     if (dep.html) parts.push(`(has UI template: ${dep.html})`);
     if (dep.css) parts.push(`(has styles: ${dep.css})`);
     return parts.join(' ');
 }).join('\n')}
 
-**These components/modules depend on this file (${selectedNodeData.dependents.length} dependents):**
-${selectedNodeData.dependents.map(dep => {
+**These components/modules depend on this file (${data.dependents.length} dependents):**
+${data.dependents.map(dep => {
     let parts = [`- ${dep.main}`];
     if (dep.html) parts.push(`(has UI template: ${dep.html})`);
     if (dep.css) parts.push(`(has styles: ${dep.css})`);
@@ -526,6 +614,7 @@ Please provide a simple, easy-to-understand analysis for a QA tester or project 
 4. **Testing priority:** What to test first
 
 Keep the language simple and focus on USER IMPACT, not technical details.`;
+        }
 
         console.log('🤖 Sending to AI for analysis...');
         console.log('📋 Prompt:', prompt);
@@ -553,32 +642,23 @@ Keep the language simple and focus on USER IMPACT, not technical details.`;
             
             // Clean up the response - remove markdown decorations that we added
             let cleanResponse = aiResponse
-                .replace(/^---\n\n/, '') // Remove leading separator
-                .replace(/\n\n---\n\n$/, '') // Remove trailing separator
+                .replace(/^[\s\S]*?---\s*/, '') // Remove everything up to and including the first separator
+                .replace(/\s*---\s*$/, '') // Remove trailing separator
                 .replace(/🤖 \*\*Streaming.*?\*\*.*?\n\n/gs, '') // Remove streaming header
                 .replace(/\n\n---\n\n📊 \*\*Token Usage Summary:\*\*[\s\S]*$/g, '') // Remove token stats section
                 .replace(/💰 \*\*Cost.*?\*\*[\s\S]*$/g, '') // Remove cost footer
                 .trim();
 
-            console.log('📤 Sending AI response to webview for nodeId:', selectedNodeData.originalNodeId);
-
-            // Send response back to webview using ORIGINAL nodeId for matching
-            panel.webview.postMessage({
-                command: 'aiAnalysisComplete',
-                nodeId: selectedNodeData.originalNodeId, // Use original nodeId from graph
-                analysis: cleanResponse
-            });
+            // Update panel with result
+            analysisPanel.webview.html = getHtml(formatMarkdown(cleanResponse));
+            
         } else {
             throw new Error('AI analysis failed');
         }
 
     } catch (error) {
         console.error('❌ Error analyzing with AI:', error);
-        panel.webview.postMessage({
-            command: 'aiAnalysisError',
-            nodeId: selectedNodeData.originalNodeId || selectedNodeData.id, // Fallback to id
-            error: error.message
-        });
+        analysisPanel.webview.html = getHtml(`<div style="color: #f48771;">❌ Error: ${error.message}</div>`);
     }
 }
 
@@ -1010,8 +1090,6 @@ async function handlePRDependencyAnalysis(prUrl, stream, token, workspaceRoot) {
         const fetcher = new PRFileFetcher();
         const prInfo = fetcher.parsePRUrl(prUrl);
         
-        stream.markdown(`✅ Detected **${prInfo.repoType.toUpperCase()}** PR\n\n`);
-        
         // Step 2: Fetch PR files
         stream.markdown('⏳ Fetching PR file changes...\n\n');
         
@@ -1052,7 +1130,7 @@ async function handlePRDependencyAnalysis(prUrl, stream, token, workspaceRoot) {
             return;
         }
         
-        stream.markdown(`✅ Found **${prFiles.length} files** in PR (filtered for testing):\n\n`);
+        stream.markdown(`✅ Found **${prFiles.length} files** in PR:\n\n`);
         
         // Show file summary
         const added = prFiles.filter(f => f.status === 'add').length;
@@ -1060,10 +1138,10 @@ async function handlePRDependencyAnalysis(prUrl, stream, token, workspaceRoot) {
         const deleted = prFiles.filter(f => f.status === 'delete').length;
         const renamed = prFiles.filter(f => f.status === 'rename').length;
         
-        stream.markdown(`- ➕ Added: ${added}\n`);
-        stream.markdown(`- ✏️ Modified: ${modified}\n`);
-        stream.markdown(`- ❌ Deleted: ${deleted}\n`);
-        if (renamed > 0) stream.markdown(`- ↔️ Renamed: ${renamed}\n`);
+        stream.markdown(`- 🟢 Added: ${added}\n`);
+        stream.markdown(`- 🟡 Modified: ${modified}\n`);
+        stream.markdown(`- 🔴 Deleted: ${deleted}\n`);
+        if (renamed > 0) stream.markdown(`- 🔵 Renamed: ${renamed}\n`);
         stream.markdown('\n');
         
         // Step 3: Analyze dependencies for PR files
@@ -1175,6 +1253,48 @@ async function handlePRDependencyAnalysis(prUrl, stream, token, workspaceRoot) {
         stream.markdown(`❌ **Unexpected Error:** ${error.message}\n\n`);
         stream.markdown('Please check the console for details.\n\n');
     }
+}
+
+/**
+ * Handle messages from graph webview
+ */
+async function handleGraphWebviewMessage(message, panel, graph) {
+    if (message.command === 'buildSelectedNodeObject') {
+        await buildSelectedNodeObject(message.nodeId, graph, panel);
+    } else if (message.command === 'analyzeImpact') {
+        await analyzeImpactWithAI(message.selectedNodeData, panel);
+    } else if (message.command === 'analyzeDeepImpact') {
+        await openImpactAnalysisWebview(message.nodeId, graph);
+    } else if (message.command === 'analyzePRImpact') {
+        const prContext = buildPRContextObject(graph);
+        await analyzeImpactWithAI(prContext, panel);
+    }
+}
+
+/**
+ * Build PR Context Object for AI Analysis
+ */
+function buildPRContextObject(graph) {
+    const prFiles = graph.nodes.filter(n => n.isPRFile).map(n => ({
+        file: n.relativePath || n.fileName,
+        status: n.prStatus,
+        changes: n.prChanges,
+        changedSymbols: n.changedSymbols
+    }));
+
+    const impactedFiles = graph.nodes.filter(n => !n.isPRFile && (n.nodeType === 'dependent' || n.nodeType === 'both')).map(n => ({
+        file: n.relativePath || n.fileName,
+        type: n.nodeType
+    }));
+
+    return {
+        isPRAnalysis: true,
+        fileName: `PR #${graph.prInfo?.prId || 'Analysis'}`,
+        prSummary: graph.prSummary,
+        changes: prFiles,
+        impact: impactedFiles,
+        symbolMap: graph.symbolToDependentsMap ? Object.fromEntries(graph.symbolToDependentsMap) : {}
+    };
 }
 
 /**
@@ -1370,7 +1490,7 @@ function generatePRGraphWebviewHtml(graph, summary, prInfo) {
     
     // Replace placeholders
     htmlTemplate = htmlTemplate.replace('{{SEARCH_TERM}}', searchTerm);
-    htmlTemplate = htmlTemplate.replace('{{NODE_COUNT}}', graph.nodes.length);
+    htmlTemplate = htmlTemplate.replace('{{NODE_COUNT}}', filteredNodes.length);
     
     scriptContent = scriptContent.replace('__GRAPH_DATA__', graphDataJson);
     scriptContent = scriptContent.replace('__SEARCH_TERM__', JSON.stringify(searchTerm));

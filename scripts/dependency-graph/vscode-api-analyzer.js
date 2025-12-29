@@ -27,11 +27,14 @@ class VSCodeApiDependencyAnalyzer {
                 // 🔥 NEW: Asset patterns for UI templates/styles
                 assetPatterns: [
                     // Angular
-                    { type: 'html', regex: /templateUrl\s*:\s*['"`]([^'"`]+)['"`]/ },
-                    { type: 'css', regex: /styleUrls\s*:\s*\[([\s\S]*?)\]/, multi: true },
-                    // React/General
-                    { type: 'css', regex: /import\s+['"`]([^'"`]+\.(?:css|scss|sass|less))['"`]/ },
-                    { type: 'css', regex: /import\s+.*?from\s+['"`]([^'"`]+\.(?:css|scss|sass|less))['"`]/ }
+                    { type: 'html', regex: /templateUrl\s*:\s*['"`]([^'"`]+)['"`]/ }
+                    // CSS/SCSS patterns removed to disable style impact analysis
+                ],
+                // 🔥 NEW: Ignore patterns for Impact Analysis (e.g. Angular Modules)
+                ignorePatterns: [
+                    '**/*.module.ts', // Angular Modules are just declarations
+                    '**/*.spec.ts',   // Tests
+                    '**/*.test.ts'
                 ],
                 // Expanded pattern to catch CONSTANTS and camelCase functions
                 classPattern: /\b([a-zA-Z_][a-zA-Z0-9_]*)\b/g,
@@ -73,6 +76,12 @@ class VSCodeApiDependencyAnalyzer {
                     // Flask/Django templates
                     { type: 'template', regex: /render_template\s*\(\s*['"`]([^'"`]+)['"`]/ }
                 ],
+                // 🔥 NEW: Ignore patterns
+                ignorePatterns: [
+                    '**/tests/**',
+                    '**/test_*.py',
+                    '**/*_test.py'
+                ],
                 classPattern: /class\s+([A-Z][a-zA-Z0-9_]*)/g,
                 // 🔥 NEW: Regex patterns for symbol extraction from patches
                 symbolPatterns: {
@@ -103,6 +112,11 @@ class VSCodeApiDependencyAnalyzer {
                     { type: 'view', regex: /View\s*\(\s*['"]([^'"]+)['"]/ },
                     { type: 'view', regex: /PartialView\s*\(\s*['"]([^'"]+)['"]/ },
                     { type: 'layout', regex: /Layout\s*=\s*['"]([^'"]+)['"]/ }
+                ],
+                // 🔥 NEW: Ignore patterns
+                ignorePatterns: [
+                    '**/*.Test.cs',
+                    '**/*.Tests.cs'
                 ],
                 classPattern: /\b([A-Z][a-zA-Z0-9]*(?:[A-Z][a-zA-Z0-9]*)*)\b/g,
                 // 🔥 NEW: Regex patterns for symbol extraction from patches
@@ -137,6 +151,12 @@ class VSCodeApiDependencyAnalyzer {
                     { type: 'view', regex: /return\s+['"]([^'"]+)['"]\s*;/ },
                     { type: 'jsp', regex: /<jsp:include\s+page=['"]([^'"]+)['"]/ }
                 ],
+                // 🔥 NEW: Ignore patterns
+                ignorePatterns: [
+                    '**/*Test.java',
+                    '**/Test*.java',
+                    '**/*.spec.java'
+                ],
                 classPattern: /\b([A-Z][a-zA-Z0-9]*)\b/g,
                 // 🔥 NEW: Regex patterns for symbol extraction from patches
                 symbolPatterns: {
@@ -168,6 +188,13 @@ class VSCodeApiDependencyAnalyzer {
                     { type: 'template', regex: /<template\s+src=['"]([^'"]+)['"]/ },
                     { type: 'style', regex: /<style\s+src=['"]([^'"]+)['"]/ }
                 ],
+                // 🔥 NEW: Ignore patterns
+                ignorePatterns: [
+                    '**/*.spec.js',
+                    '**/*.test.js',
+                    '**/*.spec.ts',
+                    '**/*.test.ts'
+                ],
                 classPattern: /\b([A-Z][a-zA-Z0-9]*)\b/g,
                 // 🔥 NEW: Regex patterns for symbol extraction from patches (similar to JS/TS)
                 symbolPatterns: {
@@ -198,6 +225,11 @@ class VSCodeApiDependencyAnalyzer {
                     { type: 'view', regex: /view\s*\(\s*['"]([^'"]+)['"]/ },
                     { type: 'include', regex: /(?:include|require)(?:_once)?\s*['"]([^'"]+)['"]/ }
                 ],
+                // 🔥 NEW: Ignore patterns
+                ignorePatterns: [
+                    '**/tests/**',
+                    '**/*Test.php'
+                ],
                 classPattern: /\b([A-Z][a-zA-Z0-9]*)\b/g,
                 // 🔥 NEW: Regex patterns for symbol extraction from patches
                 symbolPatterns: {
@@ -225,6 +257,10 @@ class VSCodeApiDependencyAnalyzer {
                 assetPatterns: [
                     { type: 'template', regex: /template\.ParseFiles\s*\(\s*['"]([^'"]+)['"]/ }
                 ],
+                // 🔥 NEW: Ignore patterns
+                ignorePatterns: [
+                    '**/*_test.go'
+                ],
                 classPattern: /type\s+([A-Z][a-zA-Z0-9]*)/g,
                 // 🔥 NEW: Regex patterns for symbol extraction from patches
                 symbolPatterns: {
@@ -251,6 +287,10 @@ class VSCodeApiDependencyAnalyzer {
                 assetPatterns: [
                     { type: 'include', regex: /include_(?:str|bytes)!\s*\(\s*['"]([^'"]+)['"]\s*\)/ }
                 ],
+                // 🔥 NEW: Ignore patterns
+                ignorePatterns: [
+                    '**/*_test.rs'
+                ],
                 classPattern: /(?:struct|enum|trait)\s+([A-Z][a-zA-Z0-9]*)/g,
                 // 🔥 NEW: Regex patterns for symbol extraction from patches
                 symbolPatterns: {
@@ -274,6 +314,11 @@ class VSCodeApiDependencyAnalyzer {
                 // 🔥 NEW: Asset patterns for Android layouts
                 assetPatterns: [
                     { type: 'layout', regex: /R\.layout\.([a-zA-Z0-9_]+)/ }
+                ],
+                // 🔥 NEW: Ignore patterns
+                ignorePatterns: [
+                    '**/*Test.kt',
+                    '**/Test*.kt'
                 ],
                 classPattern: /\b([A-Z][a-zA-Z0-9]*)\b/g,
                 // 🔥 NEW: Regex patterns for symbol extraction from patches
@@ -301,6 +346,11 @@ class VSCodeApiDependencyAnalyzer {
                     { type: 'nib', regex: /nibName:\s*['"]([^'"]+)['"]/ },
                     { type: 'storyboard', regex: /name:\s*['"]([^'"]+)['"]/ }
                 ],
+                // 🔥 NEW: Ignore patterns
+                ignorePatterns: [
+                    '**/*Tests.swift',
+                    '**/*UITests.swift'
+                ],
                 classPattern: /\b([A-Z][a-zA-Z0-9]*)\b/g,
                 // 🔥 NEW: Regex patterns for symbol extraction from patches
                 symbolPatterns: {
@@ -327,6 +377,10 @@ class VSCodeApiDependencyAnalyzer {
                     { type: 'asset', regex: /asset\s*\(\s*['"]([^'"]+)['"]/ },
                     { type: 'image', regex: /Image\.asset\s*\(\s*['"]([^'"]+)['"]/ }
                 ],
+                // 🔥 NEW: Ignore patterns
+                ignorePatterns: [
+                    '**/*_test.dart'
+                ],
                 classPattern: /\b([A-Z][a-zA-Z0-9]*)\b/g,
                 standardLibraries: ['String', 'int', 'bool', 'List', 'Map', 'dart:'],
                 excludePatterns: [
@@ -346,6 +400,13 @@ class VSCodeApiDependencyAnalyzer {
                     { type: 'view', regex: /render\s+['"]([^'"]+)['"]/ },
                     { type: 'partial', regex: /render\s+partial:\s*['"]([^'"]+)['"]/ }
                 ],
+                // 🔥 NEW: Ignore patterns
+                ignorePatterns: [
+                    '**/spec/**',
+                    '**/test/**',
+                    '**/*_spec.rb',
+                    '**/*_test.rb'
+                ],
                 classPattern: /class\s+([A-Z][a-zA-Z0-9]*)/g,
                 standardLibraries: ['String', 'Integer', 'Array', 'Hash', 'File'],
                 excludePatterns: [
@@ -355,28 +416,11 @@ class VSCodeApiDependencyAnalyzer {
                     '**/*_spec.rb'
                 ]
             },
-            // 🔥 NEW: Style files (CSS, SCSS, etc.)
-            style: {
-                extensions: ['.css', '.scss', '.less', '.sass', '.html'],
-                importPatterns: [
-                    /@import\s+['"]([^'"]+)['"]/g,
-                    /url\s*\(\s*['"]?([^'")]+)['"]?\s*\)/g
-                ],
-                // 🔥 NEW: Asset patterns for CSS imports/urls
-                assetPatterns: [
-                    { type: 'import', regex: /@import\s+['"]([^'"]+)['"]/ },
-                    { type: 'url', regex: /url\s*\(\s*['"]?([^'")]+)['"]?\s*\)/ }
-                ],
-                // No class pattern for styles
-                symbolPatterns: {},
-                standardLibraries: [],
-                excludePatterns: []
-            },
-            // 🔥 NEW: Config files (JSON, XML, etc.)
-            config: {
-                extensions: ['.json', '.xml', '.yaml', '.yml', '.env', '.config', '.ini'],
-                importPatterns: [], // No regex imports for config files
-                // No class pattern
+            // HTML Templates
+            html: {
+                extensions: ['.html'],
+                importPatterns: [],
+                assetPatterns: [],
                 symbolPatterns: {},
                 standardLibraries: [],
                 excludePatterns: []
@@ -452,7 +496,9 @@ class VSCodeApiDependencyAnalyzer {
             '**/.vs/**',
             '**/.*/**',           // Any folder starting with dot
             '**/test/**',         // Generic test folders
-            '**/tests/**'
+            '**/tests/**',
+            '**/environments/**', // 🔥 Exclude environments
+            '**/scripts/**'       // 🔥 Exclude scripts folder
         ];
         
         const languageExcludes = [...new Set(

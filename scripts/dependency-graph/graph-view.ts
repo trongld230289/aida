@@ -32,6 +32,10 @@ function initializeGraph() {
   };
 
   // Update summary statistics
+  const nodeCountElement = document.getElementById('nodeCount');
+  if (nodeCountElement) {
+    nodeCountElement.textContent = graphData.nodes.length.toString();
+  }
   document.getElementById('edgeCount').textContent = graphData.edges.length;
 
   // Calculate circular dependencies (simple cycle detection)
@@ -76,8 +80,8 @@ function initializeGraph() {
   g = svg.append('g');
 
   simulation = d3.forceSimulation(graphData.nodes)
-    .force('link', d3.forceLink(graphData.edges).id(d => d.id).distance(200))
-    .force('charge', d3.forceManyBody().strength(-800))
+    .force('link', d3.forceLink(graphData.edges).id(d => d.id).distance(100))
+    .force('charge', d3.forceManyBody().strength(-300))
     .force('center', d3.forceCenter(graphCenter.x, graphCenter.y))
     .force('collision', d3.forceCollide().radius(50));
 
@@ -133,12 +137,6 @@ function renderGraph() {
       if (searchInput) {
         searchInput.value = d.displayName || d.fileName || d.id;
       }
-
-      // Trigger building selected node object
-      vscode.postMessage({
-        command: 'buildSelectedNodeObject',
-        nodeId: d.id
-      });
     })
     .on('mouseenter', (event, d) => {
       const tooltip = document.getElementById('nodeTooltip');
@@ -295,21 +293,27 @@ function renderGraph() {
 }
 
 function identifyIsolatedNodes() {
-  if (!graphData.edges || graphData.edges.length === 0) {
-    isolatedNodeIds = new Set(graphData.nodes.map(node => node.id));
-    return;
-  }
   const connected = new Set();
-  graphData.edges.forEach(edge => {
-    const sourceId = typeof edge.source === 'object' ? edge.source.id : edge.source;
-    const targetId = typeof edge.target === 'object' ? edge.target.id : edge.target;
-    if (sourceId) connected.add(sourceId);
-    if (targetId) connected.add(targetId);
-  });
+  if (graphData.edges && graphData.edges.length > 0) {
+    graphData.edges.forEach(edge => {
+      const sourceId = typeof edge.source === 'object' ? edge.source.id : edge.source;
+      const targetId = typeof edge.target === 'object' ? edge.target.id : edge.target;
+      if (sourceId) connected.add(sourceId);
+      if (targetId) connected.add(targetId);
+    });
+  }
 
   isolatedNodeIds = new Set(
     graphData.nodes
-      .filter(node => !connected.has(node.id))
+      .filter(node => {
+        // Condition 1: No connections (isolated)
+        const isIsolated = !connected.has(node.id);
+
+        // Condition 2: Explicitly deleted in PR
+        const isDeleted = node.prStatus === 'delete';
+
+        return isIsolated || isDeleted;
+      })
       .map(node => node.id)
   );
 }
@@ -319,8 +323,10 @@ function createIsolatedNodeForce(nodes) {
     if (!isolatedNodeIds.size) return;
     nodes.forEach(node => {
       if (isolatedNodeIds.has(node.id) && !node.isDragging) {
-        node.vx += (isolatedAnchor.x - node.x) * 0.0015 * alpha;
-        node.vy += (isolatedAnchor.y - node.y) * 0.0015 * alpha;
+        // Stronger pull to bottom for isolated/deleted nodes
+        // Increased force from 0.05 to 0.15 for stronger separation
+        node.vx += (isolatedAnchor.x - node.x) * 0.15 * alpha;
+        node.vy += (isolatedAnchor.y - node.y) * 0.15 * alpha;
       }
     });
   };
@@ -533,15 +539,10 @@ function showNodeDetails(node) {
         </div>
 
         <!-- Actions Bar: Moved to top for better accessibility -->
-        <div class="detail-section" style="margin-bottom: 15px;">
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                <button class="ai-analyst-btn" style="font-size: 11px; padding: 8px 4px; display: flex; align-items: center; justify-content: center; gap: 4px;" onclick="analyzeWithAI('${node.id}')">
-                    <span>🤖</span> AI Analysis
-                </button>
-                <button class="ai-analyst-btn" style="font-size: 11px; padding: 8px 4px; background: linear-gradient(135deg, #9C27B0 0%, #673AB7 100%); display: flex; align-items: center; justify-content: center; gap: 4px;" onclick="analyzeDeepImpact('${node.id}')">
-                    <span>🔍</span> Deep Impact
-                </button>
-            </div>
+        <div style="margin-bottom: 15px;">
+            <button class="ai-analyst-btn" style="width: 100%; font-size: 11px; padding: 8px 4px; display: flex; align-items: center; justify-content: center; gap: 4px;" onclick="analyzeWithAI('${node.id}')">
+                <span>🤖</span> AI Analysis
+            </button>
             <div id="ai-analysis-${node.id}" class="ai-analysis-result"></div>
         </div>
         
@@ -991,20 +992,29 @@ function getNodeTypeDescription(nodeType) {
 function analyzeWithAI(nodeId) {
   console.log('🤖 AI Analysis clicked for nodeId:', nodeId);
 
-  const resultDiv = document.getElementById('ai-analysis-' + nodeId);
-  if (!resultDiv) {
-    console.error('❌ Result div not found');
-    return;
-  }
-
-  // Show loading state
-  resultDiv.style.display = 'block';
-  resultDiv.innerHTML = '<div class="ai-analysis-loading">🤖 Analyzing impact... Please wait</div>';
-
   // Trigger building selected node object and send to AI
   vscode.postMessage({
     command: 'buildSelectedNodeObject',
     nodeId: nodeId
+  });
+}
+
+function analyzePRGraph() {
+  console.log('🤖 AI PR Analysis clicked');
+  const btn = document.getElementById('aiPrAnalysisBtn');
+  if (btn) {
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<span class="ai-icon">⏳</span> Analyzing...';
+    btn.disabled = true;
+
+    setTimeout(() => {
+      btn.innerHTML = originalText;
+      btn.disabled = false;
+    }, 5000);
+  }
+
+  vscode.postMessage({
+    command: 'analyzePRImpact'
   });
 }
 

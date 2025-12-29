@@ -560,27 +560,22 @@
         <!-- PR Mode Legend -->
         <div id="prLegend"
              class="legend-info"
-             style="display: none; flex-direction: column; gap: 8px; background: linear-gradient(135deg, #2d2d30 0%, #1a1a1a 100%);">
-          <div style="font-weight: bold; color: #ffc107; margin-bottom: 5px;">🔖 PR Mode - Legend:</div>
+             style="display: none; flex-direction: row; justify-content: space-between; align-items: center; gap: 8px; background: linear-gradient(135deg, #2d2d30 0%, #1a1a1a 100%);">
           <div style="display: flex; gap: 15px; flex-wrap: wrap;">
             <span class="legend-item"><span class="legend-dot"
-                    style="background: #28a745;"></span> ➕ Added</span>
+                    style="background: #28a745;"></span> Added</span>
             <span class="legend-item"><span class="legend-dot"
-                    style="background: #ffc107;"></span> ✏️ Modified</span>
+                    style="background: #ffc107;"></span> Modified</span>
             <span class="legend-item"><span class="legend-dot"
-                    style="background: #dc3545;"></span> ❌ Deleted</span>
+                    style="background: #dc3545;"></span> Deleted</span>
             <span class="legend-item"><span class="legend-dot"
-                    style="background: #17a2b8;"></span> ↔️ Renamed</span>
+                    style="background: #17a2b8;"></span> Renamed</span>
           </div>
-          <div
-               style="display: flex; gap: 15px; flex-wrap: wrap; margin-top: 5px; padding-top: 5px; border-top: 1px solid #444;">
-            <span class="legend-item"><span class="legend-dot"
-                    style="background: #6c757d; opacity: 0.8;"></span> 📦 Dependency</span>
-            <span class="legend-item"><span class="legend-dot"
-                    style="background: #007bff; opacity: 0.8;"></span> 🔗 Dependent</span>
-            <span class="legend-item"><span class="legend-dot"
-                    style="background: #6f42c1; opacity: 0.9;"></span> 🔄 Both</span>
-          </div>
+          <button id="aiPrAnalysisBtn"
+                  class="copy-json-btn"
+                  onclick="analyzePRGraph()">
+            <span class="ai-icon">🤖</span> AI PR Analysis
+          </button>
         </div>
 
         <div class="controls">
@@ -592,7 +587,7 @@
             <div class="search-suggestions"
                  id="searchSuggestions"></div>
             <button class="btn"
-                    onclick="searchAndFocus()">🔍 Search</button>
+                    onclick="searchAndFocus()">🔍</button>
             <button class="recenter-btn"
                     onclick="recenterGraph()"
                     title="Recenter Graph">🎯</button>
