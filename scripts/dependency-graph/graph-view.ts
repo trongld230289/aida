@@ -510,12 +510,12 @@ function showNodeDetails(node) {
   });
 
   const html = `
-        <div class="module-title">${node.fileName || node.id}</div>
+        <div class="module-title" style="color: #3794ff;">${node.fileName || node.id}</div>
         
         ${node.isPRFile && node.prStatus ? `
         <div class="detail-section" style="background: linear-gradient(135deg, #2d2d30 0%, #1a1a1a 100%); border-left: 4px solid ${getPRStatusColor(node.prStatus)};">
             <h4 style="color: ${getPRStatusColor(node.prStatus)};">
-                ${getPRStatusIcon(node.prStatus)} PR File - ${getPRStatusLabel(node.prStatus)}
+              ${getPRStatusIcon(node.prStatus)} PR File - ${getPRStatusLabel(node.prStatus)}
             </h4>
             ${node.prChanges ? `
             <div style="display: flex; gap: 20px; font-size: 16px; font-weight: bold; margin-top: 10px;">
@@ -541,7 +541,7 @@ function showNodeDetails(node) {
         ` : ''}
         
         <div class="detail-section">
-            <h4>📂 File Path</h4>
+            <h4 style="color: #3794ff;">📂 File Path</h4>
             <div style="word-break: break-all; font-size: 0.9em; color: #ccc;">${node.relativePath || 'Unknown path'}</div>
         </div>
 
@@ -554,14 +554,14 @@ function showNodeDetails(node) {
         </div>
         
         <div class="detail-section">
-            <h4 style="border-bottom: 3px solid #ffa500; padding-bottom: 8px;">📤 Dependents (${dependents.length}) - Who Needs Me</h4>
+            <h4 style="color: #3794ff; border-bottom: 3px solid #ffa500; padding-bottom: 8px;">📤 Dependents (${dependents.length}) - Who Needs Me</h4>
             <div style="max-height: 400px; overflow-y: auto;">
                 ${dependentsHtml || '<p style="opacity:0.6; font-style:italic;">No dependents found</p>'}
             </div>
         </div>
 
         <div class="detail-section">
-            <h4 style="border-bottom: 3px solid #ff6b6b; padding-bottom: 8px;">📥 Dependencies (${dependencies.length}) - What I Need</h4>
+            <h4 style="color: #3794ff; border-bottom: 3px solid #ff6b6b; padding-bottom: 8px;">📥 Dependencies (${dependencies.length}) - What I Need</h4>
             <div style="max-height: 400px; overflow-y: auto;">
                 ${dependenciesHtml || '<p style="opacity:0.6; font-style:italic;">No dependencies found</p>'}
             </div>
@@ -958,12 +958,12 @@ function getPRStatusColor(status) {
 
 function getPRStatusIcon(status) {
   const icons = {
-    add: '➕',
-    edit: '✏️',
-    delete: '❌',
-    rename: '↔️'
+    add: '🟢',
+    edit: '🟡',
+    delete: '🔴',
+    rename: '🔵'
   };
-  return icons[status] || '📄';
+  return icons[status] || '•';
 }
 
 function getPRStatusLabel(status) {

@@ -2,6 +2,9 @@ const vscode = require('vscode');
 const path = require('path');
 const fs = require('fs');
 
+// Import settings
+const { isProd } = require('./settings');
+
 // Import VS Code API analyzer - required
 const { VSCodeApiDependencyAnalyzer } = require('./dependency-graph/vscode-api-analyzer');
 const { SymbolAnalyzer } = require('./dependency-graph/symbol-analyzer');
@@ -504,21 +507,11 @@ async function analyzeImpactWithAI(data, originalPanel) {
         }
     );
 
-    // Helper to format markdown
+    // Helper to format markdown (now just cleans up HTML response)
     const formatMarkdown = (text) => {
         if (!text) return '';
-        return text
-            .replace(/^### (.*$)/gim, '<h3>$1</h3>')
-            .replace(/^## (.*$)/gim, '<h2>$1</h2>')
-            .replace(/^# (.*$)/gim, '<h1>$1</h1>')
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-            .replace(/\*(.*?)\*/g, '<em>$1</em>')
-            .replace(/^- (.*$)/gim, '<li>$1</li>')
-            // Wrap consecutive li elements in ul
-            .replace(/((?:<li>.*?<\/li>\s*)+)/g, '<ul>$1</ul>')
-            .replace(/\n{3,}/g, '\n\n') // Collapse multiple newlines
-            .replace(/\n\n/g, '<br>') // Reduced spacing
-            .replace(/\n/g, '<br>'); // Handle single newlines
+        // Remove markdown code blocks if present
+        return text.replace(/```html/g, '').replace(/```/g, '');
     };
 
     // Helper to generate HTML
@@ -578,10 +571,24 @@ ${JSON.stringify({
 }, null, 2)}
 
 Please provide a comprehensive report covering:
-1. **Summary of Changes**: What is being changed at a high level?
-2. **Impact Analysis**: Which components are affected and how critical is the impact?
-3. **Risk Assessment**: Are there any high-risk changes (e.g., modifying core services, circular dependencies)?
-4. **Testing Recommendations**: What should be tested to ensure no regressions?
+1. Summary of Changes: What is being changed at a high level?
+2. Impact Analysis: Which components are affected and how critical is the impact?
+3. Risk Assessment: Are there any high-risk changes (e.g., modifying core services, circular dependencies)?
+4. Testing Recommendations: What should be tested to ensure no regressions?
+
+FORMAT OUTPUT AS HTML:
+- Use <h1> for the title: "Pull Request Impact Analysis"
+- Use <h2> for section headers.
+- Use <ul> and <li> for lists.
+- Use <p> for paragraphs.
+- Use <strong> for emphasis.
+- Do NOT use markdown. Do NOT use \`\`\`html code blocks. Just raw HTML.
+
+IMPORTANT INSTRUCTION:
+For files listed in the PR that have NO dependents or impact on other files:
+- Explicitly mention that they have "Low Risk" or are "Isolated Changes".
+- Do NOT hallucinate impacts for these isolated files.
+- Focus the "Impact Analysis" and "Testing Recommendations" on the files that actually have dependents.
 
 Keep the language simple and focus on USER IMPACT.`;
         } else {
@@ -606,12 +613,27 @@ ${data.dependents.map(dep => {
     return parts.join(' ');
 }).join('\n')}
 
-Please provide a simple, easy-to-understand analysis for a QA tester or project manager (non-technical user):
+IMPORTANT INSTRUCTION:
+If the list of dependents is EMPTY (0 dependents), it means this file is NOT used by any other file in the scanned codebase.
+In this case, you MUST conclude that the risk is LOW or the file might be unused/dead code (unless it is a known entry point like main.ts or index.html).
+Do NOT hallucinate features or impacts if there are no dependents.
+If there are dependents, analyze the impact based ONLY on the listed files.
 
-1. **What features should be tested?** - List specific user-facing features that could break
-2. **Which pages/screens need checking?** - Identify UI areas to verify
-3. **Risk level:** High/Medium/Low and why
-4. **Testing priority:** What to test first
+Please provide a simple, easy-to-understand analysis for a QA tester or project manager (non-technical user).
+
+FORMAT OUTPUT AS HTML:
+- Use <h1> for the title: "Testing Impact Analysis for {filename}"
+- Use <h2> for section headers.
+- Use <ul> and <li> for lists.
+- Use <p> for paragraphs.
+- Use <strong> for emphasis.
+- Do NOT use markdown. Do NOT use \`\`\`html code blocks. Just raw HTML.
+
+Sections to include:
+1. What features should be tested?
+2. Which pages/screens need checking?
+3. Risk level (High/Medium/Low) and why
+4. Testing priority
 
 Keep the language simple and focus on USER IMPACT, not technical details.`;
         }
@@ -1138,10 +1160,10 @@ async function handlePRDependencyAnalysis(prUrl, stream, token, workspaceRoot) {
         const deleted = prFiles.filter(f => f.status === 'delete').length;
         const renamed = prFiles.filter(f => f.status === 'rename').length;
         
-        stream.markdown(`- 🟢 Added: ${added}\n`);
-        stream.markdown(`- 🟡 Modified: ${modified}\n`);
-        stream.markdown(`- 🔴 Deleted: ${deleted}\n`);
-        if (renamed > 0) stream.markdown(`- 🔵 Renamed: ${renamed}\n`);
+        stream.markdown(`🟢 Added: ${added}\n`);
+        stream.markdown(`🟡 Modified: ${modified}\n`);
+        stream.markdown(`🔴 Deleted: ${deleted}\n`);
+        if (renamed > 0) stream.markdown(`🔵 Renamed: ${renamed}\n`);
         stream.markdown('\n');
         
         // Step 3: Analyze dependencies for PR files
@@ -1163,81 +1185,83 @@ async function handlePRDependencyAnalysis(prUrl, stream, token, workspaceRoot) {
         }
         
         // Step 4: Show extracted symbols with impact analysis
-        stream.markdown('✨ **Symbol Extraction Results:**\n\n');
-        
-        const prNodesWithSymbols = graph.nodes.filter(n => n.isPRFile);
-        
-        if (prNodesWithSymbols.length === 0) {
-            stream.markdown('ℹ️ No PR files found\n\n');
-        }
-        
-        let totalSymbols = 0;
-        const symbolToDependentsMap = graph.symbolToDependentsMap || new Map();
-        
-        for (const prNode of prNodesWithSymbols) {
-            stream.markdown(`📄 **File:** ${prNode.prPath}\n\n`);
+        if (!isProd) {
+            stream.markdown('✨ **Symbol Extraction Results:**\n\n');
             
-            if (!prNode.changedSymbols || prNode.changedSymbols.length === 0) {
-                stream.markdown('  ℹ️ No symbols extracted\n\n');
-                continue;
+            const prNodesWithSymbols = graph.nodes.filter(n => n.isPRFile);
+            
+            if (prNodesWithSymbols.length === 0) {
+                stream.markdown('ℹ️ No PR files found\n\n');
             }
             
-            stream.markdown(`🔤 **Symbols (${prNode.changedSymbols.length}):**\n\n`);
+            let totalSymbols = 0;
+            const symbolToDependentsMap = graph.symbolToDependentsMap || new Map();
             
-            for (const symbol of prNode.changedSymbols) {
-                // Handle both string and object formats
-                const symbolName = typeof symbol === 'string' ? symbol : symbol.fullName;
-                const symbolType = typeof symbol === 'object' ? symbol.type : 'unknown';
+            for (const prNode of prNodesWithSymbols) {
+                stream.markdown(`📄 **File:** ${prNode.prPath}\n\n`);
                 
-                stream.markdown(`  - \`${symbolName}\` _(${symbolType})_`);
+                if (!prNode.changedSymbols || prNode.changedSymbols.length === 0) {
+                    stream.markdown('  ℹ️ No symbols extracted\n\n');
+                    continue;
+                }
                 
-                // Show impacted files for this symbol
-                const impactedFiles = symbolToDependentsMap.get(symbolName) || [];
-                if (impactedFiles.length > 0) {
-                    stream.markdown(` → **${impactedFiles.length} files**`);
+                stream.markdown(`🔤 **Symbols (${prNode.changedSymbols.length}):**\n\n`);
+                
+                for (const symbol of prNode.changedSymbols) {
+                    // Handle both string and object formats
+                    const symbolName = typeof symbol === 'string' ? symbol : symbol.fullName;
+                    const symbolType = typeof symbol === 'object' ? symbol.type : 'unknown';
+                    
+                    stream.markdown(`  - \`${symbolName}\` _(${symbolType})_`);
+                    
+                    // Show impacted files for this symbol
+                    const impactedFiles = symbolToDependentsMap.get(symbolName) || [];
+                    if (impactedFiles.length > 0) {
+                        stream.markdown(` → **${impactedFiles.length} files**`);
+                    }
+                    
+                    stream.markdown('\n');
+                    totalSymbols++;
                 }
                 
                 stream.markdown('\n');
-                totalSymbols++;
             }
             
-            stream.markdown('\n');
-        }
-        
-        // Step 5: Show Impact Analysis Summary
-        stream.markdown('\n---\n\n');
-        stream.markdown('📊 **Impact Analysis Summary:**\n\n');
-        stream.markdown(`- **Changed Symbols:** ${totalSymbols}\n`);
-        stream.markdown(`- **Total Files Analyzed:** ${graph.nodes.length}\n`);
-        stream.markdown(`- **Impacted Files:** ${graph.nodes.filter(n => n.nodeType === 'dependent').length}\n`);
-        stream.markdown(`- **Dependencies:** ${graph.nodes.filter(n => n.nodeType === 'dependency').length}\n\n`);
-        
-        // Show top impacted symbols
-        if (symbolToDependentsMap.size > 0) {
-            stream.markdown('🔥 **Top Impacted Symbols:**\n\n');
+            // Step 5: Show Impact Analysis Summary
+            stream.markdown('\n---\n\n');
+            stream.markdown('📊 **Impact Analysis Summary:**\n\n');
+            stream.markdown(`- **Changed Symbols:** ${totalSymbols}\n`);
+            stream.markdown(`- **Total Files Analyzed:** ${graph.nodes.length}\n`);
+            stream.markdown(`- **Impacted Files:** ${graph.nodes.filter(n => n.nodeType === 'dependent').length}\n`);
+            stream.markdown(`- **Dependencies:** ${graph.nodes.filter(n => n.nodeType === 'dependency').length}\n\n`);
             
-            const sortedSymbols = Array.from(symbolToDependentsMap.entries())
-                .sort((a, b) => b[1].length - a[1].length)
-                .slice(0, 5);
-            
-            for (const [symbolName, dependents] of sortedSymbols) {
-                const impactLevel = dependents.length > 5 ? '🔴 HIGH' : 
-                                  dependents.length > 2 ? '🟡 MEDIUM' : '🟢 LOW';
-                stream.markdown(`  ${impactLevel} \`${symbolName}\` → **${dependents.length} files**\n`);
+            // Show top impacted symbols
+            if (symbolToDependentsMap.size > 0) {
+                stream.markdown('🔥 **Top Impacted Symbols:**\n\n');
                 
-                // Show first 3 impacted files
-                const preview = dependents.slice(0, 3);
-                for (const file of preview) {
-                    const fileName = file.split('/').pop();
-                    stream.markdown(`    - ${fileName}\n`);
+                const sortedSymbols = Array.from(symbolToDependentsMap.entries())
+                    .sort((a, b) => b[1].length - a[1].length)
+                    .slice(0, 5);
+                
+                for (const [symbolName, dependents] of sortedSymbols) {
+                    const impactLevel = dependents.length > 5 ? '🔴 HIGH' : 
+                                    dependents.length > 2 ? '🟡 MEDIUM' : '🟢 LOW';
+                    stream.markdown(`  ${impactLevel} \`${symbolName}\` → **${dependents.length} files**\n`);
+                    
+                    // Show first 3 impacted files
+                    const preview = dependents.slice(0, 3);
+                    for (const file of preview) {
+                        const fileName = file.split('/').pop();
+                        stream.markdown(`    - ${fileName}\n`);
+                    }
+                    if (dependents.length > 3) {
+                        stream.markdown(`    - _...and ${dependents.length - 3} more_\n`);
+                    }
+                    stream.markdown('\n');
                 }
-                if (dependents.length > 3) {
-                    stream.markdown(`    - _...and ${dependents.length - 3} more_\n`);
-                }
-                stream.markdown('\n');
+            } else {
+                stream.markdown('✅ **No external files impacted** (low risk change)\n\n');
             }
-        } else {
-            stream.markdown('✅ **No external files impacted** (low risk change)\n\n');
         }
         
         // Step 6: Display graph
