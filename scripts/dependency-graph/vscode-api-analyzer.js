@@ -525,7 +525,14 @@ class VSCodeApiDependencyAnalyzer {
         // Remove duplicates and filter workspace files
         const uniqueFiles = Array.from(new Set(allFiles.map(uri => uri.toString())))
             .map(uriString => vscode.Uri.parse(uriString))
-            .filter(uri => uri.fsPath.startsWith(this.workspaceRoot));
+            .filter(uri => uri.fsPath.startsWith(this.workspaceRoot))
+            // 🔥 NEW: Exclude files in the root directory (same level as package.json)
+            .filter(uri => {
+                const fileDir = path.dirname(uri.fsPath);
+                // Check if file is directly in workspace root
+                // We compare normalized paths to be safe
+                return path.normalize(fileDir) !== path.normalize(this.workspaceRoot);
+            });
             
         return uniqueFiles;
     }

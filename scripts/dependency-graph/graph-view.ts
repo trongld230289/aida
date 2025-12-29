@@ -79,14 +79,21 @@ function initializeGraph() {
 
   g = svg.append('g');
 
+  // Identify isolated nodes before simulation to configure forces correctly
+  identifyIsolatedNodes();
+
+  // Define separate centers
+  const mainCenterY = height * 0.4;
+  const isolatedCenterY = height * 0.9; // Push isolated nodes to the bottom
+
   simulation = d3.forceSimulation(graphData.nodes)
     .force('link', d3.forceLink(graphData.edges).id(d => d.id).distance(100))
     .force('charge', d3.forceManyBody().strength(-300))
-    .force('center', d3.forceCenter(graphCenter.x, graphCenter.y))
-    .force('collision', d3.forceCollide().radius(50));
-
-  identifyIsolatedNodes();
-  simulation.force('isolatedPull', createIsolatedNodeForce(graphData.nodes));
+    .force('collision', d3.forceCollide().radius(50))
+    // Use conditional forces to separate connected vs isolated nodes
+    .force('x', d3.forceX(graphCenter.x).strength(0.05))
+    .force('y', d3.forceY(d => isolatedNodeIds.has(d.id) ? isolatedCenterY : mainCenterY)
+      .strength(d => isolatedNodeIds.has(d.id) ? 0.3 : 0.05));
 
   renderGraph();
 }
@@ -275,7 +282,7 @@ function renderGraph() {
   );
 
   simulation.on('tick', () => {
-    applyIsolatedNodeClamping();
+    // applyIsolatedNodeClamping(); // Disabled to allow natural force positioning
     link
       .attr('x1', d => d.source.x)
       .attr('y1', d => d.source.y)
