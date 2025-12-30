@@ -4,7 +4,7 @@
 
 > Transform your development workflow with AIDA - Your intelligent coding companion featuring built-in chatbot, support for your own AI API (OpenAI/Claude), and comprehensive development tools. Compatible with both VS Code and Cursor IDE. No GitHub Copilot required!
 
-[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://marketplace.visualstudio.com/items?itemName=trongld232.aida-dev)
+[![Version](https://img.shields.io/badge/version-1.1.2-blue.svg)](https://marketplace.visualstudio.com/items?itemName=trongld232.aida-dev)
 [![VS Code](https://img.shields.io/badge/VS%20Code-1.90+-green.svg)](https://code.visualstudio.com/)
 [![Cursor IDE](https://img.shields.io/badge/Cursor%20IDE-Compatible-brightgreen.svg)](https://cursor.sh/)
 [![License](https://img.shields.io/badge/license-MIT-orange.svg)](LICENSE)
@@ -18,9 +18,7 @@
 - 🔧 **Flexible AI Integration** - Use your own OpenAI/Claude API or GitHub Copilot
 - 🔍 **Intelligent Code Review** - AI-powered analysis with framework-specific insights
 - 🚀 **Smart PR Analysis** - Cross-platform support for GitHub, GitLab, and Azure DevOps
-- 📊 **Project Scanning** - Comprehensive codebase analysis and architecture insights
-- 💬 **Interactive Chat Participants** - Natural language interaction with your code
-- 🛠️ **Development Workflows** - Automated daily reports and project management
+- � **Interactive Chat Participants** - Natural language interaction with your code
 
 ## ✨ Key Features
 
@@ -29,9 +27,11 @@
 - **Framework Awareness**: Angular, React, Vue, Node.js
 - **Security Analysis**: Automated security vulnerability detection
 - **Performance Insights**: Code efficiency and optimization suggestions
+- **Project Rules**: Support for both **Technical Project Rules** and **Business Project Rules**
 
-### 🤖 **AIDA Chatbot (No Copilot Required)**
-- **Built-in Chat Interface**: Copilot-style sidebar chat with conversation history
+### 🤖 **AIDA Chatbot (Full GitHub Copilot Experience)**
+- **Native Experience**: Built-in sidebar chat interface identical to GitHub Copilot
+- **Full Feature Parity**: Supports all review modes, dependency analysis, and context awareness
 - **Image Support**: Analyze code screenshots, error messages, and UI designs
 - **Flexible AI Backend**: Use OpenAI API, Claude API, or your custom AI service
 - **Smart Context**: Automatically detects current file and project context
@@ -44,16 +44,10 @@
 - **Hybrid Mode**: Mix and match different AI providers for different tasks
 
 ### 🚀 **Pull Request Intelligence**
-- **Cross-Platform**: GitHub, GitLab, Azure DevOps integration
+- **Cross-Platform**: Full support for **GitHub**, **GitLab**, and **Azure DevOps**
 - **AI-Powered Analysis**: Context-aware code change reviews
 - **Visual Diff Viewer**: Monaco Editor integration with syntax highlighting
 - **Template System**: Customizable review templates for different technologies
-
-### 📊 **Project Scanning**
-- **Architecture Analysis**: Understand your project structure instantly
-- **Duplicate Detection**: Find redundant code and suggest consolidation
-- **API Pattern Analysis**: Identify and optimize API endpoint patterns
-- **Dependency Insights**: Track and manage project dependencies
 
 ### 💬 **Chat Participants**
 - **@review-file**: Comprehensive file analysis and suggestions
@@ -61,7 +55,6 @@
 - **@review-all-changes**: Analyze ALL git changes in workspace at once
 - **@review-pr**: Complete pull request review with team collaboration
 - **@sync-review-templates**: Sync AIDA review templates to workspace
-- **@scan-app**: AI-powered code scanning and duplicate detection
 - **@dependency**: Visualize and analyze project dependencies
 
 ## 🚀 Quick Start
@@ -180,10 +173,18 @@ AIDA Chat provides intelligent code analysis through simple chat commands. Open 
 - 🎯 Sets up language-specific templates (Angular, React, Vue, etc.)
 - 🔄 Updates existing templates with improvements
 
-### 🕸️ **@dependency** - Dependency Analysis
-**Usage:** `@dependency`
+### �️ **Context Menu Actions**
+Right-click on files in the **Explorer** or **Editor** to access quick actions:
+- **Review File**: Instant AI code review for the selected file
+- **Review Changes**: Analyze Git changes for the selected file
+- **Analyze Dependency**: Visualize dependencies for the selected file
+
+### �🕸️ **@dependency** - Dependency Analysis
+**Usage:**
 ```
-@dependency
+@dependency                     // Analyze workspace (uses cache if available)
+@dependency re-analyze          // Force fresh analysis (ignore cache)
+@dependency pr <pr-url>         // Analyze dependencies in a Pull Request
 ```
 **What it does:**
 - 📊 Visualizes project dependencies in an interactive graph
@@ -191,12 +192,6 @@ AIDA Chat provides intelligent code analysis through simple chat commands. Open 
 - 🤖 AI-powered impact analysis for changes
 - ⚠️ Detects circular dependencies and architectural issues
 - 💾 **Smart Caching**: Analysis results are cached for 24 hours for instant loading
-
-## 🧪 **Experimental Features**
-
-AIDA includes experimental features currently in development:
-
-- **@scan-app**: scode scaning and duplicate detection for API
 
 *Note: Experimental features are controlled by developers and not available in production releases.*
 

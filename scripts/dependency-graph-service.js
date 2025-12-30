@@ -32,6 +32,13 @@ class DependencyGraphService {
     }
 
     /**
+     * Check if cache exists
+     */
+    hasCache() {
+        return fs.existsSync(this.cacheFilePath);
+    }
+
+    /**
      * Save graph to disk
      */
     saveCache() {

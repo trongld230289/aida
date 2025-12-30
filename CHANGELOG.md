@@ -5,6 +5,20 @@ All notable changes to the "AIDA - AI Development Assistant" extension will be d
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.34/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.2] - 2025-12-30
+
+### Fixed
+- **🕸️ Dependency Analysis**: Fixed crash when analyzing single file dependency without existing cache
+- **🕸️ Dependency Analysis**: Enforced cache check for PR analysis to ensure accuracy
+
+## [1.1.1] - 2025-12-30
+
+### Added
+- **🕸️ Dependency Analysis**: Added `@dependency pr <url>` for analyzing PR dependencies
+- **🕸️ Dependency Analysis**: Added `@dependency re-analyze` for forcing fresh analysis
+- **🖱️ Context Menu**: Added right-click actions for Review File, Review Changes, and Analyze Dependency
+- **📖 Documentation**: Updated README with detailed `@dependency` usage and context menu actions
+
 ## [1.1.0] - 2025-12-07
 
 ### Added

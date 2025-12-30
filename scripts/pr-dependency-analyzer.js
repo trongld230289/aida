@@ -63,10 +63,15 @@ class PRDependencyAnalyzer {
 
         aidaLogging(`🔍 Analyzing ${filteredPRFiles.length} PR files (filtered from ${prFiles.length})...`);
 
-        // Step 1: Load or build full graph (with cache)
+        // Step 1: Check if cache exists (PR analysis requires cache for accuracy)
+        if (!this.graphService.hasCache() && !this.graphService.fullGraph) {
+            throw new Error('Dependency cache is missing. PR analysis requires a pre-built dependency graph for accuracy.');
+        }
+
+        // Step 2: Load full graph
         await this.graphService.ensureFullGraph();
 
-        // Step 2: Find PR file nodes in full graph
+        // Step 3: Find PR file nodes in full graph
         const prNodes = this.findPRNodes(filteredPRFiles);
         aidaLogging(`✅ Matched ${prNodes.length} PR files to graph nodes`);
 

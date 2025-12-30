@@ -56,10 +56,10 @@ class FileDependencyAnalyzer {
         const analyzer = new VSCodeApiDependencyAnalyzer(this.workspaceRoot);
         const fileUri = vscode.Uri.file(filePath);
         
-        // This populates analyzer.graph with outgoing edges
+        // This populates analyzer.model.adjacencyList with outgoing edges
         await analyzer.processFile(fileUri);
         
-        const outgoingDeps = analyzer.graph.get(relativePath);
+        const outgoingDeps = analyzer.model.adjacencyList.get(relativePath);
         if (outgoingDeps) {
             for (const depPath of outgoingDeps) {
                 // Add dependency node
