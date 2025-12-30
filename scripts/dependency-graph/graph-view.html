@@ -569,14 +569,21 @@
              class="legend-info"
              style="display: none; flex-direction: row; justify-content: space-between; align-items: center; gap: 8px; background: linear-gradient(135deg, #2d2d30 0%, #1a1a1a 100%);">
           <div style="display: flex; gap: 15px; flex-wrap: wrap;">
-            <span class="legend-item"><span class="legend-dot"
+            <span class="legend-item"
+                  title="Files newly created in this PR"><span class="legend-dot"
                     style="background: #28a745;"></span> Added</span>
-            <span class="legend-item"><span class="legend-dot"
+            <span class="legend-item"
+                  title="Files changed in this PR"><span class="legend-dot"
                     style="background: #ffc107;"></span> Modified</span>
-            <span class="legend-item"><span class="legend-dot"
+            <span class="legend-item"
+                  title="Files removed in this PR"><span class="legend-dot"
                     style="background: #dc3545;"></span> Deleted</span>
-            <span class="legend-item"><span class="legend-dot"
+            <span class="legend-item"
+                  title="Files moved or renamed in this PR"><span class="legend-dot"
                     style="background: #17a2b8;"></span> Renamed</span>
+            <span class="legend-item"
+                  title="Files not changed but potentially affected by changes"><span class="legend-dot"
+                    style="background: #fd7e14;"></span> Hidden Impact</span>
           </div>
           <button id="aiPrAnalysisBtn"
                   class="copy-json-btn"

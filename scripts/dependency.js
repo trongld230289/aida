@@ -130,9 +130,17 @@ async function aiDependencyAnalysis(message, stream, token, context) {
         // Set cache file path
         cacheFilePath = path.join(workspaceRoot, '.vscode', 'dependency-cache.json');
         
+        const userMessage = message.trim();
+
+        // ✅ NEW: Check if message contains PR URL (Support for AIDA Chatbot)
+        if (isPRUrl(userMessage)) {
+            await handlePRDependencyAnalysis(userMessage, stream, token, workspaceRoot);
+            return;
+        }
+        
         // Check if user explicitly requested re-analysis
-        const userMessage = message.toLowerCase();
-        const isReAnalyzeRequest = userMessage.includes('re-analyze') || userMessage.includes('reanalyze');
+        const lowerMessage = userMessage.toLowerCase();
+        const isReAnalyzeRequest = lowerMessage.includes('re-analyze') || lowerMessage.includes('reanalyze');
         
         // Check for existing cache
         const cacheExists = await checkCacheExists();
