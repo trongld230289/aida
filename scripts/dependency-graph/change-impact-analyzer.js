@@ -2,6 +2,7 @@ const vscode = require('vscode');
 const path = require('path');
 const fs = require('fs').promises;
 const { VSCodeApiDependencyAnalyzer } = require('./vscode-api-analyzer');
+const { aidaLogging } = require('../settings');
 
 /**
  * Change-Impact Analysis System
@@ -39,9 +40,9 @@ class ChangeImpactAnalyzer {
             maxDepth = 2
         } = options;
 
-        console.log('🔍 Starting Change-Impact Analysis...');
-        console.log(`📁 PR Files: ${prFiles.length}`);
-        console.log(`📂 Workspace: ${this.workspaceRoot}`);
+        aidaLogging('🔍 Starting Change-Impact Analysis...');
+        aidaLogging(`📁 PR Files: ${prFiles.length}`);
+        aidaLogging(`📂 Workspace: ${this.workspaceRoot}`);
 
         // Step 1: Initialize graph with PR files
         const graph = {
@@ -67,7 +68,7 @@ class ChangeImpactAnalyzer {
         }
 
         // Step 2: Extract code changes for each PR file
-        console.log('\n📝 Step 2: Extracting code changes...');
+        aidaLogging('\n📝 Step 2: Extracting code changes...');
         const changedSymbols = await this.extractCodeChanges(prFiles);
         
         // Update nodes with changed symbols
@@ -79,11 +80,11 @@ class ChangeImpactAnalyzer {
         }
 
         // Step 3: Scan workspace for usages
-        console.log('\n🔎 Step 3: Scanning workspace for symbol usages...');
+        aidaLogging('\n🔎 Step 3: Scanning workspace for symbol usages...');
         const usageMap = await this.scanWorkspaceForUsages(changedSymbols);
 
         // Step 4: Build impact graph
-        console.log('\n🔗 Step 4: Building impact graph...');
+        aidaLogging('\n🔗 Step 4: Building impact graph...');
         await this.buildImpactGraph(graph, usageMap, changedSymbols);
 
         // Generate summary
@@ -115,9 +116,9 @@ class ChangeImpactAnalyzer {
                 
                 if (symbols.length > 0) {
                     changedSymbols.set(normalizedPath, symbols);
-                    console.log(`  ✓ ${path.basename(file)}: Found ${symbols.length} symbols`);
+                    aidaLogging(`  ✓ ${path.basename(file)}: Found ${symbols.length} symbols`);
                 } else {
-                    console.log(`  ⚠ ${path.basename(file)}: No symbols found`);
+                    aidaLogging(`  ⚠ ${path.basename(file)}: No symbols found`);
                 }
             } catch (error) {
                 console.error(`  ✗ Error analyzing ${file}:`, error.message);
@@ -196,7 +197,7 @@ class ChangeImpactAnalyzer {
                     type: 'export-const',
                     line: content.substring(0, match.index).split('\n').length - 1
                 });
-                console.log(`  ✓ Extracted export const: ${constName}`);
+                aidaLogging(`  ✓ Extracted export const: ${constName}`);
             }
             
             // Pattern 2: Match object keys: key: "value" or key = "value"
@@ -237,7 +238,7 @@ class ChangeImpactAnalyzer {
             }
         }
 
-        console.log(`  Searching for ${allSymbolNames.size} unique symbols...`);
+        aidaLogging(`  Searching for ${allSymbolNames.size} unique symbols...`);
 
         // Use VS Code's search API for better performance
         for (const symbolName of allSymbolNames) {
@@ -246,7 +247,7 @@ class ChangeImpactAnalyzer {
                 
                 if (locations.length > 0) {
                     usageMap.set(symbolName, locations);
-                    console.log(`  ✓ "${symbolName}": Found in ${locations.length} files`);
+                    aidaLogging(`  ✓ "${symbolName}": Found in ${locations.length} files`);
                 }
             } catch (error) {
                 console.warn(`  ⚠ Error searching for "${symbolName}":`, error.message);
@@ -300,11 +301,11 @@ class ChangeImpactAnalyzer {
         const prFilePaths = new Set(graph.metadata.prFiles);
         const hiddenImpacts = [];
         
-        console.log('  Building impact graph...');
+        aidaLogging('  Building impact graph...');
         
         // For each symbol and its usages, determine impact
         for (const [symbolName, usageLocations] of usageMap.entries()) {
-            console.log(`  Processing symbol "${symbolName}" with ${usageLocations.length} usages`);
+            aidaLogging(`  Processing symbol "${symbolName}" with ${usageLocations.length} usages`);
             
             for (const location of usageLocations) {
                 const locationPath = location.path;
@@ -314,7 +315,7 @@ class ChangeImpactAnalyzer {
                 
                 if (isInPR) {
                     // Case A: File already in PR - Create internal edge
-                    console.log(`    ✓ Internal edge: ${symbolName} used in PR file ${locationPath}`);
+                    aidaLogging(`    ✓ Internal edge: ${symbolName} used in PR file ${locationPath}`);
                     
                     // Find which PR file changed this symbol
                     let sourceNode = null;
@@ -347,7 +348,7 @@ class ChangeImpactAnalyzer {
                     
                 } else {
                     // Case B: File NOT in PR - Hidden Impact!
-                    console.log(`    🚨 Hidden Impact: ${symbolName} used in ${locationPath} (NOT in PR)`);
+                    aidaLogging(`    🚨 Hidden Impact: ${symbolName} used in ${locationPath} (NOT in PR)`);
                     
                     // Check if we already identified this file as a hidden impact
                     let existingImpact = hiddenImpacts.find(hi => hi.path === locationPath);
@@ -385,7 +386,7 @@ class ChangeImpactAnalyzer {
         graph.metadata.totalHiddenImpacts = hiddenImpacts.length;
         graph.metadata.totalSymbolsChanged = [...changedSymbols.values()].reduce((sum, arr) => sum + arr.length, 0);
         
-        console.log(`  ✅ Impact graph built: ${hiddenImpacts.length} hidden impacts found`);
+        aidaLogging(`  ✅ Impact graph built: ${hiddenImpacts.length} hidden impacts found`);
     }
 
     /**
@@ -419,29 +420,29 @@ class ChangeImpactAnalyzer {
      * Generate analysis summary
      */
     generateSummary(graph) {
-        console.log('\n' + '='.repeat(60));
-        console.log('📊 CHANGE-IMPACT ANALYSIS SUMMARY');
-        console.log('='.repeat(60));
-        console.log(`Initial PR Nodes: ${graph.metadata.prFiles.length}`);
-        console.log(`Total Graph Nodes: ${graph.nodes.length}`);
-        console.log(`Hidden Impact Nodes: ${graph.metadata.hiddenImpacts.length}`);
-        console.log(`Total Edges: ${graph.edges.length}`);
+        aidaLogging('\n' + '='.repeat(60));
+        aidaLogging('📊 CHANGE-IMPACT ANALYSIS SUMMARY');
+        aidaLogging('='.repeat(60));
+        aidaLogging(`Initial PR Nodes: ${graph.metadata.prFiles.length}`);
+        aidaLogging(`Total Graph Nodes: ${graph.nodes.length}`);
+        aidaLogging(`Hidden Impact Nodes: ${graph.metadata.hiddenImpacts.length}`);
+        aidaLogging(`Total Edges: ${graph.edges.length}`);
         
         if (graph.metadata.hiddenImpacts.length > 0) {
-            console.log('\n⚠️  WARNING: The following files are impacted but NOT in the PR:');
+            aidaLogging('\n⚠️  WARNING: The following files are impacted but NOT in the PR:');
             graph.metadata.hiddenImpacts.forEach(file => {
                 const node = graph.nodes.find(n => n.path === file);
                 const symbols = node?.impactedBy || [];
-                console.log(`  📄 ${file}`);
+                aidaLogging(`  📄 ${file}`);
                 if (symbols.length > 0) {
-                    console.log(`     → Impacted by: ${symbols.join(', ')}`);
+                    aidaLogging(`     → Impacted by: ${symbols.join(', ')}`);
                 }
             });
         } else {
-            console.log('\n✅ No hidden impacts found. Graph is contained within PR files.');
+            aidaLogging('\n✅ No hidden impacts found. Graph is contained within PR files.');
         }
         
-        console.log('='.repeat(60));
+        aidaLogging('='.repeat(60));
     }
 
     /**
@@ -533,7 +534,7 @@ class ChangeImpactAnalyzer {
             const files = stdout.trim().split('\n').filter(f => f.length > 0);
             changedFiles.push(...files);
             
-            console.log(`📋 Found ${files.length} changed files from git`);
+            aidaLogging(`📋 Found ${files.length} changed files from git`);
         } catch (error) {
             console.error('Error getting changed files from git:', error.message);
         }

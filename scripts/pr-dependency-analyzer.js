@@ -5,6 +5,7 @@ const fs = require('fs');
 const { VSCodeApiDependencyAnalyzer } = require('./dependency-graph/vscode-api-analyzer');
 const { SymbolAnalyzer } = require('./dependency-graph/symbol-analyzer');
 const { BarrelResolver } = require('./dependency-graph/barrel-resolver');
+const { aidaLogging } = require('./settings');
 
 // Cache management
 const CACHE_VERSION = '1.0';
@@ -42,25 +43,25 @@ class PRDependencyAnalyzer {
             
             // 🔥 Also ignore environment files and scripts
             if (file.path.includes('environments/') || file.path.includes('scripts/')) {
-                console.log(`🚫 Ignoring env/script file: ${file.path}`);
+                aidaLogging(`🚫 Ignoring env/script file: ${file.path}`);
                 return false;
             }
             
             if (ignoredExtensions.includes(ext)) {
-                console.log(`🚫 Ignoring file: ${file.path}`);
+                aidaLogging(`🚫 Ignoring file: ${file.path}`);
                 return false;
             }
             return true;
         });
 
-        console.log(`🔍 Analyzing ${filteredPRFiles.length} PR files (filtered from ${prFiles.length})...`);
+        aidaLogging(`🔍 Analyzing ${filteredPRFiles.length} PR files (filtered from ${prFiles.length})...`);
 
         // Step 1: Load or build full graph (with cache)
         await this.ensureFullGraph();
 
         // Step 2: Find PR file nodes in full graph
         const prNodes = this.findPRNodes(filteredPRFiles);
-        console.log(`✅ Matched ${prNodes.length} PR files to graph nodes`);
+        aidaLogging(`✅ Matched ${prNodes.length} PR files to graph nodes`);
 
         // Step 3: Extract changed symbols for MODIFIED files
         // Store changedSymbols in Map<nodeId, symbols[]> for reuse by Deep Impact
@@ -69,20 +70,20 @@ class PRDependencyAnalyzer {
         for (const node of prNodes) {
             if (node.prStatus === 'edit' && node.prPatch) {
                 // Modified file: extract changed symbols from patch
-                console.log(`\n🔍 Extracting symbols from: ${node.prPath}`);
-                console.log(`   Patch length: ${node.prPatch?.length || 0} chars`);
-                console.log(`   Patch preview: ${node.prPatch?.substring(0, 200)}...`);
+                aidaLogging(`\n🔍 Extracting symbols from: ${node.prPath}`);
+                aidaLogging(`   Patch length: ${node.prPatch?.length || 0} chars`);
+                aidaLogging(`   Patch preview: ${node.prPatch?.substring(0, 200)}...`);
                 
                 // 🔥 Use async extraction with VS Code API
                 const changedSymbols = await this.extractChangedSymbols(node.prPatch, node.relativePath);
                 
                 if (changedSymbols.length === 0) {
-                    console.log(`⚠️ No changed symbols extracted for: ${node.prPath}`);
+                    aidaLogging(`⚠️ No changed symbols extracted for: ${node.prPath}`);
                     // Don't fallback - if extraction fails, log clearly
                     nodeChangedSymbols.set(node.id, []);
                 } else {
-                    console.log(`✅ Extracted ${changedSymbols.length} changed symbols from: ${node.prPath}`);
-                    console.log(`   Symbols: ${changedSymbols.map(s => s.fullName).join(', ')}`);
+                    aidaLogging(`✅ Extracted ${changedSymbols.length} changed symbols from: ${node.prPath}`);
+                    aidaLogging(`   Symbols: ${changedSymbols.map(s => s.fullName).join(', ')}`);
                     nodeChangedSymbols.set(node.id, changedSymbols);
                 }
                 
@@ -93,18 +94,18 @@ class PRDependencyAnalyzer {
                 const changedSymbols = await this.extractChangedSymbols(node.prPatch, node.relativePath);
                 
                 if (changedSymbols.length > 0) {
-                    console.log(`✅ Extracted ${changedSymbols.length} changed symbols from renamed file: ${node.prPath}`);
-                    console.log(`   Symbols: ${changedSymbols.map(s => s.fullName).join(', ')}`);
+                    aidaLogging(`✅ Extracted ${changedSymbols.length} changed symbols from renamed file: ${node.prPath}`);
+                    aidaLogging(`   Symbols: ${changedSymbols.map(s => s.fullName).join(', ')}`);
                     nodeChangedSymbols.set(node.id, changedSymbols);
                     node.changedSymbols = changedSymbols;
                 } else {
                     // Pure rename (no content changes): full file impact (all dependents need import path updates)
-                    console.log(`📄 Full file impact for pure rename: ${node.prPath}`);
+                    aidaLogging(`📄 Full file impact for pure rename: ${node.prPath}`);
                     node.changedSymbols = null;
                 }
             } else {
                 // New, deleted, or pure rename file: full file impact (no symbol filtering)
-                console.log(`📄 Full file impact for ${node.prStatus}: ${node.prPath}`);
+                aidaLogging(`📄 Full file impact for ${node.prStatus}: ${node.prPath}`);
                 node.changedSymbols = null; // null indicates "scan all symbols"
             }
         }
@@ -121,23 +122,23 @@ class PRDependencyAnalyzer {
 
         for (const node of prNodes) {
             if (node.prStatus === 'delete') {
-                console.log(`🚫 Skipping dependency/dependent scan for deleted file: ${node.prPath}`);
+                aidaLogging(`🚫 Skipping dependency/dependent scan for deleted file: ${node.prPath}`);
                 continue;
             }
             
             // Get direct dependents
             const allDependents = this.getDependents(node.id);
             
-            console.log(`\n🔍 Analyzing file: ${node.prPath}`);
-            console.log(`   Node ID: ${node.id}`);
-            console.log(`   Node relative path: ${node.relativePath}`);
-            console.log(`   Changed symbols: [${node.changedSymbols?.map(s => s.fullName).join(', ') || 'none'}]`);
-            console.log(`   Dependents found in graph: ${allDependents.length}`);
+            aidaLogging(`\n🔍 Analyzing file: ${node.prPath}`);
+            aidaLogging(`   Node ID: ${node.id}`);
+            aidaLogging(`   Node relative path: ${node.relativePath}`);
+            aidaLogging(`   Changed symbols: [${node.changedSymbols?.map(s => s.fullName).join(', ') || 'none'}]`);
+            aidaLogging(`   Dependents found in graph: ${allDependents.length}`);
             
             if ((node.prStatus === 'edit' || node.prStatus === 'rename') && node.changedSymbols && node.changedSymbols.length > 0) {
                 // 🔥 NEW: If no direct dependents, check if this is a barrel export source
                 if (allDependents.length === 0) {
-                    console.log(`🔍 No direct dependents → Checking for barrel export usage`);
+                    aidaLogging(`🔍 No direct dependents → Checking for barrel export usage`);
                     
                     const fullPRFilePath = path.join(this.workspaceRoot, node.relativePath);
                     const symbolFileUri = vscode.Uri.file(fullPRFilePath);
@@ -146,7 +147,7 @@ class PRDependencyAnalyzer {
                     for (const symbol of node.changedSymbols) {
                         const symbolPosition = new vscode.Position(symbol.lineNumber, symbol.column);
                         
-                        console.log(`         🔍 Finding users of: ${symbol.fullName} via barrel chain`);
+                        aidaLogging(`         🔍 Finding users of: ${symbol.fullName} via barrel chain`);
                         
                         try {
                             const result = await this.resolveBarrelReferences(
@@ -158,7 +159,7 @@ class PRDependencyAnalyzer {
                             );
                             
                             if (result.references.length > 0) {
-                                console.log(`            📍 Found ${result.references.length} references through barrel`);
+                                aidaLogging(`            📍 Found ${result.references.length} references through barrel`);
                                 
                                 // Extract unique file paths (excluding definition and barrel files)
                                 const userFiles = new Set();
@@ -167,7 +168,7 @@ class PRDependencyAnalyzer {
                                     const isDefinition = path.normalize(refPath) === path.normalize(fullPRFilePath);
                                     const isBarrel = await this.isBarrelExport(ref);
                                     
-                                    console.log(`               🔍 Checking ref: ${path.basename(refPath)} (def=${isDefinition}, barrel=${isBarrel})`);
+                                    aidaLogging(`               🔍 Checking ref: ${path.basename(refPath)} (def=${isDefinition}, barrel=${isBarrel})`);
                                     
                                     if (!isDefinition && !isBarrel) {
                                         const relativePath = path.relative(this.workspaceRoot, refPath).replace(/\\/g, '/');
@@ -175,23 +176,23 @@ class PRDependencyAnalyzer {
                                     }
                                 }
                                 
-                                console.log(`            ✅ Found ${userFiles.size} actual user files`);
+                                aidaLogging(`            ✅ Found ${userFiles.size} actual user files`);
                                 
                                 // 🔥 NEW: If no users found via references, try wildcard search through barrel
                                 if (userFiles.size === 0 && result.barrelChain && result.barrelChain.length > 0) {
-                                    console.log(`            🔍 No users via references → Trying wildcard search through barrel`);
+                                    aidaLogging(`            🔍 No users via references → Trying wildcard search through barrel`);
                                     
                                     // Find barrel file in chain
                                     for (const barrelInfo of result.barrelChain) {
                                         if (barrelInfo.isWildcard) {
-                                            console.log(`               📦 Found wildcard barrel: ${path.basename(barrelInfo.location.uri.fsPath)}`);
+                                            aidaLogging(`               📦 Found wildcard barrel: ${path.basename(barrelInfo.location.uri.fsPath)}`);
                                             
                                             const wildcardRefs = await this.findImportsOfBarrelFile(
                                                 barrelInfo.location.uri,
                                                 symbol.fullName
                                             );
                                             
-                                            console.log(`               ✅ Wildcard search found ${wildcardRefs.length} usages`);
+                                            aidaLogging(`               ✅ Wildcard search found ${wildcardRefs.length} usages`);
                                             
                                             for (const ref of wildcardRefs) {
                                                 const refPath = ref.uri.fsPath;
@@ -243,10 +244,10 @@ class PRDependencyAnalyzer {
                                         });
                                     }
                                     
-                                    console.log(`            ✅ Added: ${userFilePath}`);
+                                    aidaLogging(`            ✅ Added: ${userFilePath}`);
                                 }
                             } else {
-                                console.log(`            ⚠️ No references found via VS Code API → Trying wildcard search`);
+                                aidaLogging(`            ⚠️ No references found via VS Code API → Trying wildcard search`);
                                 
                                 // 🔥 NEW: Fallback to wildcard search if no references at all
                                 // Find barrel file that re-exports this symbol
@@ -259,7 +260,7 @@ class PRDependencyAnalyzer {
                                     const barrelPath = path.join(prDir, barrelName);
                                     
                                     if (fs.existsSync(barrelPath)) {
-                                        console.log(`               📦 Found barrel: ${path.basename(barrelPath)}`);
+                                        aidaLogging(`               📦 Found barrel: ${path.basename(barrelPath)}`);
                                         
                                         const barrelUri = vscode.Uri.file(barrelPath);
                                         const wildcardRefs = await this.findImportsOfBarrelFile(
@@ -268,7 +269,7 @@ class PRDependencyAnalyzer {
                                         );
                                         
                                         if (wildcardRefs.length > 0) {
-                                            console.log(`               ✅ Wildcard search found ${wildcardRefs.length} usages`);
+                                            aidaLogging(`               ✅ Wildcard search found ${wildcardRefs.length} usages`);
                                             
                                             const userFiles = new Set();
                                             for (const ref of wildcardRefs) {
@@ -312,7 +313,7 @@ class PRDependencyAnalyzer {
                                                     });
                                                 }
                                                 
-                                                console.log(`            ✅ Added via fallback: ${userFilePath}`);
+                                                aidaLogging(`            ✅ Added via fallback: ${userFilePath}`);
                                             }
                                             
                                             // Stop after finding the first valid barrel with usages
@@ -327,7 +328,7 @@ class PRDependencyAnalyzer {
                     }
                 } else {
                     // Has direct dependents - filter them normally
-                    console.log(`🔎 Filtering ${allDependents.length} dependents for ${node.prStatus} file: ${node.prPath}`);
+                    aidaLogging(`🔎 Filtering ${allDependents.length} dependents for ${node.prStatus} file: ${node.prPath}`);
                     
                     for (const depId of allDependents) {
                         const depNode = this.fullGraph.nodes.find(n => n.id === depId);
@@ -352,9 +353,9 @@ class PRDependencyAnalyzer {
                                 symbolToDependentsMap.get(symbolFullName).push(depNode.relativePath);
                             });
                             
-                            console.log(`   ✅ Dependent uses symbols [${usedSymbols.join(', ')}]: ${depNode.relativePath}`);
+                            aidaLogging(`   ✅ Dependent uses symbols [${usedSymbols.join(', ')}]: ${depNode.relativePath}`);
                         } else {
-                            console.log(`   ⏭️ Skipping dependent (no symbol usage): ${depNode.relativePath}`);
+                            aidaLogging(`   ⏭️ Skipping dependent (no symbol usage): ${depNode.relativePath}`);
                         }
                     }
                 }
@@ -363,11 +364,11 @@ class PRDependencyAnalyzer {
                 allDependents.forEach(depId => {
                     relevantNodeIds.add(depId);
                 });
-                console.log(`✅ Included all ${allDependents.length} dependents for ${node.prStatus}: ${node.prPath}`);
+                aidaLogging(`✅ Included all ${allDependents.length} dependents for ${node.prStatus}: ${node.prPath}`);
             }
         }
 
-        console.log(`📊 Total relevant nodes: ${relevantNodeIds.size}`);
+        aidaLogging(`📊 Total relevant nodes: ${relevantNodeIds.size}`);
 
         // Step 5: Build filtered graph
         const filteredGraph = this.buildFilteredGraph(relevantNodeIds, prNodes, nodeChangedSymbols);
@@ -400,7 +401,7 @@ class PRDependencyAnalyzer {
      */
     async ensureFullGraph() {
         if (this.fullGraph) {
-            console.log('✅ Using cached full graph');
+            aidaLogging('✅ Using cached full graph');
             return;
         }
 
@@ -410,16 +411,16 @@ class PRDependencyAnalyzer {
                 const cacheData = JSON.parse(fs.readFileSync(this.cacheFilePath, 'utf8'));
                 if (cacheData.version === CACHE_VERSION && cacheData.graph) {
                     this.fullGraph = cacheData.graph;
-                    console.log(`✅ Loaded graph from cache: ${this.fullGraph.nodes.length} nodes, ${this.fullGraph.edges.length} edges`);
+                    aidaLogging(`✅ Loaded graph from cache: ${this.fullGraph.nodes.length} nodes, ${this.fullGraph.edges.length} edges`);
                     return;
                 }
             } catch (error) {
-                console.log(`⚠️ Cache read error: ${error.message}`);
+                aidaLogging(`⚠️ Cache read error: ${error.message}`);
             }
         }
 
         // Build new graph
-        console.log('🔨 Building new dependency graph...');
+        aidaLogging('🔨 Building new dependency graph...');
         this.fullGraph = await this.buildFullGraph();
 
         // Save cache
@@ -435,9 +436,9 @@ class PRDependencyAnalyzer {
                 graph: this.fullGraph
             }, null, 2));
 
-            console.log(`✅ Saved graph cache: ${this.fullGraph.nodes.length} nodes`);
+            aidaLogging(`✅ Saved graph cache: ${this.fullGraph.nodes.length} nodes`);
         } catch (error) {
-            console.log(`⚠️ Cache write error: ${error.message}`);
+            aidaLogging(`⚠️ Cache write error: ${error.message}`);
         }
     }
 
@@ -445,11 +446,11 @@ class PRDependencyAnalyzer {
      * Build full workspace dependency graph
      */
     async buildFullGraph() {
-        console.log('📊 Analyzing workspace dependencies...');
+        aidaLogging('📊 Analyzing workspace dependencies...');
         
         try {
             const graph = await this.vscodeAnalyzer.analyze();
-            console.log(`✅ Built graph: ${graph.nodes.length} nodes, ${graph.edges.length} edges`);
+            aidaLogging(`✅ Built graph: ${graph.nodes.length} nodes, ${graph.edges.length} edges`);
             return graph;
         } catch (error) {
             console.error('❌ Error building graph:', error);
@@ -506,14 +507,14 @@ class PRDependencyAnalyzer {
                     prPatch: prFile.patch || null // Add patch data for symbol extraction
                 });
                 
-                console.log(`✅ Matched PR file: ${prFile.path} → ${node.relativePath} (${prFile.status})`);
+                aidaLogging(`✅ Matched PR file: ${prFile.path} → ${node.relativePath} (${prFile.status})`);
             } else {
                 // Handle files not present in cached graph (new or deleted)
                 const placeholderNode = prFile.status === 'delete'
                     ? this.createNodeForDeletedFile(prFile)
                     : this.createNodeForNewFile(prFile);
                 nodes.push(placeholderNode);
-                console.log(`➕ Created node for ${prFile.status} file: ${prFile.path}`);
+                aidaLogging(`➕ Created node for ${prFile.status} file: ${prFile.path}`);
             }
         }
 
@@ -889,7 +890,7 @@ class PRDependencyAnalyzer {
      * Combines Regex (fast, robust for fragments) and VS Code API (accurate for structure)
      */
     async extractChangedSymbols(patch, prFilePath) {
-        console.log(`   🔍 Extracting symbols using Hybrid approach (Regex + VS Code API)...`);
+        aidaLogging(`   🔍 Extracting symbols using Hybrid approach (Regex + VS Code API)...`);
         
         // 1. Run Regex extraction (using the existing method)
         const regexSymbols = await this.extractChangedSymbolsRegex(patch, prFilePath);
@@ -905,7 +906,7 @@ class PRDependencyAnalyzer {
             // Filter out symbols that match the filename (likely module wrappers)
             const fileName = path.basename(prFilePath, path.extname(prFilePath));
             if (sym.name.toLowerCase() === fileName.toLowerCase()) {
-                console.log(`   🚫 Ignoring symbol '${sym.name}' (matches filename) from ${source}`);
+                aidaLogging(`   🚫 Ignoring symbol '${sym.name}' (matches filename) from ${source}`);
                 return;
             }
             
@@ -924,7 +925,7 @@ class PRDependencyAnalyzer {
         vscodeSymbols.forEach(s => addSymbol(s, 'VSCode'));
         
         const finalSymbols = Array.from(mergedMap.values());
-        console.log(`   ✅ Hybrid extraction found ${finalSymbols.length} unique symbols`);
+        aidaLogging(`   ✅ Hybrid extraction found ${finalSymbols.length} unique symbols`);
         return finalSymbols;
     }
 
@@ -938,7 +939,7 @@ class PRDependencyAnalyzer {
             return [];
         }
 
-        console.log(`   📄 Extracting symbols from patch content (VS Code API)...`);
+        aidaLogging(`   📄 Extracting symbols from patch content (VS Code API)...`);
         
         // 1. Extract "New Code" from patch (lines starting with +)
         const lines = patch.split('\n');
@@ -1067,11 +1068,11 @@ class PRDependencyAnalyzer {
      */
     extractChangedSymbolsRegex(patch, prFilePath) {
         if (!patch) {
-            console.log(`   ⚠️ No patch data`);
+            aidaLogging(`   ⚠️ No patch data`);
             return [];
         }
 
-        console.log(`   📄 Extracting from patch (${patch.length} chars)...`);
+        aidaLogging(`   📄 Extracting from patch (${patch.length} chars)...`);
         
         const allSymbols = [];
         const lines = patch.split('\n');
@@ -1186,15 +1187,15 @@ class PRDependencyAnalyzer {
         // Convert to array
         const uniqueRootSymbols = Array.from(rootSymbolMap.values());
         
-        console.log(`   ✅ Found ${uniqueRootSymbols.length} root symbols:`);
+        aidaLogging(`   ✅ Found ${uniqueRootSymbols.length} root symbols:`);
         uniqueRootSymbols.forEach(s => {
             if (s.children && s.children.length > 0) {
-                console.log(`      - ${s.fullName} (object with ${s.children.length} properties)`);
+                aidaLogging(`      - ${s.fullName} (object with ${s.children.length} properties)`);
                 s.children.forEach(child => {
-                    console.log(`         └─ ${child}`);
+                    aidaLogging(`         └─ ${child}`);
                 });
             } else {
-                console.log(`      - ${s.fullName}`);
+                aidaLogging(`      - ${s.fullName}`);
             }
         });
         
@@ -1391,14 +1392,14 @@ class PRDependencyAnalyzer {
         }
 
         try {
-            console.log(`      🔍 Checking dependent: ${dependentPath}`);
-            console.log(`         Root symbols to check: [${changedSymbols.map(s => s.fullName).join(', ')}]`);
+            aidaLogging(`      🔍 Checking dependent: ${dependentPath}`);
+            aidaLogging(`         Root symbols to check: [${changedSymbols.map(s => s.fullName).join(', ')}]`);
             
             const fullDependentPath = path.join(this.workspaceRoot, dependentPath);
             const fullPRFilePath = path.join(this.workspaceRoot, prFilePath);
             
             if (!fs.existsSync(fullDependentPath)) {
-                console.log(`         ❌ File not found: ${fullDependentPath}`);
+                aidaLogging(`         ❌ File not found: ${fullDependentPath}`);
                 return usedSymbols;
             }
 
@@ -1408,7 +1409,7 @@ class PRDependencyAnalyzer {
             for (const symbol of changedSymbols) {
                 const symbolPosition = new vscode.Position(symbol.lineNumber, symbol.column);
                 
-                console.log(`         🔍 Searching: ${symbol.fullName}`);
+                aidaLogging(`         🔍 Searching: ${symbol.fullName}`);
                 
                 try {
                     const result = await this.resolveBarrelReferences(
@@ -1422,11 +1423,11 @@ class PRDependencyAnalyzer {
                     const allReferences = result.references;
                     
                     if (allReferences.length === 0) {
-                        console.log(`            ⏭️ No references found`);
+                        aidaLogging(`            ⏭️ No references found`);
                         continue;
                     }
                     
-                    console.log(`            📍 Found ${allReferences.length} total references`);
+                    aidaLogging(`            📍 Found ${allReferences.length} total references`);
                     
                     // Filter to this dependent file only
                     const referencesInDependent = allReferences.filter(ref => {
@@ -1454,9 +1455,9 @@ class PRDependencyAnalyzer {
                                 usedSymbols.push(...symbol.children);
                             }
                             
-                            console.log(`            ✅ Found ${realRefs.length} real usages`);
+                            aidaLogging(`            ✅ Found ${realRefs.length} real usages`);
                             if (symbol.children && symbol.children.length > 0) {
-                                console.log(`            ✅ Including ${symbol.children.length} child properties`);
+                                aidaLogging(`            ✅ Including ${symbol.children.length} child properties`);
                             }
                         }
                     }
@@ -1467,9 +1468,9 @@ class PRDependencyAnalyzer {
             }
             
             if (usedSymbols.length > 0) {
-                console.log(`         ✅ Total confirmed: ${usedSymbols.length} symbols`);
+                aidaLogging(`         ✅ Total confirmed: ${usedSymbols.length} symbols`);
             } else {
-                console.log(`         ℹ️ No symbols from PR file used`);
+                aidaLogging(`         ℹ️ No symbols from PR file used`);
             }
 
             return usedSymbols;

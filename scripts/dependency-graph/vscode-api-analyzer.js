@@ -1,6 +1,7 @@
 const vscode = require('vscode');
 const path = require('path');
 const { BarrelResolver } = require('./barrel-resolver');
+const { aidaLogging } = require('../settings');
 
 /**
  * Enhanced Dependency Analyzer using VS Code Language Server APIs
@@ -449,19 +450,19 @@ class VSCodeApiDependencyAnalyzer {
      */
     async analyze() {
         try {
-            console.log('🔍 Starting Symbol Crawling analysis...');
+            aidaLogging('🔍 Starting Symbol Crawling analysis...');
             
             // Reset graph
             this.graph.clear();
             
             // Step 1: Find all source files
             const sourceFiles = await this.findSourceFiles();
-            console.log(`📁 Found ${sourceFiles.length} source files`);
+            aidaLogging(`📁 Found ${sourceFiles.length} source files`);
             
             // Step 2: Process each file with throttling
             for (let i = 0; i < sourceFiles.length; i++) {
                 const fileUri = sourceFiles[i];
-                console.log(`📝 Processing ${i + 1}/${sourceFiles.length}: ${path.basename(fileUri.fsPath)}`);
+                aidaLogging(`📝 Processing ${i + 1}/${sourceFiles.length}: ${path.basename(fileUri.fsPath)}`);
                 
                 await this.processFile(fileUri);
                 
@@ -675,7 +676,7 @@ class VSCodeApiDependencyAnalyzer {
             const targetFile = await this.resolveDefinition(document, position);
             if (targetFile) {
                 this.graph.get(sourceFile).add(targetFile);
-                console.log(`🔗 ${sourceFile} -> ${targetFile} (${type})`);
+                aidaLogging(`🔗 ${sourceFile} -> ${targetFile} (${type})`);
             }
         } catch (error) {
             // Silent fail - LSP might not be available for this symbol

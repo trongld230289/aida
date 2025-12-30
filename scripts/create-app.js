@@ -1,12 +1,13 @@
 const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
+const { aidaLogging } = require('./settings');
 
 function initializeCreateApp(context) {
-    console.log('🚀 Initializing create-app participant...');
+    aidaLogging('🚀 Initializing create-app participant...');
     
     const createAppParticipant = vscode.chat.createChatParticipant('create-app', async (request, context, stream, token) => {
-        console.log('🎨 Create-app called:', request.prompt);
+        aidaLogging('🎨 Create-app called:', request.prompt);
         
         try {
             const query = request.prompt.trim().toLowerCase();
@@ -25,7 +26,7 @@ function initializeCreateApp(context) {
         }
     });
     
-    console.log('✅ create-app participant created successfully');
+    aidaLogging('✅ create-app participant created successfully');
     return { createAppParticipant };
 }
 
@@ -123,7 +124,7 @@ function findImageFiles(dirPath) {
 }
 
 async function analyzeWireframeWithAI(imageBase64, imageFormat) {
-    console.log('🤖 Starting AI wireframe analysis...');
+    aidaLogging('🤖 Starting AI wireframe analysis...');
     
     const config = vscode.workspace.getConfiguration('aida');
     const apiKey = config.get('ai.apiKey');
@@ -201,11 +202,11 @@ Focus on practical web development insights that can guide React component creat
     const data = await response.json();
     const content = data.choices[0].message.content;
     
-    console.log('AI Response content:', content ? content.substring(0, 200) + '...' : 'EMPTY');
+    aidaLogging('AI Response content:', content ? content.substring(0, 200) + '...' : 'EMPTY');
     
     // Check if content is empty or null
     if (!content || content.trim() === '') {
-        console.log('AI returned empty response, using fallback analysis');
+        aidaLogging('AI returned empty response, using fallback analysis');
         // Use fallback analysis for home-cart wireframe
         return createFallbackAnalysis();
     }
@@ -215,7 +216,7 @@ Focus on practical web development insights that can guide React component creat
     try {
         analysis = JSON.parse(content);
     } catch (e) {
-        console.log('Failed to parse JSON, using text analysis:', e.message);
+        aidaLogging('Failed to parse JSON, using text analysis:', e.message);
         analysis = parseTextAnalysis(content);
     }
     
@@ -230,7 +231,7 @@ Focus on practical web development insights that can guide React component creat
  * Parse text analysis when JSON parsing fails
  */
 function parseTextAnalysis(content) {
-    console.log('Parsing text content:', content.substring(0, 300));
+    aidaLogging('Parsing text content:', content.substring(0, 300));
     
     const analysis = {
         pageType: "Homepage",
@@ -621,18 +622,18 @@ Return ONLY valid JSON.`;
     const data = await response.json();
     const content = data.choices[0].message.content;
     
-    console.log('React generation response:', content ? content.substring(0, 200) + '...' : 'EMPTY');
+    aidaLogging('React generation response:', content ? content.substring(0, 200) + '...' : 'EMPTY');
     
     // Check if content is empty or null
     if (!content || content.trim() === '') {
-        console.log('AI returned empty response for React generation, using fallback');
+        aidaLogging('AI returned empty response for React generation, using fallback');
         return createFallbackReactStructure();
     }
     
     try {
         return JSON.parse(content);
     } catch (e) {
-        console.log('Failed to parse React generation JSON, using fallback:', e.message);
+        aidaLogging('Failed to parse React generation JSON, using fallback:', e.message);
         return createFallbackReactStructure();
     }
 }

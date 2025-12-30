@@ -4,6 +4,7 @@ const { AidaChatbotService } = require('./chatbot-service.js');
 const { ChatbotContextEngine } = require('./chatbot-algorithm.js');
 const TemplateLoader = require('./template-loader');
 const { setGlobalAbortSignal } = require('../review-common');
+const { aidaLogging } = require('../settings');
 
 /**
  * GitHub Copilot-Style Sidebar Chat (True Right Sidebar like Copilot)
@@ -40,7 +41,7 @@ class CopilotSidebarChat {
         // Listen for workspace folder changes
         this.context.subscriptions.push(
             vscode.workspace.onDidChangeWorkspaceFolders(() => {
-                console.log('📁 Workspace changed, reloading chat history...');
+                aidaLogging('📁 Workspace changed, reloading chat history...');
                 // Clear current chat and load new workspace chat history
                 this.chatHistory = [];
                 this.messageHistory = [];
@@ -82,9 +83,9 @@ class CopilotSidebarChat {
                         fileName: displayName,
                         fullPath: fileName
                     });
-                    console.log('📁 Current file updated:', displayName, forceUpdate ? '(forced)' : '');
+                    aidaLogging('📁 Current file updated:', displayName, forceUpdate ? '(forced)' : '');
                 } else {
-                    console.log('📁 Webview not ready, current file will be updated later:', displayName);
+                    aidaLogging('📁 Webview not ready, current file will be updated later:', displayName);
                 }
             }
         } else {
@@ -99,7 +100,7 @@ class CopilotSidebarChat {
                         fullPath: null
                     });
                 }
-                console.log('📁 Current file cleared');
+                aidaLogging('📁 Current file cleared');
             }
         }
     }
@@ -110,7 +111,7 @@ class CopilotSidebarChat {
     async initializeChatbot() {
         try {
             await this.chatbotService.initialize();
-            console.log('✅ AIDA Chatbot Service initialized');
+            aidaLogging('✅ AIDA Chatbot Service initialized');
         } catch (error) {
             console.error('❌ Failed to initialize chatbot service:', error);
         }
@@ -136,7 +137,7 @@ class CopilotSidebarChat {
             )
         );
 
-        console.log('✅ AIDA Chat Sidebar registered (GitHub Copilot style)');
+        aidaLogging('✅ AIDA Chat Sidebar registered (GitHub Copilot style)');
         return provider;
     }
 
@@ -185,7 +186,7 @@ class CopilotSidebarChat {
             this.messageHistory = savedMessageHistory.slice(-20);
             
             const workspaceName = vscode.workspace.workspaceFolders?.[0]?.name || 'global';
-            console.log(`📚 Loaded ${this.chatHistory.length} chat messages for workspace: ${workspaceName}`);
+            aidaLogging(`📚 Loaded ${this.chatHistory.length} chat messages for workspace: ${workspaceName}`);
         } catch (error) {
             console.error('Failed to load chat history:', error);
             this.chatHistory = [];
@@ -215,7 +216,7 @@ class CopilotSidebarChat {
             this.context.globalState.update(messageKey, this.messageHistory);
             
             const workspaceName = vscode.workspace.workspaceFolders?.[0]?.name || 'global';
-            console.log(`💾 Saved ${historyToSave.length} chat messages for workspace: ${workspaceName}`);
+            aidaLogging(`💾 Saved ${historyToSave.length} chat messages for workspace: ${workspaceName}`);
         } catch (error) {
             console.error('Failed to save chat history:', error);
         }
@@ -236,7 +237,7 @@ class CopilotSidebarChat {
         this.context.globalState.update(messageKey, []);
         
         const workspaceName = vscode.workspace.workspaceFolders?.[0]?.name || 'global';
-        console.log(`🗑️ Chat history cleared for workspace: ${workspaceName}`);
+        aidaLogging(`🗑️ Chat history cleared for workspace: ${workspaceName}`);
     }
 
     /**
@@ -247,7 +248,7 @@ class CopilotSidebarChat {
             return;
         }
 
-        console.log(`📚 Restoring ${this.chatHistory.length} workspace chat messages`);
+        aidaLogging(`📚 Restoring ${this.chatHistory.length} workspace chat messages`);
         
         for (const message of this.chatHistory) {
             if (message.role === 'user') {
@@ -272,7 +273,7 @@ class CopilotSidebarChat {
         try {
             const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
             if (!workspaceFolder) {
-                console.log('⚠️ No workspace folder found for AIDA templates');
+                aidaLogging('⚠️ No workspace folder found for AIDA templates');
                 return;
             }
 
@@ -281,11 +282,11 @@ class CopilotSidebarChat {
             
             // Check if AIDA templates already exist
             if (require('fs').existsSync(templatesPath)) {
-                console.log('✅ AIDA templates already exist');
+                aidaLogging('✅ AIDA templates already exist');
                 return;
             }
 
-            console.log('🔄 AIDA Chatbot: Creating AIDA templates folder...');
+            aidaLogging('🔄 AIDA Chatbot: Creating AIDA templates folder...');
             
             // Create AIDA/templates directory
             require('fs').mkdirSync(templatesPath, { recursive: true });
@@ -294,7 +295,7 @@ class CopilotSidebarChat {
             const extensionTemplatesPath = require('path').join(this.context.extensionPath, 'templates');
             if (require('fs').existsSync(extensionTemplatesPath)) {
                 await this.copyTemplatesRecursively(extensionTemplatesPath, templatesPath);
-                console.log('✅ AIDA Chatbot: Templates created successfully');
+                aidaLogging('✅ AIDA Chatbot: Templates created successfully');
                 
                 // Notify webview
                 if (this.webviewView) {
@@ -305,10 +306,10 @@ class CopilotSidebarChat {
                     });
                 }
             } else {
-                console.log('⚠️ Extension templates not found');
+                aidaLogging('⚠️ Extension templates not found');
             }
         } catch (error) {
-            console.log('❌ Failed to create AIDA templates:', error.message);
+            aidaLogging('❌ Failed to create AIDA templates:', error.message);
         }
     }
 
@@ -373,7 +374,7 @@ class CopilotSidebarChat {
                     this.webviewView.webview.postMessage({ type: 'clearChat' });
                 }
                 
-                console.log('🗑️ Conversation cleared - arrow key history preserved');
+                aidaLogging('🗑️ Conversation cleared - arrow key history preserved');
                 return; // Don't process further
             }
             
@@ -406,7 +407,7 @@ class CopilotSidebarChat {
                         conversationHistory
                     );
                     
-                    console.log('🧠 Context Engine Decision:', {
+                    aidaLogging('🧠 Context Engine Decision:', {
                         shouldInclude: contextDecision.shouldInclude,
                         confidence: contextDecision.confidence,
                         intent: contextDecision.intent,
@@ -434,13 +435,13 @@ class CopilotSidebarChat {
                     
                     // Apply multimodal decision
                     if (multimodalDecision.shouldInclude) {
-                        console.log(`🖼️ Multimodal context decision: ${multimodalDecision.reason}`);
+                        aidaLogging(`🖼️ Multimodal context decision: ${multimodalDecision.reason}`);
                         contextDecision.shouldInclude = true;
                         contextDecision.reasoning = [...(contextDecision.reasoning || []), multimodalDecision.reason];
                         enhancedMessage = multimodalDecision.enhancedMessage;
                     } else if (!contextDecision.shouldInclude) {
                         // If all decisions say no, log why
-                        console.log(`🚫 No context needed: Engine=${contextDecision.shouldInclude}, Semantic=${semanticDecision.shouldInclude}, Multimodal=${multimodalDecision.shouldInclude}`);
+                        aidaLogging(`🚫 No context needed: Engine=${contextDecision.shouldInclude}, Semantic=${semanticDecision.shouldInclude}, Multimodal=${multimodalDecision.shouldInclude}`);
                     }
                     
                 } catch (engineError) {
@@ -492,7 +493,7 @@ class CopilotSidebarChat {
                 this.saveChatHistory();
             }
 
-            console.log('💬 Processing sidebar message:', userMessage);
+            aidaLogging('💬 Processing sidebar message:', userMessage);
 
             // Handle Agent Mode
             if (mode === 'agent') {
@@ -676,15 +677,15 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
             if (currentFileContext && currentFileContext.hasFile) {
                 if (contextDecision?.shouldInclude) {
                     // Context engine decided context is needed - use enhanced message from context engine
-                    console.log('📁 Using enhanced message from context engine:', currentFileContext.fileName);
+                    aidaLogging('📁 Using enhanced message from context engine:', currentFileContext.fileName);
                     // enhancedMessage already set by this.enhanceMessageWithContext() above
                 } else {
                     // Context engine decided no context needed, but add minimal context as fallback
                     enhancedMessage = `${userMessage}\n\n**Current File Context:** ${currentFileContext.summary}\nFile: ${currentFileContext.languageId} file with ${currentFileContext.lineCount} lines`;
-                    console.log('📁 Enhanced message with minimal context (fallback):', currentFileContext.fileName);
+                    aidaLogging('📁 Enhanced message with minimal context (fallback):', currentFileContext.fileName);
                 }
             } else {
-                console.log('📁 No file context available');
+                aidaLogging('📁 No file context available');
             }
             
             // Create streaming callback for real-time updates
@@ -694,7 +695,7 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
             const streamCallback = (chunk) => {
                 // Check for cancellation
                 if (this.isCanceled) {
-                    console.log('🛑 Streaming canceled, stopping chunk processing');
+                    aidaLogging('🛑 Streaming canceled, stopping chunk processing');
                     return;
                 }
                 
@@ -724,7 +725,7 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
             const shouldStream = participant === 'general' || isReviewMode;
             
             let response;
-            console.log('🤖 Calling participant with enhanced message:', enhancedMessage.substring(0, 200) + '...');
+            aidaLogging('🤖 Calling participant with enhanced message:', enhancedMessage.substring(0, 200) + '...');
             if (shouldStream) {
                 response = await this.callParticipant(participant, enhancedMessage, images, streamCallback);
             } else {
@@ -733,7 +734,7 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
             
             // Check for cancellation before completing
             if (this.isCanceled) {
-                console.log('🛑 Operation was canceled, stopping processing');
+                aidaLogging('🛑 Operation was canceled, stopping processing');
                 return;
             }
             
@@ -2706,7 +2707,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
             switch (participant) {
                 case 'review-file':
                     try {
-                        console.log('📁 AIDA Chat: Calling review-file with streaming');
+                        aidaLogging('📁 AIDA Chat: Calling review-file with streaming');
                         
                         // Ensure AIDA templates exist before review (like Copilot does)
                         await this.ensureAidaTemplatesExist();
@@ -2721,7 +2722,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
 
                 case 'review-changes':  
                     try {
-                        console.log('📝 AIDA Chat: Calling review-changes with streaming');
+                        aidaLogging('📝 AIDA Chat: Calling review-changes with streaming');
                         
                         // Ensure AIDA templates exist before review (like Copilot does)
                         await this.ensureAidaTemplatesExist();
@@ -2736,7 +2737,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
 
                 case 'review-all-changes':  
                     try {
-                        console.log('🔍 AIDA Chat: Calling review-all-changes with streaming');
+                        aidaLogging('🔍 AIDA Chat: Calling review-all-changes with streaming');
                         
                         // Ensure AIDA templates exist before review (like Copilot does)
                         await this.ensureAidaTemplatesExist();
@@ -2751,7 +2752,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
 
                 case 'review-pr':
                     try {
-                        console.log('🔄 AIDA Chat: Calling review-pr with streaming');
+                        aidaLogging('🔄 AIDA Chat: Calling review-pr with streaming');
 
                         // Ensure AIDA templates exist before review (like Copilot does)
                         await this.ensureAidaTemplatesExist();
@@ -2766,7 +2767,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
 
                 case 'sync-review-templates':
                     try {
-                        console.log('🔄 AIDA Chat: Calling sync-review-templates with reusable logic');
+                        aidaLogging('🔄 AIDA Chat: Calling sync-review-templates with reusable logic');
                         const syncModule = require('../sync-review-templates.js');
                         await syncModule.aiSyncReviewTemplates(messageWithoutParticipant, mockStream, null, this.context);
                         return result || '✅ **Template Sync Complete**\n\nTemplate synchronization completed.';
@@ -2777,7 +2778,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
 
                 case 'dependency':
                     try {
-                        console.log('🔍 AIDA Chat: Calling dependency analysis with reusable logic');
+                        aidaLogging('🔍 AIDA Chat: Calling dependency analysis with reusable logic');
                         const dependencyModule = require('../dependency.js');
                         await dependencyModule.aiDependencyAnalysis(messageWithoutParticipant, mockStream, null, this.context);
                         return result || '✅ **Dependency Analysis Complete**\n\nDependency analysis completed.';
@@ -2788,7 +2789,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
 
                 case 'scan-app':
                     try {
-                        console.log('🔍 AIDA Chat: Calling scan-app with reusable logic');
+                        aidaLogging('🔍 AIDA Chat: Calling scan-app with reusable logic');
                         const scanModule = require('../scan-app.js');
                         await scanModule.handleScanApp(messageWithoutParticipant, mockStream, null, this.context);
                         return result || '✅ **Scan Complete**\n\nCode scanning and duplicate detection completed.';
@@ -2812,15 +2813,15 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
      */
     async generateGeneralResponse(message, images = [], streamCallback = null) {
         try {
-            console.log('💬 Generating conversational response for:', message);
+            aidaLogging('💬 Generating conversational response for:', message);
             if (images && images.length > 0) {
-                console.log('🖼️ Processing with', images.length, 'image(s)');
+                aidaLogging('🖼️ Processing with', images.length, 'image(s)');
             }
             
             // Use AI chatbot service for intelligent conversation with images
             const response = await this.chatbotService.generateResponse(message, images, streamCallback);
             
-            console.log('✅ Generated response length:', response.length);
+            aidaLogging('✅ Generated response length:', response.length);
             return response;
             
         } catch (error) {
@@ -2925,19 +2926,19 @@ What interesting project are you working on? 🚀`;
         const hasImages = images && images.length > 0;
         const hasCurrentFile = currentFileContext && currentFileContext.hasFile;
         
-        console.log(`🔍 Hybrid analysis: ${images.length} image(s) + ${hasCurrentFile ? 'current file' : 'no file'}`);
+        aidaLogging(`🔍 Hybrid analysis: ${images.length} image(s) + ${hasCurrentFile ? 'current file' : 'no file'}`);
         
         // Step 1: Fast rule-based decision (primary)
         const ruleDecision = this.makeRuleBasedDecision(userMessage, images, currentFileContext);
         
         // Step 2: Check if we need semantic analysis (secondary)
         if (this.needsSemanticAnalysis(ruleDecision, userMessage, hasImages, hasCurrentFile)) {
-            console.log(`🧠 Complex case detected - using semantic analysis`);
+            aidaLogging(`🧠 Complex case detected - using semantic analysis`);
             const semanticDecision = this.contextEngine.shouldIncludeContext(userMessage, currentFileContext);
             return this.combineDecisions(ruleDecision, semanticDecision, userMessage, currentFileContext, images);
         }
         
-        console.log(`⚡ Rule-based decision: ${ruleDecision.reason}`);
+        aidaLogging(`⚡ Rule-based decision: ${ruleDecision.reason}`);
         return ruleDecision;
     }
 
@@ -3131,7 +3132,7 @@ Summary: ${currentFileContext.summary}`;
 **Note:** Working with ${currentFileContext.fileName} (${currentFileContext.languageId})`;
         }
 
-        console.log(`🧠 Enhanced message with ${contextDecision.confidence > 0.8 ? 'detailed' : contextDecision.confidence > 0.6 ? 'basic' : 'minimal'} context`);
+        aidaLogging(`🧠 Enhanced message with ${contextDecision.confidence > 0.8 ? 'detailed' : contextDecision.confidence > 0.6 ? 'basic' : 'minimal'} context`);
         return enhancedMessage;
     }
 
@@ -3179,7 +3180,7 @@ Summary: ${currentFileContext.summary}`;
         // More inclusive logic - if user mentions file operations AND has active file
         const shouldInclude = (hasFileReference || hasCodeAction) && currentFileContext?.hasFile;
         
-        console.log(`🔍 Basic context decision: fileRef=${hasFileReference}, codeAction=${hasCodeAction}, hasFile=${!!currentFileContext?.hasFile}, result=${shouldInclude}`);
+        aidaLogging(`🔍 Basic context decision: fileRef=${hasFileReference}, codeAction=${hasCodeAction}, hasFile=${!!currentFileContext?.hasFile}, result=${shouldInclude}`);
         
         return {
             shouldInclude: shouldInclude,
@@ -3208,7 +3209,7 @@ class AidaChatViewProvider {
     setupConfigurationListener() {
         vscode.workspace.onDidChangeConfiguration((event) => {
             if (event.affectsConfiguration('aida.ai.model')) {
-                console.log('🤖 Model configuration changed, updating webview...');
+                aidaLogging('🤖 Model configuration changed, updating webview...');
                 if (this.chatInstance.webviewView) {
                     this.sendCurrentModelName(this.chatInstance.webviewView);
                 }
@@ -3277,7 +3278,7 @@ class AidaChatViewProvider {
 
                 case 'cancelStreaming':
                     // Cancel ongoing streaming operation
-                    console.log('🛑 Cancel streaming requested from frontend');
+                    aidaLogging('🛑 Cancel streaming requested from frontend');
                     this.cancelStreaming();
                     break;
 
@@ -3372,23 +3373,23 @@ class AidaChatViewProvider {
                     }
                     break;
                     // Open diff view for file button
-                    console.log('🔍 Received runDiffCommand:', message);
+                    aidaLogging('🔍 Received runDiffCommand:', message);
                     if (message.command && Array.isArray(message.arguments)) {
-                        console.log('🚀 Executing command:', message.command, 'with args:', message.arguments);
+                        aidaLogging('🚀 Executing command:', message.command, 'with args:', message.arguments);
                         try {
                             if (message.command === 'aida.viewPrDiff') {
                                 const diffId = message.arguments[0];
-                                console.log('📄 Opening Monaco diff for diffId:', diffId);
+                                aidaLogging('📄 Opening Monaco diff for diffId:', diffId);
                                 
                                 // Extract file path from diffId (format: github_id_filepath)
                                 const pathPart = diffId.split('_').slice(2).join('_').replace(/_/g, '/');
-                                console.log('� Extracted path:', pathPart);
+                                aidaLogging('� Extracted path:', pathPart);
                                 
                                 // Try to find the file in workspace
                                 const workspaceFolders = vscode.workspace.workspaceFolders;
                                 if (workspaceFolders && workspaceFolders.length > 0) {
                                     const filePath = vscode.Uri.joinPath(workspaceFolders[0].uri, pathPart);
-                                    console.log('🔍 Opening file:', filePath.toString());
+                                    aidaLogging('🔍 Opening file:', filePath.toString());
                                     
                                     // Open the file
                                     await vscode.commands.executeCommand('vscode.open', filePath);
@@ -3399,7 +3400,7 @@ class AidaChatViewProvider {
                             } else {
                                 await vscode.commands.executeCommand(message.command, ...message.arguments);
                             }
-                            console.log('✅ Command executed successfully');
+                            aidaLogging('✅ Command executed successfully');
                         } catch (error) {
                             console.error('❌ Command execution failed:', error);
                             vscode.window.showErrorMessage(`Failed to open file: ${error.message}`);
@@ -3421,28 +3422,28 @@ class AidaChatViewProvider {
                         
                         // Save to persistent storage
                         this.chatInstance.saveChatHistory();
-                        console.log('💾 Saved partial content to chat history');
+                        aidaLogging('💾 Saved partial content to chat history');
                     }
                     break;
                     
                 case 'frontendReady':
                     // Frontend is ready, send current file info
-                    console.log('📁 Frontend ready, updating current file...');
+                    aidaLogging('📁 Frontend ready, updating current file...');
                     if (this.chatInstance && typeof this.chatInstance.updateCurrentFile === 'function') {
                         const currentEditor = vscode.window.activeTextEditor;
                         if (currentEditor) {
                             this.chatInstance.updateCurrentFile(currentEditor, true);
-                            console.log('📁 Sent current file to ready frontend:', currentEditor.document.fileName);
+                            aidaLogging('📁 Sent current file to ready frontend:', currentEditor.document.fileName);
                         } else {
                             this.chatInstance.updateCurrentFile(null, true);
-                            console.log('📁 No active editor, sent null to frontend');
+                            aidaLogging('📁 No active editor, sent null to frontend');
                         }
                     }
                     break;
             }
         });
 
-        console.log('✅ AIDA Chat Sidebar WebView resolved');
+        aidaLogging('✅ AIDA Chat Sidebar WebView resolved');
     }
 
     /**
@@ -3450,7 +3451,7 @@ class AidaChatViewProvider {
      */
     initializeWebviewState(webviewView) {
         try {
-            console.log('🔄 Initializing webview state...');
+            aidaLogging('🔄 Initializing webview state...');
             
             // Send current model name to frontend
             this.sendCurrentModelName(webviewView);
@@ -3462,22 +3463,22 @@ class AidaChatViewProvider {
             if (this.chatInstance && typeof this.chatInstance.updateCurrentFile === 'function') {
                 // Force current file update by passing current active editor
                 const currentEditor = vscode.window.activeTextEditor;
-                console.log('📁 Active editor during init:', currentEditor ? currentEditor.document.fileName : 'None');
+                aidaLogging('📁 Active editor during init:', currentEditor ? currentEditor.document.fileName : 'None');
                 
                 if (currentEditor) {
                     // Force update even if filename is same
                     this.chatInstance.updateCurrentFile(currentEditor, true);
-                    console.log('📁 Forced current file update on webview init');
+                    aidaLogging('📁 Forced current file update on webview init');
                 } else {
                     // Still force update to clear any previous state
                     this.chatInstance.updateCurrentFile(null, true);
-                    console.log('📁 No active editor found during webview init');
+                    aidaLogging('📁 No active editor found during webview init');
                 }
             } else {
                 console.warn('updateCurrentFile not available on chatInstance');
             }
             
-            console.log('🔄 Webview state initialized');
+            aidaLogging('🔄 Webview state initialized');
         } catch (error) {
             console.error('Failed to initialize webview state:', error);
         }
@@ -3491,7 +3492,7 @@ class AidaChatViewProvider {
             const config = vscode.workspace.getConfiguration('aida');
             const modelFromSettings = config.get('ai.model', 'Claude-4-Sonnet');
             
-            console.log('🤖 Sending model name to frontend:', modelFromSettings);
+            aidaLogging('🤖 Sending model name to frontend:', modelFromSettings);
             
             webviewView.webview.postMessage({
                 type: 'updateModelName',
@@ -3510,7 +3511,7 @@ class AidaChatViewProvider {
             return;
         }
 
-        console.log(`📚 Restoring ${this.chatInstance.chatHistory.length} chat messages`);
+        aidaLogging(`📚 Restoring ${this.chatInstance.chatHistory.length} chat messages`);
         
         for (const message of this.chatInstance.chatHistory) {
             if (message.role === 'user') {
@@ -3569,12 +3570,12 @@ class AidaChatViewProvider {
      * Cancel ongoing streaming operation
      */
     cancelStreaming() {
-        console.log('🛑 Canceling streaming operation...');
+        aidaLogging('🛑 Canceling streaming operation...');
         
         // Abort the actual AI HTTP request
         if (this.currentAbortController) {
             this.currentAbortController.abort();
-            console.log('🛑 HTTP request aborted');
+            aidaLogging('🛑 HTTP request aborted');
         }
         
         // Set a flag to indicate cancellation
@@ -3621,7 +3622,7 @@ function initializeCopilotSidebarChat(context) {
             sidebarChat.show();
         });
 
-        console.log('✅ AIDA Chatbot Sidebar initialized');
+        aidaLogging('✅ AIDA Chatbot Sidebar initialized');
         
         return {
             sidebarChat,

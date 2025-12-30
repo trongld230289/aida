@@ -1,6 +1,7 @@
 const fs = require('fs').promises;
 const path = require('path');
 const { detectProvider, callAI, mapProviderResponse } = require('../review-common');
+const { aidaLogging } = require('../settings');
 
 /**
  * AIDA Chatbot Service - Conversational AI for coding assistance
@@ -21,7 +22,7 @@ class AidaChatbotService {
     async initialize() {
         try {
             this.systemPrompt = await this.loadSystemPrompt();
-            console.log('✅ AIDA Chatbot initialized with system prompt');
+            aidaLogging('✅ AIDA Chatbot initialized with system prompt');
         } catch (error) {
             console.warn('⚠️ Failed to load system prompt, using default');
             this.systemPrompt = this.getDefaultSystemPrompt();
@@ -126,11 +127,11 @@ class AidaChatbotService {
      */
     async generateResponse(userMessage, images = [], streamCallback = null) {
         try {
-            console.log('💬 generateResponse called with:', { message: userMessage, imageCount: images?.length || 0, streaming: !!streamCallback });
+            aidaLogging('💬 generateResponse called with:', { message: userMessage, imageCount: images?.length || 0, streaming: !!streamCallback });
             
             // Notify user about image processing approach
             if (images && images.length > 0) {
-                console.log(`🖼️ Processing ${images.length} image(s) from CURRENT message only (not from conversation history)`);
+                aidaLogging(`🖼️ Processing ${images.length} image(s) from CURRENT message only (not from conversation history)`);
             }
             
             // Add user message to history with images
@@ -139,7 +140,7 @@ class AidaChatbotService {
             // Build messages for API
             const messages = this.buildMessagesForAPI();
             
-            console.log('📦 Built messages for API:', messages.length, 'messages');
+            aidaLogging('📦 Built messages for API:', messages.length, 'messages');
 
             // Check if we have AI service configured
             const aiResponse = await this.callAIService(messages, streamCallback);
@@ -165,11 +166,11 @@ class AidaChatbotService {
         // Check for API key configuration
         const config = await this.getAIConfig();
         
-        console.log('🔧 AI Config:', { provider: config.provider, hasApiKey: !!config.apiKey, apiHost: config.apiHost, model: config.model, streaming: !!streamCallback });
+        aidaLogging('🔧 AI Config:', { provider: config.provider, hasApiKey: !!config.apiKey, apiHost: config.apiHost, model: config.model, streaming: !!streamCallback });
         
         // If no API service configured, use smart rule-based responses
         if (!config.apiKey || !config.apiHost) {
-            console.log('📡 Using Smart Responses (no AI service configured)');
+            aidaLogging('📡 Using Smart Responses (no AI service configured)');
             return this.generateSmartResponse(messages);
         }
         
@@ -182,7 +183,7 @@ class AidaChatbotService {
             const latestUserMessage = conversationMessages.filter(msg => msg.role === 'user').pop();
             const currentImages = latestUserMessage && latestUserMessage.images ? latestUserMessage.images : [];
             
-            console.log(`🖼️ Using ${currentImages.length} images from current message only (not from history)`);
+            aidaLogging(`🖼️ Using ${currentImages.length} images from current message only (not from history)`);
             
             // Create conversation context for user prompt (without image history pollution)
             const conversationText = conversationMessages.map(msg => {
@@ -196,8 +197,8 @@ class AidaChatbotService {
                 return text;
             }).join('\n\n');
             
-            console.log('🔄 Using shared callAI function from review-common');
-            console.log(`🖼️ Processing ${currentImages.length} images from current message only`);
+            aidaLogging('🔄 Using shared callAI function from review-common');
+            aidaLogging(`🖼️ Processing ${currentImages.length} images from current message only`);
             
             // Use shared callAI function with chat-optimized options and ONLY current images
             const chatOptions = {
@@ -216,14 +217,14 @@ class AidaChatbotService {
             
             // Handle streaming vs non-streaming responses
             if (result.isStreaming && streamCallback) {
-                console.log('🔄 Processing streaming response...');
+                aidaLogging('🔄 Processing streaming response...');
                 return await this.handleStreamingResponse(result, streamCallback);
             } else {
                 // Map the response based on provider
                 const provider = detectProvider(config.apiHost, config.model);
                 const mappedResponse = mapProviderResponse(result.rawResponse, provider);
                 
-                console.log('✅ AI response received via shared callAI');
+                aidaLogging('✅ AI response received via shared callAI');
                 return mappedResponse.content || 'Sorry, I couldn\'t generate a response.';
             }
             
@@ -231,7 +232,7 @@ class AidaChatbotService {
             console.error('❌ Shared callAI failed:', error);
             
             // Fall back to smart responses
-            console.log('🔄 Falling back to smart responses');
+            aidaLogging('🔄 Falling back to smart responses');
             return this.generateSmartResponse(messages);
         }
     }
@@ -253,7 +254,7 @@ class AidaChatbotService {
             
             if (apiHost && apiKey) {
                 provider = detectProvider(apiHost, model);
-                console.log(`🔍 Provider detected: ${provider} (from ${apiHost} + ${model})`);
+                aidaLogging(`🔍 Provider detected: ${provider} (from ${apiHost} + ${model})`);
             }
             
             return {
@@ -328,7 +329,7 @@ const MyComponent = ({ title, data }) => {
     const [count, setCount] = useState(0);
     
     useEffect(() => {
-        console.log('Component mounted');
+        aidaLogging('Component mounted');
     }, []);
     
     return (
@@ -365,7 +366,7 @@ const MyComponent = ({ title, data }) => {
     const [count, setCount] = useState(0);
     
     useEffect(() => {
-        console.log('Component mounted');
+        aidaLogging('Component mounted');
     }, []);
     
     return (
@@ -401,7 +402,7 @@ Các cách debug JavaScript hiệu quả:
 
 \`\`\`javascript
 // 1. Console debugging
-console.log('Debug value:', variable);
+aidaLogging('Debug value:', variable);
 console.table(arrayData);
 console.group('Function trace');
 console.trace();
@@ -417,7 +418,7 @@ function problematicFunction() {
 // 3. Try-catch error handling
 try {
     const result = riskyOperation();
-    console.log('Success:', result);
+    aidaLogging('Success:', result);
 } catch (error) {
     console.error('Error details:', error);
     console.error('Stack trace:', error.stack);
@@ -684,7 +685,7 @@ Please try asking again with more details! 🙏`;
      */
     async handleStreamingResponse(result, streamCallback) {
         try {
-            console.log('🔄 Starting streaming response processing...');
+            aidaLogging('🔄 Starting streaming response processing...');
             
             const response = result.streamResponse;
             const reader = response.body.getReader();
@@ -697,7 +698,7 @@ Please try asking again with more details! 🙏`;
                 const { done, value } = await reader.read();
                 
                 if (done) {
-                    console.log('✅ Streaming complete');
+                    aidaLogging('✅ Streaming complete');
                     break;
                 }
                 
@@ -713,7 +714,7 @@ Please try asking again with more details! 🙏`;
                         const data = line.slice(6).trim();
                         
                         if (data === '[DONE]') {
-                            console.log('🏁 Received [DONE] signal');
+                            aidaLogging('🏁 Received [DONE] signal');
                             break;
                         }
                         
@@ -736,7 +737,7 @@ Please try asking again with more details! 🙏`;
             // Add complete response to history
             this.addMessage('assistant', fullContent);
             
-            console.log('✅ Streaming response processed, total length:', fullContent.length);
+            aidaLogging('✅ Streaming response processed, total length:', fullContent.length);
             return fullContent;
             
         } catch (error) {

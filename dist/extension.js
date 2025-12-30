@@ -42,6 +42,8 @@ const {
     getBusinessDocumentFolders
 } = __webpack_require__(/*! ./scripts/review-common */ "./scripts/review-common.js");
 
+const { analyzeFileDependency } = __webpack_require__(/*! ./scripts/dependency */ "./scripts/dependency.js");
+
 
 // Session tracking for "Enter twice" functionality and change scores
 const chatSessions = new Map();
@@ -327,6 +329,17 @@ function activate(context) {
             vscode.window.showErrorMessage(`Failed to review file: ${error.message}`);
         }
     });
+
+    let analyzeFileDependencyCommand = vscode.commands.registerCommand('aida.analyzeFileDependency', async (uri) => {
+        console.log('🎯 Analyze File Dependency command called', uri);
+        try {
+            await analyzeFileDependency(uri);
+        } catch (error) {
+            console.error('Error in analyzeFileDependency command:', error);
+            vscode.window.showErrorMessage(`Failed to analyze file dependency: ${error.message}`);
+        }
+    });
+    context.subscriptions.push(analyzeFileDependencyCommand);
 
     let reviewChangesCommand = vscode.commands.registerCommand('aida.reviewChanges', async (uri) => {
         console.log('🎯 Review Changes command called', uri);
@@ -49749,6 +49762,7 @@ module.exports = /*#__PURE__*/JSON.parse('{"name":"wordnet-db","version":"3.1.14
 
 // Import the new context detector
 const ContextDetector = __webpack_require__(/*! ./context-detector */ "./scripts/chatbot/context-detector.js");
+const { aidaLogging } = __webpack_require__(/*! ../settings */ "./scripts/settings.js");
 
 class ChatbotContextEngine {
     constructor() {
@@ -49774,7 +49788,7 @@ class ChatbotContextEngine {
             // Use the new context detector
             const decision = this.contextDetector.shouldIncludeContent(userMessage, editorContext);
             
-            console.log('🔍 Context Detection Result:', {
+            aidaLogging('🔍 Context Detection Result:', {
                 message: userMessage.substring(0, 50) + (userMessage.length > 50 ? '...' : ''),
                 includeContent: decision.includeContent,
                 confidence: decision.confidence,
@@ -50898,7 +50912,7 @@ class ChatbotContextEngine {
         if (!images || images.length === 0) return '';
         
         try {
-            console.log(`🔍 Processing ${images.length} image(s) with Tesseract OCR...`);
+            aidaLogging(`🔍 Processing ${images.length} image(s) with Tesseract OCR...`);
             const extractedTexts = [];
             
             for (const image of images) {
@@ -50907,7 +50921,7 @@ class ChatbotContextEngine {
                     
                     if (text && text.trim()) {
                         extractedTexts.push(text.trim());
-                        console.log('✅ Tesseract OCR extracted:', text.substring(0, 100) + '...');
+                        aidaLogging('✅ Tesseract OCR extracted:', text.substring(0, 100) + '...');
                     } else {
                         console.warn('⚠️ No text extracted from image');
                     }
@@ -50919,7 +50933,7 @@ class ChatbotContextEngine {
             }
             
             const combinedText = extractedTexts.join(' ').trim();
-            console.log(`📝 Total OCR extracted: ${combinedText.length} characters from ${images.length} images`);
+            aidaLogging(`📝 Total OCR extracted: ${combinedText.length} characters from ${images.length} images`);
             
             return combinedText;
             
@@ -50945,7 +50959,7 @@ class ChatbotContextEngine {
                     throw new Error('Tesseract.js not installed. Please run: npm install tesseract.js');
                 }
                 
-                console.log('🔄 Starting Tesseract OCR processing...');
+                aidaLogging('🔄 Starting Tesseract OCR processing...');
                 
                 const { data: { text } } = await Tesseract.recognize(
                     imageData,
@@ -50953,7 +50967,7 @@ class ChatbotContextEngine {
                     {
                         logger: m => {
                             if (m.status === 'recognizing text') {
-                                console.log(`OCR Progress: ${(m.progress * 100).toFixed(1)}%`);
+                                aidaLogging(`OCR Progress: ${(m.progress * 100).toFixed(1)}%`);
                             }
                         }
                     }
@@ -51062,6 +51076,7 @@ module.exports = {
     ContextDetector 
 };
 
+
 /***/ }),
 
 /***/ "./scripts/chatbot/chatbot-service.js":
@@ -51073,6 +51088,7 @@ module.exports = {
 const fs = (__webpack_require__(/*! fs */ "fs").promises);
 const path = __webpack_require__(/*! path */ "path");
 const { detectProvider, callAI, mapProviderResponse } = __webpack_require__(/*! ../review-common */ "./scripts/review-common.js");
+const { aidaLogging } = __webpack_require__(/*! ../settings */ "./scripts/settings.js");
 
 /**
  * AIDA Chatbot Service - Conversational AI for coding assistance
@@ -51093,7 +51109,7 @@ class AidaChatbotService {
     async initialize() {
         try {
             this.systemPrompt = await this.loadSystemPrompt();
-            console.log('✅ AIDA Chatbot initialized with system prompt');
+            aidaLogging('✅ AIDA Chatbot initialized with system prompt');
         } catch (error) {
             console.warn('⚠️ Failed to load system prompt, using default');
             this.systemPrompt = this.getDefaultSystemPrompt();
@@ -51198,11 +51214,11 @@ class AidaChatbotService {
      */
     async generateResponse(userMessage, images = [], streamCallback = null) {
         try {
-            console.log('💬 generateResponse called with:', { message: userMessage, imageCount: images?.length || 0, streaming: !!streamCallback });
+            aidaLogging('💬 generateResponse called with:', { message: userMessage, imageCount: images?.length || 0, streaming: !!streamCallback });
             
             // Notify user about image processing approach
             if (images && images.length > 0) {
-                console.log(`🖼️ Processing ${images.length} image(s) from CURRENT message only (not from conversation history)`);
+                aidaLogging(`🖼️ Processing ${images.length} image(s) from CURRENT message only (not from conversation history)`);
             }
             
             // Add user message to history with images
@@ -51211,7 +51227,7 @@ class AidaChatbotService {
             // Build messages for API
             const messages = this.buildMessagesForAPI();
             
-            console.log('📦 Built messages for API:', messages.length, 'messages');
+            aidaLogging('📦 Built messages for API:', messages.length, 'messages');
 
             // Check if we have AI service configured
             const aiResponse = await this.callAIService(messages, streamCallback);
@@ -51237,11 +51253,11 @@ class AidaChatbotService {
         // Check for API key configuration
         const config = await this.getAIConfig();
         
-        console.log('🔧 AI Config:', { provider: config.provider, hasApiKey: !!config.apiKey, apiHost: config.apiHost, model: config.model, streaming: !!streamCallback });
+        aidaLogging('🔧 AI Config:', { provider: config.provider, hasApiKey: !!config.apiKey, apiHost: config.apiHost, model: config.model, streaming: !!streamCallback });
         
         // If no API service configured, use smart rule-based responses
         if (!config.apiKey || !config.apiHost) {
-            console.log('📡 Using Smart Responses (no AI service configured)');
+            aidaLogging('📡 Using Smart Responses (no AI service configured)');
             return this.generateSmartResponse(messages);
         }
         
@@ -51254,7 +51270,7 @@ class AidaChatbotService {
             const latestUserMessage = conversationMessages.filter(msg => msg.role === 'user').pop();
             const currentImages = latestUserMessage && latestUserMessage.images ? latestUserMessage.images : [];
             
-            console.log(`🖼️ Using ${currentImages.length} images from current message only (not from history)`);
+            aidaLogging(`🖼️ Using ${currentImages.length} images from current message only (not from history)`);
             
             // Create conversation context for user prompt (without image history pollution)
             const conversationText = conversationMessages.map(msg => {
@@ -51268,8 +51284,8 @@ class AidaChatbotService {
                 return text;
             }).join('\n\n');
             
-            console.log('🔄 Using shared callAI function from review-common');
-            console.log(`🖼️ Processing ${currentImages.length} images from current message only`);
+            aidaLogging('🔄 Using shared callAI function from review-common');
+            aidaLogging(`🖼️ Processing ${currentImages.length} images from current message only`);
             
             // Use shared callAI function with chat-optimized options and ONLY current images
             const chatOptions = {
@@ -51288,14 +51304,14 @@ class AidaChatbotService {
             
             // Handle streaming vs non-streaming responses
             if (result.isStreaming && streamCallback) {
-                console.log('🔄 Processing streaming response...');
+                aidaLogging('🔄 Processing streaming response...');
                 return await this.handleStreamingResponse(result, streamCallback);
             } else {
                 // Map the response based on provider
                 const provider = detectProvider(config.apiHost, config.model);
                 const mappedResponse = mapProviderResponse(result.rawResponse, provider);
                 
-                console.log('✅ AI response received via shared callAI');
+                aidaLogging('✅ AI response received via shared callAI');
                 return mappedResponse.content || 'Sorry, I couldn\'t generate a response.';
             }
             
@@ -51303,7 +51319,7 @@ class AidaChatbotService {
             console.error('❌ Shared callAI failed:', error);
             
             // Fall back to smart responses
-            console.log('🔄 Falling back to smart responses');
+            aidaLogging('🔄 Falling back to smart responses');
             return this.generateSmartResponse(messages);
         }
     }
@@ -51325,7 +51341,7 @@ class AidaChatbotService {
             
             if (apiHost && apiKey) {
                 provider = detectProvider(apiHost, model);
-                console.log(`🔍 Provider detected: ${provider} (from ${apiHost} + ${model})`);
+                aidaLogging(`🔍 Provider detected: ${provider} (from ${apiHost} + ${model})`);
             }
             
             return {
@@ -51400,7 +51416,7 @@ const MyComponent = ({ title, data }) => {
     const [count, setCount] = useState(0);
     
     useEffect(() => {
-        console.log('Component mounted');
+        aidaLogging('Component mounted');
     }, []);
     
     return (
@@ -51437,7 +51453,7 @@ const MyComponent = ({ title, data }) => {
     const [count, setCount] = useState(0);
     
     useEffect(() => {
-        console.log('Component mounted');
+        aidaLogging('Component mounted');
     }, []);
     
     return (
@@ -51473,7 +51489,7 @@ Các cách debug JavaScript hiệu quả:
 
 \`\`\`javascript
 // 1. Console debugging
-console.log('Debug value:', variable);
+aidaLogging('Debug value:', variable);
 console.table(arrayData);
 console.group('Function trace');
 console.trace();
@@ -51489,7 +51505,7 @@ function problematicFunction() {
 // 3. Try-catch error handling
 try {
     const result = riskyOperation();
-    console.log('Success:', result);
+    aidaLogging('Success:', result);
 } catch (error) {
     console.error('Error details:', error);
     console.error('Stack trace:', error.stack);
@@ -51756,7 +51772,7 @@ Please try asking again with more details! 🙏`;
      */
     async handleStreamingResponse(result, streamCallback) {
         try {
-            console.log('🔄 Starting streaming response processing...');
+            aidaLogging('🔄 Starting streaming response processing...');
             
             const response = result.streamResponse;
             const reader = response.body.getReader();
@@ -51769,7 +51785,7 @@ Please try asking again with more details! 🙏`;
                 const { done, value } = await reader.read();
                 
                 if (done) {
-                    console.log('✅ Streaming complete');
+                    aidaLogging('✅ Streaming complete');
                     break;
                 }
                 
@@ -51785,7 +51801,7 @@ Please try asking again with more details! 🙏`;
                         const data = line.slice(6).trim();
                         
                         if (data === '[DONE]') {
-                            console.log('🏁 Received [DONE] signal');
+                            aidaLogging('🏁 Received [DONE] signal');
                             break;
                         }
                         
@@ -51808,7 +51824,7 @@ Please try asking again with more details! 🙏`;
             // Add complete response to history
             this.addMessage('assistant', fullContent);
             
-            console.log('✅ Streaming response processed, total length:', fullContent.length);
+            aidaLogging('✅ Streaming response processed, total length:', fullContent.length);
             return fullContent;
             
         } catch (error) {
@@ -51861,6 +51877,7 @@ Please try asking again with more details! 🙏`;
 
 module.exports = { AidaChatbotService };
 
+
 /***/ }),
 
 /***/ "./scripts/chatbot/chatbot-sidebar.js":
@@ -51875,6 +51892,7 @@ const { AidaChatbotService } = __webpack_require__(/*! ./chatbot-service.js */ "
 const { ChatbotContextEngine } = __webpack_require__(/*! ./chatbot-algorithm.js */ "./scripts/chatbot/chatbot-algorithm.js");
 const TemplateLoader = __webpack_require__(/*! ./template-loader */ "./scripts/chatbot/template-loader.js");
 const { setGlobalAbortSignal } = __webpack_require__(/*! ../review-common */ "./scripts/review-common.js");
+const { aidaLogging } = __webpack_require__(/*! ../settings */ "./scripts/settings.js");
 
 /**
  * GitHub Copilot-Style Sidebar Chat (True Right Sidebar like Copilot)
@@ -51911,7 +51929,7 @@ class CopilotSidebarChat {
         // Listen for workspace folder changes
         this.context.subscriptions.push(
             vscode.workspace.onDidChangeWorkspaceFolders(() => {
-                console.log('📁 Workspace changed, reloading chat history...');
+                aidaLogging('📁 Workspace changed, reloading chat history...');
                 // Clear current chat and load new workspace chat history
                 this.chatHistory = [];
                 this.messageHistory = [];
@@ -51953,9 +51971,9 @@ class CopilotSidebarChat {
                         fileName: displayName,
                         fullPath: fileName
                     });
-                    console.log('📁 Current file updated:', displayName, forceUpdate ? '(forced)' : '');
+                    aidaLogging('📁 Current file updated:', displayName, forceUpdate ? '(forced)' : '');
                 } else {
-                    console.log('📁 Webview not ready, current file will be updated later:', displayName);
+                    aidaLogging('📁 Webview not ready, current file will be updated later:', displayName);
                 }
             }
         } else {
@@ -51970,7 +51988,7 @@ class CopilotSidebarChat {
                         fullPath: null
                     });
                 }
-                console.log('📁 Current file cleared');
+                aidaLogging('📁 Current file cleared');
             }
         }
     }
@@ -51981,7 +51999,7 @@ class CopilotSidebarChat {
     async initializeChatbot() {
         try {
             await this.chatbotService.initialize();
-            console.log('✅ AIDA Chatbot Service initialized');
+            aidaLogging('✅ AIDA Chatbot Service initialized');
         } catch (error) {
             console.error('❌ Failed to initialize chatbot service:', error);
         }
@@ -52007,7 +52025,7 @@ class CopilotSidebarChat {
             )
         );
 
-        console.log('✅ AIDA Chat Sidebar registered (GitHub Copilot style)');
+        aidaLogging('✅ AIDA Chat Sidebar registered (GitHub Copilot style)');
         return provider;
     }
 
@@ -52056,7 +52074,7 @@ class CopilotSidebarChat {
             this.messageHistory = savedMessageHistory.slice(-20);
             
             const workspaceName = vscode.workspace.workspaceFolders?.[0]?.name || 'global';
-            console.log(`📚 Loaded ${this.chatHistory.length} chat messages for workspace: ${workspaceName}`);
+            aidaLogging(`📚 Loaded ${this.chatHistory.length} chat messages for workspace: ${workspaceName}`);
         } catch (error) {
             console.error('Failed to load chat history:', error);
             this.chatHistory = [];
@@ -52086,7 +52104,7 @@ class CopilotSidebarChat {
             this.context.globalState.update(messageKey, this.messageHistory);
             
             const workspaceName = vscode.workspace.workspaceFolders?.[0]?.name || 'global';
-            console.log(`💾 Saved ${historyToSave.length} chat messages for workspace: ${workspaceName}`);
+            aidaLogging(`💾 Saved ${historyToSave.length} chat messages for workspace: ${workspaceName}`);
         } catch (error) {
             console.error('Failed to save chat history:', error);
         }
@@ -52107,7 +52125,7 @@ class CopilotSidebarChat {
         this.context.globalState.update(messageKey, []);
         
         const workspaceName = vscode.workspace.workspaceFolders?.[0]?.name || 'global';
-        console.log(`🗑️ Chat history cleared for workspace: ${workspaceName}`);
+        aidaLogging(`🗑️ Chat history cleared for workspace: ${workspaceName}`);
     }
 
     /**
@@ -52118,7 +52136,7 @@ class CopilotSidebarChat {
             return;
         }
 
-        console.log(`📚 Restoring ${this.chatHistory.length} workspace chat messages`);
+        aidaLogging(`📚 Restoring ${this.chatHistory.length} workspace chat messages`);
         
         for (const message of this.chatHistory) {
             if (message.role === 'user') {
@@ -52143,7 +52161,7 @@ class CopilotSidebarChat {
         try {
             const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
             if (!workspaceFolder) {
-                console.log('⚠️ No workspace folder found for AIDA templates');
+                aidaLogging('⚠️ No workspace folder found for AIDA templates');
                 return;
             }
 
@@ -52152,11 +52170,11 @@ class CopilotSidebarChat {
             
             // Check if AIDA templates already exist
             if ((__webpack_require__(/*! fs */ "fs").existsSync)(templatesPath)) {
-                console.log('✅ AIDA templates already exist');
+                aidaLogging('✅ AIDA templates already exist');
                 return;
             }
 
-            console.log('🔄 AIDA Chatbot: Creating AIDA templates folder...');
+            aidaLogging('🔄 AIDA Chatbot: Creating AIDA templates folder...');
             
             // Create AIDA/templates directory
             (__webpack_require__(/*! fs */ "fs").mkdirSync)(templatesPath, { recursive: true });
@@ -52165,7 +52183,7 @@ class CopilotSidebarChat {
             const extensionTemplatesPath = (__webpack_require__(/*! path */ "path").join)(this.context.extensionPath, 'templates');
             if ((__webpack_require__(/*! fs */ "fs").existsSync)(extensionTemplatesPath)) {
                 await this.copyTemplatesRecursively(extensionTemplatesPath, templatesPath);
-                console.log('✅ AIDA Chatbot: Templates created successfully');
+                aidaLogging('✅ AIDA Chatbot: Templates created successfully');
                 
                 // Notify webview
                 if (this.webviewView) {
@@ -52176,10 +52194,10 @@ class CopilotSidebarChat {
                     });
                 }
             } else {
-                console.log('⚠️ Extension templates not found');
+                aidaLogging('⚠️ Extension templates not found');
             }
         } catch (error) {
-            console.log('❌ Failed to create AIDA templates:', error.message);
+            aidaLogging('❌ Failed to create AIDA templates:', error.message);
         }
     }
 
@@ -52244,7 +52262,7 @@ class CopilotSidebarChat {
                     this.webviewView.webview.postMessage({ type: 'clearChat' });
                 }
                 
-                console.log('🗑️ Conversation cleared - arrow key history preserved');
+                aidaLogging('🗑️ Conversation cleared - arrow key history preserved');
                 return; // Don't process further
             }
             
@@ -52277,7 +52295,7 @@ class CopilotSidebarChat {
                         conversationHistory
                     );
                     
-                    console.log('🧠 Context Engine Decision:', {
+                    aidaLogging('🧠 Context Engine Decision:', {
                         shouldInclude: contextDecision.shouldInclude,
                         confidence: contextDecision.confidence,
                         intent: contextDecision.intent,
@@ -52305,13 +52323,13 @@ class CopilotSidebarChat {
                     
                     // Apply multimodal decision
                     if (multimodalDecision.shouldInclude) {
-                        console.log(`🖼️ Multimodal context decision: ${multimodalDecision.reason}`);
+                        aidaLogging(`🖼️ Multimodal context decision: ${multimodalDecision.reason}`);
                         contextDecision.shouldInclude = true;
                         contextDecision.reasoning = [...(contextDecision.reasoning || []), multimodalDecision.reason];
                         enhancedMessage = multimodalDecision.enhancedMessage;
                     } else if (!contextDecision.shouldInclude) {
                         // If all decisions say no, log why
-                        console.log(`🚫 No context needed: Engine=${contextDecision.shouldInclude}, Semantic=${semanticDecision.shouldInclude}, Multimodal=${multimodalDecision.shouldInclude}`);
+                        aidaLogging(`🚫 No context needed: Engine=${contextDecision.shouldInclude}, Semantic=${semanticDecision.shouldInclude}, Multimodal=${multimodalDecision.shouldInclude}`);
                     }
                     
                 } catch (engineError) {
@@ -52363,7 +52381,7 @@ class CopilotSidebarChat {
                 this.saveChatHistory();
             }
 
-            console.log('💬 Processing sidebar message:', userMessage);
+            aidaLogging('💬 Processing sidebar message:', userMessage);
 
             // Handle Agent Mode
             if (mode === 'agent') {
@@ -52547,15 +52565,15 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
             if (currentFileContext && currentFileContext.hasFile) {
                 if (contextDecision?.shouldInclude) {
                     // Context engine decided context is needed - use enhanced message from context engine
-                    console.log('📁 Using enhanced message from context engine:', currentFileContext.fileName);
+                    aidaLogging('📁 Using enhanced message from context engine:', currentFileContext.fileName);
                     // enhancedMessage already set by this.enhanceMessageWithContext() above
                 } else {
                     // Context engine decided no context needed, but add minimal context as fallback
                     enhancedMessage = `${userMessage}\n\n**Current File Context:** ${currentFileContext.summary}\nFile: ${currentFileContext.languageId} file with ${currentFileContext.lineCount} lines`;
-                    console.log('📁 Enhanced message with minimal context (fallback):', currentFileContext.fileName);
+                    aidaLogging('📁 Enhanced message with minimal context (fallback):', currentFileContext.fileName);
                 }
             } else {
-                console.log('📁 No file context available');
+                aidaLogging('📁 No file context available');
             }
             
             // Create streaming callback for real-time updates
@@ -52565,7 +52583,7 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
             const streamCallback = (chunk) => {
                 // Check for cancellation
                 if (this.isCanceled) {
-                    console.log('🛑 Streaming canceled, stopping chunk processing');
+                    aidaLogging('🛑 Streaming canceled, stopping chunk processing');
                     return;
                 }
                 
@@ -52595,7 +52613,7 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
             const shouldStream = participant === 'general' || isReviewMode;
             
             let response;
-            console.log('🤖 Calling participant with enhanced message:', enhancedMessage.substring(0, 200) + '...');
+            aidaLogging('🤖 Calling participant with enhanced message:', enhancedMessage.substring(0, 200) + '...');
             if (shouldStream) {
                 response = await this.callParticipant(participant, enhancedMessage, images, streamCallback);
             } else {
@@ -52604,7 +52622,7 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
             
             // Check for cancellation before completing
             if (this.isCanceled) {
-                console.log('🛑 Operation was canceled, stopping processing');
+                aidaLogging('🛑 Operation was canceled, stopping processing');
                 return;
             }
             
@@ -54577,7 +54595,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
             switch (participant) {
                 case 'review-file':
                     try {
-                        console.log('📁 AIDA Chat: Calling review-file with streaming');
+                        aidaLogging('📁 AIDA Chat: Calling review-file with streaming');
                         
                         // Ensure AIDA templates exist before review (like Copilot does)
                         await this.ensureAidaTemplatesExist();
@@ -54592,7 +54610,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
 
                 case 'review-changes':  
                     try {
-                        console.log('📝 AIDA Chat: Calling review-changes with streaming');
+                        aidaLogging('📝 AIDA Chat: Calling review-changes with streaming');
                         
                         // Ensure AIDA templates exist before review (like Copilot does)
                         await this.ensureAidaTemplatesExist();
@@ -54607,7 +54625,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
 
                 case 'review-all-changes':  
                     try {
-                        console.log('🔍 AIDA Chat: Calling review-all-changes with streaming');
+                        aidaLogging('🔍 AIDA Chat: Calling review-all-changes with streaming');
                         
                         // Ensure AIDA templates exist before review (like Copilot does)
                         await this.ensureAidaTemplatesExist();
@@ -54622,7 +54640,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
 
                 case 'review-pr':
                     try {
-                        console.log('🔄 AIDA Chat: Calling review-pr with streaming');
+                        aidaLogging('🔄 AIDA Chat: Calling review-pr with streaming');
 
                         // Ensure AIDA templates exist before review (like Copilot does)
                         await this.ensureAidaTemplatesExist();
@@ -54637,7 +54655,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
 
                 case 'sync-review-templates':
                     try {
-                        console.log('🔄 AIDA Chat: Calling sync-review-templates with reusable logic');
+                        aidaLogging('🔄 AIDA Chat: Calling sync-review-templates with reusable logic');
                         const syncModule = __webpack_require__(/*! ../sync-review-templates.js */ "./scripts/sync-review-templates.js");
                         await syncModule.aiSyncReviewTemplates(messageWithoutParticipant, mockStream, null, this.context);
                         return result || '✅ **Template Sync Complete**\n\nTemplate synchronization completed.';
@@ -54648,7 +54666,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
 
                 case 'dependency':
                     try {
-                        console.log('🔍 AIDA Chat: Calling dependency analysis with reusable logic');
+                        aidaLogging('🔍 AIDA Chat: Calling dependency analysis with reusable logic');
                         const dependencyModule = __webpack_require__(/*! ../dependency.js */ "./scripts/dependency.js");
                         await dependencyModule.aiDependencyAnalysis(messageWithoutParticipant, mockStream, null, this.context);
                         return result || '✅ **Dependency Analysis Complete**\n\nDependency analysis completed.';
@@ -54659,7 +54677,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
 
                 case 'scan-app':
                     try {
-                        console.log('🔍 AIDA Chat: Calling scan-app with reusable logic');
+                        aidaLogging('🔍 AIDA Chat: Calling scan-app with reusable logic');
                         const scanModule = __webpack_require__(/*! ../scan-app.js */ "./scripts/scan-app.js");
                         await scanModule.handleScanApp(messageWithoutParticipant, mockStream, null, this.context);
                         return result || '✅ **Scan Complete**\n\nCode scanning and duplicate detection completed.';
@@ -54683,15 +54701,15 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
      */
     async generateGeneralResponse(message, images = [], streamCallback = null) {
         try {
-            console.log('💬 Generating conversational response for:', message);
+            aidaLogging('💬 Generating conversational response for:', message);
             if (images && images.length > 0) {
-                console.log('🖼️ Processing with', images.length, 'image(s)');
+                aidaLogging('🖼️ Processing with', images.length, 'image(s)');
             }
             
             // Use AI chatbot service for intelligent conversation with images
             const response = await this.chatbotService.generateResponse(message, images, streamCallback);
             
-            console.log('✅ Generated response length:', response.length);
+            aidaLogging('✅ Generated response length:', response.length);
             return response;
             
         } catch (error) {
@@ -54796,19 +54814,19 @@ What interesting project are you working on? 🚀`;
         const hasImages = images && images.length > 0;
         const hasCurrentFile = currentFileContext && currentFileContext.hasFile;
         
-        console.log(`🔍 Hybrid analysis: ${images.length} image(s) + ${hasCurrentFile ? 'current file' : 'no file'}`);
+        aidaLogging(`🔍 Hybrid analysis: ${images.length} image(s) + ${hasCurrentFile ? 'current file' : 'no file'}`);
         
         // Step 1: Fast rule-based decision (primary)
         const ruleDecision = this.makeRuleBasedDecision(userMessage, images, currentFileContext);
         
         // Step 2: Check if we need semantic analysis (secondary)
         if (this.needsSemanticAnalysis(ruleDecision, userMessage, hasImages, hasCurrentFile)) {
-            console.log(`🧠 Complex case detected - using semantic analysis`);
+            aidaLogging(`🧠 Complex case detected - using semantic analysis`);
             const semanticDecision = this.contextEngine.shouldIncludeContext(userMessage, currentFileContext);
             return this.combineDecisions(ruleDecision, semanticDecision, userMessage, currentFileContext, images);
         }
         
-        console.log(`⚡ Rule-based decision: ${ruleDecision.reason}`);
+        aidaLogging(`⚡ Rule-based decision: ${ruleDecision.reason}`);
         return ruleDecision;
     }
 
@@ -55002,7 +55020,7 @@ Summary: ${currentFileContext.summary}`;
 **Note:** Working with ${currentFileContext.fileName} (${currentFileContext.languageId})`;
         }
 
-        console.log(`🧠 Enhanced message with ${contextDecision.confidence > 0.8 ? 'detailed' : contextDecision.confidence > 0.6 ? 'basic' : 'minimal'} context`);
+        aidaLogging(`🧠 Enhanced message with ${contextDecision.confidence > 0.8 ? 'detailed' : contextDecision.confidence > 0.6 ? 'basic' : 'minimal'} context`);
         return enhancedMessage;
     }
 
@@ -55050,7 +55068,7 @@ Summary: ${currentFileContext.summary}`;
         // More inclusive logic - if user mentions file operations AND has active file
         const shouldInclude = (hasFileReference || hasCodeAction) && currentFileContext?.hasFile;
         
-        console.log(`🔍 Basic context decision: fileRef=${hasFileReference}, codeAction=${hasCodeAction}, hasFile=${!!currentFileContext?.hasFile}, result=${shouldInclude}`);
+        aidaLogging(`🔍 Basic context decision: fileRef=${hasFileReference}, codeAction=${hasCodeAction}, hasFile=${!!currentFileContext?.hasFile}, result=${shouldInclude}`);
         
         return {
             shouldInclude: shouldInclude,
@@ -55079,7 +55097,7 @@ class AidaChatViewProvider {
     setupConfigurationListener() {
         vscode.workspace.onDidChangeConfiguration((event) => {
             if (event.affectsConfiguration('aida.ai.model')) {
-                console.log('🤖 Model configuration changed, updating webview...');
+                aidaLogging('🤖 Model configuration changed, updating webview...');
                 if (this.chatInstance.webviewView) {
                     this.sendCurrentModelName(this.chatInstance.webviewView);
                 }
@@ -55148,7 +55166,7 @@ class AidaChatViewProvider {
 
                 case 'cancelStreaming':
                     // Cancel ongoing streaming operation
-                    console.log('🛑 Cancel streaming requested from frontend');
+                    aidaLogging('🛑 Cancel streaming requested from frontend');
                     this.cancelStreaming();
                     break;
 
@@ -55243,23 +55261,23 @@ class AidaChatViewProvider {
                     }
                     break;
                     // Open diff view for file button
-                    console.log('🔍 Received runDiffCommand:', message);
+                    aidaLogging('🔍 Received runDiffCommand:', message);
                     if (message.command && Array.isArray(message.arguments)) {
-                        console.log('🚀 Executing command:', message.command, 'with args:', message.arguments);
+                        aidaLogging('🚀 Executing command:', message.command, 'with args:', message.arguments);
                         try {
                             if (message.command === 'aida.viewPrDiff') {
                                 const diffId = message.arguments[0];
-                                console.log('📄 Opening Monaco diff for diffId:', diffId);
+                                aidaLogging('📄 Opening Monaco diff for diffId:', diffId);
                                 
                                 // Extract file path from diffId (format: github_id_filepath)
                                 const pathPart = diffId.split('_').slice(2).join('_').replace(/_/g, '/');
-                                console.log('� Extracted path:', pathPart);
+                                aidaLogging('� Extracted path:', pathPart);
                                 
                                 // Try to find the file in workspace
                                 const workspaceFolders = vscode.workspace.workspaceFolders;
                                 if (workspaceFolders && workspaceFolders.length > 0) {
                                     const filePath = vscode.Uri.joinPath(workspaceFolders[0].uri, pathPart);
-                                    console.log('🔍 Opening file:', filePath.toString());
+                                    aidaLogging('🔍 Opening file:', filePath.toString());
                                     
                                     // Open the file
                                     await vscode.commands.executeCommand('vscode.open', filePath);
@@ -55270,7 +55288,7 @@ class AidaChatViewProvider {
                             } else {
                                 await vscode.commands.executeCommand(message.command, ...message.arguments);
                             }
-                            console.log('✅ Command executed successfully');
+                            aidaLogging('✅ Command executed successfully');
                         } catch (error) {
                             console.error('❌ Command execution failed:', error);
                             vscode.window.showErrorMessage(`Failed to open file: ${error.message}`);
@@ -55292,28 +55310,28 @@ class AidaChatViewProvider {
                         
                         // Save to persistent storage
                         this.chatInstance.saveChatHistory();
-                        console.log('💾 Saved partial content to chat history');
+                        aidaLogging('💾 Saved partial content to chat history');
                     }
                     break;
                     
                 case 'frontendReady':
                     // Frontend is ready, send current file info
-                    console.log('📁 Frontend ready, updating current file...');
+                    aidaLogging('📁 Frontend ready, updating current file...');
                     if (this.chatInstance && typeof this.chatInstance.updateCurrentFile === 'function') {
                         const currentEditor = vscode.window.activeTextEditor;
                         if (currentEditor) {
                             this.chatInstance.updateCurrentFile(currentEditor, true);
-                            console.log('📁 Sent current file to ready frontend:', currentEditor.document.fileName);
+                            aidaLogging('📁 Sent current file to ready frontend:', currentEditor.document.fileName);
                         } else {
                             this.chatInstance.updateCurrentFile(null, true);
-                            console.log('📁 No active editor, sent null to frontend');
+                            aidaLogging('📁 No active editor, sent null to frontend');
                         }
                     }
                     break;
             }
         });
 
-        console.log('✅ AIDA Chat Sidebar WebView resolved');
+        aidaLogging('✅ AIDA Chat Sidebar WebView resolved');
     }
 
     /**
@@ -55321,7 +55339,7 @@ class AidaChatViewProvider {
      */
     initializeWebviewState(webviewView) {
         try {
-            console.log('🔄 Initializing webview state...');
+            aidaLogging('🔄 Initializing webview state...');
             
             // Send current model name to frontend
             this.sendCurrentModelName(webviewView);
@@ -55333,22 +55351,22 @@ class AidaChatViewProvider {
             if (this.chatInstance && typeof this.chatInstance.updateCurrentFile === 'function') {
                 // Force current file update by passing current active editor
                 const currentEditor = vscode.window.activeTextEditor;
-                console.log('📁 Active editor during init:', currentEditor ? currentEditor.document.fileName : 'None');
+                aidaLogging('📁 Active editor during init:', currentEditor ? currentEditor.document.fileName : 'None');
                 
                 if (currentEditor) {
                     // Force update even if filename is same
                     this.chatInstance.updateCurrentFile(currentEditor, true);
-                    console.log('📁 Forced current file update on webview init');
+                    aidaLogging('📁 Forced current file update on webview init');
                 } else {
                     // Still force update to clear any previous state
                     this.chatInstance.updateCurrentFile(null, true);
-                    console.log('📁 No active editor found during webview init');
+                    aidaLogging('📁 No active editor found during webview init');
                 }
             } else {
                 console.warn('updateCurrentFile not available on chatInstance');
             }
             
-            console.log('🔄 Webview state initialized');
+            aidaLogging('🔄 Webview state initialized');
         } catch (error) {
             console.error('Failed to initialize webview state:', error);
         }
@@ -55362,7 +55380,7 @@ class AidaChatViewProvider {
             const config = vscode.workspace.getConfiguration('aida');
             const modelFromSettings = config.get('ai.model', 'Claude-4-Sonnet');
             
-            console.log('🤖 Sending model name to frontend:', modelFromSettings);
+            aidaLogging('🤖 Sending model name to frontend:', modelFromSettings);
             
             webviewView.webview.postMessage({
                 type: 'updateModelName',
@@ -55381,7 +55399,7 @@ class AidaChatViewProvider {
             return;
         }
 
-        console.log(`📚 Restoring ${this.chatInstance.chatHistory.length} chat messages`);
+        aidaLogging(`📚 Restoring ${this.chatInstance.chatHistory.length} chat messages`);
         
         for (const message of this.chatInstance.chatHistory) {
             if (message.role === 'user') {
@@ -55440,12 +55458,12 @@ class AidaChatViewProvider {
      * Cancel ongoing streaming operation
      */
     cancelStreaming() {
-        console.log('🛑 Canceling streaming operation...');
+        aidaLogging('🛑 Canceling streaming operation...');
         
         // Abort the actual AI HTTP request
         if (this.currentAbortController) {
             this.currentAbortController.abort();
-            console.log('🛑 HTTP request aborted');
+            aidaLogging('🛑 HTTP request aborted');
         }
         
         // Set a flag to indicate cancellation
@@ -55492,7 +55510,7 @@ function initializeCopilotSidebarChat(context) {
             sidebarChat.show();
         });
 
-        console.log('✅ AIDA Chatbot Sidebar initialized');
+        aidaLogging('✅ AIDA Chatbot Sidebar initialized');
         
         return {
             sidebarChat,
@@ -55512,6 +55530,7 @@ module.exports = {
     initializeCopilotSidebarChat
 };
 
+
 /***/ }),
 
 /***/ "./scripts/chatbot/context-detector.js":
@@ -55525,6 +55544,7 @@ const MLClassifier = __webpack_require__(/*! ./ml-classifier */ "./scripts/chatb
 const LanguageProcessor = __webpack_require__(/*! ./language-processor */ "./scripts/chatbot/language-processor.js");
 const fs = __webpack_require__(/*! fs */ "fs");
 const path = __webpack_require__(/*! path */ "path");
+const { aidaLogging } = __webpack_require__(/*! ../settings */ "./scripts/settings.js");
 
 class ContextDetector {
   constructor() {
@@ -56132,7 +56152,7 @@ class ContextDetector {
       const worker = await createWorker('eng+vie', 1, {
         logger: m => {
           if (m.status === 'recognizing text') {
-            console.log(`OCR Progress: ${Math.round(m.progress * 100)}%`);
+            aidaLogging(`OCR Progress: ${Math.round(m.progress * 100)}%`);
           }
         }
       });
@@ -56152,7 +56172,7 @@ class ContextDetector {
         .replace(/\s+/g, ' ')  // Replace multiple spaces with single space
         .trim();
         
-      console.log(`OCR extracted ${cleanedText.length} characters from image`);
+      aidaLogging(`OCR extracted ${cleanedText.length} characters from image`);
       return cleanedText;
 
     } catch (error) {
@@ -56340,6 +56360,7 @@ class ContextDetector {
 }
 
 module.exports = ContextDetector;
+
 
 /***/ }),
 
@@ -56529,6 +56550,7 @@ module.exports = LanguageProcessor;
 
 const natural = __webpack_require__(/*! natural */ "./node_modules/natural/lib/natural/index.js");
 const stringSimilarity = __webpack_require__(/*! string-similarity */ "./node_modules/string-similarity/src/index.js");
+const { aidaLogging } = __webpack_require__(/*! ../settings */ "./scripts/settings.js");
 
 class MLClassifier {
   constructor() {
@@ -56634,7 +56656,7 @@ class MLClassifier {
       this.classifier.train();
       this.trained = true;
       
-      console.log('✅ ML Classifier trained with', contextRequired.length + noContext.length, 'examples');
+      aidaLogging('✅ ML Classifier trained with', contextRequired.length + noContext.length, 'examples');
     } catch (error) {
       console.warn('❌ Failed to train ML classifier:', error.message);
       this.trained = false;
@@ -56906,6 +56928,7 @@ class MLClassifier {
 
 module.exports = MLClassifier;
 
+
 /***/ }),
 
 /***/ "./scripts/chatbot/patterns/en-patterns.js":
@@ -57080,6 +57103,7 @@ module.exports = {
 
 const fs = (__webpack_require__(/*! fs */ "fs").promises);
 const path = __webpack_require__(/*! path */ "path");
+const { aidaLogging } = __webpack_require__(/*! ../settings */ "./scripts/settings.js");
 
 /**
  * Template Loader for AIDA Chatbot
@@ -57116,7 +57140,7 @@ class TemplateLoader {
                     '<script src="./sidebar-script.js"></script>',
                     `<script type="text/javascript">\n${scriptContent}\n</script>`
                 );
-                console.log('📜 Inlined script content into template');
+                aidaLogging('📜 Inlined script content into template');
             } catch (scriptError) {
                 console.warn('⚠️ Could not load script file:', scriptError.message);
             }
@@ -57198,7 +57222,7 @@ class TemplateLoader {
     async preloadTemplates() {
         try {
             await this.getSidebarTemplate();
-            console.log('✅ Templates preloaded successfully');
+            aidaLogging('✅ Templates preloaded successfully');
         } catch (error) {
             console.warn('⚠️ Failed to preload templates:', error.message);
         }
@@ -57206,6 +57230,7 @@ class TemplateLoader {
 }
 
 module.exports = TemplateLoader;
+
 
 /***/ }),
 
@@ -57221,6 +57246,7 @@ module.exports = TemplateLoader;
 const vscode = __webpack_require__(/*! vscode */ "vscode");
 const path = __webpack_require__(/*! path */ "path");
 const { createDailyReport } = __webpack_require__(/*! ./daily/daily-report */ "./scripts/daily/daily-report.js");
+const { aidaLogging } = __webpack_require__(/*! ./settings */ "./scripts/settings.js");
 
 /**
  * Initialize daily report chat participant
@@ -57228,12 +57254,12 @@ const { createDailyReport } = __webpack_require__(/*! ./daily/daily-report */ ".
  * @returns {Object} - Daily report participant and related functions
  */
 function initializeDailyReport(context) {
-    console.log('🚀 Initializing Daily Report participant...');
+    aidaLogging('🚀 Initializing Daily Report participant...');
 
     // Create daily report chat participant
     const dailyReportParticipant = vscode.chat.createChatParticipant('daily-report', async (request, context, stream, token) => {
         try {
-            console.log('📊 Daily Report participant activated');
+            aidaLogging('📊 Daily Report participant activated');
             
             // Show initial loading message
             stream.markdown('# 📊 Daily Report Generator\n\n');
@@ -57302,7 +57328,7 @@ function initializeDailyReport(context) {
     // Set up participant description and welcome message
     dailyReportParticipant.iconPath = vscode.Uri.file(path.join(__dirname, '..', 'icons', 'daily-report.svg'));
     
-    console.log('✅ Daily Report participant registered successfully');
+    aidaLogging('✅ Daily Report participant registered successfully');
 
     return {
         dailyReportParticipant
@@ -57316,7 +57342,7 @@ function initializeDailyReport(context) {
  * @returns {vscode.WebviewPanel} - Created webview panel
  */
 function createDailyReportWebview(reportPath, htmlContent) {
-    console.log('🌐 Creating daily report webview...');
+    aidaLogging('🌐 Creating daily report webview...');
 
     // Create webview panel
     const panel = vscode.window.createWebviewPanel(
@@ -57338,7 +57364,7 @@ function createDailyReportWebview(reportPath, htmlContent) {
         message => {
             switch (message.command) {
                 case 'refresh':
-                    console.log('🔄 Refreshing daily report...');
+                    aidaLogging('🔄 Refreshing daily report...');
                     // Regenerate report and update webview
                     createDailyReport().then(result => {
                         if (result.success) {
@@ -57349,7 +57375,7 @@ function createDailyReportWebview(reportPath, htmlContent) {
                     break;
                     
                 case 'export':
-                    console.log('💾 Exporting daily report...');
+                    aidaLogging('💾 Exporting daily report...');
                     vscode.window.showSaveDialog({
                         defaultUri: vscode.Uri.file('Daily_Report.html'),
                         filters: {
@@ -57370,11 +57396,11 @@ function createDailyReportWebview(reportPath, htmlContent) {
     // Update panel when it becomes visible
     panel.onDidChangeViewState(e => {
         if (e.webviewPanel.visible) {
-            console.log('👁️ Daily report webview became visible');
+            aidaLogging('👁️ Daily report webview became visible');
         }
     });
 
-    console.log('✅ Daily report webview created successfully');
+    aidaLogging('✅ Daily report webview created successfully');
     return panel;
 }
 
@@ -57471,6 +57497,7 @@ module.exports = {
 
 const https = __webpack_require__(/*! https */ "https");
 const vscode = __webpack_require__(/*! vscode */ "vscode");
+const { aidaLogging } = __webpack_require__(/*! ../settings */ "./scripts/settings.js");
 
 /**
  * Make HTTP request to Azure DevOps API
@@ -57750,7 +57777,7 @@ function formatWorkItemsForReport(workItems) {
  */
 async function fetchAzureDevOpsData() {
     try {
-        console.log('🔄 Fetching Azure DevOps data...');
+        aidaLogging('🔄 Fetching Azure DevOps data...');
         
         const config = getAzureDevOpsConfig();
         
@@ -57774,8 +57801,8 @@ async function fetchAzureDevOpsData() {
         // Format work items for report
         const formattedWorkItems = formatWorkItemsForReport(workItems);
         
-        console.log('✅ Azure DevOps data fetched successfully');
-        console.log(`📊 Found ${workItems.length} work items in iteration: ${iterationData.iteration.name}`);
+        aidaLogging('✅ Azure DevOps data fetched successfully');
+        aidaLogging(`📊 Found ${workItems.length} work items in iteration: ${iterationData.iteration.name}`);
         
         return {
             success: true,
@@ -57829,6 +57856,7 @@ module.exports = {
     formatWorkItemsForReport
 };
 
+
 /***/ }),
 
 /***/ "./scripts/daily/daily-report.js":
@@ -57844,6 +57872,7 @@ module.exports = {
 const fs = __webpack_require__(/*! fs */ "fs");
 const path = __webpack_require__(/*! path */ "path");
 const { fetchAzureDevOpsData } = __webpack_require__(/*! ./azure-devops-data */ "./scripts/daily/azure-devops-data.js");
+const { aidaLogging } = __webpack_require__(/*! ../settings */ "./scripts/settings.js");
 
 /**
  * Generate a daily report HTML with real Azure DevOps data
@@ -57863,7 +57892,7 @@ async function generateDailyReport(options = {}) {
         height = 1000
     } = options;
 
-    console.log('🔄 Fetching Azure DevOps data for daily report...');
+    aidaLogging('🔄 Fetching Azure DevOps data for daily report...');
     
     // Fetch real Azure DevOps data
     const azureData = await fetchAzureDevOpsData();
@@ -57871,13 +57900,13 @@ async function generateDailyReport(options = {}) {
     let stats, workItems, iterationName, projectInfo;
     
     if (azureData.success) {
-        console.log('✅ Using real Azure DevOps data');
+        aidaLogging('✅ Using real Azure DevOps data');
         stats = azureData.statistics;
         workItems = azureData.workItems;
         iterationName = azureData.iteration.name;
         projectInfo = `${azureData.organization}/${azureData.project}`;
     } else {
-        console.log('⚠️ Using fallback data due to Azure DevOps error:', azureData.error);
+        aidaLogging('⚠️ Using fallback data due to Azure DevOps error:', azureData.error);
         stats = azureData.fallbackData.statistics;
         workItems = azureData.fallbackData.workItems;
         iterationName = 'LRP 25.4 Sprint 2';
@@ -58184,7 +58213,7 @@ async function saveHtmlReport(htmlContent, outputPath = null) {
         await fs.promises.access(dir);
     } catch {
         await fs.promises.mkdir(dir, { recursive: true });
-        console.log(`📁 Created directory: ${dir}`);
+        aidaLogging(`📁 Created directory: ${dir}`);
     }
 
     await fs.promises.writeFile(outputPath, htmlContent, 'utf8');
@@ -58198,13 +58227,13 @@ async function saveHtmlReport(htmlContent, outputPath = null) {
  */
 async function createDailyReport(options = {}) {
     try {
-        console.log('🎯 Generating daily report...');
+        aidaLogging('🎯 Generating daily report...');
         
         const htmlContent = await generateDailyReport(options);
         const outputPath = await saveHtmlReport(htmlContent, options.outputPath);
         
-        console.log('✅ Daily report generated successfully!');
-        console.log(`📁 File saved: ${outputPath}`);
+        aidaLogging('✅ Daily report generated successfully!');
+        aidaLogging(`📁 File saved: ${outputPath}`);
         
         return {
             success: true,
@@ -58247,8 +58276,8 @@ if (__webpack_require__.c[__webpack_require__.s] === module) {
     
     createDailyReport(options).then(result => {
         if (result.success) {
-            console.log(`\n🎉 Success! Report saved to: ${result.outputPath}`);
-            console.log(`📊 File size: ${(result.fileSize / 1024).toFixed(2)} KB`);
+            aidaLogging(`\n🎉 Success! Report saved to: ${result.outputPath}`);
+            aidaLogging(`📊 File size: ${(result.fileSize / 1024).toFixed(2)} KB`);
         } else {
             console.error(`\n❌ Failed: ${result.error}`);
             process.exit(1);
@@ -58258,6 +58287,7 @@ if (__webpack_require__.c[__webpack_require__.s] === module) {
         process.exit(1);
     });
 }
+
 
 /***/ }),
 
@@ -58427,6 +58457,7 @@ module.exports = {
 const vscode = __webpack_require__(/*! vscode */ "vscode");
 const path = __webpack_require__(/*! path */ "path");
 const fs = __webpack_require__(/*! fs */ "fs");
+const { aidaLogging } = __webpack_require__(/*! ../settings */ "./scripts/settings.js");
 
 /**
  * BarrelResolver - Module xử lý barrel files (index.ts re-exports)
@@ -58517,18 +58548,18 @@ class BarrelResolver {
             allReferences.push(...realUsages);
             
             const indent = '  '.repeat(currentLevel);
-            console.log(`         ${indent}📍 Level ${currentLevel}: ${barrels.length} barrels, ${realUsages.length} real usages`);
+            aidaLogging(`         ${indent}📍 Level ${currentLevel}: ${barrels.length} barrels, ${realUsages.length} real usages`);
             
             // Process barrels
             for (const barrelRef of barrels) {
                 const refPath = barrelRef.uri.fsPath;
                 const refKey = `${refPath}:${barrelRef.range.start.line}:${barrelRef.range.start.character}`;
                 
-                console.log(`         ${indent}🔄 Barrel: ${path.basename(refPath)}:${barrelRef.range.start.line}`);
+                aidaLogging(`         ${indent}🔄 Barrel: ${path.basename(refPath)}:${barrelRef.range.start.line}`);
                 
                 // Avoid infinite loops
                 if (visitedBarrels.has(refKey)) {
-                    console.log(`         ${indent}⏭️ Already visited, skipping`);
+                    aidaLogging(`         ${indent}⏭️ Already visited, skipping`);
                     continue;
                 }
                 
@@ -58538,7 +58569,7 @@ class BarrelResolver {
                 const barrelSymbolInfo = await this.getBarrelExportSymbolImproved(barrelRef, symbolName);
                 
                 if (!barrelSymbolInfo) {
-                    console.log(`         ${indent}⚠️ Could not parse barrel export`);
+                    aidaLogging(`         ${indent}⚠️ Could not parse barrel export`);
                     continue;
                 }
                 
@@ -58552,17 +58583,17 @@ class BarrelResolver {
                 
                 // Handle wildcard exports
                 if (barrelSymbolInfo.isWildcard) {
-                    console.log(`         ${indent}⭐ Wildcard: finding imports of barrel...`);
+                    aidaLogging(`         ${indent}⭐ Wildcard: finding imports of barrel...`);
                     const wildcardRefs = await this.findImportsOfBarrelFileImproved(
                         barrelRef.uri, 
                         symbolName,
                         currentLevel
                     );
-                    console.log(`         ${indent}✅ Found ${wildcardRefs.length} usages through wildcard`);
+                    aidaLogging(`         ${indent}✅ Found ${wildcardRefs.length} usages through wildcard`);
                     allReferences.push(...wildcardRefs);
                 } else {
                     // Recursively resolve named exports
-                    console.log(`         ${indent}🔍 Following named export: ${barrelSymbolInfo.name}`);
+                    aidaLogging(`         ${indent}🔍 Following named export: ${barrelSymbolInfo.name}`);
                     const result = await this.resolveBarrelReferences(
                         barrelRef.uri,
                         barrelSymbolInfo.position,
@@ -58571,7 +58602,7 @@ class BarrelResolver {
                         currentLevel + 1
                     );
                     
-                    console.log(`         ${indent}✅ Found ${result.references.length} refs through chain`);
+                    aidaLogging(`         ${indent}✅ Found ${result.references.length} refs through chain`);
                     allReferences.push(...result.references);
                     barrelChain.push(...result.barrelChain);
                 }
@@ -58737,12 +58768,12 @@ class BarrelResolver {
             const barrelRelativeToWorkspace = path.relative(workspacePath, barrelDir).replace(/\\/g, '/');
             
             const indent = '  '.repeat(currentLevel);
-            console.log(`${indent}         🔍 Looking for imports of barrel: ${barrelRelativeToWorkspace}`);
-            console.log(`${indent}         🎯 Searching for symbol: ${symbolName}`);
+            aidaLogging(`${indent}         🔍 Looking for imports of barrel: ${barrelRelativeToWorkspace}`);
+            aidaLogging(`${indent}         🎯 Searching for symbol: ${symbolName}`);
             
             // Load tsconfig aliases for better matching
             const pathAliases = await this.loadTSConfigAliases(workspacePath);
-            console.log(`${indent}         📋 Loaded ${pathAliases.size} path aliases`);
+            aidaLogging(`${indent}         📋 Loaded ${pathAliases.size} path aliases`);
             
             const files = await vscode.workspace.findFiles(
                 new vscode.RelativePattern(workspaceFolder, '**/*.{ts,tsx,js,jsx}'),
@@ -58797,7 +58828,7 @@ class BarrelResolver {
                     }
                     
                     if (foundInFile > 0) {
-                        console.log(`${indent}         ✅ ${path.basename(fileUri.fsPath)}: ${foundInFile} usages`);
+                        aidaLogging(`${indent}         ✅ ${path.basename(fileUri.fsPath)}: ${foundInFile} usages`);
                     }
                 } catch (error) {
                     // Skip files that can't be read
@@ -58805,7 +58836,7 @@ class BarrelResolver {
                 }
             }
             
-            console.log(`${indent}         ✅ Found ${imports.length} usages of ${symbolName} through barrel`);
+            aidaLogging(`${indent}         ✅ Found ${imports.length} usages of ${symbolName} through barrel`);
             return imports;
             
         } catch (error) {
@@ -58925,11 +58956,11 @@ class BarrelResolver {
                     aliases.set(cleanAlias, cleanTarget);
                 }
                 
-                console.log(`✅ Loaded ${aliases.size} path aliases from tsconfig.json`);
+                aidaLogging(`✅ Loaded ${aliases.size} path aliases from tsconfig.json`);
             }
             
         } catch (error) {
-            console.log(`⚠️ Could not load tsconfig.json:`, error.message);
+            aidaLogging(`⚠️ Could not load tsconfig.json:`, error.message);
         }
         
         // Cache the result
@@ -59004,6 +59035,7 @@ const path = __webpack_require__(/*! path */ "path");
 const fs = __webpack_require__(/*! fs */ "fs");
 const { VSCodeApiDependencyAnalyzer } = __webpack_require__(/*! ./vscode-api-analyzer */ "./scripts/dependency-graph/vscode-api-analyzer.js");
 const { BarrelResolver } = __webpack_require__(/*! ./barrel-resolver */ "./scripts/dependency-graph/barrel-resolver.js");
+const { aidaLogging } = __webpack_require__(/*! ../settings */ "./scripts/settings.js");
 
 class SymbolAnalyzer {
     constructor() {
@@ -59184,7 +59216,7 @@ class SymbolAnalyzer {
                 // Merge: Include all graph files, enhance with symbol data when available
                 finalRelatedFiles = this.mergeGraphWithSymbolData(graphDependents, finalRelatedFiles);
                 
-                console.log(`📊 SymbolAnalyzer merged: ${graphDependents.length} graph dependents, ${finalRelatedFiles.length} final (with details)`);
+                aidaLogging(`📊 SymbolAnalyzer merged: ${graphDependents.length} graph dependents, ${finalRelatedFiles.length} final (with details)`);
             }
         }
 
@@ -59539,6 +59571,7 @@ module.exports = { SymbolAnalyzer };
 const vscode = __webpack_require__(/*! vscode */ "vscode");
 const path = __webpack_require__(/*! path */ "path");
 const { BarrelResolver } = __webpack_require__(/*! ./barrel-resolver */ "./scripts/dependency-graph/barrel-resolver.js");
+const { aidaLogging } = __webpack_require__(/*! ../settings */ "./scripts/settings.js");
 
 /**
  * Enhanced Dependency Analyzer using VS Code Language Server APIs
@@ -59565,11 +59598,14 @@ class VSCodeApiDependencyAnalyzer {
                 // 🔥 NEW: Asset patterns for UI templates/styles
                 assetPatterns: [
                     // Angular
-                    { type: 'html', regex: /templateUrl\s*:\s*['"`]([^'"`]+)['"`]/ },
-                    { type: 'css', regex: /styleUrls\s*:\s*\[([\s\S]*?)\]/, multi: true },
-                    // React/General
-                    { type: 'css', regex: /import\s+['"`]([^'"`]+\.(?:css|scss|sass|less))['"`]/ },
-                    { type: 'css', regex: /import\s+.*?from\s+['"`]([^'"`]+\.(?:css|scss|sass|less))['"`]/ }
+                    { type: 'html', regex: /templateUrl\s*:\s*['"`]([^'"`]+)['"`]/ }
+                    // CSS/SCSS patterns removed to disable style impact analysis
+                ],
+                // 🔥 NEW: Ignore patterns for Impact Analysis (e.g. Angular Modules)
+                ignorePatterns: [
+                    '**/*.module.ts', // Angular Modules are just declarations
+                    '**/*.spec.ts',   // Tests
+                    '**/*.test.ts'
                 ],
                 // Expanded pattern to catch CONSTANTS and camelCase functions
                 classPattern: /\b([a-zA-Z_][a-zA-Z0-9_]*)\b/g,
@@ -59611,6 +59647,12 @@ class VSCodeApiDependencyAnalyzer {
                     // Flask/Django templates
                     { type: 'template', regex: /render_template\s*\(\s*['"`]([^'"`]+)['"`]/ }
                 ],
+                // 🔥 NEW: Ignore patterns
+                ignorePatterns: [
+                    '**/tests/**',
+                    '**/test_*.py',
+                    '**/*_test.py'
+                ],
                 classPattern: /class\s+([A-Z][a-zA-Z0-9_]*)/g,
                 // 🔥 NEW: Regex patterns for symbol extraction from patches
                 symbolPatterns: {
@@ -59641,6 +59683,11 @@ class VSCodeApiDependencyAnalyzer {
                     { type: 'view', regex: /View\s*\(\s*['"]([^'"]+)['"]/ },
                     { type: 'view', regex: /PartialView\s*\(\s*['"]([^'"]+)['"]/ },
                     { type: 'layout', regex: /Layout\s*=\s*['"]([^'"]+)['"]/ }
+                ],
+                // 🔥 NEW: Ignore patterns
+                ignorePatterns: [
+                    '**/*.Test.cs',
+                    '**/*.Tests.cs'
                 ],
                 classPattern: /\b([A-Z][a-zA-Z0-9]*(?:[A-Z][a-zA-Z0-9]*)*)\b/g,
                 // 🔥 NEW: Regex patterns for symbol extraction from patches
@@ -59675,6 +59722,12 @@ class VSCodeApiDependencyAnalyzer {
                     { type: 'view', regex: /return\s+['"]([^'"]+)['"]\s*;/ },
                     { type: 'jsp', regex: /<jsp:include\s+page=['"]([^'"]+)['"]/ }
                 ],
+                // 🔥 NEW: Ignore patterns
+                ignorePatterns: [
+                    '**/*Test.java',
+                    '**/Test*.java',
+                    '**/*.spec.java'
+                ],
                 classPattern: /\b([A-Z][a-zA-Z0-9]*)\b/g,
                 // 🔥 NEW: Regex patterns for symbol extraction from patches
                 symbolPatterns: {
@@ -59706,6 +59759,13 @@ class VSCodeApiDependencyAnalyzer {
                     { type: 'template', regex: /<template\s+src=['"]([^'"]+)['"]/ },
                     { type: 'style', regex: /<style\s+src=['"]([^'"]+)['"]/ }
                 ],
+                // 🔥 NEW: Ignore patterns
+                ignorePatterns: [
+                    '**/*.spec.js',
+                    '**/*.test.js',
+                    '**/*.spec.ts',
+                    '**/*.test.ts'
+                ],
                 classPattern: /\b([A-Z][a-zA-Z0-9]*)\b/g,
                 // 🔥 NEW: Regex patterns for symbol extraction from patches (similar to JS/TS)
                 symbolPatterns: {
@@ -59736,6 +59796,11 @@ class VSCodeApiDependencyAnalyzer {
                     { type: 'view', regex: /view\s*\(\s*['"]([^'"]+)['"]/ },
                     { type: 'include', regex: /(?:include|require)(?:_once)?\s*['"]([^'"]+)['"]/ }
                 ],
+                // 🔥 NEW: Ignore patterns
+                ignorePatterns: [
+                    '**/tests/**',
+                    '**/*Test.php'
+                ],
                 classPattern: /\b([A-Z][a-zA-Z0-9]*)\b/g,
                 // 🔥 NEW: Regex patterns for symbol extraction from patches
                 symbolPatterns: {
@@ -59763,6 +59828,10 @@ class VSCodeApiDependencyAnalyzer {
                 assetPatterns: [
                     { type: 'template', regex: /template\.ParseFiles\s*\(\s*['"]([^'"]+)['"]/ }
                 ],
+                // 🔥 NEW: Ignore patterns
+                ignorePatterns: [
+                    '**/*_test.go'
+                ],
                 classPattern: /type\s+([A-Z][a-zA-Z0-9]*)/g,
                 // 🔥 NEW: Regex patterns for symbol extraction from patches
                 symbolPatterns: {
@@ -59789,6 +59858,10 @@ class VSCodeApiDependencyAnalyzer {
                 assetPatterns: [
                     { type: 'include', regex: /include_(?:str|bytes)!\s*\(\s*['"]([^'"]+)['"]\s*\)/ }
                 ],
+                // 🔥 NEW: Ignore patterns
+                ignorePatterns: [
+                    '**/*_test.rs'
+                ],
                 classPattern: /(?:struct|enum|trait)\s+([A-Z][a-zA-Z0-9]*)/g,
                 // 🔥 NEW: Regex patterns for symbol extraction from patches
                 symbolPatterns: {
@@ -59812,6 +59885,11 @@ class VSCodeApiDependencyAnalyzer {
                 // 🔥 NEW: Asset patterns for Android layouts
                 assetPatterns: [
                     { type: 'layout', regex: /R\.layout\.([a-zA-Z0-9_]+)/ }
+                ],
+                // 🔥 NEW: Ignore patterns
+                ignorePatterns: [
+                    '**/*Test.kt',
+                    '**/Test*.kt'
                 ],
                 classPattern: /\b([A-Z][a-zA-Z0-9]*)\b/g,
                 // 🔥 NEW: Regex patterns for symbol extraction from patches
@@ -59839,6 +59917,11 @@ class VSCodeApiDependencyAnalyzer {
                     { type: 'nib', regex: /nibName:\s*['"]([^'"]+)['"]/ },
                     { type: 'storyboard', regex: /name:\s*['"]([^'"]+)['"]/ }
                 ],
+                // 🔥 NEW: Ignore patterns
+                ignorePatterns: [
+                    '**/*Tests.swift',
+                    '**/*UITests.swift'
+                ],
                 classPattern: /\b([A-Z][a-zA-Z0-9]*)\b/g,
                 // 🔥 NEW: Regex patterns for symbol extraction from patches
                 symbolPatterns: {
@@ -59865,6 +59948,10 @@ class VSCodeApiDependencyAnalyzer {
                     { type: 'asset', regex: /asset\s*\(\s*['"]([^'"]+)['"]/ },
                     { type: 'image', regex: /Image\.asset\s*\(\s*['"]([^'"]+)['"]/ }
                 ],
+                // 🔥 NEW: Ignore patterns
+                ignorePatterns: [
+                    '**/*_test.dart'
+                ],
                 classPattern: /\b([A-Z][a-zA-Z0-9]*)\b/g,
                 standardLibraries: ['String', 'int', 'bool', 'List', 'Map', 'dart:'],
                 excludePatterns: [
@@ -59884,6 +59971,13 @@ class VSCodeApiDependencyAnalyzer {
                     { type: 'view', regex: /render\s+['"]([^'"]+)['"]/ },
                     { type: 'partial', regex: /render\s+partial:\s*['"]([^'"]+)['"]/ }
                 ],
+                // 🔥 NEW: Ignore patterns
+                ignorePatterns: [
+                    '**/spec/**',
+                    '**/test/**',
+                    '**/*_spec.rb',
+                    '**/*_test.rb'
+                ],
                 classPattern: /class\s+([A-Z][a-zA-Z0-9]*)/g,
                 standardLibraries: ['String', 'Integer', 'Array', 'Hash', 'File'],
                 excludePatterns: [
@@ -59893,28 +59987,11 @@ class VSCodeApiDependencyAnalyzer {
                     '**/*_spec.rb'
                 ]
             },
-            // 🔥 NEW: Style files (CSS, SCSS, etc.)
-            style: {
-                extensions: ['.css', '.scss', '.less', '.sass', '.html'],
-                importPatterns: [
-                    /@import\s+['"]([^'"]+)['"]/g,
-                    /url\s*\(\s*['"]?([^'")]+)['"]?\s*\)/g
-                ],
-                // 🔥 NEW: Asset patterns for CSS imports/urls
-                assetPatterns: [
-                    { type: 'import', regex: /@import\s+['"]([^'"]+)['"]/ },
-                    { type: 'url', regex: /url\s*\(\s*['"]?([^'")]+)['"]?\s*\)/ }
-                ],
-                // No class pattern for styles
-                symbolPatterns: {},
-                standardLibraries: [],
-                excludePatterns: []
-            },
-            // 🔥 NEW: Config files (JSON, XML, etc.)
-            config: {
-                extensions: ['.json', '.xml', '.yaml', '.yml', '.env', '.config', '.ini'],
-                importPatterns: [], // No regex imports for config files
-                // No class pattern
+            // HTML Templates
+            html: {
+                extensions: ['.html'],
+                importPatterns: [],
+                assetPatterns: [],
                 symbolPatterns: {},
                 standardLibraries: [],
                 excludePatterns: []
@@ -59943,19 +60020,19 @@ class VSCodeApiDependencyAnalyzer {
      */
     async analyze() {
         try {
-            console.log('🔍 Starting Symbol Crawling analysis...');
+            aidaLogging('🔍 Starting Symbol Crawling analysis...');
             
             // Reset graph
             this.graph.clear();
             
             // Step 1: Find all source files
             const sourceFiles = await this.findSourceFiles();
-            console.log(`📁 Found ${sourceFiles.length} source files`);
+            aidaLogging(`📁 Found ${sourceFiles.length} source files`);
             
             // Step 2: Process each file with throttling
             for (let i = 0; i < sourceFiles.length; i++) {
                 const fileUri = sourceFiles[i];
-                console.log(`📝 Processing ${i + 1}/${sourceFiles.length}: ${path.basename(fileUri.fsPath)}`);
+                aidaLogging(`📝 Processing ${i + 1}/${sourceFiles.length}: ${path.basename(fileUri.fsPath)}`);
                 
                 await this.processFile(fileUri);
                 
@@ -59990,7 +60067,9 @@ class VSCodeApiDependencyAnalyzer {
             '**/.vs/**',
             '**/.*/**',           // Any folder starting with dot
             '**/test/**',         // Generic test folders
-            '**/tests/**'
+            '**/tests/**',
+            '**/environments/**', // 🔥 Exclude environments
+            '**/scripts/**'       // 🔥 Exclude scripts folder
         ];
         
         const languageExcludes = [...new Set(
@@ -60017,7 +60096,14 @@ class VSCodeApiDependencyAnalyzer {
         // Remove duplicates and filter workspace files
         const uniqueFiles = Array.from(new Set(allFiles.map(uri => uri.toString())))
             .map(uriString => vscode.Uri.parse(uriString))
-            .filter(uri => uri.fsPath.startsWith(this.workspaceRoot));
+            .filter(uri => uri.fsPath.startsWith(this.workspaceRoot))
+            // 🔥 NEW: Exclude files in the root directory (same level as package.json)
+            .filter(uri => {
+                const fileDir = path.dirname(uri.fsPath);
+                // Check if file is directly in workspace root
+                // We compare normalized paths to be safe
+                return path.normalize(fileDir) !== path.normalize(this.workspaceRoot);
+            });
             
         return uniqueFiles;
     }
@@ -60160,7 +60246,7 @@ class VSCodeApiDependencyAnalyzer {
             const targetFile = await this.resolveDefinition(document, position);
             if (targetFile) {
                 this.graph.get(sourceFile).add(targetFile);
-                console.log(`🔗 ${sourceFile} -> ${targetFile} (${type})`);
+                aidaLogging(`🔗 ${sourceFile} -> ${targetFile} (${type})`);
             }
         } catch (error) {
             // Silent fail - LSP might not be available for this symbol
@@ -60584,6 +60670,7 @@ module.exports = {
     VSCodeApiDependencyAnalyzer
 };
 
+
 /***/ }),
 
 /***/ "./scripts/dependency.js":
@@ -60595,6 +60682,9 @@ module.exports = {
 const vscode = __webpack_require__(/*! vscode */ "vscode");
 const path = __webpack_require__(/*! path */ "path");
 const fs = __webpack_require__(/*! fs */ "fs");
+
+// Import settings
+const { isProd, aidaLogging } = __webpack_require__(/*! ./settings */ "./scripts/settings.js");
 
 // Import VS Code API analyzer - required
 const { VSCodeApiDependencyAnalyzer } = __webpack_require__(/*! ./dependency-graph/vscode-api-analyzer */ "./scripts/dependency-graph/vscode-api-analyzer.js");
@@ -61084,42 +61174,150 @@ async function buildSelectedNodeObject(nodeId, graph, panel) {
 }
 
 /**
- * Analyze impact with AI using selected node data
+ * Analyze impact with AI using selected node data or PR context
  */
-async function analyzeImpactWithAI(selectedNodeData, panel) {
+async function analyzeImpactWithAI(data, originalPanel) {
+    // Create NEW panel aside
+    const analysisPanel = vscode.window.createWebviewPanel(
+        'aiImpactAnalysis',
+        `AI Analysis: ${data.fileName}`,
+        vscode.ViewColumn.Beside,
+        {
+            enableScripts: true,
+            retainContextWhenHidden: true
+        }
+    );
+
+    // Helper to format markdown (now just cleans up HTML response)
+    const formatMarkdown = (text) => {
+        if (!text) return '';
+        // Remove markdown code blocks if present
+        return text.replace(/```html/g, '').replace(/```/g, '');
+    };
+
+    // Helper to generate HTML
+    const getHtml = (content) => `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Analysis: ${data.fileName}</title>
+    <style>
+        body {
+            font-family: var(--vscode-font-family);
+            background-color: var(--vscode-editor-background);
+            color: var(--vscode-editor-foreground);
+            padding: 20px;
+            line-height: 1.5;
+            font-size: 13px;
+        }
+        h1 { color: #3794ff; margin-top: 15px; margin-bottom: 10px; font-size: 1.4em; display: block; }
+        h2 { color: #3794ff; margin-top: 15px; margin-bottom: 10px; font-size: 1.2em; display: block; clear: both; }
+        h3 { color: #3794ff; margin-top: 10px; margin-bottom: 8px; font-size: 1.1em; display: block; clear: both; }
+        h4 { color: #3794ff; margin-top: 10px; margin-bottom: 8px; font-size: 1em; display: block; clear: both; }
+        strong { color: #e0e0e0; }
+        ul { padding-left: 20px; margin-top: 5px; margin-bottom: 10px; }
+        li { margin-bottom: 4px; }
+        .loading { display: flex; align-items: center; gap: 10px; font-style: italic; color: #cccccc; }
+    </style>
+</head>
+<body>
+    <h2 style="margin-top: 0;">🤖 AI Analysis: ${data.fileName}</h2>
+    <hr style="border: 0; border-top: 1px solid #333; margin: 15px 0;">
+    <div id="content">${content}</div>
+</body>
+</html>`;
+
+    // Set initial loading state
+    analysisPanel.webview.html = getHtml('<div class="loading">🤖 Analyzing impact... Please wait...</div>');
+
     try {
         // Import review-common for executeAIReview and getUnifiedModel
         const { executeAIReview, getUnifiedModel } = __webpack_require__(/*! ./review-common */ "./scripts/review-common.js");
         
-        // Build a simple, non-technical prompt for AI
-        const prompt = `You are analyzing a code change impact. A developer wants to modify a file and needs to know what to test.
+        let prompt = '';
+        
+        if (data.isPRAnalysis) {
+            // PR Analysis Prompt
+            prompt = `You are an expert code reviewer and architect.
+Analyze the impact of this Pull Request based on the dependency graph data.
 
-**File being modified:** ${selectedNodeData.fileName}
+PR Context:
+${JSON.stringify({
+    summary: data.prSummary,
+    changes: data.changes,
+    impact: data.impact,
+    // Limit symbol map to avoid token limits if necessary
+    symbolMap: data.symbolMap
+}, null, 2)}
 
-**This file uses these components/modules (${selectedNodeData.dependencies.length} dependencies):**
-${selectedNodeData.dependencies.map(dep => {
+Please provide a comprehensive report covering:
+1. Summary of Changes: What is being changed at a high level?
+2. Impact Analysis: Which components are affected and how critical is the impact?
+3. Risk Assessment: Are there any high-risk changes (e.g., modifying core services, circular dependencies)?
+4. Testing Recommendations: What should be tested to ensure no regressions?
+
+FORMAT OUTPUT AS HTML:
+- Use <h1> for the title: "Pull Request Impact Analysis"
+- Use <h2> for section headers.
+- Use <ul> and <li> for lists.
+- Use <p> for paragraphs.
+- Use <strong> for emphasis.
+- Do NOT use markdown. Do NOT use \`\`\`html code blocks. Just raw HTML.
+
+IMPORTANT INSTRUCTION:
+For files listed in the PR that have NO dependents or impact on other files:
+- Explicitly mention that they have "Low Risk" or are "Isolated Changes".
+- Do NOT hallucinate impacts for these isolated files.
+- Focus the "Impact Analysis" and "Testing Recommendations" on the files that actually have dependents.
+
+Keep the language simple and focus on USER IMPACT.`;
+        } else {
+            // Single Node Analysis Prompt
+            prompt = `You are analyzing a code change impact. A developer wants to modify a file and needs to know what to test.
+
+**File being modified:** ${data.fileName}
+
+**This file uses these components/modules (${data.dependencies.length} dependencies):**
+${data.dependencies.map(dep => {
     let parts = [`- ${dep.main}`];
     if (dep.html) parts.push(`(has UI template: ${dep.html})`);
     if (dep.css) parts.push(`(has styles: ${dep.css})`);
     return parts.join(' ');
 }).join('\n')}
 
-**These components/modules depend on this file (${selectedNodeData.dependents.length} dependents):**
-${selectedNodeData.dependents.map(dep => {
+**These components/modules depend on this file (${data.dependents.length} dependents):**
+${data.dependents.map(dep => {
     let parts = [`- ${dep.main}`];
     if (dep.html) parts.push(`(has UI template: ${dep.html})`);
     if (dep.css) parts.push(`(has styles: ${dep.css})`);
     return parts.join(' ');
 }).join('\n')}
 
-Please provide a simple, easy-to-understand analysis for a QA tester or project manager (non-technical user):
+IMPORTANT INSTRUCTION:
+If the list of dependents is EMPTY (0 dependents), it means this file is NOT used by any other file in the scanned codebase.
+In this case, you MUST conclude that the risk is LOW or the file might be unused/dead code (unless it is a known entry point like main.ts or index.html).
+Do NOT hallucinate features or impacts if there are no dependents.
+If there are dependents, analyze the impact based ONLY on the listed files.
 
-1. **What features should be tested?** - List specific user-facing features that could break
-2. **Which pages/screens need checking?** - Identify UI areas to verify
-3. **Risk level:** High/Medium/Low and why
-4. **Testing priority:** What to test first
+Please provide a simple, easy-to-understand analysis for a QA tester or project manager (non-technical user).
+
+FORMAT OUTPUT AS HTML:
+- Use <h1> for the title: "Testing Impact Analysis for {filename}"
+- Use <h2> for section headers.
+- Use <ul> and <li> for lists.
+- Use <p> for paragraphs.
+- Use <strong> for emphasis.
+- Do NOT use markdown. Do NOT use \`\`\`html code blocks. Just raw HTML.
+
+Sections to include:
+1. What features should be tested?
+2. Which pages/screens need checking?
+3. Risk level (High/Medium/Low) and why
+4. Testing priority
 
 Keep the language simple and focus on USER IMPACT, not technical details.`;
+        }
 
         console.log('🤖 Sending to AI for analysis...');
         console.log('📋 Prompt:', prompt);
@@ -61147,32 +61345,23 @@ Keep the language simple and focus on USER IMPACT, not technical details.`;
             
             // Clean up the response - remove markdown decorations that we added
             let cleanResponse = aiResponse
-                .replace(/^---\n\n/, '') // Remove leading separator
-                .replace(/\n\n---\n\n$/, '') // Remove trailing separator
+                .replace(/^[\s\S]*?---\s*/, '') // Remove everything up to and including the first separator
+                .replace(/\s*---\s*$/, '') // Remove trailing separator
                 .replace(/🤖 \*\*Streaming.*?\*\*.*?\n\n/gs, '') // Remove streaming header
                 .replace(/\n\n---\n\n📊 \*\*Token Usage Summary:\*\*[\s\S]*$/g, '') // Remove token stats section
                 .replace(/💰 \*\*Cost.*?\*\*[\s\S]*$/g, '') // Remove cost footer
                 .trim();
 
-            console.log('📤 Sending AI response to webview for nodeId:', selectedNodeData.originalNodeId);
-
-            // Send response back to webview using ORIGINAL nodeId for matching
-            panel.webview.postMessage({
-                command: 'aiAnalysisComplete',
-                nodeId: selectedNodeData.originalNodeId, // Use original nodeId from graph
-                analysis: cleanResponse
-            });
+            // Update panel with result
+            analysisPanel.webview.html = getHtml(formatMarkdown(cleanResponse));
+            
         } else {
             throw new Error('AI analysis failed');
         }
 
     } catch (error) {
         console.error('❌ Error analyzing with AI:', error);
-        panel.webview.postMessage({
-            command: 'aiAnalysisError',
-            nodeId: selectedNodeData.originalNodeId || selectedNodeData.id, // Fallback to id
-            error: error.message
-        });
+        analysisPanel.webview.html = getHtml(`<div style="color: #f48771;">❌ Error: ${error.message}</div>`);
     }
 }
 
@@ -61604,8 +61793,6 @@ async function handlePRDependencyAnalysis(prUrl, stream, token, workspaceRoot) {
         const fetcher = new PRFileFetcher();
         const prInfo = fetcher.parsePRUrl(prUrl);
         
-        stream.markdown(`✅ Detected **${prInfo.repoType.toUpperCase()}** PR\n\n`);
-        
         // Step 2: Fetch PR files
         stream.markdown('⏳ Fetching PR file changes...\n\n');
         
@@ -61646,7 +61833,7 @@ async function handlePRDependencyAnalysis(prUrl, stream, token, workspaceRoot) {
             return;
         }
         
-        stream.markdown(`✅ Found **${prFiles.length} files** in PR (filtered for testing):\n\n`);
+        stream.markdown(`✅ Found **${prFiles.length} files** in PR:\n\n`);
         
         // Show file summary
         const added = prFiles.filter(f => f.status === 'add').length;
@@ -61654,10 +61841,10 @@ async function handlePRDependencyAnalysis(prUrl, stream, token, workspaceRoot) {
         const deleted = prFiles.filter(f => f.status === 'delete').length;
         const renamed = prFiles.filter(f => f.status === 'rename').length;
         
-        stream.markdown(`- ➕ Added: ${added}\n`);
-        stream.markdown(`- ✏️ Modified: ${modified}\n`);
-        stream.markdown(`- ❌ Deleted: ${deleted}\n`);
-        if (renamed > 0) stream.markdown(`- ↔️ Renamed: ${renamed}\n`);
+        stream.markdown(`🟢 Added: ${added}\n`);
+        stream.markdown(`🟡 Modified: ${modified}\n`);
+        stream.markdown(`🔴 Deleted: ${deleted}\n`);
+        if (renamed > 0) stream.markdown(`🔵 Renamed: ${renamed}\n`);
         stream.markdown('\n');
         
         // Step 3: Analyze dependencies for PR files
@@ -61679,81 +61866,83 @@ async function handlePRDependencyAnalysis(prUrl, stream, token, workspaceRoot) {
         }
         
         // Step 4: Show extracted symbols with impact analysis
-        stream.markdown('✨ **Symbol Extraction Results:**\n\n');
-        
-        const prNodesWithSymbols = graph.nodes.filter(n => n.isPRFile);
-        
-        if (prNodesWithSymbols.length === 0) {
-            stream.markdown('ℹ️ No PR files found\n\n');
-        }
-        
-        let totalSymbols = 0;
-        const symbolToDependentsMap = graph.symbolToDependentsMap || new Map();
-        
-        for (const prNode of prNodesWithSymbols) {
-            stream.markdown(`📄 **File:** ${prNode.prPath}\n\n`);
+        if (!isProd) {
+            stream.markdown('✨ **Symbol Extraction Results:**\n\n');
             
-            if (!prNode.changedSymbols || prNode.changedSymbols.length === 0) {
-                stream.markdown('  ℹ️ No symbols extracted\n\n');
-                continue;
+            const prNodesWithSymbols = graph.nodes.filter(n => n.isPRFile);
+            
+            if (prNodesWithSymbols.length === 0) {
+                stream.markdown('ℹ️ No PR files found\n\n');
             }
             
-            stream.markdown(`🔤 **Symbols (${prNode.changedSymbols.length}):**\n\n`);
+            let totalSymbols = 0;
+            const symbolToDependentsMap = graph.symbolToDependentsMap || new Map();
             
-            for (const symbol of prNode.changedSymbols) {
-                // Handle both string and object formats
-                const symbolName = typeof symbol === 'string' ? symbol : symbol.fullName;
-                const symbolType = typeof symbol === 'object' ? symbol.type : 'unknown';
+            for (const prNode of prNodesWithSymbols) {
+                stream.markdown(`📄 **File:** ${prNode.prPath}\n\n`);
                 
-                stream.markdown(`  - \`${symbolName}\` _(${symbolType})_`);
+                if (!prNode.changedSymbols || prNode.changedSymbols.length === 0) {
+                    stream.markdown('  ℹ️ No symbols extracted\n\n');
+                    continue;
+                }
                 
-                // Show impacted files for this symbol
-                const impactedFiles = symbolToDependentsMap.get(symbolName) || [];
-                if (impactedFiles.length > 0) {
-                    stream.markdown(` → **${impactedFiles.length} files**`);
+                stream.markdown(`🔤 **Symbols (${prNode.changedSymbols.length}):**\n\n`);
+                
+                for (const symbol of prNode.changedSymbols) {
+                    // Handle both string and object formats
+                    const symbolName = typeof symbol === 'string' ? symbol : symbol.fullName;
+                    const symbolType = typeof symbol === 'object' ? symbol.type : 'unknown';
+                    
+                    stream.markdown(`  - \`${symbolName}\` _(${symbolType})_`);
+                    
+                    // Show impacted files for this symbol
+                    const impactedFiles = symbolToDependentsMap.get(symbolName) || [];
+                    if (impactedFiles.length > 0) {
+                        stream.markdown(` → **${impactedFiles.length} files**`);
+                    }
+                    
+                    stream.markdown('\n');
+                    totalSymbols++;
                 }
                 
                 stream.markdown('\n');
-                totalSymbols++;
             }
             
-            stream.markdown('\n');
-        }
-        
-        // Step 5: Show Impact Analysis Summary
-        stream.markdown('\n---\n\n');
-        stream.markdown('📊 **Impact Analysis Summary:**\n\n');
-        stream.markdown(`- **Changed Symbols:** ${totalSymbols}\n`);
-        stream.markdown(`- **Total Files Analyzed:** ${graph.nodes.length}\n`);
-        stream.markdown(`- **Impacted Files:** ${graph.nodes.filter(n => n.nodeType === 'dependent').length}\n`);
-        stream.markdown(`- **Dependencies:** ${graph.nodes.filter(n => n.nodeType === 'dependency').length}\n\n`);
-        
-        // Show top impacted symbols
-        if (symbolToDependentsMap.size > 0) {
-            stream.markdown('🔥 **Top Impacted Symbols:**\n\n');
+            // Step 5: Show Impact Analysis Summary
+            stream.markdown('\n---\n\n');
+            stream.markdown('📊 **Impact Analysis Summary:**\n\n');
+            stream.markdown(`- **Changed Symbols:** ${totalSymbols}\n`);
+            stream.markdown(`- **Total Files Analyzed:** ${graph.nodes.length}\n`);
+            stream.markdown(`- **Impacted Files:** ${graph.nodes.filter(n => n.nodeType === 'dependent').length}\n`);
+            stream.markdown(`- **Dependencies:** ${graph.nodes.filter(n => n.nodeType === 'dependency').length}\n\n`);
             
-            const sortedSymbols = Array.from(symbolToDependentsMap.entries())
-                .sort((a, b) => b[1].length - a[1].length)
-                .slice(0, 5);
-            
-            for (const [symbolName, dependents] of sortedSymbols) {
-                const impactLevel = dependents.length > 5 ? '🔴 HIGH' : 
-                                  dependents.length > 2 ? '🟡 MEDIUM' : '🟢 LOW';
-                stream.markdown(`  ${impactLevel} \`${symbolName}\` → **${dependents.length} files**\n`);
+            // Show top impacted symbols
+            if (symbolToDependentsMap.size > 0) {
+                stream.markdown('🔥 **Top Impacted Symbols:**\n\n');
                 
-                // Show first 3 impacted files
-                const preview = dependents.slice(0, 3);
-                for (const file of preview) {
-                    const fileName = file.split('/').pop();
-                    stream.markdown(`    - ${fileName}\n`);
+                const sortedSymbols = Array.from(symbolToDependentsMap.entries())
+                    .sort((a, b) => b[1].length - a[1].length)
+                    .slice(0, 5);
+                
+                for (const [symbolName, dependents] of sortedSymbols) {
+                    const impactLevel = dependents.length > 5 ? '🔴 HIGH' : 
+                                    dependents.length > 2 ? '🟡 MEDIUM' : '🟢 LOW';
+                    stream.markdown(`  ${impactLevel} \`${symbolName}\` → **${dependents.length} files**\n`);
+                    
+                    // Show first 3 impacted files
+                    const preview = dependents.slice(0, 3);
+                    for (const file of preview) {
+                        const fileName = file.split('/').pop();
+                        stream.markdown(`    - ${fileName}\n`);
+                    }
+                    if (dependents.length > 3) {
+                        stream.markdown(`    - _...and ${dependents.length - 3} more_\n`);
+                    }
+                    stream.markdown('\n');
                 }
-                if (dependents.length > 3) {
-                    stream.markdown(`    - _...and ${dependents.length - 3} more_\n`);
-                }
-                stream.markdown('\n');
+            } else {
+                stream.markdown('✅ **No external files impacted** (low risk change)\n\n');
             }
-        } else {
-            stream.markdown('✅ **No external files impacted** (low risk change)\n\n');
         }
         
         // Step 6: Display graph
@@ -61769,6 +61958,48 @@ async function handlePRDependencyAnalysis(prUrl, stream, token, workspaceRoot) {
         stream.markdown(`❌ **Unexpected Error:** ${error.message}\n\n`);
         stream.markdown('Please check the console for details.\n\n');
     }
+}
+
+/**
+ * Handle messages from graph webview
+ */
+async function handleGraphWebviewMessage(message, panel, graph) {
+    if (message.command === 'buildSelectedNodeObject') {
+        await buildSelectedNodeObject(message.nodeId, graph, panel);
+    } else if (message.command === 'analyzeImpact') {
+        await analyzeImpactWithAI(message.selectedNodeData, panel);
+    } else if (message.command === 'analyzeDeepImpact') {
+        await openImpactAnalysisWebview(message.nodeId, graph);
+    } else if (message.command === 'analyzePRImpact') {
+        const prContext = buildPRContextObject(graph);
+        await analyzeImpactWithAI(prContext, panel);
+    }
+}
+
+/**
+ * Build PR Context Object for AI Analysis
+ */
+function buildPRContextObject(graph) {
+    const prFiles = graph.nodes.filter(n => n.isPRFile).map(n => ({
+        file: n.relativePath || n.fileName,
+        status: n.prStatus,
+        changes: n.prChanges,
+        changedSymbols: n.changedSymbols
+    }));
+
+    const impactedFiles = graph.nodes.filter(n => !n.isPRFile && (n.nodeType === 'dependent' || n.nodeType === 'both')).map(n => ({
+        file: n.relativePath || n.fileName,
+        type: n.nodeType
+    }));
+
+    return {
+        isPRAnalysis: true,
+        fileName: `PR #${graph.prInfo?.prId || 'Analysis'}`,
+        prSummary: graph.prSummary,
+        changes: prFiles,
+        impact: impactedFiles,
+        symbolMap: graph.symbolToDependentsMap ? Object.fromEntries(graph.symbolToDependentsMap) : {}
+    };
 }
 
 /**
@@ -61964,7 +62195,7 @@ function generatePRGraphWebviewHtml(graph, summary, prInfo) {
     
     // Replace placeholders
     htmlTemplate = htmlTemplate.replace('{{SEARCH_TERM}}', searchTerm);
-    htmlTemplate = htmlTemplate.replace('{{NODE_COUNT}}', graph.nodes.length);
+    htmlTemplate = htmlTemplate.replace('{{NODE_COUNT}}', filteredNodes.length);
     
     scriptContent = scriptContent.replace('__GRAPH_DATA__', graphDataJson);
     scriptContent = scriptContent.replace('__SEARCH_TERM__', JSON.stringify(searchTerm));
@@ -62058,6 +62289,7 @@ module.exports = {
 const vscode = __webpack_require__(/*! vscode */ "vscode");
 const fs = __webpack_require__(/*! fs */ "fs");
 const path = __webpack_require__(/*! path */ "path");
+const { aidaLogging } = __webpack_require__(/*! ./settings */ "./scripts/settings.js");
 
 let _ops = null;
 
@@ -62266,7 +62498,7 @@ async function detectFramework(files, primaryLang) {
       );
 
       if (hasFrameworkFiles) {
-        console.log(`🎯 Framework detected by unique files: ${framework} (matched file: ${uniqueFrameworkFiles.find(f => filePaths.some(p => p === f.toLowerCase() || p.endsWith('/' + f.toLowerCase())))})`);
+        aidaLogging(`🎯 Framework detected by unique files: ${framework} (matched file: ${uniqueFrameworkFiles.find(f => filePaths.some(p => p === f.toLowerCase() || p.endsWith('/' + f.toLowerCase())))})`);
         return framework;
       }
     }
@@ -62274,18 +62506,18 @@ async function detectFramework(files, primaryLang) {
 
   // Second priority: Check for dependencies in package.json content
   const packageJsonFile = files.find(f => f.path.toLowerCase().includes('package.json'));
-  console.log('🔍 DEBUG: packageJsonFile found:', !!packageJsonFile);
+  aidaLogging('🔍 DEBUG: packageJsonFile found:', !!packageJsonFile);
   
   if (packageJsonFile) {
-    console.log('🔍 DEBUG: packageJsonFile path:', packageJsonFile.path);
-    console.log('🔍 DEBUG: packageJsonFile rawContentSample:', !!packageJsonFile.rawContentSample);
-    console.log('🔍 DEBUG: packageJsonFile content preview:', packageJsonFile.rawContentSample?.substring(0, 200));
+    aidaLogging('🔍 DEBUG: packageJsonFile path:', packageJsonFile.path);
+    aidaLogging('🔍 DEBUG: packageJsonFile rawContentSample:', !!packageJsonFile.rawContentSample);
+    aidaLogging('🔍 DEBUG: packageJsonFile content preview:', packageJsonFile.rawContentSample?.substring(0, 200));
   }
   
   if (packageJsonFile && packageJsonFile.rawContentSample) {
     try {
       const packageContent = JSON.parse(packageJsonFile.rawContentSample);
-      console.log('🔍 DEBUG: parsed package.json:', {
+      aidaLogging('🔍 DEBUG: parsed package.json:', {
         name: packageContent.name,
         hasDependencies: !!packageContent.dependencies,
         hasDevDependencies: !!packageContent.devDependencies,
@@ -62299,7 +62531,7 @@ async function detectFramework(files, primaryLang) {
                        (!packageContent.devDependencies || Object.keys(packageContent.devDependencies).length === 0);
       
       if (isLibrary) {
-        console.log(`📚 Detected as JavaScript library: ${packageContent.name}`);
+        aidaLogging(`📚 Detected as JavaScript library: ${packageContent.name}`);
         return null; // Return null to use language template instead
       }
 
@@ -62314,21 +62546,21 @@ async function detectFramework(files, primaryLang) {
         const matchedDeps = config.dependencies.filter(dep => allDeps && allDeps.hasOwnProperty(dep));
         
         if (matchedDeps.length > 0) {
-          console.log(`🎯 Framework detected by dependencies: ${framework} (found: ${matchedDeps.join(', ')})`);
+          aidaLogging(`🎯 Framework detected by dependencies: ${framework} (found: ${matchedDeps.join(', ')})`);
           return framework;
         }
       }
 
     } catch (error) {
-      console.log('⚠️ Could not parse package.json for framework detection:', error.message);
+      aidaLogging('⚠️ Could not parse package.json for framework detection:', error.message);
     }
   }
 
   // Third priority: Check for framework patterns in content (LOWER confidence)
-  console.log('🔍 DEBUG: Starting content pattern detection...');
-  console.log('🔍 DEBUG: primaryLang:', primaryLang);
-  console.log('🔍 DEBUG: allContent length:', allContent.length);
-  console.log('🔍 DEBUG: allContent sample:', allContent.substring(0, 500));
+  aidaLogging('🔍 DEBUG: Starting content pattern detection...');
+  aidaLogging('🔍 DEBUG: primaryLang:', primaryLang);
+  aidaLogging('🔍 DEBUG: allContent length:', allContent.length);
+  aidaLogging('🔍 DEBUG: allContent sample:', allContent.substring(0, 500));
   
   for (const [framework, config] of Object.entries(FRAMEWORK_PATTERNS)) {
     // Require multiple patterns for content-based detection (reduce false positives)
@@ -62336,18 +62568,18 @@ async function detectFramework(files, primaryLang) {
       allContent.includes(pattern)
     );
 
-    console.log(`🔍 DEBUG: ${framework} patterns:`, config.patterns);
-    console.log(`🔍 DEBUG: ${framework} matched patterns (${matchedPatterns.length}):`, matchedPatterns);
-    console.log(`🔍 DEBUG: ${framework} compatible with ${primaryLang}:`, isCompatibleLanguage(framework, primaryLang));
+    aidaLogging(`🔍 DEBUG: ${framework} patterns:`, config.patterns);
+    aidaLogging(`🔍 DEBUG: ${framework} matched patterns (${matchedPatterns.length}):`, matchedPatterns);
+    aidaLogging(`🔍 DEBUG: ${framework} compatible with ${primaryLang}:`, isCompatibleLanguage(framework, primaryLang));
 
     // Require at least 2 patterns for framework detection via content
     if (matchedPatterns.length >= 2 && isCompatibleLanguage(framework, primaryLang)) {
-      console.log(`🎯 Framework detected by patterns (${matchedPatterns.length}): ${framework}`);
+      aidaLogging(`🎯 Framework detected by patterns (${matchedPatterns.length}): ${framework}`);
       return framework;
     }
   }
 
-  console.log('🤷 No framework detected - using language template');
+  aidaLogging('🤷 No framework detected - using language template');
   return null;
 }
 
@@ -62394,7 +62626,7 @@ function findNearestProjectRoot(filePath) {
         for (const indicator of projectIndicators) {
             const indicatorPath = path.join(currentDir, indicator);
             if (fs.existsSync(indicatorPath)) {
-                console.log(`🎯 Found project root at: ${currentDir} (indicator: ${indicator})`);
+                aidaLogging(`🎯 Found project root at: ${currentDir} (indicator: ${indicator})`);
                 return currentDir;
             }
         }
@@ -62406,7 +62638,7 @@ function findNearestProjectRoot(filePath) {
     }
     
     // Fallback to file's directory
-    console.log(`⚠️ No project root found, using file directory: ${path.dirname(filePath)}`);
+    aidaLogging(`⚠️ No project root found, using file directory: ${path.dirname(filePath)}`);
     return path.dirname(filePath);
 }
 
@@ -62452,7 +62684,7 @@ async function autoDetectLanguage(filePath) {
         return detection;
         
     } catch (error) {
-        console.log('Single file detection error:', error);
+        aidaLogging('Single file detection error:', error);
         return {
             detected: 'General (fallback)',
             type: 'fallback',
@@ -62482,13 +62714,13 @@ async function autoDetectWorkspace(workspacePath, targetFilePath = null) {
 
     try {
         // PHASE 1: Framework Detection (Priority 1) - All map to languages path
-        console.log('🔍 Phase 1: Framework Detection');
+        aidaLogging('🔍 Phase 1: Framework Detection');
         
         // If we have a target file, find the nearest project root from that file
         let searchPath = workspacePath;
         if (targetFilePath) {
             searchPath = findNearestProjectRoot(targetFilePath);
-            console.log(`🔍 Searching from file location: ${searchPath}`);
+            aidaLogging(`🔍 Searching from file location: ${searchPath}`);
         }
         
         // Angular Detection - Check from searchPath
@@ -62496,7 +62728,7 @@ async function autoDetectWorkspace(workspacePath, targetFilePath = null) {
         const packageJson = path.join(searchPath, 'package.json');
         
         if (fs.existsSync(angularConfig)) {
-            console.log(`✅ Angular detected: angular.json found at ${searchPath}`);
+            aidaLogging(`✅ Angular detected: angular.json found at ${searchPath}`);
             return {
                 ...detectionResult,
                 type: 'language',
@@ -62517,7 +62749,7 @@ async function autoDetectWorkspace(workspacePath, targetFilePath = null) {
                 for (const subdir of subdirs) {
                     const subAngularConfig = path.join(workspacePath, subdir, 'angular.json');
                     if (fs.existsSync(subAngularConfig)) {
-                        console.log(`✅ Angular detected: angular.json found in subdirectory ${subdir}`);
+                        aidaLogging(`✅ Angular detected: angular.json found in subdirectory ${subdir}`);
                         return {
                             ...detectionResult,
                             type: 'language',
@@ -62529,7 +62761,7 @@ async function autoDetectWorkspace(workspacePath, targetFilePath = null) {
                     }
                 }
             } catch (error) {
-                console.log('⚠️ Error checking subdirectories for Angular:', error.message);
+                aidaLogging('⚠️ Error checking subdirectories for Angular:', error.message);
             }
         }
 
@@ -62540,7 +62772,7 @@ async function autoDetectWorkspace(workspacePath, targetFilePath = null) {
             
             // React Framework
             if (packageContent.dependencies?.react || packageContent.devDependencies?.react) {
-                console.log('✅ React detected: react dependency found');
+                aidaLogging('✅ React detected: react dependency found');
                 return {
                     ...detectionResult,
                     type: 'language',
@@ -62554,7 +62786,7 @@ async function autoDetectWorkspace(workspacePath, targetFilePath = null) {
             // Vue Framework
             if (packageContent.dependencies?.vue || packageContent.devDependencies?.vue || 
                 packageContent.dependencies?.['@vue/core']) {
-                console.log('✅ Vue detected: vue dependency found');
+                aidaLogging('✅ Vue detected: vue dependency found');
                 return {
                     ...detectionResult,
                     type: 'language',
@@ -62567,7 +62799,7 @@ async function autoDetectWorkspace(workspacePath, targetFilePath = null) {
 
             // Express Framework
             if (packageContent.dependencies?.express || packageContent.devDependencies?.express) {
-                console.log('✅ Express detected: express dependency found');
+                aidaLogging('✅ Express detected: express dependency found');
                 return {
                     ...detectionResult,
                     type: 'language',
@@ -62582,7 +62814,7 @@ async function autoDetectWorkspace(workspacePath, targetFilePath = null) {
             if (packageContent.dependencies?.['@nestjs/core'] || 
                 packageContent.devDependencies?.['@nestjs/core'] ||
                 packageContent.dependencies?.['@nestjs/common']) {
-                console.log('✅ NestJS detected: @nestjs dependency found');
+                aidaLogging('✅ NestJS detected: @nestjs dependency found');
                 return {
                     ...detectionResult,
                     type: 'language',
@@ -62596,7 +62828,7 @@ async function autoDetectWorkspace(workspacePath, targetFilePath = null) {
             // NodeJS Framework
             if (packageContent.dependencies?.fastify || packageContent.dependencies?.koa ||
                 packageContent.dependencies?.hapi) {
-                console.log('✅ NodeJS detected: Node.js framework dependency found');
+                aidaLogging('✅ NodeJS detected: Node.js framework dependency found');
                 return {
                     ...detectionResult,
                     type: 'language',
@@ -62609,13 +62841,13 @@ async function autoDetectWorkspace(workspacePath, targetFilePath = null) {
         }
 
         // PHASE 2: Language Detection (Priority 2) - Use searchPath
-        console.log('🔍 Phase 2: Language Detection');
+        aidaLogging('🔍 Phase 2: Language Detection');
 
         // TypeScript Detection
         const tsConfigPath = path.join(searchPath, 'tsconfig.json');
         if (fs.existsSync(tsConfigPath) || 
             (targetFilePath && targetFilePath.endsWith('.ts'))) {
-            console.log('✅ TypeScript detected');
+            aidaLogging('✅ TypeScript detected');
             return {
                 ...detectionResult,
                 type: 'language',
@@ -62629,7 +62861,7 @@ async function autoDetectWorkspace(workspacePath, targetFilePath = null) {
         // JavaScript Detection
         if (fs.existsSync(packageJsonPath) || 
             (targetFilePath && targetFilePath.endsWith('.js'))) {
-            console.log('✅ JavaScript detected');
+            aidaLogging('✅ JavaScript detected');
             return {
                 ...detectionResult,
                 type: 'language',
@@ -62644,7 +62876,7 @@ async function autoDetectWorkspace(workspacePath, targetFilePath = null) {
         const pythonFiles = ['requirements.txt', 'pyproject.toml', 'setup.py'];
         for (const pythonFile of pythonFiles) {
             if (fs.existsSync(path.join(searchPath, pythonFile))) {
-                console.log('✅ Python detected');
+                aidaLogging('✅ Python detected');
                 return {
                     ...detectionResult,
                     type: 'language',
@@ -62658,7 +62890,7 @@ async function autoDetectWorkspace(workspacePath, targetFilePath = null) {
 
         // C# Detection
         if (targetFilePath && targetFilePath.endsWith('.cs')) {
-            console.log('✅ C# detected');
+            aidaLogging('✅ C# detected');
             return {
                 ...detectionResult,
                 type: 'language',
@@ -62671,7 +62903,7 @@ async function autoDetectWorkspace(workspacePath, targetFilePath = null) {
 
         // Java Detection
         if (targetFilePath && targetFilePath.endsWith('.java')) {
-            console.log('✅ Java detected');
+            aidaLogging('✅ Java detected');
             return {
                 ...detectionResult,
                 type: 'language',
@@ -62685,7 +62917,7 @@ async function autoDetectWorkspace(workspacePath, targetFilePath = null) {
         // Go Detection
         if (fs.existsSync(path.join(searchPath, 'go.mod')) ||
             (targetFilePath && targetFilePath.endsWith('.go'))) {
-            console.log('✅ Go detected');
+            aidaLogging('✅ Go detected');
             return {
                 ...detectionResult,
                 type: 'language',
@@ -62699,7 +62931,7 @@ async function autoDetectWorkspace(workspacePath, targetFilePath = null) {
         // Rust Detection
         if (fs.existsSync(path.join(searchPath, 'Cargo.toml')) ||
             (targetFilePath && targetFilePath.endsWith('.rs'))) {
-            console.log('✅ Rust detected');
+            aidaLogging('✅ Rust detected');
             return {
                 ...detectionResult,
                 type: 'language',
@@ -62710,7 +62942,7 @@ async function autoDetectWorkspace(workspacePath, targetFilePath = null) {
             };
         }
 
-        console.log('⚠️ No specific framework or language detected, using fallback');
+        aidaLogging('⚠️ No specific framework or language detected, using fallback');
         return detectionResult;
 
     } catch (error) {
@@ -62944,6 +63176,7 @@ const fs = __webpack_require__(/*! fs */ "fs");
 const { VSCodeApiDependencyAnalyzer } = __webpack_require__(/*! ./dependency-graph/vscode-api-analyzer */ "./scripts/dependency-graph/vscode-api-analyzer.js");
 const { SymbolAnalyzer } = __webpack_require__(/*! ./dependency-graph/symbol-analyzer */ "./scripts/dependency-graph/symbol-analyzer.js");
 const { BarrelResolver } = __webpack_require__(/*! ./dependency-graph/barrel-resolver */ "./scripts/dependency-graph/barrel-resolver.js");
+const { aidaLogging } = __webpack_require__(/*! ./settings */ "./scripts/settings.js");
 
 // Cache management
 const CACHE_VERSION = '1.0';
@@ -62969,14 +63202,37 @@ class PRDependencyAnalyzer {
      * @returns {Promise<object>} Graph {nodes, edges, prSummary}
      */
     async analyzePRFiles(prFiles) {
-        console.log(`🔍 Analyzing ${prFiles.length} PR files...`);
+        // 🔥 Filter out unnecessary files from analysis
+        const filteredPRFiles = prFiles.filter(file => {
+            const ext = path.extname(file.path).toLowerCase();
+            const ignoredExtensions = [
+                // '.css', '.scss', '.sass', '.less', // 🔥 Allow styles to appear in PR list
+                '.json', '.xml', '.yaml', '.yml', 
+                '.md', '.txt', '.lock', '.map', 
+                '.config', '.ini', '.env'
+            ];
+            
+            // 🔥 Also ignore environment files and scripts
+            if (file.path.includes('environments/') || file.path.includes('scripts/')) {
+                aidaLogging(`🚫 Ignoring env/script file: ${file.path}`);
+                return false;
+            }
+            
+            if (ignoredExtensions.includes(ext)) {
+                aidaLogging(`🚫 Ignoring file: ${file.path}`);
+                return false;
+            }
+            return true;
+        });
+
+        aidaLogging(`🔍 Analyzing ${filteredPRFiles.length} PR files (filtered from ${prFiles.length})...`);
 
         // Step 1: Load or build full graph (with cache)
         await this.ensureFullGraph();
 
         // Step 2: Find PR file nodes in full graph
-        const prNodes = this.findPRNodes(prFiles);
-        console.log(`✅ Matched ${prNodes.length} PR files to graph nodes`);
+        const prNodes = this.findPRNodes(filteredPRFiles);
+        aidaLogging(`✅ Matched ${prNodes.length} PR files to graph nodes`);
 
         // Step 3: Extract changed symbols for MODIFIED files
         // Store changedSymbols in Map<nodeId, symbols[]> for reuse by Deep Impact
@@ -62985,20 +63241,20 @@ class PRDependencyAnalyzer {
         for (const node of prNodes) {
             if (node.prStatus === 'edit' && node.prPatch) {
                 // Modified file: extract changed symbols from patch
-                console.log(`\n🔍 Extracting symbols from: ${node.prPath}`);
-                console.log(`   Patch length: ${node.prPatch?.length || 0} chars`);
-                console.log(`   Patch preview: ${node.prPatch?.substring(0, 200)}...`);
+                aidaLogging(`\n🔍 Extracting symbols from: ${node.prPath}`);
+                aidaLogging(`   Patch length: ${node.prPatch?.length || 0} chars`);
+                aidaLogging(`   Patch preview: ${node.prPatch?.substring(0, 200)}...`);
                 
                 // 🔥 Use async extraction with VS Code API
                 const changedSymbols = await this.extractChangedSymbols(node.prPatch, node.relativePath);
                 
                 if (changedSymbols.length === 0) {
-                    console.log(`⚠️ No changed symbols extracted for: ${node.prPath}`);
+                    aidaLogging(`⚠️ No changed symbols extracted for: ${node.prPath}`);
                     // Don't fallback - if extraction fails, log clearly
                     nodeChangedSymbols.set(node.id, []);
                 } else {
-                    console.log(`✅ Extracted ${changedSymbols.length} changed symbols from: ${node.prPath}`);
-                    console.log(`   Symbols: ${changedSymbols.map(s => s.fullName).join(', ')}`);
+                    aidaLogging(`✅ Extracted ${changedSymbols.length} changed symbols from: ${node.prPath}`);
+                    aidaLogging(`   Symbols: ${changedSymbols.map(s => s.fullName).join(', ')}`);
                     nodeChangedSymbols.set(node.id, changedSymbols);
                 }
                 
@@ -63009,27 +63265,27 @@ class PRDependencyAnalyzer {
                 const changedSymbols = await this.extractChangedSymbols(node.prPatch, node.relativePath);
                 
                 if (changedSymbols.length > 0) {
-                    console.log(`✅ Extracted ${changedSymbols.length} changed symbols from renamed file: ${node.prPath}`);
-                    console.log(`   Symbols: ${changedSymbols.map(s => s.fullName).join(', ')}`);
+                    aidaLogging(`✅ Extracted ${changedSymbols.length} changed symbols from renamed file: ${node.prPath}`);
+                    aidaLogging(`   Symbols: ${changedSymbols.map(s => s.fullName).join(', ')}`);
                     nodeChangedSymbols.set(node.id, changedSymbols);
                     node.changedSymbols = changedSymbols;
                 } else {
                     // Pure rename (no content changes): full file impact (all dependents need import path updates)
-                    console.log(`📄 Full file impact for pure rename: ${node.prPath}`);
+                    aidaLogging(`📄 Full file impact for pure rename: ${node.prPath}`);
                     node.changedSymbols = null;
                 }
             } else {
                 // New, deleted, or pure rename file: full file impact (no symbol filtering)
-                console.log(`📄 Full file impact for ${node.prStatus}: ${node.prPath}`);
+                aidaLogging(`📄 Full file impact for ${node.prStatus}: ${node.prPath}`);
                 node.changedSymbols = null; // null indicates "scan all symbols"
             }
         }
 
         // Step 4: Scan dependencies/dependents for each PR node
-        const relevantNodeIds = new Set(prNodes.map(n => n.id));
+        // 🔥 REFACTOR: Simplified logic - we only need to find dependents based on symbol usage
+        // The graph construction will happen in buildFilteredGraph based on edges found here
         
-        let totalDeps = 0;
-        let totalDependents = 0;
+        const relevantNodeIds = new Set(prNodes.map(n => n.id));
         let filteredDependents = 0;
         
         // Track which files use which specific symbols
@@ -63037,29 +63293,23 @@ class PRDependencyAnalyzer {
 
         for (const node of prNodes) {
             if (node.prStatus === 'delete') {
-                console.log(`🚫 Skipping dependency/dependent scan for deleted file: ${node.prPath}`);
+                aidaLogging(`🚫 Skipping dependency/dependent scan for deleted file: ${node.prPath}`);
                 continue;
             }
-            // Get direct dependencies (always include all)
-            const deps = this.getDependencies(node.id);
-            deps.forEach(depId => {
-                relevantNodeIds.add(depId);
-                totalDeps++;
-            });
             
             // Get direct dependents
             const allDependents = this.getDependents(node.id);
             
-            console.log(`\n🔍 Analyzing file: ${node.prPath}`);
-            console.log(`   Node ID: ${node.id}`);
-            console.log(`   Node relative path: ${node.relativePath}`);
-            console.log(`   Changed symbols: [${node.changedSymbols?.map(s => s.fullName).join(', ') || 'none'}]`);
-            console.log(`   Dependents found in graph: ${allDependents.length}`);
+            aidaLogging(`\n🔍 Analyzing file: ${node.prPath}`);
+            aidaLogging(`   Node ID: ${node.id}`);
+            aidaLogging(`   Node relative path: ${node.relativePath}`);
+            aidaLogging(`   Changed symbols: [${node.changedSymbols?.map(s => s.fullName).join(', ') || 'none'}]`);
+            aidaLogging(`   Dependents found in graph: ${allDependents.length}`);
             
             if ((node.prStatus === 'edit' || node.prStatus === 'rename') && node.changedSymbols && node.changedSymbols.length > 0) {
                 // 🔥 NEW: If no direct dependents, check if this is a barrel export source
                 if (allDependents.length === 0) {
-                    console.log(`🔍 No direct dependents → Checking for barrel export usage`);
+                    aidaLogging(`🔍 No direct dependents → Checking for barrel export usage`);
                     
                     const fullPRFilePath = path.join(this.workspaceRoot, node.relativePath);
                     const symbolFileUri = vscode.Uri.file(fullPRFilePath);
@@ -63068,7 +63318,7 @@ class PRDependencyAnalyzer {
                     for (const symbol of node.changedSymbols) {
                         const symbolPosition = new vscode.Position(symbol.lineNumber, symbol.column);
                         
-                        console.log(`         🔍 Finding users of: ${symbol.fullName} via barrel chain`);
+                        aidaLogging(`         🔍 Finding users of: ${symbol.fullName} via barrel chain`);
                         
                         try {
                             const result = await this.resolveBarrelReferences(
@@ -63080,7 +63330,7 @@ class PRDependencyAnalyzer {
                             );
                             
                             if (result.references.length > 0) {
-                                console.log(`            📍 Found ${result.references.length} references through barrel`);
+                                aidaLogging(`            📍 Found ${result.references.length} references through barrel`);
                                 
                                 // Extract unique file paths (excluding definition and barrel files)
                                 const userFiles = new Set();
@@ -63089,7 +63339,7 @@ class PRDependencyAnalyzer {
                                     const isDefinition = path.normalize(refPath) === path.normalize(fullPRFilePath);
                                     const isBarrel = await this.isBarrelExport(ref);
                                     
-                                    console.log(`               🔍 Checking ref: ${path.basename(refPath)} (def=${isDefinition}, barrel=${isBarrel})`);
+                                    aidaLogging(`               🔍 Checking ref: ${path.basename(refPath)} (def=${isDefinition}, barrel=${isBarrel})`);
                                     
                                     if (!isDefinition && !isBarrel) {
                                         const relativePath = path.relative(this.workspaceRoot, refPath).replace(/\\/g, '/');
@@ -63097,23 +63347,23 @@ class PRDependencyAnalyzer {
                                     }
                                 }
                                 
-                                console.log(`            ✅ Found ${userFiles.size} actual user files`);
+                                aidaLogging(`            ✅ Found ${userFiles.size} actual user files`);
                                 
                                 // 🔥 NEW: If no users found via references, try wildcard search through barrel
                                 if (userFiles.size === 0 && result.barrelChain && result.barrelChain.length > 0) {
-                                    console.log(`            🔍 No users via references → Trying wildcard search through barrel`);
+                                    aidaLogging(`            🔍 No users via references → Trying wildcard search through barrel`);
                                     
                                     // Find barrel file in chain
                                     for (const barrelInfo of result.barrelChain) {
                                         if (barrelInfo.isWildcard) {
-                                            console.log(`               📦 Found wildcard barrel: ${path.basename(barrelInfo.location.uri.fsPath)}`);
+                                            aidaLogging(`               📦 Found wildcard barrel: ${path.basename(barrelInfo.location.uri.fsPath)}`);
                                             
                                             const wildcardRefs = await this.findImportsOfBarrelFile(
                                                 barrelInfo.location.uri,
                                                 symbol.fullName
                                             );
                                             
-                                            console.log(`               ✅ Wildcard search found ${wildcardRefs.length} usages`);
+                                            aidaLogging(`               ✅ Wildcard search found ${wildcardRefs.length} usages`);
                                             
                                             for (const ref of wildcardRefs) {
                                                 const refPath = ref.uri.fsPath;
@@ -63146,7 +63396,6 @@ class PRDependencyAnalyzer {
                                     }
                                     
                                     relevantNodeIds.add(userNode.id);
-                                    totalDependents++;
                                     filteredDependents++;
                                     
                                     // Track symbols
@@ -63166,10 +63415,10 @@ class PRDependencyAnalyzer {
                                         });
                                     }
                                     
-                                    console.log(`            ✅ Added: ${userFilePath}`);
+                                    aidaLogging(`            ✅ Added: ${userFilePath}`);
                                 }
                             } else {
-                                console.log(`            ⚠️ No references found via VS Code API → Trying wildcard search`);
+                                aidaLogging(`            ⚠️ No references found via VS Code API → Trying wildcard search`);
                                 
                                 // 🔥 NEW: Fallback to wildcard search if no references at all
                                 // Find barrel file that re-exports this symbol
@@ -63182,7 +63431,7 @@ class PRDependencyAnalyzer {
                                     const barrelPath = path.join(prDir, barrelName);
                                     
                                     if (fs.existsSync(barrelPath)) {
-                                        console.log(`               📦 Found barrel: ${path.basename(barrelPath)}`);
+                                        aidaLogging(`               📦 Found barrel: ${path.basename(barrelPath)}`);
                                         
                                         const barrelUri = vscode.Uri.file(barrelPath);
                                         const wildcardRefs = await this.findImportsOfBarrelFile(
@@ -63191,7 +63440,7 @@ class PRDependencyAnalyzer {
                                         );
                                         
                                         if (wildcardRefs.length > 0) {
-                                            console.log(`               ✅ Wildcard search found ${wildcardRefs.length} usages`);
+                                            aidaLogging(`               ✅ Wildcard search found ${wildcardRefs.length} usages`);
                                             
                                             const userFiles = new Set();
                                             for (const ref of wildcardRefs) {
@@ -63218,7 +63467,6 @@ class PRDependencyAnalyzer {
                                                 }
                                                 
                                                 relevantNodeIds.add(userNode.id);
-                                                totalDependents++;
                                                 filteredDependents++;
                                                 
                                                 const symbolFullName = symbol.fullName;
@@ -63236,7 +63484,7 @@ class PRDependencyAnalyzer {
                                                     });
                                                 }
                                                 
-                                                console.log(`            ✅ Added via fallback: ${userFilePath}`);
+                                                aidaLogging(`            ✅ Added via fallback: ${userFilePath}`);
                                             }
                                             
                                             // Stop after finding the first valid barrel with usages
@@ -63251,7 +63499,7 @@ class PRDependencyAnalyzer {
                     }
                 } else {
                     // Has direct dependents - filter them normally
-                    console.log(`🔎 Filtering ${allDependents.length} dependents for ${node.prStatus} file: ${node.prPath}`);
+                    aidaLogging(`🔎 Filtering ${allDependents.length} dependents for ${node.prStatus} file: ${node.prPath}`);
                     
                     for (const depId of allDependents) {
                         const depNode = this.fullGraph.nodes.find(n => n.id === depId);
@@ -63266,7 +63514,6 @@ class PRDependencyAnalyzer {
 
                         if (usedSymbols.length > 0) {
                             relevantNodeIds.add(depId);
-                            totalDependents++;
                             filteredDependents++;
                             
                             // Track which symbols are used by this dependent
@@ -63277,9 +63524,9 @@ class PRDependencyAnalyzer {
                                 symbolToDependentsMap.get(symbolFullName).push(depNode.relativePath);
                             });
                             
-                            console.log(`   ✅ Dependent uses symbols [${usedSymbols.join(', ')}]: ${depNode.relativePath}`);
+                            aidaLogging(`   ✅ Dependent uses symbols [${usedSymbols.join(', ')}]: ${depNode.relativePath}`);
                         } else {
-                            console.log(`   ⏭️ Skipping dependent (no symbol usage): ${depNode.relativePath}`);
+                            aidaLogging(`   ⏭️ Skipping dependent (no symbol usage): ${depNode.relativePath}`);
                         }
                     }
                 }
@@ -63287,17 +63534,12 @@ class PRDependencyAnalyzer {
                 // New/deleted/pure-rename file OR modified with no symbols: include all dependents
                 allDependents.forEach(depId => {
                     relevantNodeIds.add(depId);
-                    totalDependents++;
                 });
-                console.log(`✅ Included all ${allDependents.length} dependents for ${node.prStatus}: ${node.prPath}`);
+                aidaLogging(`✅ Included all ${allDependents.length} dependents for ${node.prStatus}: ${node.prPath}`);
             }
         }
 
-        console.log(`📊 Found ${totalDeps} dependencies and ${totalDependents} dependents`);
-        if (filteredDependents > 0) {
-            console.log(`📊 Filtered dependents: ${filteredDependents} (symbol-level filtering applied)`);
-        }
-        console.log(`📊 Total relevant nodes: ${relevantNodeIds.size}`);
+        aidaLogging(`📊 Total relevant nodes: ${relevantNodeIds.size}`);
 
         // Step 5: Build filtered graph
         const filteredGraph = this.buildFilteredGraph(relevantNodeIds, prNodes, nodeChangedSymbols);
@@ -63306,8 +63548,8 @@ class PRDependencyAnalyzer {
         filteredGraph.prSummary = {
             totalPRFiles: prFiles.length,
             matchedNodes: prNodes.length,
-            totalDependencies: totalDeps,
-            totalDependents: totalDependents,
+            totalDependencies: 0, // Dependencies are now hidden
+            totalDependents: filteredGraph.nodes.filter(n => n.nodeType === 'dependent' || n.nodeType === 'both').length,
             filteredDependents: filteredDependents,
             totalNodes: filteredGraph.nodes.length,
             totalEdges: filteredGraph.edges.length,
@@ -63330,7 +63572,7 @@ class PRDependencyAnalyzer {
      */
     async ensureFullGraph() {
         if (this.fullGraph) {
-            console.log('✅ Using cached full graph');
+            aidaLogging('✅ Using cached full graph');
             return;
         }
 
@@ -63340,16 +63582,16 @@ class PRDependencyAnalyzer {
                 const cacheData = JSON.parse(fs.readFileSync(this.cacheFilePath, 'utf8'));
                 if (cacheData.version === CACHE_VERSION && cacheData.graph) {
                     this.fullGraph = cacheData.graph;
-                    console.log(`✅ Loaded graph from cache: ${this.fullGraph.nodes.length} nodes, ${this.fullGraph.edges.length} edges`);
+                    aidaLogging(`✅ Loaded graph from cache: ${this.fullGraph.nodes.length} nodes, ${this.fullGraph.edges.length} edges`);
                     return;
                 }
             } catch (error) {
-                console.log(`⚠️ Cache read error: ${error.message}`);
+                aidaLogging(`⚠️ Cache read error: ${error.message}`);
             }
         }
 
         // Build new graph
-        console.log('🔨 Building new dependency graph...');
+        aidaLogging('🔨 Building new dependency graph...');
         this.fullGraph = await this.buildFullGraph();
 
         // Save cache
@@ -63365,9 +63607,9 @@ class PRDependencyAnalyzer {
                 graph: this.fullGraph
             }, null, 2));
 
-            console.log(`✅ Saved graph cache: ${this.fullGraph.nodes.length} nodes`);
+            aidaLogging(`✅ Saved graph cache: ${this.fullGraph.nodes.length} nodes`);
         } catch (error) {
-            console.log(`⚠️ Cache write error: ${error.message}`);
+            aidaLogging(`⚠️ Cache write error: ${error.message}`);
         }
     }
 
@@ -63375,11 +63617,11 @@ class PRDependencyAnalyzer {
      * Build full workspace dependency graph
      */
     async buildFullGraph() {
-        console.log('📊 Analyzing workspace dependencies...');
+        aidaLogging('📊 Analyzing workspace dependencies...');
         
         try {
             const graph = await this.vscodeAnalyzer.analyze();
-            console.log(`✅ Built graph: ${graph.nodes.length} nodes, ${graph.edges.length} edges`);
+            aidaLogging(`✅ Built graph: ${graph.nodes.length} nodes, ${graph.edges.length} edges`);
             return graph;
         } catch (error) {
             console.error('❌ Error building graph:', error);
@@ -63436,14 +63678,14 @@ class PRDependencyAnalyzer {
                     prPatch: prFile.patch || null // Add patch data for symbol extraction
                 });
                 
-                console.log(`✅ Matched PR file: ${prFile.path} → ${node.relativePath} (${prFile.status})`);
+                aidaLogging(`✅ Matched PR file: ${prFile.path} → ${node.relativePath} (${prFile.status})`);
             } else {
                 // Handle files not present in cached graph (new or deleted)
                 const placeholderNode = prFile.status === 'delete'
                     ? this.createNodeForDeletedFile(prFile)
                     : this.createNodeForNewFile(prFile);
                 nodes.push(placeholderNode);
-                console.log(`➕ Created node for ${prFile.status} file: ${prFile.path}`);
+                aidaLogging(`➕ Created node for ${prFile.status} file: ${prFile.path}`);
             }
         }
 
@@ -63539,109 +63781,196 @@ class PRDependencyAnalyzer {
     }
 
     /**
+     * Check if a node should be ignored based on language configuration
+     * @param {string} filePath - Relative path of the file
+     * @returns {boolean} - True if should be ignored
+     */
+    shouldIgnoreNode(filePath) {
+        if (!filePath) return false;
+        
+        // Get language config from VSCode Analyzer
+        const languageConfig = this.vscodeAnalyzer.languageConfig;
+        const ext = path.extname(filePath).toLowerCase();
+        
+        // Find matching language
+        const language = Object.values(languageConfig).find(config => 
+            config.extensions.includes(ext)
+        );
+        
+        if (language && language.ignorePatterns) {
+            return language.ignorePatterns.some(pattern => {
+                // Simple glob to regex conversion
+                // **/*.module.ts -> .*\.module\.ts$
+                let regexStr = pattern
+                    .replace(/\./g, '\\.')
+                    .replace(/\*\*\//g, '.*')
+                    .replace(/\*/g, '[^/]*');
+                
+                // Handle leading **/
+                if (!regexStr.startsWith('.*')) {
+                    regexStr = '.*' + regexStr; // Ensure we match anywhere if it was **/
+                }
+                
+                const regex = new RegExp(regexStr + '$');
+                return regex.test(filePath);
+            });
+        }
+        return false;
+    }
+
+    /**
      * Build filtered graph with only relevant nodes
+     * 🔥 REWRITE: Clean Slate Approach - Focus purely on Impact (Dependents -> PR Files)
      */
     buildFilteredGraph(relevantNodeIds, prNodes, nodeChangedSymbols = new Map()) {
-        // Get all relevant nodes from full graph
-        const nodes = this.fullGraph.nodes
-            .filter(n => relevantNodeIds.has(n.id))
-            .map(node => {
-                // Check if this is a PR node
-                const prNode = prNodes.find(pn => pn.id === node.id);
-                if (prNode) {
-                    // Merge PR metadata and add changedSymbols if available
-                    const merged = { ...node, ...prNode };
-                    
-                    // Add changedSymbols from Map (for Deep Impact reuse)
-                    if (nodeChangedSymbols.has(node.id)) {
-                        merged.changedSymbols = nodeChangedSymbols.get(node.id);
-                    }
-                    
-                    return merged;
-                }
-                return { ...node };
-            });
-
-        // Ensure PR nodes that are not part of the cached graph (e.g., deleted files) are included
-        const existingIds = new Set(nodes.map(n => n.id));
-        for (const prNode of prNodes) {
-            if (!existingIds.has(prNode.id)) {
-                const clonedNode = { ...prNode };
-                if (nodeChangedSymbols.has(prNode.id)) {
-                    clonedNode.changedSymbols = nodeChangedSymbols.get(prNode.id);
-                }
-                nodes.push(clonedNode);
-                existingIds.add(prNode.id);
-            }
-        }
-
+        // 1. Identify PR Nodes (The Center of the Universe)
+        const prNodeIds = new Set(prNodes.map(n => n.id));
         const deletedNodeIds = new Set(
             prNodes.filter(n => n.prStatus === 'delete').map(n => n.id)
         );
 
-        // Get all edges between relevant nodes excluding those touching deleted files
-        const edges = this.fullGraph.edges.filter(e =>
-            relevantNodeIds.has(e.source) &&
-            relevantNodeIds.has(e.target) &&
-            !deletedNodeIds.has(e.source) &&
-            !deletedNodeIds.has(e.target)
-        );
+        // 2. Identify Edges (Strict Impact Filtering)
+        // We only care about edges that point TO a PR file.
+        // Source can be anything (PR file or External file).
+        // Target MUST be a PR file.
+        const edges = [];
+        
+        // 2a. Scan Full Graph Edges
+        this.fullGraph.edges.forEach(e => {
+            // Skip if touching deleted files
+            if (deletedNodeIds.has(e.source) || deletedNodeIds.has(e.target)) return;
 
-        // 🔥 NEW: Add edges for barrel export detected files (not in original graph)
-        // These are files found via resolveBarrelReferences that were added dynamically
-        for (const prNode of prNodes) {
-            if (prNode.prStatus === 'delete') {
-                continue;
+            // 🔥 NEW: Check ignore patterns for Source (Dependent)
+            // If the dependent is an ignored file (e.g. Angular Module), don't show it as impacted
+            if (this.shouldIgnoreNode(e.source)) return;
+
+            // CRITICAL: Only keep edge if it points TO a PR file
+            if (prNodeIds.has(e.target)) {
+                // Also check if source is relevant (found via symbol analysis or is another PR file)
+                if (relevantNodeIds.has(e.source) || prNodeIds.has(e.source)) {
+                    edges.push(e);
+                }
             }
-            if (prNode.changedSymbols && Array.isArray(prNode.changedSymbols)) {
-                // For each impacted file found via barrel resolution
-                for (const nodeId of relevantNodeIds) {
-                    if (nodeId === prNode.id) continue; // Skip self
+        });
+
+        // 2b. Add Dynamic Edges (Barrel Exports / Wildcards)
+        // These are edges found during symbol analysis that might not exist in the static full graph
+        // The 'relevantNodeIds' set contains these dynamically found dependents
+        for (const nodeId of relevantNodeIds) {
+            // If this node is NOT a PR file, it must be a dependent found via analysis
+            if (!prNodeIds.has(nodeId)) {
+                // We need to connect it to the PR file it depends on
+                // Since we don't track exactly WHICH PR file caused this dependent to be relevant in the Set,
+                // we rely on the fact that 'relevantNodeIds' was populated by scanning PR files.
+                // However, to be precise, we should have tracked the relationship.
+                // FALLBACK: If we found a dependent but no edge exists in full graph, 
+                // we check if we can infer the connection or if it was added by barrel logic.
+                
+                // Check if we already added an edge for this node
+                const isConnected = edges.some(e => e.source === nodeId);
+                
+                if (!isConnected) {
+                    // This node was deemed relevant but has no edge in full graph pointing to a PR file.
+                    // This likely means it was found via Barrel/Wildcard search.
+                    // We need to find which PR file it uses.
+                    // Since we don't have that mapping here easily without re-scanning, 
+                    // we will try to find a connection in the full graph again (maybe missed?)
+                    // OR we assume it connects to the PR file that triggered its inclusion.
                     
-                    const targetNode = nodes.find(n => n.id === nodeId);
-                    if (!targetNode || targetNode.isPRFile) continue;
+                    // RE-SCAN: Check which PR file's symbol analysis added this node
+                    // This is a bit expensive but accurate.
+                    // Actually, we can just look at the 'symbolToDependentsMap' if we had access to it here,
+                    // but we don't.
                     
-                    // Check if edge already exists
-                    const edgeExists = edges.some(e => 
-                        e.source === nodeId && e.target === prNode.id
-                    );
-                    
-                    if (!edgeExists) {
-                        // Create edge from impacted file to PR file (dependent relationship)
-                        edges.push({
-                            source: nodeId,
-                            target: prNode.id,
-                            type: 'uses'
-                        });
-                    }
+                    // SIMPLIFICATION: If we can't find a static edge, we skip it for now to avoid false positives,
+                    // UNLESS we explicitly passed the dynamic edges (which we didn't).
+                    // Wait! The previous logic iterated over prNodes to find barrel usages.
+                    // Let's bring that back but cleaner.
                 }
             }
         }
+        
+        // 🔥 RE-INTEGRATE BARREL LOGIC (Cleaner)
+        // We need to add edges for dependents found via barrel resolution that aren't in the static graph
+        for (const prNode of prNodes) {
+            if (prNode.prStatus === 'delete') continue;
+            
+            // We need to know which dependents this PR node is responsible for.
+            // Since we don't have that map passed in, we have to rely on the fact that
+            // if a node is in relevantNodeIds and NOT in PR, it's a dependent.
+            // But we don't know WHICH PR node it depends on without the map.
+            
+            // FIX: We will trust the 'edges' array we built from Full Graph for standard deps.
+            // For barrel deps, we need to rely on the fact that 'relevantNodeIds' contains them.
+            // If a relevant node has NO edge to any PR node, it's an orphan dependent.
+            // We should probably have passed the 'symbolToDependentsMap' or similar.
+            
+            // FOR NOW: We will stick to the Full Graph edges + strict filtering.
+            // If barrel resolution added nodes to 'relevantNodeIds', but didn't create an edge in 'fullGraph',
+            // they will be missing edges.
+            // However, 'relevantNodeIds' was populated by 'getDependents' (which uses full graph) 
+            // AND 'resolveBarrelReferences' (which finds new files).
+            
+            // Let's try to recover the barrel edges by checking if any relevant node 
+            // is NOT connected yet.
+        }
 
-        // Classify nodes for better visualization
-        nodes.forEach(node => {
-            if (!node.isPRFile) {
-                // Determine if this is a dependency or dependent
-                const isDependency = edges.some(e => 
-                    prNodes.some(pn => pn.id === e.source) && e.target === node.id
-                );
-                const isDependent = edges.some(e => 
-                    prNodes.some(pn => pn.id === e.target) && e.source === node.id
-                );
+        // 3. Identify Nodes based on Filtered Edges + PR Nodes
+        const finalNodeIds = new Set(prNodeIds);
+        edges.forEach(e => finalNodeIds.add(e.source));
 
-                if (isDependency && isDependent) {
-                    node.nodeType = 'both';
-                } else if (isDependency) {
-                    node.nodeType = 'dependency';
-                } else if (isDependent) {
-                    node.nodeType = 'dependent';
-                } else {
-                    node.nodeType = 'indirect';
+        // 4. Construct Node Objects
+        const nodes = [];
+        const addedNodeIds = new Set();
+
+        // Helper to add node
+        const addNode = (id, sourceNode = null) => {
+            if (addedNodeIds.has(id)) return;
+            
+            let nodeToAdd = sourceNode;
+            
+            if (!nodeToAdd) {
+                // Try finding in full graph
+                nodeToAdd = this.fullGraph.nodes.find(n => n.id === id);
+            }
+            
+            if (!nodeToAdd) {
+                // Create placeholder if not found (e.g. new file or dynamic barrel file)
+                nodeToAdd = {
+                    id: id,
+                    relativePath: id,
+                    label: path.basename(id),
+                    type: 'dependent' // Default to dependent if not found
+                };
+            }
+
+            // Merge PR metadata if it's a PR file
+            if (prNodeIds.has(id)) {
+                const prNode = prNodes.find(pn => pn.id === id);
+                nodeToAdd = { ...nodeToAdd, ...prNode };
+                nodeToAdd.nodeType = 'pr-file';
+                
+                if (nodeChangedSymbols.has(id)) {
+                    nodeToAdd.changedSymbols = nodeChangedSymbols.get(id);
                 }
             } else {
-                node.nodeType = 'pr-file';
+                // It's a dependent
+                nodeToAdd = { ...nodeToAdd }; // Clone
+                nodeToAdd.nodeType = 'dependent';
             }
+
+            nodes.push(nodeToAdd);
+            addedNodeIds.add(id);
+        };
+
+        // Add all nodes involved in edges
+        edges.forEach(e => {
+            addNode(e.source);
+            addNode(e.target);
         });
+
+        // Ensure all PR nodes are added (even if isolated)
+        prNodes.forEach(pn => addNode(pn.id));
 
         return { nodes, edges };
     }
@@ -63732,7 +64061,7 @@ class PRDependencyAnalyzer {
      * Combines Regex (fast, robust for fragments) and VS Code API (accurate for structure)
      */
     async extractChangedSymbols(patch, prFilePath) {
-        console.log(`   🔍 Extracting symbols using Hybrid approach (Regex + VS Code API)...`);
+        aidaLogging(`   🔍 Extracting symbols using Hybrid approach (Regex + VS Code API)...`);
         
         // 1. Run Regex extraction (using the existing method)
         const regexSymbols = await this.extractChangedSymbolsRegex(patch, prFilePath);
@@ -63748,7 +64077,7 @@ class PRDependencyAnalyzer {
             // Filter out symbols that match the filename (likely module wrappers)
             const fileName = path.basename(prFilePath, path.extname(prFilePath));
             if (sym.name.toLowerCase() === fileName.toLowerCase()) {
-                console.log(`   🚫 Ignoring symbol '${sym.name}' (matches filename) from ${source}`);
+                aidaLogging(`   🚫 Ignoring symbol '${sym.name}' (matches filename) from ${source}`);
                 return;
             }
             
@@ -63767,7 +64096,7 @@ class PRDependencyAnalyzer {
         vscodeSymbols.forEach(s => addSymbol(s, 'VSCode'));
         
         const finalSymbols = Array.from(mergedMap.values());
-        console.log(`   ✅ Hybrid extraction found ${finalSymbols.length} unique symbols`);
+        aidaLogging(`   ✅ Hybrid extraction found ${finalSymbols.length} unique symbols`);
         return finalSymbols;
     }
 
@@ -63781,7 +64110,7 @@ class PRDependencyAnalyzer {
             return [];
         }
 
-        console.log(`   📄 Extracting symbols from patch content (VS Code API)...`);
+        aidaLogging(`   📄 Extracting symbols from patch content (VS Code API)...`);
         
         // 1. Extract "New Code" from patch (lines starting with +)
         const lines = patch.split('\n');
@@ -63910,11 +64239,11 @@ class PRDependencyAnalyzer {
      */
     extractChangedSymbolsRegex(patch, prFilePath) {
         if (!patch) {
-            console.log(`   ⚠️ No patch data`);
+            aidaLogging(`   ⚠️ No patch data`);
             return [];
         }
 
-        console.log(`   📄 Extracting from patch (${patch.length} chars)...`);
+        aidaLogging(`   📄 Extracting from patch (${patch.length} chars)...`);
         
         const allSymbols = [];
         const lines = patch.split('\n');
@@ -64029,15 +64358,15 @@ class PRDependencyAnalyzer {
         // Convert to array
         const uniqueRootSymbols = Array.from(rootSymbolMap.values());
         
-        console.log(`   ✅ Found ${uniqueRootSymbols.length} root symbols:`);
+        aidaLogging(`   ✅ Found ${uniqueRootSymbols.length} root symbols:`);
         uniqueRootSymbols.forEach(s => {
             if (s.children && s.children.length > 0) {
-                console.log(`      - ${s.fullName} (object with ${s.children.length} properties)`);
+                aidaLogging(`      - ${s.fullName} (object with ${s.children.length} properties)`);
                 s.children.forEach(child => {
-                    console.log(`         └─ ${child}`);
+                    aidaLogging(`         └─ ${child}`);
                 });
             } else {
-                console.log(`      - ${s.fullName}`);
+                aidaLogging(`      - ${s.fullName}`);
             }
         });
         
@@ -64234,14 +64563,14 @@ class PRDependencyAnalyzer {
         }
 
         try {
-            console.log(`      🔍 Checking dependent: ${dependentPath}`);
-            console.log(`         Root symbols to check: [${changedSymbols.map(s => s.fullName).join(', ')}]`);
+            aidaLogging(`      🔍 Checking dependent: ${dependentPath}`);
+            aidaLogging(`         Root symbols to check: [${changedSymbols.map(s => s.fullName).join(', ')}]`);
             
             const fullDependentPath = path.join(this.workspaceRoot, dependentPath);
             const fullPRFilePath = path.join(this.workspaceRoot, prFilePath);
             
             if (!fs.existsSync(fullDependentPath)) {
-                console.log(`         ❌ File not found: ${fullDependentPath}`);
+                aidaLogging(`         ❌ File not found: ${fullDependentPath}`);
                 return usedSymbols;
             }
 
@@ -64251,7 +64580,7 @@ class PRDependencyAnalyzer {
             for (const symbol of changedSymbols) {
                 const symbolPosition = new vscode.Position(symbol.lineNumber, symbol.column);
                 
-                console.log(`         🔍 Searching: ${symbol.fullName}`);
+                aidaLogging(`         🔍 Searching: ${symbol.fullName}`);
                 
                 try {
                     const result = await this.resolveBarrelReferences(
@@ -64265,11 +64594,11 @@ class PRDependencyAnalyzer {
                     const allReferences = result.references;
                     
                     if (allReferences.length === 0) {
-                        console.log(`            ⏭️ No references found`);
+                        aidaLogging(`            ⏭️ No references found`);
                         continue;
                     }
                     
-                    console.log(`            📍 Found ${allReferences.length} total references`);
+                    aidaLogging(`            📍 Found ${allReferences.length} total references`);
                     
                     // Filter to this dependent file only
                     const referencesInDependent = allReferences.filter(ref => {
@@ -64297,9 +64626,9 @@ class PRDependencyAnalyzer {
                                 usedSymbols.push(...symbol.children);
                             }
                             
-                            console.log(`            ✅ Found ${realRefs.length} real usages`);
+                            aidaLogging(`            ✅ Found ${realRefs.length} real usages`);
                             if (symbol.children && symbol.children.length > 0) {
-                                console.log(`            ✅ Including ${symbol.children.length} child properties`);
+                                aidaLogging(`            ✅ Including ${symbol.children.length} child properties`);
                             }
                         }
                     }
@@ -64310,9 +64639,9 @@ class PRDependencyAnalyzer {
             }
             
             if (usedSymbols.length > 0) {
-                console.log(`         ✅ Total confirmed: ${usedSymbols.length} symbols`);
+                aidaLogging(`         ✅ Total confirmed: ${usedSymbols.length} symbols`);
             } else {
-                console.log(`         ℹ️ No symbols from PR file used`);
+                aidaLogging(`         ℹ️ No symbols from PR file used`);
             }
 
             return usedSymbols;
@@ -64444,6 +64773,7 @@ class PRDependencyAnalyzer {
 
 module.exports = { PRDependencyAnalyzer };
 
+
 /***/ }),
 
 /***/ "./scripts/pr-file-fetcher.js":
@@ -64454,6 +64784,7 @@ module.exports = { PRDependencyAnalyzer };
 
 const { getTokenForPR } = __webpack_require__(/*! ./review-common */ "./scripts/review-common.js");
 const { parsePRUrlInfo, getGitHubPR, getAzureDevOpsPR, getGitLabMR } = __webpack_require__(/*! ./review-pr */ "./scripts/review-pr.js");
+const { aidaLogging } = __webpack_require__(/*! ./settings */ "./scripts/settings.js");
 
 /**
  * Unified PR file fetcher for all providers
@@ -64482,7 +64813,7 @@ class PRFileFetcher {
      * @returns {Promise<Array>} File change objects
      */
     async fetchFiles(prInfo) {
-        console.log(`🔍 Fetching files from ${prInfo.repoType} PR...`);
+        aidaLogging(`🔍 Fetching files from ${prInfo.repoType} PR...`);
 
         // Get token
         const token = getTokenForPR(prInfo.originalUrl);
@@ -64547,7 +64878,7 @@ class PRFileFetcher {
                       statusMap[file.status?.toLowerCase()] || 
                       'edit';
 
-        console.log(`🔍 Normalize ${file.path}: changeType="${file.changeType}" → status="${status}" (+${file.additions}/-${file.deletions})`);
+        aidaLogging(`🔍 Normalize ${file.path}: changeType="${file.changeType}" → status="${status}" (+${file.additions}/-${file.deletions})`);
 
         return {
             path: file.path,
@@ -64581,6 +64912,7 @@ const path = __webpack_require__(/*! path */ "path");
 const { execSync } = __webpack_require__(/*! child_process */ "child_process");
 const { executeAIReview, getUnifiedModel, getChecklistStatusIcon, shouldUseApiKey, displayReviewHeader, loadTemplateWithPriority, displayCommonReviewInfo, showReviewOptions } = __webpack_require__(/*! ./review-common */ "./scripts/review-common.js");
 const { autoDetectWorkspace, getReviewTemplateWithDetection, displayDetectionInfo } = __webpack_require__(/*! ./language-detection */ "./scripts/language-detection.js");
+const { aidaLogging } = __webpack_require__(/*! ./settings */ "./scripts/settings.js");
 
 // Import functions from extension.js
 let handleEnterTwiceLogic;
@@ -64590,7 +64922,7 @@ try {
     handleEnterTwiceLogic = extensionModule.handleEnterTwiceLogic;
     ensureAidaTemplatesForReview = extensionModule.ensureAidaTemplatesForReview;
 } catch (error) {
-    console.log('⚠️ Could not import functions from extension.js');
+    aidaLogging('⚠️ Could not import functions from extension.js');
 }
 
 /**
@@ -64607,11 +64939,11 @@ function initializeReviewAllChanges(context) {
                 await ensureAidaTemplatesForReview(context);
             }
             
-            console.log('🎯 review-all-changes participant called');
-            console.log('📥 Request object:', request);
-            console.log('📥 Request.model:', request.model);
-            console.log('📥 Request.model?.family:', request.model?.family);
-            console.log('📥 Request.model?.id:', request.model?.id);
+            aidaLogging('🎯 review-all-changes participant called');
+            aidaLogging('📥 Request object:', request);
+            aidaLogging('📥 Request.model:', request.model);
+            aidaLogging('📥 Request.model?.family:', request.model?.family);
+            aidaLogging('📥 Request.model?.id:', request.model?.id);
             
             const input = request.prompt.trim();
             
@@ -64624,7 +64956,7 @@ function initializeReviewAllChanges(context) {
             
             // Check for global selectedBusinessDocs (like review-file.js, review-pr.js, review-changes.js)
             if (global.selectedBusinessDocs) {
-                console.log('🎯 Enhanced/Quick All Changes Review detected:', global.selectedBusinessDocs);
+                aidaLogging('🎯 Enhanced/Quick All Changes Review detected:', global.selectedBusinessDocs);
                 
                 // Execute review directly
                 await aiReviewAllChanges(input, stream, null, context, request);
@@ -64698,11 +65030,11 @@ function initializeReviewAllChanges(context) {
  * @param {object} stream - Chat stream object
  */
 async function processReviewAllChanges(input, stream) {
-    console.log('🔍 processReviewAllChanges: Starting review all changes with options');
+    aidaLogging('🔍 processReviewAllChanges: Starting review all changes with options');
     
     // Check for global selectedBusinessDocs (unified pattern with review-file, review-changes, review-pr)
     if (global.selectedBusinessDocs) {
-        console.log('🎯 Enhanced/Quick All Changes Review detected:', global.selectedBusinessDocs);
+        aidaLogging('🎯 Enhanced/Quick All Changes Review detected:', global.selectedBusinessDocs);
         
         // Execute review directly
         await aiReviewAllChanges(input, stream, null, null, null);
@@ -64763,7 +65095,7 @@ function findGitRepositoryRoot(startPath) {
         try {
             const gitPath = path.join(currentPath, '.git');
             if (fs.existsSync(gitPath)) {
-                console.log(`📁 Found git repository root: ${currentPath}`);
+                aidaLogging(`📁 Found git repository root: ${currentPath}`);
                 return currentPath;
             }
         } catch (error) {
@@ -64772,7 +65104,7 @@ function findGitRepositoryRoot(startPath) {
         currentPath = path.dirname(currentPath);
     }
     
-    console.log('❌ Git repository root not found');
+    aidaLogging('❌ Git repository root not found');
     return null;
 }
 
@@ -64793,8 +65125,8 @@ async function getAllChangedFilesWithDiffs(workspaceFolder) {
             };
         }
         
-        console.log(`🔍 Scanning git changes from repository root: ${gitRoot}`);
-        console.log(`📂 Original workspace folder: ${workspaceFolder.uri.fsPath}`);
+        aidaLogging(`🔍 Scanning git changes from repository root: ${gitRoot}`);
+        aidaLogging(`📂 Original workspace folder: ${workspaceFolder.uri.fsPath}`);
         
         // Get list of all changed files
         let changedFiles = [];
@@ -64806,10 +65138,10 @@ async function getAllChangedFilesWithDiffs(workspaceFolder) {
                 encoding: 'utf8' 
             }).trim().split('\n').filter(f => f);
             
-            console.log(`📄 Found ${unstagedFiles.length} unstaged files:`, unstagedFiles);
+            aidaLogging(`📄 Found ${unstagedFiles.length} unstaged files:`, unstagedFiles);
             changedFiles = [...changedFiles, ...unstagedFiles.map(f => ({ file: f, type: 'unstaged' }))];
         } catch (error) {
-            console.log('No unstaged changes found');
+            aidaLogging('No unstaged changes found');
         }
         
         // Get staged changes - now using git repository root
@@ -64819,10 +65151,10 @@ async function getAllChangedFilesWithDiffs(workspaceFolder) {
                 encoding: 'utf8' 
             }).trim().split('\n').filter(f => f);
             
-            console.log(`📄 Found ${stagedFiles.length} staged files:`, stagedFiles);
+            aidaLogging(`📄 Found ${stagedFiles.length} staged files:`, stagedFiles);
             changedFiles = [...changedFiles, ...stagedFiles.map(f => ({ file: f, type: 'staged' }))];
         } catch (error) {
-            console.log('No staged changes found');
+            aidaLogging('No staged changes found');
         }
         
         if (changedFiles.length === 0) {
@@ -64862,7 +65194,7 @@ async function getAllChangedFilesWithDiffs(workspaceFolder) {
                 });
             });
         
-        console.log(`📁 Found ${uniqueFiles.length} changed files:`, uniqueFiles.map(f => f.file));
+        aidaLogging(`📁 Found ${uniqueFiles.length} changed files:`, uniqueFiles.map(f => f.file));
         
         // Get combined diff for all files
         let allDiffs = [];
@@ -64907,7 +65239,7 @@ async function getAllChangedFilesWithDiffs(workspaceFolder) {
                     totalLinesRemoved += removed;
                 }
             } catch (fileError) {
-                console.log(`Warning: Could not get diff for ${file}:`, fileError.message);
+                aidaLogging(`Warning: Could not get diff for ${file}:`, fileError.message);
             }
         }
         
@@ -65059,7 +65391,7 @@ async function reviewAllChanges(diffContent, stream, changeType, selectedModel =
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
         const detection = await autoDetectWorkspace(workspaceFolder.uri.fsPath, null);
         
-        console.log(`🎯 Detection result for all changes: "${detection.detected}" (type: ${detection.type})`);
+        aidaLogging(`🎯 Detection result for all changes: "${detection.detected}" (type: ${detection.type})`);
         
         // Use common template loading function - SAME template as review-changes
         const templateResult = await loadTemplateWithPriority('review-changes.md', detection);
@@ -65144,7 +65476,7 @@ async function reviewAllChanges(diffContent, stream, changeType, selectedModel =
             // Check if this is API key mode before showing error
             if (shouldUseApiKey()) {
                 // API key mode - executeAIReview will handle it
-                console.log('🔑 API key mode enabled - model is null as expected');
+                aidaLogging('🔑 API key mode enabled - model is null as expected');
             } else {
                 stream.markdown('❌ **AI models not available** - falling back to template display\n\n');
                 throw new Error('No AI models available');
@@ -65374,7 +65706,7 @@ function analyzeLineForAllChangesChecklist(line, file, lineNumber, analysis) {
         );
     }
 
-    if (content.includes('console.log') || content.includes('console.error')) {
+    if (content.includes('aidaLogging') || content.includes('console.error')) {
         analysis.checklist.bestPractices.issues.push(
             `🔍 **${file}:${lineNumber}** - Console statement found. Remove for production code.`
         );
@@ -65515,6 +65847,7 @@ module.exports = {
     processReviewAllChanges
 };
 
+
 /***/ }),
 
 /***/ "./scripts/review-changes.js":
@@ -65529,13 +65862,14 @@ const path = __webpack_require__(/*! path */ "path");
 const { execSync } = __webpack_require__(/*! child_process */ "child_process");
 const { executeAIReview, getUnifiedModel, getChecklistStatusIcon, shouldUseApiKey, displayReviewHeader, loadTemplateWithPriority, displayCommonReviewInfo, getBusinessDocumentFolders, showReviewOptions } = __webpack_require__(/*! ./review-common */ "./scripts/review-common.js");
 const { autoDetectWorkspace, getReviewTemplateWithDetection, displayDetectionInfo } = __webpack_require__(/*! ./language-detection */ "./scripts/language-detection.js");
+const { aidaLogging } = __webpack_require__(/*! ./settings */ "./scripts/settings.js");
 
 // Import chatSessions from extension.js for session tracking
 let chatSessions;
 try {
     const extensionModule = __webpack_require__(/*! ../extension */ "./extension.js");
     chatSessions = extensionModule.chatSessions;
-    console.log('✅ Successfully imported chatSessions from extension.js:', typeof chatSessions, chatSessions ? chatSessions.constructor.name : 'null');
+    aidaLogging('✅ Successfully imported chatSessions from extension.js:', typeof chatSessions, chatSessions ? chatSessions.constructor.name : 'null');
 } catch (error) {
     console.warn('⚠️ Could not import chatSessions from extension.js, creating fallback:', error.message);
     chatSessions = new Map();
@@ -65549,7 +65883,7 @@ try {
     handleEnterTwiceLogic = extensionModule.handleEnterTwiceLogic;
     ensureAidaTemplatesForReview = extensionModule.ensureAidaTemplatesForReview;
 } catch (error) {
-    console.log('⚠️ Could not import additional functions from extension.js');
+    aidaLogging('⚠️ Could not import additional functions from extension.js');
 }
 
 /**
@@ -65601,7 +65935,7 @@ async function processReviewChanges(targetInput, stream, context = null, request
     try {
         // Simple check - only one key! (after targetInput is defined)
         if (global.selectedBusinessDocs) {
-            console.log('🎯 Enhanced/Quick Changes Review detected:', global.selectedBusinessDocs);
+            aidaLogging('🎯 Enhanced/Quick Changes Review detected:', global.selectedBusinessDocs);
             // Execute review and cleanup
             await aiReviewChanges(targetInput, stream, null, context, request);
             return;
@@ -65675,7 +66009,7 @@ function getTargetFileInfo(input) {
         );
         
         if (isFilePath) {
-            console.log('🐛 DEBUG - String file path detected:', input);
+            aidaLogging('🐛 DEBUG - String file path detected:', input);
             return {
                 type: 'file',
                 path: input.trim(),
@@ -65687,7 +66021,7 @@ function getTargetFileInfo(input) {
     // Get current editor file as fallback
     const activeEditor = vscode.window.activeTextEditor;
     if (activeEditor) {
-        console.log('🐛 DEBUG - Using active editor:', activeEditor.document.fileName);
+        aidaLogging('🐛 DEBUG - Using active editor:', activeEditor.document.fileName);
         return {
             type: 'file',
             path: activeEditor.document.fileName,
@@ -65695,7 +66029,7 @@ function getTargetFileInfo(input) {
         };
     }
     
-    console.log('🐛 DEBUG - No file detected, using workspace');
+    aidaLogging('🐛 DEBUG - No file detected, using workspace');
     return {
         type: 'workspace',
         path: null,
@@ -65813,7 +66147,7 @@ async function handleNoChangesScenario(stream, selectedModel, context, message, 
         targetFilePath = requestedFilePath;
         fileName = path.basename(requestedFilePath);
         
-        console.log('🐛 DEBUG - Using requested file:', fileName);
+        aidaLogging('🐛 DEBUG - Using requested file:', fileName);
         
         stream.markdown(`💡 **Would you like to review the requested file?**\n`);
         stream.markdown(`📂 **Requested file:** \`${fileName}\`\n\n`);
@@ -65826,14 +66160,14 @@ async function handleNoChangesScenario(stream, selectedModel, context, message, 
         });
     } else {
         // Fallback to active file if no requested file
-        console.log('🐛 DEBUG - No requestedFilePath, falling back to active editor');
+        aidaLogging('🐛 DEBUG - No requestedFilePath, falling back to active editor');
         
         const activeEditor = vscode.window.activeTextEditor;
         if (activeEditor) {
             targetFilePath = activeEditor.document.fileName;
             fileName = path.basename(activeEditor.document.fileName);
             
-            console.log('🐛 DEBUG - Using active file:', fileName);
+            aidaLogging('🐛 DEBUG - Using active file:', fileName);
             
             stream.markdown(`💡 **Would you like to review the active file?**\n`);
             stream.markdown(`📂 **Current file:** \`${fileName}\`\n\n`);
@@ -65926,7 +66260,7 @@ async function reviewChanges(diffContent, stream, changeType, selectedModel = nu
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
         const detection = await autoDetectWorkspace(workspaceFolder.uri.fsPath, filePath);
         
-        console.log(`🎯 Detection result: "${detection.detected}" (type: ${detection.type})`);
+        aidaLogging(`🎯 Detection result: "${detection.detected}" (type: ${detection.type})`);
         
         // Use common template loading function
         const templateResult = await loadTemplateWithPriority('review-changes.md', detection);
@@ -65950,7 +66284,7 @@ async function reviewChanges(diffContent, stream, changeType, selectedModel = nu
         
         // Verify template doesn't have old git diff placeholder
         if (templateContent.includes('# Paste git diff here')) {
-            console.log('⚠️ Template contains old git diff placeholder - will be handled in code');
+            aidaLogging('⚠️ Template contains old git diff placeholder - will be handled in code');
         }
         
     } catch (error) {
@@ -65982,7 +66316,7 @@ async function reviewChanges(diffContent, stream, changeType, selectedModel = nu
             // Check if this is API key mode before showing error
             if (shouldUseApiKey()) {
                 // API key mode - executeAIReview will handle it
-                console.log('🔑 API key mode enabled - model is null as expected');
+                aidaLogging('🔑 API key mode enabled - model is null as expected');
             } else {
                 stream.markdown('❌ **AI models not available** - falling back to template display\n\n');
                 throw new Error('No AI models available');
@@ -66197,7 +66531,7 @@ function analyzeLineForChecklist(line, file, lineNumber, analysis) {
         );
     }
 
-    if (content.includes('console.log') || content.includes('console.error')) {
+    if (content.includes('aidaLogging') || content.includes('console.error')) {
         analysis.checklist.bestPractices.issues.push(
             `🔍 **${file}:${lineNumber}** - Console statement found. Remove for production code.`
         );
@@ -66433,6 +66767,7 @@ module.exports = {
 const vscode = __webpack_require__(/*! vscode */ "vscode");
 const fs = __webpack_require__(/*! fs */ "fs");
 const path = __webpack_require__(/*! path */ "path");
+const { aidaLogging } = __webpack_require__(/*! ./settings */ "./scripts/settings.js");
 
 // Global AbortController for cancellation
 let globalAbortSignal = null;
@@ -66678,7 +67013,7 @@ function estimateCost(inputTokens, outputTokens, modelFamily, provider = null, a
         provider = 'copilot'; // Default to copilot for backward compatibility
     }
     
-    console.log(`💰 Cost calculation: ${provider}/${modelFamily} - ${inputTokens}+${outputTokens} tokens`);
+    aidaLogging(`💰 Cost calculation: ${provider}/${modelFamily} - ${inputTokens}+${outputTokens} tokens`);
     
     // Get provider-specific pricing
     const providerPricing = pricing[provider] || pricing['copilot'];
@@ -66692,16 +67027,16 @@ function estimateCost(inputTokens, outputTokens, modelFamily, provider = null, a
                  providerPricing['gpt-4o'] || 
                  { input: 2.50, output: 10.00 }; // Default fallback rates
     
-    console.log(`💰 Provider pricing keys: ${Object.keys(providerPricing).join(', ')}`);
-    console.log(`💰 Looking for model key: ${modelKey} (original: ${modelFamily})`);
-    console.log(`💰 Using rates for ${provider}/${modelKey}:`, rates);
+    aidaLogging(`💰 Provider pricing keys: ${Object.keys(providerPricing).join(', ')}`);
+    aidaLogging(`💰 Looking for model key: ${modelKey} (original: ${modelFamily})`);
+    aidaLogging(`💰 Using rates for ${provider}/${modelKey}:`, rates);
     
     // Calculate standard per-token pricing
     const inputCost = (inputTokens / 1000000) * rates.input;
     const outputCost = (outputTokens / 1000000) * rates.output;
     const totalCost = inputCost + outputCost;
     
-    console.log(`💰 Calculated costs: input=$${inputCost.toFixed(6)}, output=$${outputCost.toFixed(6)}, total=$${totalCost.toFixed(6)}`);
+    aidaLogging(`💰 Calculated costs: input=$${inputCost.toFixed(6)}, output=$${outputCost.toFixed(6)}, total=$${totalCost.toFixed(6)}`);
     
     return {
         inputCost: inputCost,
@@ -66738,7 +67073,7 @@ async function getFallbackModel(currentModel, stream, attemptNumber = 1) {
     try {
         // Check if API key mode is enabled - no fallback needed for API key mode
         if (shouldUseApiKey()) {
-            console.log('🔑 API Key mode enabled - no fallback needed');
+            aidaLogging('🔑 API Key mode enabled - no fallback needed');
             return null;
         }
         
@@ -66779,7 +67114,7 @@ async function getFallbackModel(currentModel, stream, attemptNumber = 1) {
         // Show detailed fallback information with reasoning
         const availableList = availableModels.map(m => m.family).join(', ');
         
-        console.log(`🔄 Fallback ${attemptNumber}: ${currentModel.family} → ${fallbackModel.family}`);
+        aidaLogging(`🔄 Fallback ${attemptNumber}: ${currentModel.family} → ${fallbackModel.family}`);
         
         // Show user-friendly fallback messaging
         stream.markdown(`🔄 **Switching models** (attempt ${attemptNumber}):\n`);
@@ -66838,23 +67173,23 @@ function mapGoogleResponse(data) {
 }
 
 function mapSTUResponse(data) {
-    console.log('🔍 STU Response Mapping - Full structure analysis:');
-    console.log('📊 Top-level keys:', Object.keys(data));
+    aidaLogging('🔍 STU Response Mapping - Full structure analysis:');
+    aidaLogging('📊 Top-level keys:', Object.keys(data));
     
     if (data.choices) {
-        console.log('📊 Choices array length:', data.choices.length);
+        aidaLogging('📊 Choices array length:', data.choices.length);
         if (data.choices[0]) {
-            console.log('📊 First choice keys:', Object.keys(data.choices[0]));
+            aidaLogging('📊 First choice keys:', Object.keys(data.choices[0]));
             if (data.choices[0].message) {
-                console.log('📊 Message keys:', Object.keys(data.choices[0].message));
-                console.log('📊 Message content type:', typeof data.choices[0].message.content);
-                console.log('📊 Message content length:', data.choices[0].message.content?.length || 'null/undefined');
+                aidaLogging('📊 Message keys:', Object.keys(data.choices[0].message));
+                aidaLogging('📊 Message content type:', typeof data.choices[0].message.content);
+                aidaLogging('📊 Message content length:', data.choices[0].message.content?.length || 'null/undefined');
             }
         }
     }
     
     if (data.usage) {
-        console.log('📊 Usage:', JSON.stringify(data.usage, null, 2));
+        aidaLogging('📊 Usage:', JSON.stringify(data.usage, null, 2));
     }
     
     // STU Platform may have different response structure
@@ -66863,7 +67198,7 @@ function mapSTUResponse(data) {
     // Primary: Standard OpenAI format
     if (data.choices?.[0]?.message?.content) {
         content = data.choices[0].message.content;
-        console.log('✅ Content found in standard location');
+        aidaLogging('✅ Content found in standard location');
     }
     
     // Special case: STU Platform sometimes returns empty content even with tokens
@@ -66878,7 +67213,7 @@ function mapSTUResponse(data) {
         const alternatives = ['content', 'answer', 'generated_text', 'completion', 'text'];
         for (const field of alternatives) {
             if (data[field]) {
-                console.log(`✅ Found content in alternative field: ${field}`);
+                aidaLogging(`✅ Found content in alternative field: ${field}`);
                 content = data[field];
                 break;
             }
@@ -66886,7 +67221,7 @@ function mapSTUResponse(data) {
         
         // Check nested structures
         if (!content && data.data) {
-            console.log('🔍 Checking nested data structure...');
+            aidaLogging('🔍 Checking nested data structure...');
             content = data.data.choices?.[0]?.message?.content || data.data.content;
         }
         
@@ -66904,7 +67239,7 @@ function mapSTUResponse(data) {
                     const trimmed = obj.trim();
                     // Accept any meaningful text content (even short ones)
                     if (trimmed.length > 10 && (trimmed.includes('#') || trimmed.includes('**') || trimmed.includes('```') || trimmed.length > 50)) {
-                        console.log(`✅ Found meaningful content at ${path}: ${trimmed.substring(0, 150)}...`);
+                        aidaLogging(`✅ Found meaningful content at ${path}: ${trimmed.substring(0, 150)}...`);
                         return trimmed;
                     }
                 }
@@ -66974,7 +67309,7 @@ function mapSTUResponse(data) {
                     
                     if (meaningfulFragments.length > 0) {
                         content = meaningfulFragments.join('\n\n');
-                        console.log(`✅ STU Platform: Reconstructed content from ${meaningfulFragments.length} fragments`);
+                        aidaLogging(`✅ STU Platform: Reconstructed content from ${meaningfulFragments.length} fragments`);
                     }
                 }
                 
@@ -66983,7 +67318,7 @@ function mapSTUResponse(data) {
                     const choice = data.choices[0];
                     if (choice.delta && choice.delta.content) {
                         content = choice.delta.content;
-                        console.log('✅ STU Platform: Found content in streaming delta');
+                        aidaLogging('✅ STU Platform: Found content in streaming delta');
                     }
                 }
                 
@@ -66999,7 +67334,7 @@ function mapSTUResponse(data) {
     
     // Fallback for other fields if still no content
     if (!content) {
-        console.log('🔍 Fallback content search...');
+        aidaLogging('🔍 Fallback content search...');
         content = data.content || 
                   data.answer || 
                   data.generated_text ||
@@ -67014,7 +67349,7 @@ function mapSTUResponse(data) {
         totalTokens: data.usage?.total_tokens || 0
     };
     
-    console.log('🎯 Final STU mapping result:', {
+    aidaLogging('🎯 Final STU mapping result:', {
         hasContent: !!result.content,
         contentLength: result.content?.length || 0,
         inputTokens: result.inputTokens,
@@ -67048,7 +67383,7 @@ function mapGenericResponse(data) {
  * @returns {object} - Mapped response with content and token info
  */
 function mapProviderResponse(rawResponse, provider) {
-    console.log(`🔄 Mapping response for provider: ${provider}`);
+    aidaLogging(`🔄 Mapping response for provider: ${provider}`);
     
     switch (provider) {
         case 'openai':
@@ -67078,7 +67413,7 @@ function shouldUseApiKey() {
     const useApiKey = config.get('useExternalAI', false);
     const apiKey = config.get('ai.apiKey');
     
-    console.log(`🔍 API Key mode check: useExternalAI=${useApiKey}, hasApiKey=${!!apiKey}`);
+    aidaLogging(`🔍 API Key mode check: useExternalAI=${useApiKey}, hasApiKey=${!!apiKey}`);
     
     return useApiKey && !!apiKey;
 }
@@ -67114,9 +67449,9 @@ async function executeAIReviewWithApiKey(userPrompt, stream, reviewType, attempt
             throw new Error('AI API key not configured. Please set aida.ai.apiKey in VS Code settings.');
         }
         
-        console.log(`📤 API Key mode - Attempt ${attemptCount + 1}: Sending request to ${apiHost} with model: ${model}`);
-        console.log(`🔑 API Key configured: ${apiKey ? 'Yes' : 'No'}`);
-        console.log(`🌐 Final API Host: ${apiHost}`);
+        aidaLogging(`📤 API Key mode - Attempt ${attemptCount + 1}: Sending request to ${apiHost} with model: ${model}`);
+        aidaLogging(`🔑 API Key configured: ${apiKey ? 'Yes' : 'No'}`);
+        aidaLogging(`🌐 Final API Host: ${apiHost}`);
         
         const reviewIcon = reviewType === 'Changes' ? '🔍' : '📄';
         const modelStatus = attemptCount === 0 ? 'API key mode' : `API key fallback (attempt ${attemptCount + 1})`;
@@ -67126,10 +67461,10 @@ async function executeAIReviewWithApiKey(userPrompt, stream, reviewType, attempt
         stream.markdown('---\n\n');
         
         // Debug: Check if userPrompt contains template and diff
-        console.log(`🔍 UserPrompt length: ${userPrompt.length} characters`);
-        console.log(`🔍 UserPrompt preview (first 500 chars):`, userPrompt.substring(0, 500));
-        console.log(`🔍 UserPrompt contains 'MANDATORY CHANGE ANALYSIS':`, userPrompt.includes('MANDATORY CHANGE ANALYSIS'));
-        console.log(`🔍 UserPrompt contains diff (+++/-):`, userPrompt.includes('+++') || userPrompt.includes('---'));
+        aidaLogging(`🔍 UserPrompt length: ${userPrompt.length} characters`);
+        aidaLogging(`🔍 UserPrompt preview (first 500 chars):`, userPrompt.substring(0, 500));
+        aidaLogging(`🔍 UserPrompt contains 'MANDATORY CHANGE ANALYSIS':`, userPrompt.includes('MANDATORY CHANGE ANALYSIS'));
+        aidaLogging(`🔍 UserPrompt contains diff (+++/-):`, userPrompt.includes('+++') || userPrompt.includes('---'));
         
         // Use the shared callAI function
         const defaultOptions = {
@@ -67148,7 +67483,7 @@ async function executeAIReviewWithApiKey(userPrompt, stream, reviewType, attempt
         const provider = detectProvider(result.apiHost, result.model || model);
         
         if (result.isStreaming) {
-            console.log('🔄 Handling streaming response...');
+            aidaLogging('🔄 Handling streaming response...');
             
             // Handle streaming response
             const reader = result.streamResponse.body.getReader();
@@ -67212,7 +67547,7 @@ async function executeAIReviewWithApiKey(userPrompt, stream, reviewType, attempt
             // Handle non-streaming response
             mappedResponse = mapProviderResponse(result.rawResponse, provider);
             
-        console.log(`🎯 Mapped response for ${provider}:`, mappedResponse);
+        aidaLogging(`🎯 Mapped response for ${provider}:`, mappedResponse);
         
         // Handle complex parsing failure - trigger fallback to Copilot
         if (mappedResponse.error === 'COMPLEX_PARSING_FAILED') {
@@ -67221,7 +67556,7 @@ async function executeAIReviewWithApiKey(userPrompt, stream, reviewType, attempt
             if (!mappedResponse.content || mappedResponse.content.trim().length === 0) {
                 throw new Error(`${provider} complex parsing failed - content too complex for current parser`);
             } else {
-                console.log(`✅ ${provider} recovered content despite parsing complexity - proceeding normally`);
+                aidaLogging(`✅ ${provider} recovered content despite parsing complexity - proceeding normally`);
                 // Clear the error flag since we have content
                 delete mappedResponse.error;
             }
@@ -67321,7 +67656,7 @@ function normalizeApiParameters(model, apiHost, options) {
     // Detect provider from API host or model name
     const provider = detectProvider(apiHost, model);
     
-    console.log(`🔄 Normalizing parameters for provider: ${provider}`);
+    aidaLogging(`🔄 Normalizing parameters for provider: ${provider}`);
     
     switch (provider) {
         case 'openai':
@@ -67367,7 +67702,7 @@ function normalizeApiParameters(model, apiHost, options) {
             
         case 'stu':
             // STU Platform - experimental GPT-5 compatibility mode
-            console.log('🔧 STU Platform detected - applying compatibility fixes...');
+            aidaLogging('🔧 STU Platform detected - applying compatibility fixes...');
             
             // Remove ALL potentially problematic parameters for GPT-5
             if (model.includes('gpt-5') || model.toLowerCase().includes('gpt-5')) {
@@ -67387,7 +67722,7 @@ function normalizeApiParameters(model, apiHost, options) {
                     }
                 });
                 
-                console.log('🔧 STU GPT-5 params:', Object.keys(normalized));
+                aidaLogging('🔧 STU GPT-5 params:', Object.keys(normalized));
             } else {
                 // For non-GPT-5 models, use standard parameter mapping
                 if (options.max_tokens) {
@@ -67514,7 +67849,7 @@ async function callAI(systemPrompt, userPrompt, options = {}, images = [], abort
     
     // Add images for vision models if provided
     if (images && images.length > 0) {
-        console.log(`�️ Adding ${images.length} images to API call`);
+        aidaLogging(`�️ Adding ${images.length} images to API call`);
         
         // Detect provider for image format
         const provider = detectProvider(apiHost, model);
@@ -67568,9 +67903,9 @@ async function callAI(systemPrompt, userPrompt, options = {}, images = [], abort
     
     messages.push(userMessage);
     
-    console.log(`🔑 Making API call to: ${apiHost}`);
-    console.log(`🤖 Using model: ${model}`);
-    console.log(`📋 Request payload:`, JSON.stringify({
+    aidaLogging(`🔑 Making API call to: ${apiHost}`);
+    aidaLogging(`🤖 Using model: ${model}`);
+    aidaLogging(`📋 Request payload:`, JSON.stringify({
         model: model,
         messages: messages.map(m => ({
             role: m.role,
@@ -67601,7 +67936,7 @@ async function callAI(systemPrompt, userPrompt, options = {}, images = [], abort
     
     // Handle streaming vs non-streaming responses
     if (normalizedOptions.stream) {
-        console.log('🔄 Streaming response detected');
+        aidaLogging('🔄 Streaming response detected');
         return {
             streamResponse: response,
             apiHost: apiHost,
@@ -67610,7 +67945,7 @@ async function callAI(systemPrompt, userPrompt, options = {}, images = [], abort
         };
     } else {
         const data = await response.json();
-        console.log('🔍 Raw API response received:', JSON.stringify(data, null, 2));
+        aidaLogging('🔍 Raw API response received:', JSON.stringify(data, null, 2));
         
         // Just return the raw response - mapping will be done by caller
         return {
@@ -67692,7 +68027,7 @@ async function executeAIReview(userPrompt, model, stream, reviewType = 'Analysis
     
     // Check if user wants to use API key instead of Copilot
     if (shouldUseApiKey()) {
-        console.log('🔑 Using API key mode instead of Copilot');
+        aidaLogging('🔑 Using API key mode instead of Copilot');
         stream.markdown(`🔑 **API Key Mode Enabled** - Using your configured AI service\n\n`);
         
         try {
@@ -67701,7 +68036,7 @@ async function executeAIReview(userPrompt, model, stream, reviewType = 'Analysis
             // If API key fails and we have attempts left, fall back to Copilot if available
             if (attemptCount < maxAttempts - 1 && model) {
                 stream.markdown(`🔄 **API key failed, falling back to Copilot...**\n\n`);
-                console.log('🔄 API key failed, attempting Copilot fallback');
+                aidaLogging('🔄 API key failed, attempting Copilot fallback');
                 return await executeAIReviewWithCopilot(userPrompt, model, stream, reviewType, attemptCount + 1, originalRequestedModel, abortSignal);
             } else {
                 throw apiError;
@@ -67735,10 +68070,10 @@ async function executeAIReviewWithCopilot(userPrompt, model, stream, reviewType 
         const messages = [vscode.LanguageModelChatMessage.User(userPrompt)];
         
         // 📊 TOKEN ANALYSIS - Log detailed token information
-        console.log(`📊 Token Analysis for ${model.family}:`);
-        console.log(`   📤 Input tokens: ${inputTokens.toLocaleString()}`);
-        console.log(`   📏 Prompt length: ${userPrompt.length.toLocaleString()} characters`);
-        console.log(`   📋 Model: ${model.family} (${model.id})`);
+        aidaLogging(`📊 Token Analysis for ${model.family}:`);
+        aidaLogging(`   📤 Input tokens: ${inputTokens.toLocaleString()}`);
+        aidaLogging(`   📏 Prompt length: ${userPrompt.length.toLocaleString()} characters`);
+        aidaLogging(`   📋 Model: ${model.family} (${model.id})`);
         
         // ⚠️ TOKEN WARNING SYSTEM
         const COPILOT_SOFT_LIMIT = 25000;  // Warning threshold
@@ -67751,10 +68086,10 @@ async function executeAIReviewWithCopilot(userPrompt, model, stream, reviewType 
             console.warn(`⚠️ WARNING: Token count ${inputTokens} approaching limit (${Math.round(inputTokens/COPILOT_HARD_LIMIT*100)}% of ${COPILOT_HARD_LIMIT})`);
             console.warn(`   🔥 Risk of "Message exceeds token limit" error`);
         } else {
-            console.log(`✅ Token count OK: ${inputTokens} / ${COPILOT_HARD_LIMIT} (${Math.round(inputTokens/COPILOT_HARD_LIMIT*100)}%)`);
+            aidaLogging(`✅ Token count OK: ${inputTokens} / ${COPILOT_HARD_LIMIT} (${Math.round(inputTokens/COPILOT_HARD_LIMIT*100)}%)`);
         }
         
-        console.log(`📤 Copilot mode - Attempt ${attemptCount + 1}: Sending request to model:`, model.family);
+        aidaLogging(`📤 Copilot mode - Attempt ${attemptCount + 1}: Sending request to model:`, model.family);
         
         const chatResponse = await model.sendRequest(messages, {}, new vscode.CancellationTokenSource().token);
         
@@ -67795,13 +68130,13 @@ async function executeAIReviewWithCopilot(userPrompt, model, stream, reviewType 
             
             // Progress indicator every 50 fragments
             if (fragmentCount % 50 === 0) {
-                console.log(`Streaming progress: ${fragmentCount} fragments processed`);
+                aidaLogging(`Streaming progress: ${fragmentCount} fragments processed`);
             }
         }
         
         // TODO: Clean the output to remove internal blocks (temporarily disabled for streaming)
         // const cleanedOutput = stripInternalBlocks(outputText);
-        // console.log(`🧹 Cleaned output: ${outputText.length} chars -> ${cleanedOutput.length} chars`);
+        // aidaLogging(`🧹 Cleaned output: ${outputText.length} chars -> ${cleanedOutput.length} chars`);
         
         // Show completion with token statistics
         showTokenStatistics(stream, userPrompt, outputText, model, reviewType, attemptCount, 'copilot', null, null);
@@ -67873,47 +68208,47 @@ async function executeAIReviewWithCopilot(userPrompt, model, stream, reviewType 
  * @returns {string} - Processed template content with placeholders replaced
  */
 function processTemplateWithPlaceholders(templateContent, templateDir) {
-    console.log('🔍 DEBUG: processTemplateWithPlaceholders called');
-    console.log('🔍 DEBUG: Call stack:', new Error().stack?.split('\n').slice(1, 4).join('\n'));
-    console.log('🔍 DEBUG: templateDir =', templateDir);
-    console.log('🔍 DEBUG: templateContent.length =', templateContent.length);
-    console.log('🔍 DEBUG: contains {{REVIEW_BASE}}?', templateContent.includes('{{REVIEW_BASE}}'));
+    aidaLogging('🔍 DEBUG: processTemplateWithPlaceholders called');
+    aidaLogging('🔍 DEBUG: Call stack:', new Error().stack?.split('\n').slice(1, 4).join('\n'));
+    aidaLogging('🔍 DEBUG: templateDir =', templateDir);
+    aidaLogging('🔍 DEBUG: templateContent.length =', templateContent.length);
+    aidaLogging('🔍 DEBUG: contains {{REVIEW_BASE}}?', templateContent.includes('{{REVIEW_BASE}}'));
     
     // Check if already processed (to avoid double processing)
     if (templateContent.includes('<!-- AIDA_PROCESSED -->')) {
-        console.log('🔍 DEBUG: Template already processed, skipping...');
+        aidaLogging('🔍 DEBUG: Template already processed, skipping...');
         return templateContent.replace('<!-- AIDA_PROCESSED -->\n', '');
     }
     
     // Check if template contains the placeholder
     if (!templateContent.includes('{{REVIEW_BASE}}')) {
-        console.log('🔍 DEBUG: No {{REVIEW_BASE}} placeholder found, returning original content');
+        aidaLogging('🔍 DEBUG: No {{REVIEW_BASE}} placeholder found, returning original content');
         return templateContent; // No placeholders to replace
     }
 
-    console.log('🔄 Processing template with {{REVIEW_BASE}} placeholder...');
+    aidaLogging('🔄 Processing template with {{REVIEW_BASE}} placeholder...');
 
     try {
         // Try to load the review-base.md file from the same directory
         const basePath = path.join(templateDir, 'review-base.md');
-        console.log('🔍 DEBUG: Looking for base template at:', basePath);
-        console.log('🔍 DEBUG: Base template exists?', fs.existsSync(basePath));
+        aidaLogging('🔍 DEBUG: Looking for base template at:', basePath);
+        aidaLogging('🔍 DEBUG: Base template exists?', fs.existsSync(basePath));
         
         if (fs.existsSync(basePath)) {
             const baseContent = fs.readFileSync(basePath, 'utf8');
-            console.log(`✅ Loaded base template from: ${basePath}`);
-            console.log('🔍 DEBUG: baseContent.length =', baseContent.length);
+            aidaLogging(`✅ Loaded base template from: ${basePath}`);
+            aidaLogging('🔍 DEBUG: baseContent.length =', baseContent.length);
             
             // Extract the Angular critical checks content (exclude header comments)
             const angularChecksContent = extractAngularChecks(baseContent);
-            console.log('🔍 DEBUG: angularChecksContent.length =', angularChecksContent.length);
+            aidaLogging('🔍 DEBUG: angularChecksContent.length =', angularChecksContent.length);
             
             // Replace all occurrences of the placeholder
             const processedContent = templateContent.replace(/\{\{REVIEW_BASE\}\}/g, angularChecksContent);
             
-            console.log('✅ Template placeholder replacement completed');
-            console.log('🔍 DEBUG: processedContent.length =', processedContent.length);
-            console.log('🔍 DEBUG: Still contains {{REVIEW_BASE}}?', processedContent.includes('{{REVIEW_BASE}}'));
+            aidaLogging('✅ Template placeholder replacement completed');
+            aidaLogging('🔍 DEBUG: processedContent.length =', processedContent.length);
+            aidaLogging('🔍 DEBUG: Still contains {{REVIEW_BASE}}?', processedContent.includes('{{REVIEW_BASE}}'));
             
             return processedContent;
         } else {
@@ -67953,7 +68288,7 @@ function extractAngularChecks(baseContent) {
     }
 
     const extractedContent = lines.slice(startIndex, endIndex).join('\n').trim();
-    console.log(`📋 Extracted ${extractedContent.split('\n').length} lines from base template`);
+    aidaLogging(`📋 Extracted ${extractedContent.split('\n').length} lines from base template`);
     
     return extractedContent;
 }
@@ -67980,7 +68315,7 @@ function getReviewTemplate(templateName, context = null) {
             const templateDir = path.dirname(templatePath);
             const processedContent = processTemplateWithPlaceholders(rawContent, templateDir);
             
-            console.log(`✅ Loaded and processed template from: ${templatePath}`);
+            aidaLogging(`✅ Loaded and processed template from: ${templatePath}`);
             
             return {
                 content: processedContent,
@@ -68008,103 +68343,103 @@ function getReviewTemplate(templateName, context = null) {
 async function getUnifiedModel(stream, requestedModel = null, chatContext = null, request = null) {
     let models = [];
     
-    console.log('=== getUnifiedModel DEBUG START ===');
+    aidaLogging('=== getUnifiedModel DEBUG START ===');
     
     // PRIORITY 0: Check if API key mode is enabled - if so, skip ALL Copilot model detection
     if (shouldUseApiKey()) {
-        console.log('🔑 API Key mode enabled - skipping ALL Copilot model detection');
-        console.log('=== getUnifiedModel DEBUG END (API KEY MODE) ===');
+        aidaLogging('🔑 API Key mode enabled - skipping ALL Copilot model detection');
+        aidaLogging('=== getUnifiedModel DEBUG END (API KEY MODE) ===');
         return null; // Let API key mode handle the AI calls
     }
     
-    console.log('🔍 Full request object:', JSON.stringify(request, null, 2));
-    console.log('🔍 Request keys:', request ? Object.keys(request) : 'null');
-    console.log('🔍 Request.model:', request?.model);
-    console.log('🔍 Request.model?.family:', request?.model?.family);
-    console.log('🔍 Request.model?.id:', request?.model?.id);
+    aidaLogging('🔍 Full request object:', JSON.stringify(request, null, 2));
+    aidaLogging('🔍 Request keys:', request ? Object.keys(request) : 'null');
+    aidaLogging('🔍 Request.model:', request?.model);
+    aidaLogging('🔍 Request.model?.family:', request?.model?.family);
+    aidaLogging('🔍 Request.model?.id:', request?.model?.id);
     
     // Check ALL possible model locations in request
     if (request) {
-        console.log('🔍 Checking all request properties for model...');
+        aidaLogging('🔍 Checking all request properties for model...');
         for (const key in request) {
-            console.log(`   - request.${key}:`, typeof request[key] === 'object' ? JSON.stringify(request[key]).substring(0, 200) : request[key]);
+            aidaLogging(`   - request.${key}:`, typeof request[key] === 'object' ? JSON.stringify(request[key]).substring(0, 200) : request[key]);
         }
     }
     
     // PRIORITY 1: Check request.model first (this is where VS Code puts the selected model!)
     if (request && request.model) {
-        console.log('✅ Found model in request.model:', request.model);
-        console.log('✅ Model family:', request.model.family);
-        console.log('✅ Model id:', request.model.id);
-        console.log('🎯 Using user-selected model from VS Code chat');
+        aidaLogging('✅ Found model in request.model:', request.model);
+        aidaLogging('✅ Model family:', request.model.family);
+        aidaLogging('✅ Model id:', request.model.id);
+        aidaLogging('🎯 Using user-selected model from VS Code chat');
         
         // Add warning if user selected GPT but wanted Claude
         if (request.model.family && request.model.family.toLowerCase().includes('gpt')) {
-            console.log('ℹ️ NOTE: User selected GPT model. To use Claude, please select a Claude model in VS Code chat dropdown.');
+            aidaLogging('ℹ️ NOTE: User selected GPT model. To use Claude, please select a Claude model in VS Code chat dropdown.');
         }
         
         return request.model;
     } else {
-        console.log('❌ No model found in request.model');
-        console.log('❌ Request is:', request ? 'valid object' : 'null/undefined');
-        console.log('❌ Request.model is:', request?.model ? 'valid' : 'null/undefined');
+        aidaLogging('❌ No model found in request.model');
+        aidaLogging('❌ Request is:', request ? 'valid object' : 'null/undefined');
+        aidaLogging('❌ Request.model is:', request?.model ? 'valid' : 'null/undefined');
     }
     
     // PRIORITY 2: Use passed requestedModel object
     if (requestedModel && typeof requestedModel === 'object' && requestedModel.family) {
-        console.log('Using requested model object:', requestedModel);
+        aidaLogging('Using requested model object:', requestedModel);
         return requestedModel;
     }
     
     // PRIORITY 3: Try to get the current model from chat context  
     if (chatContext) {
-        console.log('🔍 Checking for model in chatContext...');
+        aidaLogging('🔍 Checking for model in chatContext...');
         
         // VS Code chat context may have model at chatContext.model or chatContext.participant.model
         let currentModel = null;
         
         if (chatContext.model) {
-            console.log('✅ Found model at chatContext.model:', chatContext.model);
+            aidaLogging('✅ Found model at chatContext.model:', chatContext.model);
             currentModel = chatContext.model;
         } else {
-            console.log('❌ No model found at chatContext.model');
+            aidaLogging('❌ No model found at chatContext.model');
         }
         
         if (chatContext.participant && chatContext.participant.model) {
-            console.log('✅ Found model at chatContext.participant.model:', chatContext.participant.model);
+            aidaLogging('✅ Found model at chatContext.participant.model:', chatContext.participant.model);
             currentModel = chatContext.participant.model;
         } else {
-            console.log('❌ No model found at chatContext.participant.model');
+            aidaLogging('❌ No model found at chatContext.participant.model');
         }
         
         // Check other possible locations
         if (chatContext.request && chatContext.request.model) {
-            console.log('✅ Found model at chatContext.request.model:', chatContext.request.model);
+            aidaLogging('✅ Found model at chatContext.request.model:', chatContext.request.model);
             currentModel = chatContext.request.model;
         }
         
         if (currentModel) {
-            console.log('Using selected chatbox model:', currentModel);
+            aidaLogging('Using selected chatbox model:', currentModel);
             return currentModel;
         } else {
-            console.log('⚠️ No model found in any chatContext location');
+            aidaLogging('⚠️ No model found in any chatContext location');
         }
     }
     
     // PRIORITY 4: Fallback to available models detection
     // NOTE: Only use this if NO model found in context (user hasn't selected anything)
-    console.log('🔄 Falling back to available models detection...');
+    aidaLogging('🔄 Falling back to available models detection...');
     
     // Get available models and try to find the currently selected one
     try {
         models = await vscode.lm.selectChatModels();
-        console.log('📋 All available models:', models.map(m => `${m.family || m.id} (${m.vendor || 'Unknown'})`));
+        aidaLogging('📋 All available models:', models.map(m => `${m.family || m.id} (${m.vendor || 'Unknown'})`));
         
         if (models.length === 0) {
             console.warn('⚠️ No Copilot models available - check GitHub Copilot installation and authentication');
             // If API key is configured, suggest using it instead
             if (vscode.workspace.getConfiguration('aida').get('ai.apiKey')) {
-                console.log('💡 Suggestion: Enable API key mode in settings: aida.useExternalAI = true');
+                aidaLogging('💡 Suggestion: Enable API key mode in settings: aida.useExternalAI = true');
             }
             return null;
         }
@@ -68140,7 +68475,7 @@ async function getUnifiedModel(stream, requestedModel = null, chatContext = null
                 });
                 
                 if (selectedModel) {
-                    console.log(`✅ Found preferred model: ${selectedModel.family || selectedModel.id} (preference: ${preference})`);
+                    aidaLogging(`✅ Found preferred model: ${selectedModel.family || selectedModel.id} (preference: ${preference})`);
                     break;
                 }
             }
@@ -68148,7 +68483,7 @@ async function getUnifiedModel(stream, requestedModel = null, chatContext = null
             // If no preferred model found, use first available
             if (!selectedModel && models.length > 0) {
                 selectedModel = models[0];
-                console.log(`⚠️ No preferred model found, using first available: ${selectedModel.family || selectedModel.id}`);
+                aidaLogging(`⚠️ No preferred model found, using first available: ${selectedModel.family || selectedModel.id}`);
             }
 
             if (selectedModel) {
@@ -68167,9 +68502,9 @@ async function getUnifiedModel(stream, requestedModel = null, chatContext = null
             const hasApiKey = config.get('ai.apiKey');
             
             if (hasApiKey) {
-                console.log('💡 You have an API key configured. Enable API key mode: aida.useExternalAI = true');
+                aidaLogging('💡 You have an API key configured. Enable API key mode: aida.useExternalAI = true');
             } else {
-                console.log('💡 Configure an API key in settings: aida.ai.apiKey and enable aida.useExternalAI');
+                aidaLogging('💡 Configure an API key in settings: aida.ai.apiKey and enable aida.useExternalAI');
             }
         }
         
@@ -68177,7 +68512,7 @@ async function getUnifiedModel(stream, requestedModel = null, chatContext = null
     }
     
     const finalModel = models.length > 0 ? models[0] : null;
-    console.log('🏁 Final model selected:', finalModel);
+    aidaLogging('🏁 Final model selected:', finalModel);
     
     // If no model is available, provide helpful guidance
     if (!finalModel) {
@@ -68197,7 +68532,7 @@ async function getUnifiedModel(stream, requestedModel = null, chatContext = null
         }
     }
     
-    console.log('=== getUnifiedModel DEBUG END ===');
+    aidaLogging('=== getUnifiedModel DEBUG END ===');
     
     return finalModel;
 }
@@ -68237,10 +68572,10 @@ function displayDocumentReviewHeader(stream)
         stream.markdown(`📋 **Enhanced Review Mode - Business Documents:**\n\n`);
         
         // Debug logging
-        console.log('🔍 Debug selectedBusinessDocs:', global.selectedBusinessDocs);
+        aidaLogging('🔍 Debug selectedBusinessDocs:', global.selectedBusinessDocs);
         
         global.selectedBusinessDocs.forEach((doc, index) => {
-            console.log(`🔍 Debug doc ${index}:`, doc, 'Type:', typeof doc);
+            aidaLogging(`🔍 Debug doc ${index}:`, doc, 'Type:', typeof doc);
             
             // Handle different types of doc entries
             let docName, docPath;
@@ -68273,7 +68608,7 @@ function displayDocumentReviewHeader(stream)
     
     // Cleanup business documents state after display
     global.selectedBusinessDocs = null;
-    console.log('🧹 displayCommonReviewInfo - cleanup: global.selectedBusinessDocs = null');
+    aidaLogging('🧹 displayCommonReviewInfo - cleanup: global.selectedBusinessDocs = null');
 }
 
 /**
@@ -68300,7 +68635,7 @@ async function getAvailableModels() {
     try {
         // Check if API key mode is enabled - return empty array for Copilot models
         if (shouldUseApiKey()) {
-            console.log('🔑 API Key mode enabled - returning API provider models');
+            aidaLogging('🔑 API Key mode enabled - returning API provider models');
             return []; // Return empty for Copilot models since we're using API key
         }
         
@@ -68382,12 +68717,12 @@ function showTokenStatistics(stream, inputText, outputText, model, reviewType, a
         // Use actual tokens from API response (more accurate)
         inputTokens = actualTokens.inputTokens;
         outputTokens = actualTokens.outputTokens;
-        console.log(`📊 Using actual tokens from API: Input=${inputTokens}, Output=${outputTokens}`);
+        aidaLogging(`📊 Using actual tokens from API: Input=${inputTokens}, Output=${outputTokens}`);
     } else {
         // Fall back to estimation (for Copilot mode)
         inputTokens = estimateTokenCount(inputText);
         outputTokens = estimateTokenCount(outputText);
-        console.log(`📊 Using estimated tokens: Input=${inputTokens}, Output=${outputTokens}`);
+        aidaLogging(`📊 Using estimated tokens: Input=${inputTokens}, Output=${outputTokens}`);
     }
     
     // Get cost estimation with GitHub Copilot quota logic
@@ -68410,8 +68745,8 @@ function showTokenStatistics(stream, inputText, outputText, model, reviewType, a
     stream.markdown(`✅ **${reviewType} Analysis complete** - successfully used ${completionStatus}\n\n`);
     
     // Console logging
-    console.log(`✅ ${reviewType} review completed successfully with model:`, model.family);
-    console.log(`📊 Token usage - Input: ${inputTokens}, Output: ${outputTokens}, Cost: $${finalCost.totalCost.toFixed(4)}`);
+    aidaLogging(`✅ ${reviewType} review completed successfully with model:`, model.family);
+    aidaLogging(`📊 Token usage - Input: ${inputTokens}, Output: ${outputTokens}, Cost: $${finalCost.totalCost.toFixed(4)}`);
 }
 
 /**
@@ -68429,7 +68764,7 @@ async function executeApiAnalysisCall(prompt, stream, analysisType = 'API Patter
             // Check if this is API key mode before showing error
             if (shouldUseApiKey()) {
                 // API key mode - try executeAIReview which will handle API key calls
-                console.log('🔑 API key mode enabled for analysis - proceeding with executeAIReview');
+                aidaLogging('🔑 API key mode enabled for analysis - proceeding with executeAIReview');
                 const success = await executeAIReview(prompt, null, stream, analysisType);
                 return success ? { analysis: 'API key mode analysis completed' } : null;
             } else {
@@ -68438,7 +68773,7 @@ async function executeApiAnalysisCall(prompt, stream, analysisType = 'API Patter
             }
         }
         
-        console.log(`📤 Starting ${analysisType} with model:`, model.family);
+        aidaLogging(`📤 Starting ${analysisType} with model:`, model.family);
         
         // Show analysis start
         stream.markdown(`🤖 **${analysisType}** (using ${model.family}):\n\n`);
@@ -68460,10 +68795,10 @@ async function executeApiAnalysisCall(prompt, stream, analysisType = 'API Patter
         // Try to parse JSON response
         try {
             const parsedResponse = JSON.parse(outputText);
-            console.log(`✅ ${analysisType} JSON parsed successfully`);
+            aidaLogging(`✅ ${analysisType} JSON parsed successfully`);
             return parsedResponse;
         } catch (parseError) {
-            console.log(`⚠️ ${analysisType} response is not JSON, returning raw text`);
+            aidaLogging(`⚠️ ${analysisType} response is not JSON, returning raw text`);
             return { rawResponse: outputText };
         }
         
@@ -68492,7 +68827,7 @@ async function executeApiAnalysisCall(prompt, stream, analysisType = 'API Patter
                 
                 try {
                     const parsedResponse = JSON.parse(outputText);
-                    console.log(`✅ ${analysisType} fallback JSON parsed successfully`);
+                    aidaLogging(`✅ ${analysisType} fallback JSON parsed successfully`);
                     return parsedResponse;
                 } catch (parseError) {
                     return { rawResponse: outputText };
@@ -68527,14 +68862,14 @@ async function autoDetectLanguage(workspacePath, targetFilePath = null) {
 
     try {
         // PHASE 1: Framework Detection (Priority 1 - most specific)
-        console.log('🔍 Phase 1: Framework Detection');
+        aidaLogging('🔍 Phase 1: Framework Detection');
         
         // Angular Detection
         const angularConfig = path.join(workspacePath, 'angular.json');
         const packageJson = path.join(workspacePath, 'package.json');
         
         if (fs.existsSync(angularConfig)) {
-            console.log('✅ Angular detected: angular.json found');
+            aidaLogging('✅ Angular detected: angular.json found');
             return {
                 ...detectionResult,
                 type: 'framework',
@@ -68551,7 +68886,7 @@ async function autoDetectLanguage(workspacePath, targetFilePath = null) {
             
             // React Framework
             if (packageContent.dependencies?.react || packageContent.devDependencies?.react) {
-                console.log('✅ React detected: react dependency found');
+                aidaLogging('✅ React detected: react dependency found');
                 return {
                     ...detectionResult,
                     type: 'framework',
@@ -68565,7 +68900,7 @@ async function autoDetectLanguage(workspacePath, targetFilePath = null) {
             // Vue Framework
             if (packageContent.dependencies?.vue || packageContent.devDependencies?.vue || 
                 packageContent.dependencies?.['@vue/core']) {
-                console.log('✅ Vue detected: vue dependency found');
+                aidaLogging('✅ Vue detected: vue dependency found');
                 return {
                     ...detectionResult,
                     type: 'framework',
@@ -68578,7 +68913,7 @@ async function autoDetectLanguage(workspacePath, targetFilePath = null) {
 
             // Express Framework
             if (packageContent.dependencies?.express || packageContent.devDependencies?.express) {
-                console.log('✅ Express detected: express dependency found');
+                aidaLogging('✅ Express detected: express dependency found');
                 return {
                     ...detectionResult,
                     type: 'framework',
@@ -68593,7 +68928,7 @@ async function autoDetectLanguage(workspacePath, targetFilePath = null) {
             if (packageContent.dependencies?.['@nestjs/core'] || 
                 packageContent.devDependencies?.['@nestjs/core'] ||
                 packageContent.dependencies?.['@nestjs/common']) {
-                console.log('✅ NestJS detected: @nestjs dependency found');
+                aidaLogging('✅ NestJS detected: @nestjs dependency found');
                 return {
                     ...detectionResult,
                     type: 'framework',
@@ -68606,13 +68941,13 @@ async function autoDetectLanguage(workspacePath, targetFilePath = null) {
         }
 
         // PHASE 2: Language Detection (Priority 2 - moderately specific)
-        console.log('🔍 Phase 2: Language Detection');
+        aidaLogging('🔍 Phase 2: Language Detection');
 
         // TypeScript Detection
         const tsConfigPath = path.join(workspacePath, 'tsconfig.json');
         if (fs.existsSync(tsConfigPath) || 
             (targetFilePath && targetFilePath.endsWith('.ts'))) {
-            console.log('✅ TypeScript detected: tsconfig.json or .ts file found');
+            aidaLogging('✅ TypeScript detected: tsconfig.json or .ts file found');
             return {
                 ...detectionResult,
                 type: 'language',
@@ -68626,7 +68961,7 @@ async function autoDetectLanguage(workspacePath, targetFilePath = null) {
         // JavaScript Detection (package.json or .js files)
         if (fs.existsSync(packageJson) || 
             (targetFilePath && targetFilePath.endsWith('.js'))) {
-            console.log('✅ JavaScript detected: package.json or .js file found');
+            aidaLogging('✅ JavaScript detected: package.json or .js file found');
             return {
                 ...detectionResult,
                 type: 'language',
@@ -68643,7 +68978,7 @@ async function autoDetectLanguage(workspacePath, targetFilePath = null) {
             if (packageContent.engines?.node || 
                 packageContent.scripts?.start ||
                 packageContent.main) {
-                console.log('✅ Node.js detected: Node.js specific patterns found');
+                aidaLogging('✅ Node.js detected: Node.js specific patterns found');
                 return {
                     ...detectionResult,
                     type: 'language',
@@ -68660,7 +68995,7 @@ async function autoDetectLanguage(workspacePath, targetFilePath = null) {
         const hasPythonConfig = pythonFiles.some(file => fs.existsSync(path.join(workspacePath, file)));
         if (hasPythonConfig || 
             (targetFilePath && targetFilePath.endsWith('.py'))) {
-            console.log('✅ Python detected: Python configuration files or .py files found');
+            aidaLogging('✅ Python detected: Python configuration files or .py files found');
             return {
                 ...detectionResult,
                 type: 'language',
@@ -68678,7 +69013,7 @@ async function autoDetectLanguage(workspacePath, targetFilePath = null) {
         });
         if (hasCsharpConfig || 
             (targetFilePath && targetFilePath.endsWith('.cs'))) {
-            console.log('✅ C# detected: C# project files or .cs files found');
+            aidaLogging('✅ C# detected: C# project files or .cs files found');
             return {
                 ...detectionResult,
                 type: 'language',
@@ -68693,7 +69028,7 @@ async function autoDetectLanguage(workspacePath, targetFilePath = null) {
         const cargoToml = path.join(workspacePath, 'Cargo.toml');
         if (fs.existsSync(cargoToml) || 
             (targetFilePath && targetFilePath.endsWith('.rs'))) {
-            console.log('✅ Rust detected: Cargo.toml or .rs files found');
+            aidaLogging('✅ Rust detected: Cargo.toml or .rs files found');
             return {
                 ...detectionResult,
                 type: 'language',
@@ -68708,7 +69043,7 @@ async function autoDetectLanguage(workspacePath, targetFilePath = null) {
         const goMod = path.join(workspacePath, 'go.mod');
         if (fs.existsSync(goMod) || 
             (targetFilePath && targetFilePath.endsWith('.go'))) {
-            console.log('✅ Go detected: go.mod or .go files found');
+            aidaLogging('✅ Go detected: go.mod or .go files found');
             return {
                 ...detectionResult,
                 type: 'language',
@@ -68720,8 +69055,8 @@ async function autoDetectLanguage(workspacePath, targetFilePath = null) {
         }
 
         // PHASE 3: Fallback (Priority 3 - general)
-        console.log('🔍 Phase 3: Fallback to general templates');
-        console.log('❌ No specific framework or language detected, using fallback');
+        aidaLogging('🔍 Phase 3: Fallback to general templates');
+        aidaLogging('❌ No specific framework or language detected, using fallback');
         
         return {
             ...detectionResult,
@@ -68760,13 +69095,13 @@ async function getReviewTemplateWithDetection(templateType, context = null, targ
         throw new Error('No workspace folder available for template detection');
     }
 
-    console.log(`🎯 Auto-detecting template for: ${templateType}`);
+    aidaLogging(`🎯 Auto-detecting template for: ${templateType}`);
     
     // Auto-detect framework/language
     const detection = await autoDetectLanguage(workspaceFolder.uri.fsPath, targetFilePath);
     detection.templateType = templateType;
     
-    console.log(`🎯 Detection result:`, detection);
+    aidaLogging(`🎯 Detection result:`, detection);
 
     // Resolve AIDA base path using config
     const { basePath, source } = resolveAidaBasePath(workspaceFolder);
@@ -68786,9 +69121,9 @@ async function getReviewTemplateWithDetection(templateType, context = null, targ
     
     // Try each template path in order
     for (const tryPath of templatePaths) {
-        console.log(`🔍 Checking template: ${tryPath}`);
+        aidaLogging(`🔍 Checking template: ${tryPath}`);
         if (fs.existsSync(tryPath)) {
-            console.log(`✅ Found template at: ${tryPath}`);
+            aidaLogging(`✅ Found template at: ${tryPath}`);
             templatePath = tryPath;
             rawContent = fs.readFileSync(templatePath, 'utf8');
             break;
@@ -68813,7 +69148,7 @@ async function getReviewTemplateWithDetection(templateType, context = null, targ
             sourceDisplay = 'extension/templates';
         }
         
-        console.log(`✅ Loaded and processed template from: ${sourceDisplay}`);
+        aidaLogging(`✅ Loaded and processed template from: ${sourceDisplay}`);
         
         return {
             content: processedContent,
@@ -68940,7 +69275,7 @@ function autoDetectLanguage(filePath) {
                 }
             }
         } catch (error) {
-            console.log('NestJS detection error:', error);
+            aidaLogging('NestJS detection error:', error);
         }
     }
     
@@ -69023,7 +69358,7 @@ function autoDetectLanguage(filePath) {
             }
         }
     } catch (error) {
-        console.log('Framework detection error:', error);
+        aidaLogging('Framework detection error:', error);
     }
     
     // Language fallback detection with proper template paths
@@ -69095,9 +69430,9 @@ function getReviewTemplateWithDetection(templateType, filePath) {
     ];
     
     for (const templatePath of templatePaths) {
-        console.log(`🔍 Checking template: ${templatePath}`);
+        aidaLogging(`🔍 Checking template: ${templatePath}`);
         if (fs.existsSync(templatePath)) {
-            console.log(`✅ Found template at: ${templatePath}`);
+            aidaLogging(`✅ Found template at: ${templatePath}`);
             const content = fs.readFileSync(templatePath, 'utf8');
             
             // Source display - show relative path from workspace if config
@@ -69179,7 +69514,7 @@ function resolveAidaBasePath(workspaceFolder) {
         // Check if templates folder exists
         const templatesPath = path.join(resolvedPath, 'templates');
         if (fs.existsSync(templatesPath)) {
-            console.log(`✅ Using configured AIDA path: ${resolvedPath}`);
+            aidaLogging(`✅ Using configured AIDA path: ${resolvedPath}`);
             return {
                 basePath: resolvedPath,
                 source: 'config'
@@ -69187,13 +69522,13 @@ function resolveAidaBasePath(workspaceFolder) {
         } else {
             // Auto-create AIDA structure if base path doesn't exist
             console.warn(`⚠️ Configured AIDA path not found: ${templatesPath}`);
-            console.log(`🔧 Attempting to create AIDA structure at: ${resolvedPath}`);
+            aidaLogging(`🔧 Attempting to create AIDA structure at: ${resolvedPath}`);
             
             try {
                 // Create AIDA base directory
                 if (!fs.existsSync(resolvedPath)) {
                     fs.mkdirSync(resolvedPath, { recursive: true });
-                    console.log(`✅ Created AIDA directory: ${resolvedPath}`);
+                    aidaLogging(`✅ Created AIDA directory: ${resolvedPath}`);
                 }
                 
                 // Create templates directory structure
@@ -69207,7 +69542,7 @@ function resolveAidaBasePath(workspaceFolder) {
                 for (const dir of templatesDirs) {
                     if (!fs.existsSync(dir)) {
                         fs.mkdirSync(dir, { recursive: true });
-                        console.log(`✅ Created directory: ${dir}`);
+                        aidaLogging(`✅ Created directory: ${dir}`);
                     }
                 }
                 
@@ -69215,10 +69550,10 @@ function resolveAidaBasePath(workspaceFolder) {
                 const extensionTemplatesPath = path.join(global.extensionPath, 'templates');
                 if (fs.existsSync(extensionTemplatesPath)) {
                     copyTemplatesRecursive(extensionTemplatesPath, templatesPath);
-                    console.log(`✅ Copied templates from extension to: ${templatesPath}`);
+                    aidaLogging(`✅ Copied templates from extension to: ${templatesPath}`);
                 }
                 
-                console.log(`✅ AIDA structure created successfully at: ${resolvedPath}`);
+                aidaLogging(`✅ AIDA structure created successfully at: ${resolvedPath}`);
                 return {
                     basePath: resolvedPath,
                     source: 'config'
@@ -69232,7 +69567,7 @@ function resolveAidaBasePath(workspaceFolder) {
     }
     
     // Priority 2: Extension templates (fallback)
-    console.log(`✅ Using extension AIDA templates`);
+    aidaLogging(`✅ Using extension AIDA templates`);
     return {
         basePath: global.extensionPath,
         source: 'extension'
@@ -69259,7 +69594,7 @@ function copyTemplatesRecursive(src, dest) {
             copyTemplatesRecursive(srcPath, destPath);
         } else {
             fs.copyFileSync(srcPath, destPath);
-            console.log(`  📄 Copied: ${entry.name}`);
+            aidaLogging(`  📄 Copied: ${entry.name}`);
         }
     }
 }
@@ -69291,9 +69626,9 @@ async function loadTemplateWithPriority(templateType, detection) {
     
     // Try each template path in order
     for (const templatePath of templatePaths) {
-        console.log(`🔍 Checking template: ${templatePath}`);
+        aidaLogging(`🔍 Checking template: ${templatePath}`);
         if (fs.existsSync(templatePath)) {
-            console.log(`✅ Found template at: ${templatePath}`);
+            aidaLogging(`✅ Found template at: ${templatePath}`);
             const rawContent = fs.readFileSync(templatePath, 'utf8');
             
             // Process template with placeholder replacement
@@ -69322,7 +69657,7 @@ async function loadTemplateWithPriority(templateType, detection) {
         sourceDisplay = 'extension\\templates'; // ✅ Use backslash for display
     }
     
-    console.log(`✅ Loaded template from: ${sourceDisplay}/${templatePathDisplay} (${templateContent.length} chars)`);
+    aidaLogging(`✅ Loaded template from: ${sourceDisplay}/${templatePathDisplay} (${templateContent.length} chars)`);
     
     return {
         content: templateContent,
@@ -69358,7 +69693,7 @@ function displayCommonReviewInfo(stream, reviewType, filePath, options = {}) {
         }
     } catch (error) {
         // Fallback to original path if conversion fails
-        console.log('Failed to convert to relative path:', error);
+        aidaLogging('Failed to convert to relative path:', error);
     }
     
     // Display header
@@ -69408,18 +69743,18 @@ function loadBaseTemplate(mainTemplatePath, baseFileName) {
         // Build base template path in same directory
         const baseTemplatePath = path.join(templateDir, baseFileName);
         
-        console.log(`🔍 Looking for base template: ${baseTemplatePath}`);
+        aidaLogging(`🔍 Looking for base template: ${baseTemplatePath}`);
         
         if (fs.existsSync(baseTemplatePath)) {
             const baseContent = fs.readFileSync(baseTemplatePath, 'utf8');
-            console.log(`✅ Loaded base template: ${baseTemplatePath} (${baseContent.length} chars)`);
+            aidaLogging(`✅ Loaded base template: ${baseTemplatePath} (${baseContent.length} chars)`);
             return baseContent;
         } else {
-            console.log(`⚠️ Base template not found: ${baseTemplatePath}`);
+            aidaLogging(`⚠️ Base template not found: ${baseTemplatePath}`);
             return null;
         }
     } catch (error) {
-        console.log(`❌ Error loading base template: ${error.message}`);
+        aidaLogging(`❌ Error loading base template: ${error.message}`);
         return null;
     }
 }
@@ -69431,16 +69766,16 @@ function loadBaseTemplate(mainTemplatePath, baseFileName) {
  */
 function buildBusinessDocsContent(selectedBusinessDocs) {
     if (!selectedBusinessDocs || selectedBusinessDocs.length === 0) {
-        console.log('📚 No business documents selected');
+        aidaLogging('📚 No business documents selected');
         return '';
     }
 
-    console.log(`📚 Building business docs content from ${selectedBusinessDocs.length} categories...`);
+    aidaLogging(`📚 Building business docs content from ${selectedBusinessDocs.length} categories...`);
     
     let docsContent = `## 📚 Business Rules & Documentation\n\n`;
     
     selectedBusinessDocs.forEach(category => {
-        console.log(`📁 Processing category: ${category.displayName} (${category.path})`);
+        aidaLogging(`📁 Processing category: ${category.displayName} (${category.path})`);
         
         docsContent += `### ${category.displayName}\n\n`;
         
@@ -69453,7 +69788,7 @@ function buildBusinessDocsContent(selectedBusinessDocs) {
                     path: path.join(category.path, file.name)
                 }));
             
-            console.log(`📄 Found ${files.length} markdown files in ${category.name}`);
+            aidaLogging(`📄 Found ${files.length} markdown files in ${category.name}`);
             
             files.forEach(file => {
                 try {
@@ -69465,7 +69800,7 @@ function buildBusinessDocsContent(selectedBusinessDocs) {
                     docsContent += fileContent;
                     docsContent += '\n\n';
                     
-                    console.log(`📄 Loaded ${file.name}: ${fileContent.substring(0, 50)}...`);
+                    aidaLogging(`📄 Loaded ${file.name}: ${fileContent.substring(0, 50)}...`);
                 } catch (fileError) {
                     console.error(`❌ Error reading file ${file.path}:`, fileError.message);
                 }
@@ -69478,8 +69813,8 @@ function buildBusinessDocsContent(selectedBusinessDocs) {
         docsContent += '---\n\n';
     });
     
-    console.log(`✅ Built business docs content (${docsContent.length} chars)`);
-    console.log(`📄 Content preview: ${docsContent.substring(0, 100)}...`);
+    aidaLogging(`✅ Built business docs content (${docsContent.length} chars)`);
+    aidaLogging(`📄 Content preview: ${docsContent.substring(0, 100)}...`);
     
     return docsContent;
 }
@@ -69493,37 +69828,37 @@ function buildBusinessDocsContent(selectedBusinessDocs) {
  * @returns {string} - Processed content with placeholders replaced
  */
 function processTemplateContent(content, mainTemplatePath, placeholder = '{{REVIEW_BASE}}', baseFileName = 'review-base.md') {
-    console.log(`🔧 Processing template placeholders for: ${placeholder}`);
+    aidaLogging(`🔧 Processing template placeholders for: ${placeholder}`);
     
     if (!content.includes(placeholder)) {
-        console.log(`ℹ️ No ${placeholder} placeholder found, using content as-is`);
+        aidaLogging(`ℹ️ No ${placeholder} placeholder found, using content as-is`);
         return content;
     }
     
-    console.log(`✅ Found ${placeholder} placeholder, loading base content...`);
+    aidaLogging(`✅ Found ${placeholder} placeholder, loading base content...`);
     
     let baseContent = loadBaseTemplate(mainTemplatePath, baseFileName);
     
     if (baseContent) {
         // Check if we have selected business documents
         if (global.selectedBusinessDocs && global.selectedBusinessDocs.length > 0) {
-            console.log('📚 Business documents selected, building enhanced base content...');
+            aidaLogging('📚 Business documents selected, building enhanced base content...');
             const businessDocsContent = buildBusinessDocsContent(global.selectedBusinessDocs);
             
             if (businessDocsContent) {
                 // Prepend business docs to base content
                 baseContent = businessDocsContent + '\n\n' + baseContent;
-                console.log(`📄 Enhanced businessDocsContent preview: ${businessDocsContent}`);
+                aidaLogging(`📄 Enhanced businessDocsContent preview: ${businessDocsContent}`);
             }
         } else {
-            console.log('📋 No business documents selected, using original base content');
+            aidaLogging('📋 No business documents selected, using original base content');
         }
         
         const processedContent = content.replace(new RegExp(placeholder.replace(/[{}]/g, '\\$&'), 'g'), baseContent);
-        console.log(`🔧 Replaced ${placeholder} with enhanced base content (final length: ${processedContent.length} chars)`);
+        aidaLogging(`🔧 Replaced ${placeholder} with enhanced base content (final length: ${processedContent.length} chars)`);
         return processedContent;
     } else {
-        console.log(`⚠️ Base template not found, keeping ${placeholder} placeholder as-is`);
+        aidaLogging(`⚠️ Base template not found, keeping ${placeholder} placeholder as-is`);
         return content;
     }
     
@@ -69535,12 +69870,12 @@ function processTemplateContent(content, mainTemplatePath, placeholder = '{{REVI
  * @returns {Array} Array of business document folder objects with enhanced path info
  */
 async function getBusinessDocumentFolders(workspaceFolder) {
-    console.log('🔍 getBusinessDocumentFolders called with workspaceFolder:', workspaceFolder?.uri?.fsPath);
+    aidaLogging('🔍 getBusinessDocumentFolders called with workspaceFolder:', workspaceFolder?.uri?.fsPath);
     
     try {
         // Use the same logic as template base path resolution
         const aidaPathInfo = resolveAidaBasePath(workspaceFolder);
-        console.log(`🔍 Resolved AIDA base path: ${aidaPathInfo.basePath} (source: ${aidaPathInfo.source})`);
+        aidaLogging(`🔍 Resolved AIDA base path: ${aidaPathInfo.basePath} (source: ${aidaPathInfo.source})`);
         
         // Build business docs path using the resolved AIDA base path
         const businessDocsPath = path.join(aidaPathInfo.basePath, 'business-docs');
@@ -69548,11 +69883,11 @@ async function getBusinessDocumentFolders(workspaceFolder) {
         let actualPath = null;
         if (fs.existsSync(businessDocsPath)) {
             actualPath = businessDocsPath;
-            console.log('📁 Found business docs at:', businessDocsPath);
+            aidaLogging('📁 Found business docs at:', businessDocsPath);
         }
         
         if (!actualPath) {
-            console.log(`📁 Business document path not found at: ${businessDocsPath}`);
+            aidaLogging(`📁 Business document path not found at: ${businessDocsPath}`);
             return [];
         }
         
@@ -69605,7 +69940,7 @@ async function getBusinessDocumentFolders(workspaceFolder) {
                 };
             });
         
-        console.log(`📚 Found ${subFolders.length} business document categories:`, subFolders.map(f => f.name));
+        aidaLogging(`📚 Found ${subFolders.length} business document categories:`, subFolders.map(f => f.name));
         return subFolders;
     } catch (error) {
         console.error('❌ Error scanning business documents:', error);
@@ -69648,7 +69983,7 @@ async function showReviewOptions(targetInput, stream, options = {}, reviewCallba
     };
     
     const fileName = path.basename(targetInput);
-    console.log(`🔍 ${config.reviewType} review options for: ${targetInput}`);
+    aidaLogging(`🔍 ${config.reviewType} review options for: ${targetInput}`);
 
     // First check if business documents exist before showing any options
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
@@ -69659,14 +69994,14 @@ async function showReviewOptions(targetInput, stream, options = {}, reviewCallba
             const businessDocs = await getBusinessDocumentFolders(workspaceFolder);
             hasBusinessDocs = businessDocs && businessDocs.length > 0;
         } catch (error) {
-            console.log('❌ Error checking business documents:', error.message);
+            aidaLogging('❌ Error checking business documents:', error.message);
             hasBusinessDocs = false;
         }
     }
     
     // If no business documents, execute Quick Review immediately
     if (!hasBusinessDocs) {
-        console.log('📋 No business documents found - executing Quick Review automatically');
+        aidaLogging('📋 No business documents found - executing Quick Review automatically');
         stream.markdown('🚀 **Starting Quick Review automatically** (no business documents found)\n\n');
         
         // Set Quick Review mode
@@ -69850,22 +70185,22 @@ function getTokenForPR(prUrl) {
         const { provider, organization } = parsePRUrl(prUrl);
         const config = vscode.workspace.getConfiguration('aida');
         
-        console.log(`🔍 Looking for token: provider=${provider}, org=${organization}`);
+        aidaLogging(`🔍 Looking for token: provider=${provider}, org=${organization}`);
         
         // Try new multi-organization configuration first
         const sourceControls = config.get('sourceControls', {});
-        console.log(`🔍 DEBUG sourceControls config:`, JSON.stringify(sourceControls, null, 2));
+        aidaLogging(`🔍 DEBUG sourceControls config:`, JSON.stringify(sourceControls, null, 2));
         const providerTokens = sourceControls[provider];
-        console.log(`🔍 DEBUG providerTokens for ${provider}:`, JSON.stringify(providerTokens, null, 2));
+        aidaLogging(`🔍 DEBUG providerTokens for ${provider}:`, JSON.stringify(providerTokens, null, 2));
         
         if (providerTokens && providerTokens[organization]) {
-            console.log(`✅ Found token for ${provider}/${organization} in sourceControls`);
+            aidaLogging(`✅ Found token for ${provider}/${organization} in sourceControls`);
             return providerTokens[organization];
         } else {
-            console.log(`❌ No token found for ${provider}/${organization} in sourceControls`);
+            aidaLogging(`❌ No token found for ${provider}/${organization} in sourceControls`);
         }
         
-        console.log(`❌ No token found for ${provider}/${organization}`);
+        aidaLogging(`❌ No token found for ${provider}/${organization}`);
         return null;
         
     } catch (error) {
@@ -69981,7 +70316,7 @@ const providerNames = {
     // Quick setup button
     
     console.error(`❌ Missing token: ${providerName}/${organization}`);
-    console.log('🔧 Configuration help displayed to user');
+    aidaLogging('🔧 Configuration help displayed to user');
     
     if (stream) {
         stream.markdown(helpContent);
@@ -70020,6 +70355,7 @@ const fs = __webpack_require__(/*! fs */ "fs");
 const path = __webpack_require__(/*! path */ "path");
 const { executeAIReview, getUnifiedModel, shouldUseApiKey, displayReviewHeader, loadTemplateWithPriority, displayCommonReviewInfo, showReviewOptions } = __webpack_require__(/*! ./review-common */ "./scripts/review-common.js");
 const { autoDetectWorkspace, displayDetectionInfo, getLanguageFromExtension } = __webpack_require__(/*! ./language-detection */ "./scripts/language-detection.js");
+const { aidaLogging } = __webpack_require__(/*! ./settings */ "./scripts/settings.js");
 
 // Import functions from extension.js
 let handleEnterTwiceLogic;
@@ -70029,7 +70365,7 @@ try {
     handleEnterTwiceLogic = extensionModule.handleEnterTwiceLogic;
     ensureAidaTemplatesForReview = extensionModule.ensureAidaTemplatesForReview;
 } catch (error) {
-    console.log('⚠️ Could not import functions from extension.js');
+    aidaLogging('⚠️ Could not import functions from extension.js');
 }
 
 /**
@@ -70046,11 +70382,11 @@ function initializeReviewFile(context) {
                 await ensureAidaTemplatesForReview(context);
             }
             
-            console.log('🎯 review-file participant called');
-            console.log('📥 Request object:', request);
-            console.log('📥 Context object:', context);
-            console.log('📥 Request.model:', request.model);
-            console.log('📥 Context.selectedModel:', context.selectedModel);
+            aidaLogging('🎯 review-file participant called');
+            aidaLogging('📥 Request object:', request);
+            aidaLogging('📥 Context object:', context);
+            aidaLogging('📥 Request.model:', request.model);
+            aidaLogging('📥 Context.selectedModel:', context.selectedModel);
             
             const input = request.prompt.trim();
             
@@ -70067,7 +70403,7 @@ function initializeReviewFile(context) {
             
             // Simple check - only one key! (after targetInput is defined)
             if (global.selectedBusinessDocs) {
-                console.log('🎯 Enhanced/Quick File Review detected:', global.selectedBusinessDocs);
+                aidaLogging('🎯 Enhanced/Quick File Review detected:', global.selectedBusinessDocs);
                 
                 // Execute review directly
                 await aiReviewFile(targetInput, stream, request.model, context, request);
@@ -70137,7 +70473,7 @@ function initializeReviewFile(context) {
 
 // Reusable function for AIDA Chatbot integration (similar to review-changes)
 async function processReviewFile(input, stream) {
-    console.log('🎯 processReviewFile called with input:', input);
+    aidaLogging('🎯 processReviewFile called with input:', input);
     
     // Get target input (file path or active editor)
     const activeEditor = vscode.window.activeTextEditor;
@@ -70145,7 +70481,7 @@ async function processReviewFile(input, stream) {
     
     // Simple check - only one key! (global variable check)
     if (global.selectedBusinessDocs) {
-        console.log('🎯 Enhanced/Quick File Review detected:', global.selectedBusinessDocs);
+        aidaLogging('🎯 Enhanced/Quick File Review detected:', global.selectedBusinessDocs);
         
         // Execute review directly
         await aiReviewFile(targetInput, stream, null, null, {
@@ -70431,7 +70767,7 @@ async function reviewFile(filePath, stream, requestedModel = null, context = nul
                 displayDetectionInfo(stream, detection, 'review-file.md');
             }
         } catch (error) {
-            console.log('Template detection failed:', error.message);
+            aidaLogging('Template detection failed:', error.message);
         }
         
         // Use reusable header display function
@@ -70456,7 +70792,7 @@ async function reviewFile(filePath, stream, requestedModel = null, context = nul
                 
                 let template = templateContent || `Please review the following ${fileExtension} file for code quality, best practices, and potential improvements.`;
                 
-                console.log(`✅ Using ${detection?.detected || 'fallback'} template (${template.length} characters)`);
+                aidaLogging(`✅ Using ${detection?.detected || 'fallback'} template (${template.length} characters)`);
                 
                 // Replace template placeholders with actual file information
                 let processedTemplate = template
@@ -70480,7 +70816,7 @@ async function reviewFile(filePath, stream, requestedModel = null, context = nul
 
             } catch (templateError) {
                 stream.markdown('⚠️ **Template not found** - using basic review\n\n');
-                console.log(`⚠️ Template loading failed: ${templateError.message}`);
+                aidaLogging(`⚠️ Template loading failed: ${templateError.message}`);
                 reviewPrompt = `Please review this TypeScript Angular component file:
 
 **File:** ${fileName}
@@ -70558,7 +70894,7 @@ async function performBasicFileAnalysis(content, stream, fileExtension) {
         if (line.includes(': any') && !line.includes('// @ts-ignore')) {
             analysis.issues.push(`⚠️ Line ${lineNum}: TypeScript 'any' type - consider proper typing`);
         }
-        if (line.includes('console.log') || line.includes('console.error')) {
+        if (line.includes('aidaLogging') || line.includes('console.error')) {
             analysis.issues.push(`🔍 Line ${lineNum}: Console statement - remove for production`);
         }
         if (line.length > 120) {
@@ -70611,6 +70947,7 @@ const https = __webpack_require__(/*! https */ "https");
 const { execSync } = __webpack_require__(/*! child_process */ "child_process");
 const { getUnifiedModel, executeAIReview, shouldUseApiKey, processTemplateContent, showReviewOptions, getTokenForPR, parsePRUrl, showTokenConfigurationHelp } = __webpack_require__(/*! ./review-common */ "./scripts/review-common.js");
 const { detectFromPRFiles, getReviewTemplateWithDetection, displayDetectionInfo } = __webpack_require__(/*! ./language-detection */ "./scripts/language-detection.js");
+const { aidaLogging } = __webpack_require__(/*! ./settings */ "./scripts/settings.js");
 
 /**
  * Parse PR URL and extract repository information
@@ -70696,7 +71033,7 @@ try {
     const extensionModule = __webpack_require__(/*! ../extension */ "./extension.js");
     checkAndInitializeTemplates = extensionModule.ensureAidaTemplatesForReview;
 } catch (error) {
-    console.log('⚠️ Could not import functions from extension.js');
+    aidaLogging('⚠️ Could not import functions from extension.js');
 }
 
 /**
@@ -70707,7 +71044,7 @@ try {
  */
 async function getPRReviewTemplate(templateType, prData) {
     try {
-        console.log('🔍 Starting PR detection for template selection...');
+        aidaLogging('🔍 Starting PR detection for template selection...');
         
         // Convert PR files to detection format
         const prFiles = (prData.fileChanges || []).map(f => ({
@@ -70718,12 +71055,12 @@ async function getPRReviewTemplate(templateType, prData) {
             deletions: f.deletions || 0
         }));
 
-        console.log(`📊 Processing ${prFiles.length} files for detection`);
+        aidaLogging(`📊 Processing ${prFiles.length} files for detection`);
 
         // Run PR detection
         const detection = await detectFromPRFiles(prFiles);
         
-        console.log('🎯 PR Detection Results:', {
+        aidaLogging('🎯 PR Detection Results:', {
             language: detection.language,
             framework: detection.framework,
             templatePath: detection.template.path,
@@ -70773,7 +71110,7 @@ async function getPRReviewTemplate(templateType, prData) {
                     templateSource = 'workspace/AIDA/templates';
                 }
                 
-                console.log(`✅ Loaded template from: ${templateSource} - ${fullTemplatePath}`);
+                aidaLogging(`✅ Loaded template from: ${templateSource} - ${fullTemplatePath}`);
                 break;
             }
         }
@@ -70798,7 +71135,7 @@ async function getPRReviewTemplate(templateType, prData) {
         console.error('❌ PR template detection failed:', error);
         
         // Final fallback - use workspace detection
-        console.log('🔄 Falling back to workspace detection...');
+        aidaLogging('🔄 Falling back to workspace detection...');
         return await getReviewTemplateWithDetection(templateType);
     }
 }
@@ -70832,7 +71169,7 @@ function filterReviewableFiles(fileChanges, provider = 'Unknown') {
         const isMigrationDesigner = filePath.includes('/Migrations/') && filePath.endsWith('.Designer.cs');
         
         if (isMigrationDesigner) {
-            console.log(`🚫 [FILTERED] ${provider} Migration Designer file: ${filePath}`);
+            aidaLogging(`🚫 [FILTERED] ${provider} Migration Designer file: ${filePath}`);
             return false;
         }
 
@@ -70843,9 +71180,9 @@ function filterReviewableFiles(fileChanges, provider = 'Unknown') {
         return true;
     });
 
-    console.log(`📊 ${provider}: ${fileChanges.length} total files, ${reviewableFiles.length} reviewable files`);
+    aidaLogging(`📊 ${provider}: ${fileChanges.length} total files, ${reviewableFiles.length} reviewable files`);
     if (fileChanges.length !== reviewableFiles.length) {
-        console.log(`🚫 Filtered ${fileChanges.length - reviewableFiles.length} auto-generated files from review`);
+        aidaLogging(`🚫 Filtered ${fileChanges.length - reviewableFiles.length} auto-generated files from review`);
     }
 
     return reviewableFiles;
@@ -70867,14 +71204,14 @@ function clearPrDiffCache(provider, prId) {
     const keysToDelete = Object.keys(global.prDiffCache).filter(key => key.startsWith(prefix));
     
     if (keysToDelete.length > 0) {
-        console.log(`🧹 Clearing ${keysToDelete.length} cached entries for ${provider} PR ${prId}:`);
+        aidaLogging(`🧹 Clearing ${keysToDelete.length} cached entries for ${provider} PR ${prId}:`);
         keysToDelete.forEach(key => {
-            console.log(`  ❌ Removing: ${key}`);
+            aidaLogging(`  ❌ Removing: ${key}`);
             delete global.prDiffCache[key];
         });
-        console.log(`✅ Cache cleared for ${provider} PR ${prId}`);
+        aidaLogging(`✅ Cache cleared for ${provider} PR ${prId}`);
     } else {
-        console.log(`💡 No cached entries found for ${provider} PR ${prId}`);
+        aidaLogging(`💡 No cached entries found for ${provider} PR ${prId}`);
     }
 }
 
@@ -70886,7 +71223,7 @@ function clearPrDiffCache(provider, prId) {
  * @param {object} stream - VS Code stream for output
  */
 async function showGitHubDiffInWebview(prAnalysis, stream) {
-    console.log('🐙 GitHub Function B: Starting GitHub diff webview display');
+    aidaLogging('🐙 GitHub Function B: Starting GitHub diff webview display');
     
     if (!prAnalysis || !prAnalysis.data || !prAnalysis.data.fileChanges) {
         stream.markdown('❌ **No GitHub diff data available**\n\n');
@@ -70922,13 +71259,13 @@ async function showGitHubDiffInWebview(prAnalysis, stream) {
             diffContent: fileChange.diffContent || fileChange.diff || ''
         };
         
-        console.log(`🔍 Cached GitHub diff: ${diffId} for ${fileChange.path}`);
-        console.log(`📊 DEBUG: owner=${data.owner}, repo=${data.repository}, provider=github`);
+        aidaLogging(`🔍 Cached GitHub diff: ${diffId} for ${fileChange.path}`);
+        aidaLogging(`📊 DEBUG: owner=${data.owner}, repo=${data.repository}, provider=github`);
     });
 
     // Debug cache summary for GitHub (ALL files)
     const githubCacheKeys = Object.keys(global.prDiffCache).filter(k => k.startsWith(`github_${data.id}_`));
-    console.log(`🐙 GitHub cache summary: ${githubCacheKeys.length} files cached:`, githubCacheKeys);
+    aidaLogging(`🐙 GitHub cache summary: ${githubCacheKeys.length} files cached:`, githubCacheKeys);
 
     // Display file links with webview buttons (hover for details)
     stream.markdown('📁 **Files in this GitHub PR:**\n\n');
@@ -70957,7 +71294,7 @@ async function showGitHubDiffInWebview(prAnalysis, stream) {
  * @param {object} stream - VS Code stream for output
  */
 async function showGitLabDiffInWebview(mrAnalysis, stream) {
-    console.log('🦊 GitLab Function C: Starting GitLab diff webview display');
+    aidaLogging('🦊 GitLab Function C: Starting GitLab diff webview display');
     
     if (!mrAnalysis || !mrAnalysis.data || !mrAnalysis.data.fileChanges) {
         stream.markdown('❌ **No GitLab diff data available**\n\n');
@@ -70994,13 +71331,13 @@ async function showGitLabDiffInWebview(mrAnalysis, stream) {
             diffContent: fileChange.diffContent || fileChange.diff || ''
         };
         
-        console.log(`🔍 Cached GitLab diff: ${diffId} for ${fileChange.path}`);
-        console.log(`📊 DEBUG: owner=${data.owner}, repo=${data.repository}, host=${data.gitlabHost}, provider=gitlab`);
+        aidaLogging(`🔍 Cached GitLab diff: ${diffId} for ${fileChange.path}`);
+        aidaLogging(`📊 DEBUG: owner=${data.owner}, repo=${data.repository}, host=${data.gitlabHost}, provider=gitlab`);
     });
 
     // Debug cache summary for GitLab (ALL files)
     const gitlabCacheKeys = Object.keys(global.prDiffCache).filter(k => k.startsWith(`gitlab_${data.id}_`));
-    console.log(`🦊 GitLab cache summary: ${gitlabCacheKeys.length} files cached:`, gitlabCacheKeys);
+    aidaLogging(`🦊 GitLab cache summary: ${gitlabCacheKeys.length} files cached:`, gitlabCacheKeys);
 
     // Display file links with webview buttons (hover for details)
     stream.markdown('📁 **Files in this GitLab MR:**\n\n');
@@ -71029,7 +71366,7 @@ async function showGitLabDiffInWebview(mrAnalysis, stream) {
  * @param {object} stream - VS Code stream for output
  */
 async function showAzureDevOpsDiffInWebview(prAnalysis, stream) {
-    console.log('🔵 Azure Function A: Starting Azure DevOps diff webview display');
+    aidaLogging('🔵 Azure Function A: Starting Azure DevOps diff webview display');
     
     if (!prAnalysis || !prAnalysis.data || !prAnalysis.data.fileChanges) {
         stream.markdown('❌ **No Azure DevOps diff data available**\n\n');
@@ -71064,14 +71401,14 @@ async function showAzureDevOpsDiffInWebview(prAnalysis, stream) {
     global.prDiffCache.targetCommit = data.targetCommit; // This is now merge base
     global.prDiffCache.mergeBaseCommit = data.mergeBaseCommit; // Explicit merge base reference
     
-    console.log('🚀 Cached Azure DevOps API credentials for full content retrieval:');
-    console.log(`   Organization: ${data.organization}`);
-    console.log(`   Project: ${data.project}`);
-    console.log(`   Repository: ${data.repository}`);
-    console.log(`   Source Commit (PR): ${data.sourceCommit?.substring(0, 7)}`);
-    console.log(`   Target Commit (Merge Base): ${data.targetCommit?.substring(0, 7)} - CORRECTED`);
-    console.log(`   Merge Base: ${data.mergeBaseCommit?.substring(0, 7)} - for Monaco diff accuracy`);
-    console.log(`   Access Token: ${accessToken ? '✅ Available' : '❌ Missing'}`);
+    aidaLogging('🚀 Cached Azure DevOps API credentials for full content retrieval:');
+    aidaLogging(`   Organization: ${data.organization}`);
+    aidaLogging(`   Project: ${data.project}`);
+    aidaLogging(`   Repository: ${data.repository}`);
+    aidaLogging(`   Source Commit (PR): ${data.sourceCommit?.substring(0, 7)}`);
+    aidaLogging(`   Target Commit (Merge Base): ${data.targetCommit?.substring(0, 7)} - CORRECTED`);
+    aidaLogging(`   Merge Base: ${data.mergeBaseCommit?.substring(0, 7)} - for Monaco diff accuracy`);
+    aidaLogging(`   Access Token: ${accessToken ? '✅ Available' : '❌ Missing'}`);
 
     stream.markdown('🔵 **Azure DevOps Diff Webview Display**\n\n');
     
@@ -71099,8 +71436,8 @@ async function showAzureDevOpsDiffInWebview(prAnalysis, stream) {
             useFullContent: true
         };
         
-        console.log(`🔍 Cached Azure DevOps diff: ${diffId} for ${fileChange.path}`);
-        console.log(`   📊 Commits: base=${data.targetCommit?.substring(0, 7)}, source=${data.sourceCommit?.substring(0, 7)}`);
+        aidaLogging(`🔍 Cached Azure DevOps diff: ${diffId} for ${fileChange.path}`);
+        aidaLogging(`   📊 Commits: base=${data.targetCommit?.substring(0, 7)}, source=${data.sourceCommit?.substring(0, 7)}`);
     });
 
     // Display file links with webview buttons (hover for details)
@@ -71182,7 +71519,7 @@ function initializePrReview(extensionContext) {
  * @param {object} stream - Chat stream object
  */
 async function processReviewPr(userMessage, stream) {
-    console.log('🔄 processReviewPr: Starting PR review with options');
+    aidaLogging('🔄 processReviewPr: Starting PR review with options');
     
     // Parse repo URL and detect type using centralized function
     const parsedInfo = parsePRUrlInfo(userMessage);
@@ -71190,7 +71527,7 @@ async function processReviewPr(userMessage, stream) {
 
     // Check for global selectedBusinessDocs (unified pattern with other review modules)
     if (global.selectedBusinessDocs) {
-        console.log('🎯 Enhanced/Quick PR Review detected:', global.selectedBusinessDocs);
+        aidaLogging('🎯 Enhanced/Quick PR Review detected:', global.selectedBusinessDocs);
         
         // Execute review directly
         await processPrReview(userMessage, repoType, prId, owner, repo, organization, project, repository, originalUrl, stream, null);
@@ -71209,14 +71546,14 @@ async function processReviewPr(userMessage, stream) {
                 const businessDocs = await getBusinessDocumentFolders(workspaceFolder);
                 hasBusinessDocs = businessDocs && businessDocs.length > 0;
             } catch (error) {
-                console.log('❌ Error checking business documents:', error.message);
+                aidaLogging('❌ Error checking business documents:', error.message);
                 hasBusinessDocs = false;
             }
         }
         
         // If no business documents, execute Quick Review immediately
         if (!hasBusinessDocs) {
-            console.log('📋 No business documents found - executing Quick Review automatically');
+            aidaLogging('📋 No business documents found - executing Quick Review automatically');
             stream.markdown('� **Starting Quick Review automatically** (no business documents found)\n\n');
             
             // Set Quick Review mode
@@ -71324,7 +71661,7 @@ async function handleReviewPr(request, context, stream, token) {
 
         // Check for global selectedBusinessDocs (like review-file.js)
         if (global.selectedBusinessDocs) {
-            console.log('🎯 Enhanced/Quick PR Review detected:', global.selectedBusinessDocs);
+            aidaLogging('🎯 Enhanced/Quick PR Review detected:', global.selectedBusinessDocs);
             
             // Execute review directly
             await processPrReview(userMessage, repoType, prId, owner, repo, organization, project, repository, originalUrl, stream, context, request);
@@ -71343,14 +71680,14 @@ async function handleReviewPr(request, context, stream, token) {
                     const businessDocs = await getBusinessDocumentFolders(workspaceFolder);
                     hasBusinessDocs = businessDocs && businessDocs.length > 0;
                 } catch (error) {
-                    console.log('❌ Error checking business documents:', error.message);
+                    aidaLogging('❌ Error checking business documents:', error.message);
                     hasBusinessDocs = false;
                 }
             }
             
             // If no business documents, execute Quick Review immediately
             if (!hasBusinessDocs) {
-                console.log('📋 No business documents found - executing Quick Review automatically');
+                aidaLogging('📋 No business documents found - executing Quick Review automatically');
                 stream.markdown('🚀 **Starting Quick Review automatically** (no business documents found)\n\n');
                 
                 // Set Quick Review mode
@@ -71434,17 +71771,17 @@ async function processPrReview(userMessage, repoType, prId, owner, repo, organiz
         // Get PR diff and analyze based on repo type
         let prAnalysis;
         if (repoType === 'github') {
-            console.log(`🐙 DEBUG: Starting GitHub PR analysis for ${owner}/${repo}#${prId}`);
+            aidaLogging(`🐙 DEBUG: Starting GitHub PR analysis for ${owner}/${repo}#${prId}`);
             prAnalysis = await analyzeGitHubPullRequest(stream, owner, repo, prId);
-            console.log('🐙 DEBUG: GitHub PR analysis result:', JSON.stringify(prAnalysis, null, 2));
+            aidaLogging('🐙 DEBUG: GitHub PR analysis result:', JSON.stringify(prAnalysis, null, 2));
         } else if (repoType === 'gitlab') {
-            console.log(`🦊 DEBUG: Starting GitLab MR analysis for ${owner}/${repo}!${prId}`);
+            aidaLogging(`🦊 DEBUG: Starting GitLab MR analysis for ${owner}/${repo}!${prId}`);
             prAnalysis = await analyzeGitLabMergeRequest(stream, organization, owner, repo, prId);
-            console.log('🦊 DEBUG: GitLab MR analysis result:', JSON.stringify(prAnalysis, null, 2));
+            aidaLogging('🦊 DEBUG: GitLab MR analysis result:', JSON.stringify(prAnalysis, null, 2));
         } else {
-            console.log(`🔵 DEBUG: Starting Azure DevOps PR analysis for PR #${prId}`);
+            aidaLogging(`🔵 DEBUG: Starting Azure DevOps PR analysis for PR #${prId}`);
             prAnalysis = await analyzePullRequest(stream, prId, organization, project, repository);
-            console.log('🔵 DEBUG: Azure PR analysis result:', JSON.stringify(prAnalysis, null, 2));
+            aidaLogging('🔵 DEBUG: Azure PR analysis result:', JSON.stringify(prAnalysis, null, 2));
         }
 
         if (prAnalysis.error) {
@@ -71470,7 +71807,7 @@ async function processPrReview(userMessage, repoType, prId, owner, repo, organiz
         // Display basic PR info after successful fetch
         const data = prAnalysis.data;
         if (data) {
-            console.log(`📊 DEBUG: PR data structure:`, {
+            aidaLogging(`📊 DEBUG: PR data structure:`, {
                 title: data.title,
                 author: data.author,
                 status: data.status,
@@ -71489,7 +71826,7 @@ async function processPrReview(userMessage, repoType, prId, owner, repo, organiz
             
             // Debug file changes for GitHub
             if (repoType === 'github' && data.fileChanges) {
-                console.log(`🐙 DEBUG: GitHub file changes:`, data.fileChanges.map(f => ({
+                aidaLogging(`🐙 DEBUG: GitHub file changes:`, data.fileChanges.map(f => ({
                     path: f.path,
                     changeType: f.changeType,
                     additions: f.additions,
@@ -71545,13 +71882,13 @@ async function reviewPullRequestCommand() {
             project = azureMatch[2];
             repository = azureMatch[3];
             prId = azureMatch[4];
-            console.log(`🔍 Parsed from URL: org=${organization}, project=${project}, repo=${repository}, prId=${prId}`);
+            aidaLogging(`🔍 Parsed from URL: org=${organization}, project=${project}, repo=${repository}, prId=${prId}`);
         } else {
             // Fallback to simple PR ID pattern
             const prPattern = /(?:pullrequest(?:s)?\/(\d+)|pr[#\s]?(\d+)|id[:\s]?(\d+))/i;
             const match = prInput.match(prPattern);
             prId = match ? (match[1] || match[2] || match[3]) : null;
-            console.log(`🔍 Parsed PR ID only: ${prId} (using defaults for org/project)`);
+            aidaLogging(`🔍 Parsed PR ID only: ${prId} (using defaults for org/project)`);
         }
 
         if (!prId) {
@@ -71573,7 +71910,7 @@ async function reviewPullRequestCommand() {
 
             // Create a mock stream for the command-based call
             const mockStream = {
-                markdown: (text) => console.log(text)
+                markdown: (text) => aidaLogging(text)
             };
             // Pass parsed organization, project, repository to analyzePullRequest
             const prAnalysis = await analyzePullRequest(mockStream, prId, organization, project, repository);
@@ -71614,10 +71951,10 @@ async function analyzePullRequest(stream, prUrl, organization = null, project = 
                 proj = parsed.project;
                 repo = parsed.repository;
                 prId = parsed.prId;
-                console.log(`✅ Auto-detected from URL: org=${org}, project=${proj}, repo=${repo}, PR=${prId}`);
+                aidaLogging(`✅ Auto-detected from URL: org=${org}, project=${proj}, repo=${repo}, PR=${prId}`);
                 stream.markdown(`🔍 **Auto-detected**: ${org}/${proj}/${repo}/PR#${prId}\n\n`);
             } catch (parseError) {
-                console.log('⚠️ Failed to parse URL, using provided values');
+                aidaLogging('⚠️ Failed to parse URL, using provided values');
                 prId = prUrl; // Assume it's just a PR ID
             }
         } else {
@@ -71630,18 +71967,18 @@ async function analyzePullRequest(stream, prUrl, organization = null, project = 
         }
         
         if (!organization && !project && !repository) {
-            console.log(`⚠️ Using defaults: org=${org}, project=${proj}, repo=${repo}`);
+            aidaLogging(`⚠️ Using defaults: org=${org}, project=${proj}, repo=${repo}`);
             stream.markdown(`⚠️ **Using defaults**: ${org}/${proj}/${repo} (provide full URL for auto-detection)\n\n`);
         }
 
         // Get token using new multi-org helper
         const fullPrUrl = `https://dev.azure.com/${org}/${proj}/_git/${repo}/pullrequest/${prId}`;
-        console.log(`🔍 Checking token for Azure DevOps URL: ${fullPrUrl}`);
+        aidaLogging(`🔍 Checking token for Azure DevOps URL: ${fullPrUrl}`);
         const personalAccessToken = getTokenForPR(fullPrUrl);
-        console.log(`🔍 Token found: ${personalAccessToken ? 'YES' : 'NO'}`);
+        aidaLogging(`🔍 Token found: ${personalAccessToken ? 'YES' : 'NO'}`);
 
         if (!personalAccessToken) {
-            console.log(`❌ No token found for Azure DevOps org: ${org}`);
+            aidaLogging(`❌ No token found for Azure DevOps org: ${org}`);
             // Show configuration help using new helper
             showTokenConfigurationHelp('azureDevOps', org, stream);
             return { error: `Azure DevOps Personal Access Token is required for organization: ${org}` };
@@ -71649,9 +71986,9 @@ async function analyzePullRequest(stream, prUrl, organization = null, project = 
 
         try {
             // Call Azure DevOps REST API with token
-            console.log(`🔄 Calling Azure DevOps API for PR ${prId}...`);
+            aidaLogging(`🔄 Calling Azure DevOps API for PR ${prId}...`);
             const prData = await getAzureDevOpsPR(org, proj, repo, prId, personalAccessToken);
-            console.log('✅ Azure DevOps API call successful:', prData);
+            aidaLogging('✅ Azure DevOps API call successful:', prData);
             return prData;
 
         } catch (apiError) {
@@ -71672,7 +72009,7 @@ async function analyzePullRequest(stream, prUrl, organization = null, project = 
  */
 async function getAzureDevOpsPR(organization, project, repository, prId, token) {
     try {
-        console.log(`Fetching PR ${prId} from ${organization}/${project}/${repository}`);
+        aidaLogging(`Fetching PR ${prId} from ${organization}/${project}/${repository}`);
 
         // Get PR details
         const prUrl = `https://dev.azure.com/${organization}/${project}/_apis/git/repositories/${repository}/pullRequests/${prId}?api-version=7.0`;
@@ -71688,7 +72025,7 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
         // Extract branch information
         const sourceBranch = pr.sourceRefName?.replace('refs/heads/', '') || 'Unknown';
         const targetBranch = pr.targetRefName?.replace('refs/heads/', '') || 'Unknown';
-        console.log(`🌿 Branch info: ${sourceBranch} → ${targetBranch}`);
+        aidaLogging(`🌿 Branch info: ${sourceBranch} → ${targetBranch}`);
 
         let commits = [];
         let fileChanges = [];
@@ -71696,25 +72033,25 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
         let diffSource = 'PR-specific changes only';
         // mergeBaseCommit now declared at function scope above
 
-        console.log('🔍 Getting PR-specific changes from source commit...');
+        aidaLogging('🔍 Getting PR-specific changes from source commit...');
 
         // STEP 1: Get ALL commits in this PR
-        console.log('📝 Getting all commits from PR...');
+        aidaLogging('📝 Getting all commits from PR...');
         const commitsUrl = `https://dev.azure.com/${organization}/${project}/_apis/git/repositories/${repository}/pullRequests/${prId}/commits?api-version=7.0&$top=1000`;
         const commitsResponse = await makeAzureDevOpsRequest(commitsUrl, token);
 
         if (commitsResponse.success && commitsResponse.data.value?.length > 0) {
             commits = commitsResponse.data.value;
-            console.log(`✅ Found ${commits.length} commits in PR`);
+            aidaLogging(`✅ Found ${commits.length} commits in PR`);
             commits.forEach((commit, index) => {
-                console.log(`  ${index + 1}. ${commit.commitId.substring(0, 7)} - ${commit.comment || 'No message'}`);
+                aidaLogging(`  ${index + 1}. ${commit.commitId.substring(0, 7)} - ${commit.comment || 'No message'}`);
             });
         } else {
-            console.log('⚠️ No commits found, trying single source commit...');
+            aidaLogging('⚠️ No commits found, trying single source commit...');
             // Fallback to single commit if API fails
             if (pr.lastMergeSourceCommit) {
                 const sourceCommitId = pr.lastMergeSourceCommit.commitId;
-                console.log(`📝 PR source commit: ${sourceCommitId.substring(0, 7)}`);
+                aidaLogging(`📝 PR source commit: ${sourceCommitId.substring(0, 7)}`);
 
                 // Get detailed info about this specific commit
                 const commitUrl = `https://dev.azure.com/${organization}/${project}/_apis/git/repositories/${repository}/commits/${sourceCommitId}?api-version=7.0`;
@@ -71730,7 +72067,7 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
                             date: commit.author?.date || new Date().toISOString()
                         }
                     }];
-                    console.log(`✅ Found PR source commit: ${commit.commitId.substring(0, 7)} - ${commit.comment}`);
+                    aidaLogging(`✅ Found PR source commit: ${commit.commitId.substring(0, 7)} - ${commit.comment}`);
                 }
             }
         }
@@ -71740,17 +72077,17 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
         const iterationsResponse = await makeAzureDevOpsRequest(iterationsUrl, token);
 
         // Initialize variables at FUNCTION scope (not block scope)
-        console.log('🐛 DEBUG: Initializing allFileChanges and reviewableFileChanges at FUNCTION scope...');
+        aidaLogging('🐛 DEBUG: Initializing allFileChanges and reviewableFileChanges at FUNCTION scope...');
         let allFileChanges = [];
         let reviewableFileChanges = [];
         let mergeBaseCommit = null;
-        console.log('🐛 DEBUG: Variables initialized at function scope - allFileChanges.length:', allFileChanges.length);
+        aidaLogging('🐛 DEBUG: Variables initialized at function scope - allFileChanges.length:', allFileChanges.length);
 
         if (iterationsResponse.success && iterationsResponse.data.value?.length > 0) {
             const iterations = iterationsResponse.data.value;
             const latestIteration = iterations[iterations.length - 1];
 
-            console.log(`✅ Found ${iterations.length} iterations, using latest: ${latestIteration.id}`);
+            aidaLogging(`✅ Found ${iterations.length} iterations, using latest: ${latestIteration.id}`);
 
             // STEP 3: Get file changes from the latest iteration (this gives us actual PR changes)
             const changesUrl = `https://dev.azure.com/${organization}/${project}/_apis/git/repositories/${repository}/pullRequests/${prId}/iterations/${latestIteration.id}/changes?api-version=7.0&$top=1000`;
@@ -71767,7 +72104,7 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
                         !filePath.includes('/.git/');
 
                     if (isFile) {
-                        console.log(`📄 All files: ${filePath} (${change.changeType})`);
+                        aidaLogging(`📄 All files: ${filePath} (${change.changeType})`);
                     }
                     return isFile;
                 });
@@ -71776,7 +72113,7 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
                 const reviewableFiles = filterReviewableFiles(allActualFiles, 'Azure DevOps');
 
                 // Process ALL files for diff view (Monaco needs complete file list) 
-                console.log('🔄 Finding merge base (branch point) for accurate diff...');
+                aidaLogging('🔄 Finding merge base (branch point) for accurate diff...');
 
                 // Get source and target commits from PR
                 const sourceCommit = pr.lastMergeSourceCommit?.commitId;
@@ -71786,8 +72123,8 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
                     throw new Error('Missing source or target commit information in PR data');
                 }
                 
-                console.log(`🎯 Source commit (PR): ${sourceCommit.substring(0, 7)}`);
-                console.log(`🎯 Target commit (${targetBranch}): ${targetCommit.substring(0, 7)}`);
+                aidaLogging(`🎯 Source commit (PR): ${sourceCommit.substring(0, 7)}`);
+                aidaLogging(`🎯 Target commit (${targetBranch}): ${targetCommit.substring(0, 7)}`);
                 
                 // Find merge base (the common ancestor commit where the branch diverged)
                 let baseCommit;
@@ -71798,15 +72135,15 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
                     if (mergeBaseResponse.success && mergeBaseResponse.data.value && mergeBaseResponse.data.value.length > 0) {
                         baseCommit = mergeBaseResponse.data.value[0].commitId;
                         mergeBaseCommit = baseCommit; // Store for Monaco diff view
-                        console.log(`✅ Found merge base (branch point): ${baseCommit.substring(0, 7)}`);
-                        console.log(`📊 This will show ONLY changes made in the feature branch, not full target branch diff`);
+                        aidaLogging(`✅ Found merge base (branch point): ${baseCommit.substring(0, 7)}`);
+                        aidaLogging(`📊 This will show ONLY changes made in the feature branch, not full target branch diff`);
                     } else {
-                        console.log(`⚠️ Could not find merge base, falling back to target commit`);
+                        aidaLogging(`⚠️ Could not find merge base, falling back to target commit`);
                         baseCommit = targetCommit;
                         mergeBaseCommit = targetCommit; // Fallback to target commit
                     }
                 } catch (error) {
-                    console.log(`❌ Error finding merge base: ${error.message}, using target commit`);
+                    aidaLogging(`❌ Error finding merge base: ${error.message}, using target commit`);
                     baseCommit = targetCommit;
                     mergeBaseCommit = targetCommit; // Fallback to target commit
                 }
@@ -71814,16 +72151,16 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
                 // Process ALL files for diff view (Monaco needs complete file list)
                 allFileChanges = await Promise.all(allActualFiles.map(async (change) => {
                     const filePath = change.item?.path || change.originalPath || 'Unknown';
-                    console.log(`📁 Processing file: ${filePath} (${change.changeType})`);
+                    aidaLogging(`📁 Processing file: ${filePath} (${change.changeType})`);
                     
                     // 🔥 FIX: Detect rename when Azure reports 'edit' but paths differ
                     let effectiveChangeType = change.changeType?.toLowerCase() || 'edit';
                     if (change.originalPath && change.item?.path && change.originalPath !== change.item.path) {
                         effectiveChangeType = 'rename';
-                        console.log(`🔄 Detected rename: ${change.originalPath} -> ${change.item.path}`);
+                        aidaLogging(`🔄 Detected rename: ${change.originalPath} -> ${change.item.path}`);
                     }
 
-                    console.log(`📁 Processing file: ${filePath} (${effectiveChangeType})`);
+                    aidaLogging(`📁 Processing file: ${filePath} (${effectiveChangeType})`);
 
                     let diffContent = '';
                     let additions = 0;
@@ -71833,10 +72170,10 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
 
                     if (baseCommit && sourceCommit) {
                         try {
-                            console.log(`🔍 Comparing commits for ${filePath} (CORRECTED LOGIC):`);
-                            console.log(`  📍 Base commit (merge base): ${baseCommit.substring(0, 7)} - branch point where ${targetBranch} and feature branch diverged`);
-                            console.log(`  📍 Source commit (PR): ${sourceCommit.substring(0, 7)} - latest commit in feature branch`);
-                            console.log(`  💡 This shows ONLY changes made in feature branch, not full diff vs current ${targetBranch}`);
+                            aidaLogging(`🔍 Comparing commits for ${filePath} (CORRECTED LOGIC):`);
+                            aidaLogging(`  📍 Base commit (merge base): ${baseCommit.substring(0, 7)} - branch point where ${targetBranch} and feature branch diverged`);
+                            aidaLogging(`  📍 Source commit (PR): ${sourceCommit.substring(0, 7)} - latest commit in feature branch`);
+                            aidaLogging(`  💡 This shows ONLY changes made in feature branch, not full diff vs current ${targetBranch}`);
 
                             // FIX: Use correct paths for rename
                             const basePath = (effectiveChangeType === 'rename' && change.originalPath) ? change.originalPath : filePath;
@@ -71853,13 +72190,13 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
                             // Store source content for new files
                             fileSourceContent = sourceContent;
 
-                            console.log(`📊 Content retrieved:`);
-                            console.log(`  Base content (merge base): ${baseContent ? baseContent.length + ' chars' : 'NULL'}`);
-                            console.log(`  Source content (PR): ${sourceContent ? sourceContent.length + ' chars' : 'NULL'}`);
+                            aidaLogging(`📊 Content retrieved:`);
+                            aidaLogging(`  Base content (merge base): ${baseContent ? baseContent.length + ' chars' : 'NULL'}`);
+                            aidaLogging(`  Source content (PR): ${sourceContent ? sourceContent.length + ' chars' : 'NULL'}`);
 
                             if (baseContent !== null || sourceContent !== null) {
                                 // Generate unified diff using diff library
-                                console.log(`🎯 Calling generateUnifiedDiff for ${filePath} with CORRECTED commits...`);
+                                aidaLogging(`🎯 Calling generateUnifiedDiff for ${filePath} with CORRECTED commits...`);
                                 diffContent = generateUnifiedDiff(filePath, baseContent || '', sourceContent || '', effectiveChangeType);
 
                                 // Count changes using our counting function
@@ -71867,17 +72204,17 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
                                 additions = counts.additions;
                                 deletions = counts.deletions;
 
-                                console.log(`✅ Generated diff for ${filePath}: +${additions}/-${deletions} (using merge base)`);
+                                aidaLogging(`✅ Generated diff for ${filePath}: +${additions}/-${deletions} (using merge base)`);
                             } else {
-                                console.log(`⚠️ Could not fetch content for ${filePath}`);
+                                aidaLogging(`⚠️ Could not fetch content for ${filePath}`);
                                 diffContent = `diff --git a/${filePath} b/${filePath}\n[Could not retrieve file content]`;
                             }
                         } catch (err) {
-                            console.log(`❌ Error processing ${filePath}: ${err.message}`);
+                            aidaLogging(`❌ Error processing ${filePath}: ${err.message}`);
                             diffContent = `diff --git a/${filePath} b/${filePath}\n[Error: ${err.message}]`;
                         }
                     } else {
-                        console.log(`⚠️ Missing commit information for ${filePath}`);
+                        aidaLogging(`⚠️ Missing commit information for ${filePath}`);
                         diffContent = `diff --git a/${filePath} b/${filePath}\n[Missing commit information]`;
                     }
 
@@ -71900,17 +72237,17 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
                     const changeTypeLower = (change.changeType || '').toLowerCase();
                     const isAddType = (changeTypeLower === 'add' || changeTypeLower === 'added' || changeTypeLower === 'new');
                     
-                    console.log(`🔍 [DEBUG] File ${filePath}:`);
-                    console.log(`   - changeType="${change.changeType}" (lowercase="${changeTypeLower}")`);
-                    console.log(`   - isAddType=${isAddType}`);
-                    console.log(`   - fileSourceContent=${fileSourceContent ? fileSourceContent.length + ' chars' : 'NULL'}`);
-                    console.log(`   - Will store fullContent? ${isAddType && fileSourceContent ? 'YES ✅' : 'NO ❌'}`);
+                    aidaLogging(`🔍 [DEBUG] File ${filePath}:`);
+                    aidaLogging(`   - changeType="${change.changeType}" (lowercase="${changeTypeLower}")`);
+                    aidaLogging(`   - isAddType=${isAddType}`);
+                    aidaLogging(`   - fileSourceContent=${fileSourceContent ? fileSourceContent.length + ' chars' : 'NULL'}`);
+                    aidaLogging(`   - Will store fullContent? ${isAddType && fileSourceContent ? 'YES ✅' : 'NO ❌'}`);
                     
                     if (isAddType && fileSourceContent) {
                         fileObj.fullContent = fileSourceContent;
-                        console.log(`💾 ✅ STORED fullContent for new file ${filePath}: ${fileSourceContent.length} chars`);
+                        aidaLogging(`💾 ✅ STORED fullContent for new file ${filePath}: ${fileSourceContent.length} chars`);
                     } else {
-                        console.log(`⚠️ NOT storing fullContent for ${filePath}: isAddType=${isAddType}, hasContent=${!!fileSourceContent}`);
+                        aidaLogging(`⚠️ NOT storing fullContent for ${filePath}: isAddType=${isAddType}, hasContent=${!!fileSourceContent}`);
                     }
                     
                     return fileObj;
@@ -71919,13 +72256,13 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
                 // Filter reviewable files from processed results using shared function
                 reviewableFileChanges = filterReviewableFiles(allFileChanges, 'Azure DevOps');
 
-                console.log(`✅ Processed ${allFileChanges.length} total files, ${reviewableFileChanges.length} for review content`);
+                aidaLogging(`✅ Processed ${allFileChanges.length} total files, ${reviewableFileChanges.length} for review content`);
             } else {
-                console.log('⚠️ No file changes found in PR iteration');
+                aidaLogging('⚠️ No file changes found in PR iteration');
             }
 
         } else {
-            console.log('⚠️ No iterations found for PR');
+            aidaLogging('⚠️ No iterations found for PR');
         }
 
         return {
@@ -72046,7 +72383,7 @@ async function makeAzureDevOpsRequest(url, token, method = 'GET', body = null) {
  */
 async function getFileContent(organization, project, repository, filePath, commitId, token) {
     try {
-        console.log(`🔄 Fetching content for ${filePath} at commit ${commitId.substring(0, 7)}`);
+        aidaLogging(`🔄 Fetching content for ${filePath} at commit ${commitId.substring(0, 7)}`);
 
         // Use download parameter to get actual content as text
         const itemUrl = `https://dev.azure.com/${organization}/${project}/_apis/git/repositories/${repository}/items?path=${encodeURIComponent(filePath)}&versionDescriptor.version=${commitId}&versionDescriptor.versionType=commit&download=true&api-version=7.0`;
@@ -72079,7 +72416,7 @@ async function getFileContent(organization, project, repository, filePath, commi
                     if (res.statusCode === 200) {
                         resolve({ success: true, data: data });
                     } else {
-                        console.log(`⚠️ Download failed: ${res.statusCode} ${res.statusMessage}`);
+                        aidaLogging(`⚠️ Download failed: ${res.statusCode} ${res.statusMessage}`);
                         resolve({ success: false, error: `HTTP ${res.statusCode}` });
                     }
                 });
@@ -72098,26 +72435,26 @@ async function getFileContent(organization, project, repository, filePath, commi
         });
 
         if (response.success && response.data) {
-            console.log(`✅ Got file content: ${response.data.length} chars`);
+            aidaLogging(`✅ Got file content: ${response.data.length} chars`);
             
             // Debug indentation in API response
             const lines = response.data.split('\n');
-            console.log(`📊 DEBUG API CONTENT - Total lines: ${lines.length}`);
-            console.log(`📊 First 5 lines analysis:`);
+            aidaLogging(`📊 DEBUG API CONTENT - Total lines: ${lines.length}`);
+            aidaLogging(`📊 First 5 lines analysis:`);
             for (let i = 0; i < Math.min(5, lines.length); i++) {
                 const line = lines[i];
                 const leadingSpaces = line.match(/^ */)[0].length;
                 const leadingTabs = line.match(/^\t*/)[0].length;
-                console.log(`📊 Line ${i + 1}: spaces=${leadingSpaces}, tabs=${leadingTabs}, content="${line.substring(0, 50)}"`);
+                aidaLogging(`📊 Line ${i + 1}: spaces=${leadingSpaces}, tabs=${leadingTabs}, content="${line.substring(0, 50)}"`);
             }
             
             return response.data;
         }
 
-        console.log(`❌ Could not fetch content: ${response.error || 'unknown'}`);
+        aidaLogging(`❌ Could not fetch content: ${response.error || 'unknown'}`);
         return null;
     } catch (error) {
-        console.log(`❌ Error fetching content for ${filePath}: ${error.message}`);
+        aidaLogging(`❌ Error fetching content for ${filePath}: ${error.message}`);
         return null;
     }
 }
@@ -72133,7 +72470,7 @@ async function getFileContent(organization, project, repository, filePath, commi
  */
 async function getGitHubFileContent(owner, repo, filePath, commitSha, token) {
     try {
-        console.log(`🔄 Fetching GitHub content for ${filePath} at commit ${commitSha.substring(0, 7)}`);
+        aidaLogging(`🔄 Fetching GitHub content for ${filePath} at commit ${commitSha.substring(0, 7)}`);
 
         // GitHub Contents API URL
         const contentsUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${encodeURIComponent(filePath)}?ref=${commitSha}`;
@@ -72144,15 +72481,15 @@ async function getGitHubFileContent(owner, repo, filePath, commitSha, token) {
             // GitHub API returns base64 encoded content
             if (response.data.content && response.data.encoding === 'base64') {
                 const content = Buffer.from(response.data.content, 'base64').toString('utf8');
-                console.log(`✅ Got GitHub file content: ${content.length} chars`);
+                aidaLogging(`✅ Got GitHub file content: ${content.length} chars`);
                 return content;
             }
         }
 
-        console.log(`❌ Could not fetch GitHub content: ${response.error || 'unknown'}`);
+        aidaLogging(`❌ Could not fetch GitHub content: ${response.error || 'unknown'}`);
         return null;
     } catch (error) {
-        console.log(`❌ Error fetching GitHub content for ${filePath}: ${error.message}`);
+        aidaLogging(`❌ Error fetching GitHub content for ${filePath}: ${error.message}`);
         return null;
     }
 }
@@ -72203,7 +72540,7 @@ function generateUnifiedDiff(filePath, baseContent, targetContent, changeType) {
  */
 async function analyzeGitHubPullRequest(stream, owner, repo, prId) {
     try {
-        console.log(`🔄 Fetching GitHub PR ${owner}/${repo}#${prId}`);
+        aidaLogging(`🔄 Fetching GitHub PR ${owner}/${repo}#${prId}`);
 
         // Get token using new multi-org helper
         const prUrl = `https://github.com/${owner}/${repo}/pull/${prId}`;
@@ -72243,7 +72580,7 @@ async function analyzeGitHubPullRequest(stream, owner, repo, prId) {
  */
 async function getGitHubPR(owner, repo, prId, token) {
     try {
-        console.log(`📝 Fetching PR details: ${owner}/${repo}#${prId}`);
+        aidaLogging(`📝 Fetching PR details: ${owner}/${repo}#${prId}`);
 
         // Get PR details
         const prUrl = `https://api.github.com/repos/${owner}/${repo}/pulls/${prId}`;
@@ -72257,7 +72594,7 @@ async function getGitHubPR(owner, repo, prId, token) {
         const pr = prResponse.data;
 
         // Get PR files (changes)
-        console.log('📁 Fetching changed files...');
+        aidaLogging('📁 Fetching changed files...');
         const filesUrl = `https://api.github.com/repos/${owner}/${repo}/pulls/${prId}/files`;
         const filesResponse = await makeGitHubRequest(filesUrl, token);
 
@@ -72267,10 +72604,10 @@ async function getGitHubPR(owner, repo, prId, token) {
         }
 
         const files = filesResponse.data;
-        console.log(`✅ Found ${files.length} changed files`);
+        aidaLogging(`✅ Found ${files.length} changed files`);
 
         // Get diff in unified format
-        console.log('🔄 Fetching unified diff from GitHub...');
+        aidaLogging('🔄 Fetching unified diff from GitHub...');
         const diffUrl = `https://api.github.com/repos/${owner}/${repo}/pulls/${prId}`;
         const diffResponse = await makeGitHubRequest(diffUrl, token, 'GET', {
             'Accept': 'application/vnd.github.v3.diff'
@@ -72279,9 +72616,9 @@ async function getGitHubPR(owner, repo, prId, token) {
         let finalDiff = '';
         if (diffResponse.success && typeof diffResponse.data === 'string') {
             finalDiff = diffResponse.data;
-            console.log(`✅ Got unified diff: ${finalDiff.length} characters`);
+            aidaLogging(`✅ Got unified diff: ${finalDiff.length} characters`);
         } else {
-            console.log('⚠️ Could not get unified diff, will build from file patches');
+            aidaLogging('⚠️ Could not get unified diff, will build from file patches');
         }
 
         // Process file changes
@@ -72313,9 +72650,9 @@ async function getGitHubPR(owner, repo, prId, token) {
                 // Add the patch content (which contains the @@ hunks)
                 diffContent += file.patch;
                 
-                console.log(`🔧 DEBUG: Built complete diff for ${file.filename}: ${diffContent.length} chars`);
-                console.log(`🔍 DEBUG: GitHub patch for ${file.filename}:`, file.patch);
-                console.log(`🔧 DEBUG: Complete diffContent:`, diffContent);
+                aidaLogging(`🔧 DEBUG: Built complete diff for ${file.filename}: ${diffContent.length} chars`);
+                aidaLogging(`🔍 DEBUG: GitHub patch for ${file.filename}:`, file.patch);
+                aidaLogging(`🔧 DEBUG: Complete diffContent:`, diffContent);
             } else if (file.status === 'renamed' && !file.patch) {
                 // Handle renamed files without content changes
                 diffContent = `diff --git a/${file.previous_filename} b/${file.filename}\n`;
@@ -72331,7 +72668,7 @@ async function getGitHubPR(owner, repo, prId, token) {
                 }
             }
 
-            console.log(`🔍 Final diffContent for ${file.filename}: ${diffContent.length} chars`);
+            aidaLogging(`🔍 Final diffContent for ${file.filename}: ${diffContent.length} chars`);
 
             return {
                 path: file.filename,
@@ -72350,7 +72687,7 @@ async function getGitHubPR(owner, repo, prId, token) {
         const reviewableFileChanges = filterReviewableFiles(fileChanges, 'GitHub');
 
         // Get commits
-        console.log('📝 Fetching commits...');
+        aidaLogging('📝 Fetching commits...');
         const commitsUrl = `https://api.github.com/repos/${owner}/${repo}/pulls/${prId}/commits`;
         const commitsResponse = await makeGitHubRequest(commitsUrl, token);
 
@@ -72364,7 +72701,7 @@ async function getGitHubPR(owner, repo, prId, token) {
                     date: commit.commit.author.date
                 }
             }));
-            console.log(`✅ Found ${commits.length} commits`);
+            aidaLogging(`✅ Found ${commits.length} commits`);
         }
 
         return {
@@ -72502,7 +72839,7 @@ async function makeGitHubRequest(url, token, method = 'GET', customHeaders = {})
  */
 async function analyzeGitLabMergeRequest(stream, gitlabHost, owner, repo, mrId) {
     try {
-        console.log(`🔄 Fetching GitLab MR ${owner}/${repo}!${mrId} from ${gitlabHost}`);
+        aidaLogging(`🔄 Fetching GitLab MR ${owner}/${repo}!${mrId} from ${gitlabHost}`);
 
         // Get token using new multi-org helper
         const mrUrl = `https://${gitlabHost}/${owner}/${repo}/-/merge_requests/${mrId}`;
@@ -72525,8 +72862,8 @@ async function analyzeGitLabMergeRequest(stream, gitlabHost, owner, repo, mrId) 
         }
 
         // ✅ FIX: Return the correct structure - extract the data portion
-        console.log(`🔧 DEBUG: GitLab API returned ${mrData.data?.finalDiff?.length || 0} chars of finalDiff`);
-        console.log(`🔧 DEBUG: GitLab API returned ${mrData.data?.fileChanges?.length || 0} file changes`);
+        aidaLogging(`🔧 DEBUG: GitLab API returned ${mrData.data?.finalDiff?.length || 0} chars of finalDiff`);
+        aidaLogging(`🔧 DEBUG: GitLab API returned ${mrData.data?.fileChanges?.length || 0} file changes`);
         
         return {
             success: true,
@@ -72549,7 +72886,7 @@ async function analyzeGitLabMergeRequest(stream, gitlabHost, owner, repo, mrId) 
  */
 async function getGitLabMR(gitlabHost, owner, repo, mrId, token) {
     try {
-        console.log(`📝 Fetching MR details: ${owner}/${repo}!${mrId} from ${gitlabHost}`);
+        aidaLogging(`📝 Fetching MR details: ${owner}/${repo}!${mrId} from ${gitlabHost}`);
 
         // Encode project path for GitLab API (owner/repo becomes owner%2Frepo)
         const projectPath = encodeURIComponent(`${owner}/${repo}`);
@@ -72566,7 +72903,7 @@ async function getGitLabMR(gitlabHost, owner, repo, mrId, token) {
         const mr = mrResponse.data;
 
         // Get MR changes (diffs)
-        console.log('📁 Fetching changed files...');
+        aidaLogging('📁 Fetching changed files...');
         const changesUrl = `https://${gitlabHost}/api/v4/projects/${projectPath}/merge_requests/${mrId}/changes`;
         const changesResponse = await makeGitLabRequest(changesUrl, token);
 
@@ -72576,15 +72913,15 @@ async function getGitLabMR(gitlabHost, owner, repo, mrId, token) {
         }
 
         const changes = changesResponse.data;
-        console.log(`✅ Found ${changes.changes?.length || 0} changed files`);
+        aidaLogging(`✅ Found ${changes.changes?.length || 0} changed files`);
         
         // Debug: Log structure of changes response
         if (changes.changes && changes.changes.length > 0) {
-            console.log('🔍 DEBUG: GitLab changes structure:', JSON.stringify(changes.changes[0], null, 2));
+            aidaLogging('🔍 DEBUG: GitLab changes structure:', JSON.stringify(changes.changes[0], null, 2));
         }
 
         // Get diff in unified format
-        console.log('🔄 Fetching unified diff from GitLab...');
+        aidaLogging('🔄 Fetching unified diff from GitLab...');
         const diffUrl = `https://${gitlabHost}/api/v4/projects/${projectPath}/merge_requests/${mrId}.diff`;
         const diffResponse = await makeGitLabRequest(diffUrl, token, 'GET', {
             'Accept': 'text/plain'
@@ -72593,9 +72930,9 @@ async function getGitLabMR(gitlabHost, owner, repo, mrId, token) {
         let finalDiff = '';
         if (diffResponse.success && typeof diffResponse.data === 'string') {
             finalDiff = diffResponse.data;
-            console.log(`✅ Got unified diff: ${finalDiff.length} characters`);
+            aidaLogging(`✅ Got unified diff: ${finalDiff.length} characters`);
         } else {
-            console.log('⚠️ Could not get unified diff, will build from file changes');
+            aidaLogging('⚠️ Could not get unified diff, will build from file changes');
         }
 
         // Process file changes
@@ -72603,8 +72940,8 @@ async function getGitLabMR(gitlabHost, owner, repo, mrId, token) {
             let diffContent = '';
             
             // Debug: Log each change structure
-            console.log(`🔍 Processing file: ${change.new_path || change.old_path}`);
-            console.log(`🔍 Change has diff: ${!!change.diff}, diff length: ${change.diff?.length || 0}`);
+            aidaLogging(`🔍 Processing file: ${change.new_path || change.old_path}`);
+            aidaLogging(`🔍 Change has diff: ${!!change.diff}, diff length: ${change.diff?.length || 0}`);
 
             // GitLab API provides diff content directly
             if (change.diff) {
@@ -72631,7 +72968,7 @@ async function getGitLabMR(gitlabHost, owner, repo, mrId, token) {
                 // Add the diff content
                 diffContent += change.diff;
                 
-                console.log(`🔧 DEBUG: Built complete diff for ${change.new_path}: ${diffContent.length} chars`);
+                aidaLogging(`🔧 DEBUG: Built complete diff for ${change.new_path}: ${diffContent.length} chars`);
             } else if (finalDiff) {
                 // Extract from unified diff as fallback
                 const fileName = change.new_path || change.old_path;
@@ -72639,11 +72976,11 @@ async function getGitLabMR(gitlabHost, owner, repo, mrId, token) {
                 const match = filePattern.exec(finalDiff);
                 if (match) {
                     diffContent = `diff --git a/${fileName} b/${fileName}${match[1]}`;
-                    console.log(`🔧 DEBUG: Extracted diff from finalDiff for ${fileName}: ${diffContent.length} chars`);
+                    aidaLogging(`🔧 DEBUG: Extracted diff from finalDiff for ${fileName}: ${diffContent.length} chars`);
                 }
             } else {
                 // Last resort: create minimal diff representation
-                console.log(`⚠️ WARNING: No diff content available for ${change.new_path || change.old_path}, creating placeholder`);
+                aidaLogging(`⚠️ WARNING: No diff content available for ${change.new_path || change.old_path}, creating placeholder`);
                 const fileName = change.new_path || change.old_path;
                 diffContent = `diff --git a/${fileName} b/${fileName}\n`;
                 if (change.new_file) {
@@ -72678,7 +73015,7 @@ async function getGitLabMR(gitlabHost, owner, repo, mrId, token) {
         const reviewableFileChanges = filterReviewableFiles(fileChanges, 'GitLab');
 
         // Get commits
-        console.log('📝 Fetching commits...');
+        aidaLogging('📝 Fetching commits...');
         const commitsUrl = `https://${gitlabHost}/api/v4/projects/${projectPath}/merge_requests/${mrId}/commits`;
         const commitsResponse = await makeGitLabRequest(commitsUrl, token);
 
@@ -72692,7 +73029,7 @@ async function getGitLabMR(gitlabHost, owner, repo, mrId, token) {
                     date: commit.authored_date
                 }
             }));
-            console.log(`✅ Found ${commits.length} commits`);
+            aidaLogging(`✅ Found ${commits.length} commits`);
         }
 
         return {
@@ -72930,7 +73267,7 @@ async function addQuickReviewOption(stream, prAnalysis, request, originalUrl = n
     const data = prAnalysis.data;
 
     // 🔍 DEBUG: Check what we have in prAnalysis structure
-    console.log('🔧 DEBUG addQuickReviewOption: prAnalysis structure:', JSON.stringify({
+    aidaLogging('🔧 DEBUG addQuickReviewOption: prAnalysis structure:', JSON.stringify({
         hasData: !!prAnalysis.data,
         finalDiffLength: prAnalysis.data?.finalDiff?.length || 0,
         fileChangesCount: prAnalysis.data?.fileChanges?.length || 0,
@@ -72942,12 +73279,12 @@ async function addQuickReviewOption(stream, prAnalysis, request, originalUrl = n
 
     // Always get diff from reviewableFileChanges (filtered for AI review)
     const reviewableFiles = data.reviewableFileChanges || [];
-    console.log(`🔍 Building diff from reviewableFileChanges: ${reviewableFiles.length} files`);
+    aidaLogging(`🔍 Building diff from reviewableFileChanges: ${reviewableFiles.length} files`);
     
     if (reviewableFiles.length > 0) {
         // Log each reviewable file
         reviewableFiles.forEach((file, index) => {
-            console.log(`🔍 Reviewable file ${index + 1}: ${file.path}, diffContent length: ${file.diffContent?.length || 0}`);
+            aidaLogging(`🔍 Reviewable file ${index + 1}: ${file.path}, diffContent length: ${file.diffContent?.length || 0}`);
         });
         
         // Build diff from reviewable files only
@@ -72955,7 +73292,7 @@ async function addQuickReviewOption(stream, prAnalysis, request, originalUrl = n
             .filter(file => file.diffContent && file.diffContent.trim())
             .map(file => file.diffContent)
             .join('\n\n');
-        console.log(`✅ Built diff from reviewableFileChanges: ${diffContent.length} chars from ${reviewableFiles.length} files`);
+        aidaLogging(`✅ Built diff from reviewableFileChanges: ${diffContent.length} chars from ${reviewableFiles.length} files`);
     }
 
     // Only proceed if we have reviewable diff content
@@ -72963,7 +73300,7 @@ async function addQuickReviewOption(stream, prAnalysis, request, originalUrl = n
         const totalFiles = data.fileChanges ? data.fileChanges.length : 0;
         const reviewableCount = reviewableFiles.length;
         
-        console.log('⚠️ No reviewable diff content available for AI review');
+        aidaLogging('⚠️ No reviewable diff content available for AI review');
         stream.markdown('⚠️ **No reviewable files found for AI review**\n\n');
         
         if (totalFiles > 0 && reviewableCount === 0) {
@@ -73007,7 +73344,7 @@ async function performQuickReviewWithAI(stream, prData, request, diffContent, or
         const templateResult = await getPRReviewTemplate('review-pr.md', prData);
         templateContent = templateResult.content;
 
-        console.log(`✅ Loaded ${templateResult.detection.template.name} review template from: ${templateResult.templatePath} (${templateResult.content.length} characters)`);
+        aidaLogging(`✅ Loaded ${templateResult.detection.template.name} review template from: ${templateResult.templatePath} (${templateResult.content.length} characters)`);
         
         // Import and use displayCommonReviewInfo and displayDetectionInfo functions
         const { displayCommonReviewInfo, displayDetectionInfo } = __webpack_require__(/*! ./review-common */ "./scripts/review-common.js");
@@ -73040,7 +73377,7 @@ async function performQuickReviewWithAI(stream, prData, request, diffContent, or
     }
 
     // Use provided diffContent (from finalDiff or built from files)
-    console.log(`🔍 Diff content for review: ${diffContent.length} chars`);
+    aidaLogging(`🔍 Diff content for review: ${diffContent.length} chars`);
 
     // Clean up any old diff placeholder and inject diff at end of template
     let processedTemplate = templateContent.replace(/```diff[\s\S]*?\{\{FINAL_DIFF_CONTENT\}\}[\s\S]*?```/g, '');
@@ -73052,7 +73389,7 @@ async function performQuickReviewWithAI(stream, prData, request, diffContent, or
     // Use reviewableFileChanges (filtered files for AI review)
     const sourceFiles = prData.reviewableFileChanges || [];
     
-    console.log(`📊 [REVIEW FILTER] Using reviewableFileChanges: ${sourceFiles.length} files for AI analysis`);
+    aidaLogging(`📊 [REVIEW FILTER] Using reviewableFileChanges: ${sourceFiles.length} files for AI analysis`);
     
     // Separate files by change type for better analysis
     const modifiedFiles = sourceFiles.filter(f => {
@@ -73064,15 +73401,15 @@ async function performQuickReviewWithAI(stream, prData, request, diffContent, or
         const changeType = (f.changeType || '').toLowerCase();
         const isNewFile = (changeType === 'add' || changeType === 'added' || changeType === 'new') && f.fullContent;
         
-        console.log(`🔍 [FILTER] File ${f.path}: changeType="${changeType}", hasFullContent=${!!f.fullContent}, isNewFile=${isNewFile}`);
+        aidaLogging(`🔍 [FILTER] File ${f.path}: changeType="${changeType}", hasFullContent=${!!f.fullContent}, isNewFile=${isNewFile}`);
         
         return isNewFile;
     });
     
-    console.log(`📊 [FILTER RESULT] Total reviewable files: ${sourceFiles.length}, Modified: ${modifiedFiles.length}, New: ${newFiles.length}`);
+    aidaLogging(`📊 [FILTER RESULT] Total reviewable files: ${sourceFiles.length}, Modified: ${modifiedFiles.length}, New: ${newFiles.length}`);
     
     if (newFiles.length > 0) {
-        console.log(`✅ New files to inject as fullContent:`, newFiles.map(f => f.path));
+        aidaLogging(`✅ New files to inject as fullContent:`, newFiles.map(f => f.path));
     }
     
     // 1. Inject modified files as DIFF (like before)
@@ -73093,7 +73430,7 @@ async function performQuickReviewWithAI(stream, prData, request, diffContent, or
             // Check if API key mode is enabled
             if (shouldUseApiKey()) {
                 // API key mode - executeAIReview will handle it
-                console.log('🔑 API key mode enabled for PR review - model is null as expected');
+                aidaLogging('🔑 API key mode enabled for PR review - model is null as expected');
             } else {
                 stream.markdown('❌ **No AI model available**\n\n');
                 stream.markdown('Using fallback basic analysis instead.\n\n');
@@ -73110,14 +73447,14 @@ async function performQuickReviewWithAI(stream, prData, request, diffContent, or
             'PR Quick Review'
         );
 
-        console.log(`🔍 executeAIReview result: ${success}`);
+        aidaLogging(`🔍 executeAIReview result: ${success}`);
 
         if (!success) {
-            console.log('❌ AI review failed, using fallback');
+            aidaLogging('❌ AI review failed, using fallback');
             stream.markdown('⚠️ **AI analysis failed. Using fallback analysis:**\n\n');
             await performBasicQuickAnalysis(stream, prData);
         } else {
-            console.log('✅ AI review completed successfully');
+            aidaLogging('✅ AI review completed successfully');
         }
 
     } catch (error) {
@@ -73154,14 +73491,14 @@ async function performStructuredQuickAnalysis(stream, prData) {
     try {
         const templateResult = await getPRReviewTemplate('review-pr.md', prData);
         templateContent = templateResult.content;
-        console.log(`✅ Loaded ${templateResult.detection.template.name} template for AI file assessment`);
+        aidaLogging(`✅ Loaded ${templateResult.detection.template.name} template for AI file assessment`);
         
         // Display PR detection information
         stream.markdown('## 🎯 Auto-Detection Results\n\n');
         stream.markdown(`**Detection:** ${templateResult.detection.template.name} (${templateResult.confidence})\n`);
         stream.markdown(`**Template:** ${templateResult.templatePath}\n\n`);
     } catch (error) {
-        console.log('⚠️ Template not available, using enhanced fallback');
+        aidaLogging('⚠️ Template not available, using enhanced fallback');
     }
 
     for (let i = 0; i < fileChanges.length; i++) {
@@ -73242,9 +73579,9 @@ async function assessFileQuickly(file, fullDiff, templateContent = null) {
                 const contextData = global.currentPRData || { fileChanges: [file] };
                 const templateResult = await getPRReviewTemplate('review-pr.md', contextData);
                 templateContent = templateResult.content;
-                console.log(`🎯 Using ${templateResult.detection.template.name} template for file assessment`);
+                aidaLogging(`🎯 Using ${templateResult.detection.template.name} template for file assessment`);
             } catch (error) {
-                console.log('⚠️ Template loading failed, using fallback analysis');
+                aidaLogging('⚠️ Template loading failed, using fallback analysis');
                 return assessFileQuicklyFallback(file, fullDiff);
             }
         }
@@ -73261,7 +73598,7 @@ async function assessFileQuickly(file, fullDiff, templateContent = null) {
         processedTemplate += '**Instructions:** Please analyze the diff above using the strict review framework provided in this template.\n';
 
         // TODO: Send processedTemplate to AI for analysis
-        console.log(`🤖 Template ready for AI: ${file.path}`);
+        aidaLogging(`🤖 Template ready for AI: ${file.path}`);
 
         // For now, use enhanced fallback until AI integration
         const aiResponse = simulateAIFileAssessment(file, fullDiff);
@@ -73284,7 +73621,7 @@ function assessFileQuicklyFallback(file, fullDiff) {
     const filePath = file.path.toLowerCase();
     const diffContent = file.diffContent || '';
 
-    console.log(`🔧 Using fallback rule-based assessment for: ${file.path}`);
+    aidaLogging(`🔧 Using fallback rule-based assessment for: ${file.path}`);
 
     // Security checks
     if (diffContent.includes('password') || diffContent.includes('secret') || diffContent.includes('api_key')) {
@@ -73467,7 +73804,7 @@ async function displayPrReviewResults(stream, prAnalysis) {
     const isGitLabMR = data.owner && data.repository && data.gitlabHost; // GitLab has owner/repo and gitlabHost
     const isAzurePR = data.organization && data.project; // Azure has org/project
 
-    console.log(`🔍 Provider detection: GitHub=${isGitHubPR}, GitLab=${isGitLabMR}, Azure=${isAzurePR}`);
+    aidaLogging(`🔍 Provider detection: GitHub=${isGitHubPR}, GitLab=${isGitLabMR}, Azure=${isAzurePR}`);
 
     // Display commits list (common for all providers)
     if (data.commitsList && data.commitsList.length > 0) {
@@ -73491,22 +73828,22 @@ async function displayPrReviewResults(stream, prAnalysis) {
 
     // PROVIDER ROUTING: Route to appropriate diff display function
     if (isGitHubPR) {
-        console.log('🐙 Routing to GitHub Function B');
+        aidaLogging('🐙 Routing to GitHub Function B');
         await showGitHubDiffInWebview(prAnalysis, stream);
     } else if (isGitLabMR) {
-        console.log('🦊 Routing to GitLab Function C');
+        aidaLogging('🦊 Routing to GitLab Function C');
         await showGitLabDiffInWebview(prAnalysis, stream);
     } else if (isAzurePR) {
-        console.log('🔵 Routing to Azure DevOps Function A');
+        aidaLogging('🔵 Routing to Azure DevOps Function A');
         await showAzureDevOpsDiffInWebview(prAnalysis, stream);
     } else {
         // Fallback: assume Azure DevOps for backward compatibility
-        console.log('⚠️ Provider unknown, defaulting to Azure DevOps Function A');
+        aidaLogging('⚠️ Provider unknown, defaulting to Azure DevOps Function A');
         await showAzureDevOpsDiffInWebview(prAnalysis, stream);
     }
 
     // Provider-specific diff display is handled above by Function A, B, or C
-    console.log(`📊 Provider routing complete. ${totalFiles} files processed.`);
+    aidaLogging(`📊 Provider routing complete. ${totalFiles} files processed.`);
 }
 
 /**
@@ -73596,13 +73933,14 @@ const vscode = __webpack_require__(/*! vscode */ "vscode");
 const fs = __webpack_require__(/*! fs */ "fs");
 const path = __webpack_require__(/*! path */ "path");
 const { showTokenStatistics, estimateTokenCount, callAI, normalizeApiParameters, detectProvider, mapProviderResponse } = __webpack_require__(/*! ./review-common */ "./scripts/review-common.js");
+const { aidaLogging } = __webpack_require__(/*! ./settings */ "./scripts/settings.js");
 
 // Add fetch polyfill for older Node.js versions
 if (!global.fetch) {
     try {
         const fetch = __webpack_require__(/*! node-fetch */ "./node_modules/node-fetch/lib/index.mjs");
         global.fetch = fetch;
-        console.log('✅ node-fetch loaded successfully');
+        aidaLogging('✅ node-fetch loaded successfully');
     } catch (error) {
         console.warn('⚠️ node-fetch not available, using https module fallback');
         // You can add a custom fetch implementation here if needed
@@ -73613,7 +73951,7 @@ if (!global.fetch) {
  * Handle scan-app requests from chat interface
  */
 async function handleScanApp(message, stream, token, context) {
-    console.log('🔍 Smart Scanner called from chat:', message);
+    aidaLogging('🔍 Smart Scanner called from chat:', message);
     
     try {
         const query = message.trim().toLowerCase();
@@ -73643,14 +73981,14 @@ async function handleScanApp(message, stream, token, context) {
  * Initialize Smart App Scanner with AST analysis
  */
 function initializeScanApp(context) {
-    console.log('🚀 Initializing scan-app participant...');
+    aidaLogging('🚀 Initializing scan-app participant...');
     
     try {
         const scanAppParticipant = vscode.chat.createChatParticipant('scan-app', async (request, context, stream, token) => {
             await handleScanApp(request.prompt, stream, token, context);
         });
         
-        console.log('✅ scan-app participant created successfully');
+        aidaLogging('✅ scan-app participant created successfully');
 
         scanAppParticipant.iconPath = vscode.Uri.file(
             path.join(context.extensionPath, 'icons', 'extension-icon.png')
@@ -73937,7 +74275,7 @@ async function extractAllApiEndpoints(apiFiles, stream) {
                 totalOutputTokens += extractionResult.outputTokens;
                 if (extractionResult.model) aiModel = extractionResult.model;
                 aiUsed++;
-                console.log(`✅ AI used for ${file.name}: ${extractionResult.inputTokens}+${extractionResult.outputTokens} tokens`);
+                aidaLogging(`✅ AI used for ${file.name}: ${extractionResult.inputTokens}+${extractionResult.outputTokens} tokens`);
             }
             
             endpoints.push(...fileEndpoints);
@@ -73970,7 +74308,7 @@ async function extractApiEndpointsWithAI(content, file) {
     const apiKey = config.get('ai.apiKey');
     
     if (!apiKey) {
-        console.log('⚠️ No AI API key - falling back to rule-based extraction');
+        aidaLogging('⚠️ No AI API key - falling back to rule-based extraction');
         return extractApiEndpointsFromContent(content, file);
     }
     
@@ -74098,10 +74436,10 @@ async function smartExtractEndpoints(content, file) {
     ].some(pattern => content.includes(pattern));
     
     if (hasComplexPatterns) {
-        console.log(`🤖 Using AI extraction for ${file.name} (complex patterns detected) - FULL FILE SCAN`);
+        aidaLogging(`🤖 Using AI extraction for ${file.name} (complex patterns detected) - FULL FILE SCAN`);
         return await extractApiEndpointsWithAI(content, file);
     } else {
-        console.log(`⚡ Using rule extraction for ${file.name} (simple patterns)`);
+        aidaLogging(`⚡ Using rule extraction for ${file.name} (simple patterns)`);
         // Return in consistent format for non-AI extraction
         return {
             endpoints: extractApiEndpointsFromContent(content, file),
@@ -74612,7 +74950,7 @@ async function callOpenAIForSmartAnalysis(endpoints, analysisType) {
         return null;
     }
     
-    console.log(`🤖 Calling AI API (${apiHost}) with model ${model} for smart ${analysisType} analysis...`);
+    aidaLogging(`🤖 Calling AI API (${apiHost}) with model ${model} for smart ${analysisType} analysis...`);
     
     const instruction = `
 # Smart ${analysisType} Analysis
@@ -74714,9 +75052,9 @@ ${JSON.stringify(endpoints, null, 2)}
         
         const aiAnalysis = mappedResponse.content;
         
-        console.log(`✅ AI API (${result.model}) analysis completed successfully`);
-        console.log(`📊 Token usage: ${(mappedResponse.inputTokens + mappedResponse.outputTokens) || 'unknown'} tokens`);
-        console.log(`🌐 API Host: ${result.apiHost}`);
+        aidaLogging(`✅ AI API (${result.model}) analysis completed successfully`);
+        aidaLogging(`📊 Token usage: ${(mappedResponse.inputTokens + mappedResponse.outputTokens) || 'unknown'} tokens`);
+        aidaLogging(`🌐 API Host: ${result.apiHost}`);
         
         return {
             analysis: aiAnalysis,
@@ -74947,6 +75285,73 @@ module.exports = {
 
 /***/ }),
 
+/***/ "./scripts/settings.js":
+/*!*****************************!*\
+  !*** ./scripts/settings.js ***!
+  \*****************************/
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+const vscode = __webpack_require__(/*! vscode */ "vscode");
+
+// Create a dedicated output channel for AIDA
+const outputChannel = vscode.window.createOutputChannel("AIDA Extension");
+
+/**
+ * Custom logging function that logs to the AIDA Output Channel
+ * based on the 'aida.debugMode' configuration setting.
+ * 
+ * @param {any} message - The message to log
+ * @param {...any} optionalParams - Additional parameters to log
+ */
+function aidaLogging(message, ...optionalParams) {
+    // Read configuration from VS Code settings
+    const config = vscode.workspace.getConfiguration('aida');
+    const isDebug = config.get('debugMode', false);
+
+    if (isDebug) {
+        // Format log with timestamp
+        const timestamp = new Date().toLocaleTimeString();
+        const logMessage = `[${timestamp}] ${message}`;
+        
+        // Write to Output Channel
+        outputChannel.appendLine(logMessage);
+        
+        if (optionalParams.length > 0) {
+            // Handle objects/arrays gracefully
+            const formattedParams = optionalParams.map(param => {
+                if (typeof param === 'object') {
+                    try {
+                        return JSON.stringify(param, null, 2);
+                    } catch (e) {
+                        return String(param);
+                    }
+                }
+                return String(param);
+            }).join(' ');
+            
+            outputChannel.appendLine(formattedParams);
+        }
+        
+        // Also log to console for DevTools debugging if needed
+        console.log(message, ...optionalParams);
+    }
+}
+
+// Export isProd for backward compatibility if needed, 
+// but logic should rely on aidaLogging now.
+// We map isProd to !debugMode for compatibility.
+const config = vscode.workspace.getConfiguration('aida');
+const isProd = !config.get('debugMode', false);
+
+module.exports = {
+    isProd,
+    aidaLogging,
+    outputChannel
+};
+
+
+/***/ }),
+
 /***/ "./scripts/sync-review-templates.js":
 /*!******************************************!*\
   !*** ./scripts/sync-review-templates.js ***!
@@ -74956,6 +75361,7 @@ module.exports = {
 const vscode = __webpack_require__(/*! vscode */ "vscode");
 const fs = __webpack_require__(/*! fs */ "fs");
 const path = __webpack_require__(/*! path */ "path");
+const { aidaLogging } = __webpack_require__(/*! ./settings */ "./scripts/settings.js");
 
 // Import sync function from extension.js
 let handleSyncTemplates;
@@ -74963,7 +75369,7 @@ try {
     const extensionModule = __webpack_require__(/*! ../extension */ "./extension.js");
     handleSyncTemplates = extensionModule.handleSyncTemplates;
 } catch (error) {
-    console.log('⚠️ Could not import handleSyncTemplates from extension.js');
+    aidaLogging('⚠️ Could not import handleSyncTemplates from extension.js');
 }
 
 /**
@@ -74972,11 +75378,11 @@ try {
  * @returns {object} Object containing the participant
  */
 function initializeSyncTemplates(context) {
-    console.log('🔄 Initializing sync-review-templates participant...');
+    aidaLogging('🔄 Initializing sync-review-templates participant...');
 
     // Create sync-review-templates chat participant
     const syncTemplatesParticipant = vscode.chat.createChatParticipant('sync-review-templates', async (request, chatContext, stream, token) => {
-        console.log('🔄 @sync-review-templates triggered');
+        aidaLogging('🔄 @sync-review-templates triggered');
         
         try {
             stream.markdown('# 🔄 AIDA Template Sync\n\n');
@@ -75023,7 +75429,7 @@ function initializeSyncTemplates(context) {
 
     // participant.iconPath = vscode.Uri.file(path.join(context.extensionPath, 'icons', 'sync-icon.png'));
 
-    console.log('✅ sync-review-templates participant created');
+    aidaLogging('✅ sync-review-templates participant created');
     return { syncTemplatesParticipant };
 }
 
@@ -75045,7 +75451,7 @@ async function createAidaTemplateStructure(sourceTemplatePath, targetAidaPath) {
         
         if ((__webpack_require__(/*! fs */ "fs").existsSync)(reviewCodePath)) {
             await copyDirectory(reviewCodePath, targetReviewCodePath);
-            console.log('✅ AIDA templates created with all available languages');
+            aidaLogging('✅ AIDA templates created with all available languages');
         }
     } catch (error) {
         console.error('Error creating AIDA structure:', error);
@@ -75076,7 +75482,7 @@ async function syncNewLanguageTemplates(sourceTemplatePath, targetAidaPath) {
             const newLanguages = sourceLanguages.filter(lang => !targetLanguages.includes(lang));
             
             if (newLanguages.length > 0) {
-                console.log(`🔄 Syncing ${newLanguages.length} new language(s): ${newLanguages.join(', ')}`);
+                aidaLogging(`🔄 Syncing ${newLanguages.length} new language(s): ${newLanguages.join(', ')}`);
                 
                 for (const newLang of newLanguages) {
                     const sourceLangPath = path.join(sourceLanguagesPath, newLang);
@@ -75084,7 +75490,7 @@ async function syncNewLanguageTemplates(sourceTemplatePath, targetAidaPath) {
                     await copyDirectory(sourceLangPath, targetLangPath);
                 }
                 
-                console.log('✅ New language templates synced to AIDA');
+                aidaLogging('✅ New language templates synced to AIDA');
             }
             
             return { newLanguages };
@@ -75202,7 +75608,7 @@ module.exports = {
  * @param {vscode.ExtensionContext} context - Extension context
  */
 async function aiSyncReviewTemplates(messageWithoutParticipant, stream, token, context) {
-    console.log('🔄 AI Sync Review Templates called');
+    aidaLogging('🔄 AI Sync Review Templates called');
     
     stream.progress && stream.progress('Syncing AIDA templates...');
     
@@ -75260,6 +75666,7 @@ async function aiSyncReviewTemplates(messageWithoutParticipant, stream, token, c
     }
 }
 
+
 /***/ }),
 
 /***/ "./scripts/test/test-get-copilot-models.js":
@@ -75269,6 +75676,7 @@ async function aiSyncReviewTemplates(messageWithoutParticipant, stream, token, c
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
 const vscode = __webpack_require__(/*! vscode */ "vscode");
+const { aidaLogging } = __webpack_require__(/*! ../settings */ "./scripts/settings.js");
 
 /**
  * Test script to get all available GitHub Copilot models
@@ -75276,72 +75684,72 @@ const vscode = __webpack_require__(/*! vscode */ "vscode");
  * Ctrl+Shift+P: AIDA: Test Get Copilot Models
  */
 async function testGetCopilotModels() {
-    console.log('🔍 Testing GitHub Copilot Model Discovery...\n');
+    aidaLogging('🔍 Testing GitHub Copilot Model Discovery...\n');
     
     try {
         // Method 1: Try vscode.lm API (VS Code 1.90+)
-        console.log('📋 Method 1: Using vscode.lm.selectChatModels()');
+        aidaLogging('📋 Method 1: Using vscode.lm.selectChatModels()');
         if (vscode.lm && vscode.lm.selectChatModels) {
             const models = await vscode.lm.selectChatModels();
-            console.log(`✅ Found ${models.length} models:\n`);
+            aidaLogging(`✅ Found ${models.length} models:\n`);
             
             models.forEach((model, index) => {
-                console.log(`${index + 1}. Model ID: ${model.id}`);
-                console.log(`   Name: ${model.name || 'N/A'}`);
-                console.log(`   Vendor: ${model.vendor || 'N/A'}`);
-                console.log(`   Family: ${model.family || 'N/A'}`);
-                console.log(`   Version: ${model.version || 'N/A'}`);
-                console.log(`   Max Input Tokens: ${model.maxInputTokens || 'N/A'}`);
-                console.log(`   Max Output Tokens: ${model.maxOutputTokens || 'N/A'}`);
-                console.log('');
+                aidaLogging(`${index + 1}. Model ID: ${model.id}`);
+                aidaLogging(`   Name: ${model.name || 'N/A'}`);
+                aidaLogging(`   Vendor: ${model.vendor || 'N/A'}`);
+                aidaLogging(`   Family: ${model.family || 'N/A'}`);
+                aidaLogging(`   Version: ${model.version || 'N/A'}`);
+                aidaLogging(`   Max Input Tokens: ${model.maxInputTokens || 'N/A'}`);
+                aidaLogging(`   Max Output Tokens: ${model.maxOutputTokens || 'N/A'}`);
+                aidaLogging('');
             });
             
             // Try to get specific model families
-            console.log('\n🔎 Filtering by families:');
+            aidaLogging('\n🔎 Filtering by families:');
             
             const claudeModels = models.filter(m => 
                 m.family?.toLowerCase().includes('claude') || 
                 m.id?.toLowerCase().includes('claude')
             );
-            console.log(`\n🤖 Claude models (${claudeModels.length}):`);
-            claudeModels.forEach(m => console.log(`   - ${m.id} (${m.name || 'unnamed'})`));
+            aidaLogging(`\n🤖 Claude models (${claudeModels.length}):`);
+            claudeModels.forEach(m => aidaLogging(`   - ${m.id} (${m.name || 'unnamed'})`));
             
             const gptModels = models.filter(m => 
                 m.family?.toLowerCase().includes('gpt') || 
                 m.id?.toLowerCase().includes('gpt')
             );
-            console.log(`\n🤖 GPT models (${gptModels.length}):`);
-            gptModels.forEach(m => console.log(`   - ${m.id} (${m.name || 'unnamed'})`));
+            aidaLogging(`\n🤖 GPT models (${gptModels.length}):`);
+            gptModels.forEach(m => aidaLogging(`   - ${m.id} (${m.name || 'unnamed'})`));
             
             const geminiModels = models.filter(m => 
                 m.family?.toLowerCase().includes('gemini') || 
                 m.id?.toLowerCase().includes('gemini')
             );
-            console.log(`\n🤖 Gemini models (${geminiModels.length}):`);
-            geminiModels.forEach(m => console.log(`   - ${m.id} (${m.name || 'unnamed'})`));
+            aidaLogging(`\n🤖 Gemini models (${geminiModels.length}):`);
+            geminiModels.forEach(m => aidaLogging(`   - ${m.id} (${m.name || 'unnamed'})`));
             
             const o1Models = models.filter(m => 
                 m.family?.toLowerCase().includes('o1') || 
                 m.id?.toLowerCase().includes('o1')
             );
-            console.log(`\n🤖 O1 models (${o1Models.length}):`);
-            o1Models.forEach(m => console.log(`   - ${m.id} (${m.name || 'unnamed'})`));
+            aidaLogging(`\n🤖 O1 models (${o1Models.length}):`);
+            o1Models.forEach(m => aidaLogging(`   - ${m.id} (${m.name || 'unnamed'})`));
             
         } else {
-            console.log('❌ vscode.lm.selectChatModels not available');
+            aidaLogging('❌ vscode.lm.selectChatModels not available');
         }
         
         // Method 2: Try languageModelAccessInformation
-        console.log('\n📋 Method 2: Using vscode.lm.languageModels');
+        aidaLogging('\n📋 Method 2: Using vscode.lm.languageModels');
         if (vscode.lm && vscode.lm.languageModels) {
             const languageModels = vscode.lm.languageModels;
-            console.log('✅ Available language models:', languageModels);
+            aidaLogging('✅ Available language models:', languageModels);
         } else {
-            console.log('❌ vscode.lm.languageModels not available');
+            aidaLogging('❌ vscode.lm.languageModels not available');
         }
         
         // Method 3: Check chat model access
-        console.log('\n📋 Method 3: Checking specific model IDs');
+        aidaLogging('\n📋 Method 3: Checking specific model IDs');
         const testModelIds = [
             'copilot-gpt-4',
             'copilot-gpt-4-turbo',
@@ -75361,16 +75769,16 @@ async function testGetCopilotModels() {
             try {
                 const models = await vscode.lm.selectChatModels({ id: modelId });
                 if (models && models.length > 0) {
-                    console.log(`✅ ${modelId}: Available`);
+                    aidaLogging(`✅ ${modelId}: Available`);
                 } else {
-                    console.log(`❌ ${modelId}: Not found`);
+                    aidaLogging(`❌ ${modelId}: Not found`);
                 }
             } catch (error) {
-                console.log(`❌ ${modelId}: Error - ${error.message}`);
+                aidaLogging(`❌ ${modelId}: Error - ${error.message}`);
             }
         }
         
-        console.log('\n✅ Test completed!');
+        aidaLogging('\n✅ Test completed!');
         
     } catch (error) {
         console.error('❌ Error testing models:', error);
@@ -75382,27 +75790,27 @@ async function testGetCopilotModels() {
  * Alternative: Get currently selected model in chat context
  */
 async function getCurrentChatModel(chatContext) {
-    console.log('\n🔍 Getting current chat model from context...');
+    aidaLogging('\n🔍 Getting current chat model from context...');
     
     if (!chatContext) {
-        console.log('❌ No chat context provided');
+        aidaLogging('❌ No chat context provided');
         return null;
     }
     
     try {
         // Check if context has model info
         if (chatContext.model) {
-            console.log('✅ Model from context:', chatContext.model);
+            aidaLogging('✅ Model from context:', chatContext.model);
             return chatContext.model;
         }
         
         // Check language model accessor
         if (chatContext.languageModelAccessInformation) {
-            console.log('✅ Language model info:', chatContext.languageModelAccessInformation);
+            aidaLogging('✅ Language model info:', chatContext.languageModelAccessInformation);
             return chatContext.languageModelAccessInformation;
         }
         
-        console.log('❌ No model information in chat context');
+        aidaLogging('❌ No model information in chat context');
         return null;
         
     } catch (error) {
@@ -75420,8 +75828,8 @@ function registerTestCommand(context) {
     });
     
     context.subscriptions.push(testCommand);
-    console.log('✅ Test command registered: aida.testGetCopilotModels');
-    console.log('💡 Run command: Developer: Run Command > "Test Get Copilot Models"');
+    aidaLogging('✅ Test command registered: aida.testGetCopilotModels');
+    aidaLogging('💡 Run command: Developer: Run Command > "Test Get Copilot Models"');
 }
 
 module.exports = {

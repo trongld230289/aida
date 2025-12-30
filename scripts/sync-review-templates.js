@@ -1,6 +1,7 @@
 const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
+const { aidaLogging } = require('./settings');
 
 // Import sync function from extension.js
 let handleSyncTemplates;
@@ -8,7 +9,7 @@ try {
     const extensionModule = require('../extension');
     handleSyncTemplates = extensionModule.handleSyncTemplates;
 } catch (error) {
-    console.log('⚠️ Could not import handleSyncTemplates from extension.js');
+    aidaLogging('⚠️ Could not import handleSyncTemplates from extension.js');
 }
 
 /**
@@ -17,11 +18,11 @@ try {
  * @returns {object} Object containing the participant
  */
 function initializeSyncTemplates(context) {
-    console.log('🔄 Initializing sync-review-templates participant...');
+    aidaLogging('🔄 Initializing sync-review-templates participant...');
 
     // Create sync-review-templates chat participant
     const syncTemplatesParticipant = vscode.chat.createChatParticipant('sync-review-templates', async (request, chatContext, stream, token) => {
-        console.log('🔄 @sync-review-templates triggered');
+        aidaLogging('🔄 @sync-review-templates triggered');
         
         try {
             stream.markdown('# 🔄 AIDA Template Sync\n\n');
@@ -68,7 +69,7 @@ function initializeSyncTemplates(context) {
 
     // participant.iconPath = vscode.Uri.file(path.join(context.extensionPath, 'icons', 'sync-icon.png'));
 
-    console.log('✅ sync-review-templates participant created');
+    aidaLogging('✅ sync-review-templates participant created');
     return { syncTemplatesParticipant };
 }
 
@@ -90,7 +91,7 @@ async function createAidaTemplateStructure(sourceTemplatePath, targetAidaPath) {
         
         if (require('fs').existsSync(reviewCodePath)) {
             await copyDirectory(reviewCodePath, targetReviewCodePath);
-            console.log('✅ AIDA templates created with all available languages');
+            aidaLogging('✅ AIDA templates created with all available languages');
         }
     } catch (error) {
         console.error('Error creating AIDA structure:', error);
@@ -121,7 +122,7 @@ async function syncNewLanguageTemplates(sourceTemplatePath, targetAidaPath) {
             const newLanguages = sourceLanguages.filter(lang => !targetLanguages.includes(lang));
             
             if (newLanguages.length > 0) {
-                console.log(`🔄 Syncing ${newLanguages.length} new language(s): ${newLanguages.join(', ')}`);
+                aidaLogging(`🔄 Syncing ${newLanguages.length} new language(s): ${newLanguages.join(', ')}`);
                 
                 for (const newLang of newLanguages) {
                     const sourceLangPath = path.join(sourceLanguagesPath, newLang);
@@ -129,7 +130,7 @@ async function syncNewLanguageTemplates(sourceTemplatePath, targetAidaPath) {
                     await copyDirectory(sourceLangPath, targetLangPath);
                 }
                 
-                console.log('✅ New language templates synced to AIDA');
+                aidaLogging('✅ New language templates synced to AIDA');
             }
             
             return { newLanguages };
@@ -247,7 +248,7 @@ module.exports = {
  * @param {vscode.ExtensionContext} context - Extension context
  */
 async function aiSyncReviewTemplates(messageWithoutParticipant, stream, token, context) {
-    console.log('🔄 AI Sync Review Templates called');
+    aidaLogging('🔄 AI Sync Review Templates called');
     
     stream.progress && stream.progress('Syncing AIDA templates...');
     

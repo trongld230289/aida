@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const { VSCodeApiDependencyAnalyzer } = require('./vscode-api-analyzer');
 const { BarrelResolver } = require('./barrel-resolver');
+const { aidaLogging } = require('../settings');
 
 class SymbolAnalyzer {
     constructor() {
@@ -183,7 +184,7 @@ class SymbolAnalyzer {
                 // Merge: Include all graph files, enhance with symbol data when available
                 finalRelatedFiles = this.mergeGraphWithSymbolData(graphDependents, finalRelatedFiles);
                 
-                console.log(`📊 SymbolAnalyzer merged: ${graphDependents.length} graph dependents, ${finalRelatedFiles.length} final (with details)`);
+                aidaLogging(`📊 SymbolAnalyzer merged: ${graphDependents.length} graph dependents, ${finalRelatedFiles.length} final (with details)`);
             }
         }
 

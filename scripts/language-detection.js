@@ -5,6 +5,7 @@
 const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
+const { aidaLogging } = require('./settings');
 
 let _ops = null;
 
@@ -213,7 +214,7 @@ async function detectFramework(files, primaryLang) {
       );
 
       if (hasFrameworkFiles) {
-        console.log(`🎯 Framework detected by unique files: ${framework} (matched file: ${uniqueFrameworkFiles.find(f => filePaths.some(p => p === f.toLowerCase() || p.endsWith('/' + f.toLowerCase())))})`);
+        aidaLogging(`🎯 Framework detected by unique files: ${framework} (matched file: ${uniqueFrameworkFiles.find(f => filePaths.some(p => p === f.toLowerCase() || p.endsWith('/' + f.toLowerCase())))})`);
         return framework;
       }
     }
@@ -221,18 +222,18 @@ async function detectFramework(files, primaryLang) {
 
   // Second priority: Check for dependencies in package.json content
   const packageJsonFile = files.find(f => f.path.toLowerCase().includes('package.json'));
-  console.log('🔍 DEBUG: packageJsonFile found:', !!packageJsonFile);
+  aidaLogging('🔍 DEBUG: packageJsonFile found:', !!packageJsonFile);
   
   if (packageJsonFile) {
-    console.log('🔍 DEBUG: packageJsonFile path:', packageJsonFile.path);
-    console.log('🔍 DEBUG: packageJsonFile rawContentSample:', !!packageJsonFile.rawContentSample);
-    console.log('🔍 DEBUG: packageJsonFile content preview:', packageJsonFile.rawContentSample?.substring(0, 200));
+    aidaLogging('🔍 DEBUG: packageJsonFile path:', packageJsonFile.path);
+    aidaLogging('🔍 DEBUG: packageJsonFile rawContentSample:', !!packageJsonFile.rawContentSample);
+    aidaLogging('🔍 DEBUG: packageJsonFile content preview:', packageJsonFile.rawContentSample?.substring(0, 200));
   }
   
   if (packageJsonFile && packageJsonFile.rawContentSample) {
     try {
       const packageContent = JSON.parse(packageJsonFile.rawContentSample);
-      console.log('🔍 DEBUG: parsed package.json:', {
+      aidaLogging('🔍 DEBUG: parsed package.json:', {
         name: packageContent.name,
         hasDependencies: !!packageContent.dependencies,
         hasDevDependencies: !!packageContent.devDependencies,
@@ -246,7 +247,7 @@ async function detectFramework(files, primaryLang) {
                        (!packageContent.devDependencies || Object.keys(packageContent.devDependencies).length === 0);
       
       if (isLibrary) {
-        console.log(`📚 Detected as JavaScript library: ${packageContent.name}`);
+        aidaLogging(`📚 Detected as JavaScript library: ${packageContent.name}`);
         return null; // Return null to use language template instead
       }
 
@@ -261,21 +262,21 @@ async function detectFramework(files, primaryLang) {
         const matchedDeps = config.dependencies.filter(dep => allDeps && allDeps.hasOwnProperty(dep));
         
         if (matchedDeps.length > 0) {
-          console.log(`🎯 Framework detected by dependencies: ${framework} (found: ${matchedDeps.join(', ')})`);
+          aidaLogging(`🎯 Framework detected by dependencies: ${framework} (found: ${matchedDeps.join(', ')})`);
           return framework;
         }
       }
 
     } catch (error) {
-      console.log('⚠️ Could not parse package.json for framework detection:', error.message);
+      aidaLogging('⚠️ Could not parse package.json for framework detection:', error.message);
     }
   }
 
   // Third priority: Check for framework patterns in content (LOWER confidence)
-  console.log('🔍 DEBUG: Starting content pattern detection...');
-  console.log('🔍 DEBUG: primaryLang:', primaryLang);
-  console.log('🔍 DEBUG: allContent length:', allContent.length);
-  console.log('🔍 DEBUG: allContent sample:', allContent.substring(0, 500));
+  aidaLogging('🔍 DEBUG: Starting content pattern detection...');
+  aidaLogging('🔍 DEBUG: primaryLang:', primaryLang);
+  aidaLogging('🔍 DEBUG: allContent length:', allContent.length);
+  aidaLogging('🔍 DEBUG: allContent sample:', allContent.substring(0, 500));
   
   for (const [framework, config] of Object.entries(FRAMEWORK_PATTERNS)) {
     // Require multiple patterns for content-based detection (reduce false positives)
@@ -283,18 +284,18 @@ async function detectFramework(files, primaryLang) {
       allContent.includes(pattern)
     );
 
-    console.log(`🔍 DEBUG: ${framework} patterns:`, config.patterns);
-    console.log(`🔍 DEBUG: ${framework} matched patterns (${matchedPatterns.length}):`, matchedPatterns);
-    console.log(`🔍 DEBUG: ${framework} compatible with ${primaryLang}:`, isCompatibleLanguage(framework, primaryLang));
+    aidaLogging(`🔍 DEBUG: ${framework} patterns:`, config.patterns);
+    aidaLogging(`🔍 DEBUG: ${framework} matched patterns (${matchedPatterns.length}):`, matchedPatterns);
+    aidaLogging(`🔍 DEBUG: ${framework} compatible with ${primaryLang}:`, isCompatibleLanguage(framework, primaryLang));
 
     // Require at least 2 patterns for framework detection via content
     if (matchedPatterns.length >= 2 && isCompatibleLanguage(framework, primaryLang)) {
-      console.log(`🎯 Framework detected by patterns (${matchedPatterns.length}): ${framework}`);
+      aidaLogging(`🎯 Framework detected by patterns (${matchedPatterns.length}): ${framework}`);
       return framework;
     }
   }
 
-  console.log('🤷 No framework detected - using language template');
+  aidaLogging('🤷 No framework detected - using language template');
   return null;
 }
 
@@ -341,7 +342,7 @@ function findNearestProjectRoot(filePath) {
         for (const indicator of projectIndicators) {
             const indicatorPath = path.join(currentDir, indicator);
             if (fs.existsSync(indicatorPath)) {
-                console.log(`🎯 Found project root at: ${currentDir} (indicator: ${indicator})`);
+                aidaLogging(`🎯 Found project root at: ${currentDir} (indicator: ${indicator})`);
                 return currentDir;
             }
         }
@@ -353,7 +354,7 @@ function findNearestProjectRoot(filePath) {
     }
     
     // Fallback to file's directory
-    console.log(`⚠️ No project root found, using file directory: ${path.dirname(filePath)}`);
+    aidaLogging(`⚠️ No project root found, using file directory: ${path.dirname(filePath)}`);
     return path.dirname(filePath);
 }
 
@@ -399,7 +400,7 @@ async function autoDetectLanguage(filePath) {
         return detection;
         
     } catch (error) {
-        console.log('Single file detection error:', error);
+        aidaLogging('Single file detection error:', error);
         return {
             detected: 'General (fallback)',
             type: 'fallback',
@@ -429,13 +430,13 @@ async function autoDetectWorkspace(workspacePath, targetFilePath = null) {
 
     try {
         // PHASE 1: Framework Detection (Priority 1) - All map to languages path
-        console.log('🔍 Phase 1: Framework Detection');
+        aidaLogging('🔍 Phase 1: Framework Detection');
         
         // If we have a target file, find the nearest project root from that file
         let searchPath = workspacePath;
         if (targetFilePath) {
             searchPath = findNearestProjectRoot(targetFilePath);
-            console.log(`🔍 Searching from file location: ${searchPath}`);
+            aidaLogging(`🔍 Searching from file location: ${searchPath}`);
         }
         
         // Angular Detection - Check from searchPath
@@ -443,7 +444,7 @@ async function autoDetectWorkspace(workspacePath, targetFilePath = null) {
         const packageJson = path.join(searchPath, 'package.json');
         
         if (fs.existsSync(angularConfig)) {
-            console.log(`✅ Angular detected: angular.json found at ${searchPath}`);
+            aidaLogging(`✅ Angular detected: angular.json found at ${searchPath}`);
             return {
                 ...detectionResult,
                 type: 'language',
@@ -464,7 +465,7 @@ async function autoDetectWorkspace(workspacePath, targetFilePath = null) {
                 for (const subdir of subdirs) {
                     const subAngularConfig = path.join(workspacePath, subdir, 'angular.json');
                     if (fs.existsSync(subAngularConfig)) {
-                        console.log(`✅ Angular detected: angular.json found in subdirectory ${subdir}`);
+                        aidaLogging(`✅ Angular detected: angular.json found in subdirectory ${subdir}`);
                         return {
                             ...detectionResult,
                             type: 'language',
@@ -476,7 +477,7 @@ async function autoDetectWorkspace(workspacePath, targetFilePath = null) {
                     }
                 }
             } catch (error) {
-                console.log('⚠️ Error checking subdirectories for Angular:', error.message);
+                aidaLogging('⚠️ Error checking subdirectories for Angular:', error.message);
             }
         }
 
@@ -487,7 +488,7 @@ async function autoDetectWorkspace(workspacePath, targetFilePath = null) {
             
             // React Framework
             if (packageContent.dependencies?.react || packageContent.devDependencies?.react) {
-                console.log('✅ React detected: react dependency found');
+                aidaLogging('✅ React detected: react dependency found');
                 return {
                     ...detectionResult,
                     type: 'language',
@@ -501,7 +502,7 @@ async function autoDetectWorkspace(workspacePath, targetFilePath = null) {
             // Vue Framework
             if (packageContent.dependencies?.vue || packageContent.devDependencies?.vue || 
                 packageContent.dependencies?.['@vue/core']) {
-                console.log('✅ Vue detected: vue dependency found');
+                aidaLogging('✅ Vue detected: vue dependency found');
                 return {
                     ...detectionResult,
                     type: 'language',
@@ -514,7 +515,7 @@ async function autoDetectWorkspace(workspacePath, targetFilePath = null) {
 
             // Express Framework
             if (packageContent.dependencies?.express || packageContent.devDependencies?.express) {
-                console.log('✅ Express detected: express dependency found');
+                aidaLogging('✅ Express detected: express dependency found');
                 return {
                     ...detectionResult,
                     type: 'language',
@@ -529,7 +530,7 @@ async function autoDetectWorkspace(workspacePath, targetFilePath = null) {
             if (packageContent.dependencies?.['@nestjs/core'] || 
                 packageContent.devDependencies?.['@nestjs/core'] ||
                 packageContent.dependencies?.['@nestjs/common']) {
-                console.log('✅ NestJS detected: @nestjs dependency found');
+                aidaLogging('✅ NestJS detected: @nestjs dependency found');
                 return {
                     ...detectionResult,
                     type: 'language',
@@ -543,7 +544,7 @@ async function autoDetectWorkspace(workspacePath, targetFilePath = null) {
             // NodeJS Framework
             if (packageContent.dependencies?.fastify || packageContent.dependencies?.koa ||
                 packageContent.dependencies?.hapi) {
-                console.log('✅ NodeJS detected: Node.js framework dependency found');
+                aidaLogging('✅ NodeJS detected: Node.js framework dependency found');
                 return {
                     ...detectionResult,
                     type: 'language',
@@ -556,13 +557,13 @@ async function autoDetectWorkspace(workspacePath, targetFilePath = null) {
         }
 
         // PHASE 2: Language Detection (Priority 2) - Use searchPath
-        console.log('🔍 Phase 2: Language Detection');
+        aidaLogging('🔍 Phase 2: Language Detection');
 
         // TypeScript Detection
         const tsConfigPath = path.join(searchPath, 'tsconfig.json');
         if (fs.existsSync(tsConfigPath) || 
             (targetFilePath && targetFilePath.endsWith('.ts'))) {
-            console.log('✅ TypeScript detected');
+            aidaLogging('✅ TypeScript detected');
             return {
                 ...detectionResult,
                 type: 'language',
@@ -576,7 +577,7 @@ async function autoDetectWorkspace(workspacePath, targetFilePath = null) {
         // JavaScript Detection
         if (fs.existsSync(packageJsonPath) || 
             (targetFilePath && targetFilePath.endsWith('.js'))) {
-            console.log('✅ JavaScript detected');
+            aidaLogging('✅ JavaScript detected');
             return {
                 ...detectionResult,
                 type: 'language',
@@ -591,7 +592,7 @@ async function autoDetectWorkspace(workspacePath, targetFilePath = null) {
         const pythonFiles = ['requirements.txt', 'pyproject.toml', 'setup.py'];
         for (const pythonFile of pythonFiles) {
             if (fs.existsSync(path.join(searchPath, pythonFile))) {
-                console.log('✅ Python detected');
+                aidaLogging('✅ Python detected');
                 return {
                     ...detectionResult,
                     type: 'language',
@@ -605,7 +606,7 @@ async function autoDetectWorkspace(workspacePath, targetFilePath = null) {
 
         // C# Detection
         if (targetFilePath && targetFilePath.endsWith('.cs')) {
-            console.log('✅ C# detected');
+            aidaLogging('✅ C# detected');
             return {
                 ...detectionResult,
                 type: 'language',
@@ -618,7 +619,7 @@ async function autoDetectWorkspace(workspacePath, targetFilePath = null) {
 
         // Java Detection
         if (targetFilePath && targetFilePath.endsWith('.java')) {
-            console.log('✅ Java detected');
+            aidaLogging('✅ Java detected');
             return {
                 ...detectionResult,
                 type: 'language',
@@ -632,7 +633,7 @@ async function autoDetectWorkspace(workspacePath, targetFilePath = null) {
         // Go Detection
         if (fs.existsSync(path.join(searchPath, 'go.mod')) ||
             (targetFilePath && targetFilePath.endsWith('.go'))) {
-            console.log('✅ Go detected');
+            aidaLogging('✅ Go detected');
             return {
                 ...detectionResult,
                 type: 'language',
@@ -646,7 +647,7 @@ async function autoDetectWorkspace(workspacePath, targetFilePath = null) {
         // Rust Detection
         if (fs.existsSync(path.join(searchPath, 'Cargo.toml')) ||
             (targetFilePath && targetFilePath.endsWith('.rs'))) {
-            console.log('✅ Rust detected');
+            aidaLogging('✅ Rust detected');
             return {
                 ...detectionResult,
                 type: 'language',
@@ -657,7 +658,7 @@ async function autoDetectWorkspace(workspacePath, targetFilePath = null) {
             };
         }
 
-        console.log('⚠️ No specific framework or language detected, using fallback');
+        aidaLogging('⚠️ No specific framework or language detected, using fallback');
         return detectionResult;
 
     } catch (error) {

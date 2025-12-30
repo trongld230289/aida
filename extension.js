@@ -15,6 +15,8 @@ const {
     getBusinessDocumentFolders
 } = require('./scripts/review-common');
 
+const { analyzeFileDependency } = require('./scripts/dependency');
+
 
 // Session tracking for "Enter twice" functionality and change scores
 const chatSessions = new Map();
@@ -300,6 +302,17 @@ function activate(context) {
             vscode.window.showErrorMessage(`Failed to review file: ${error.message}`);
         }
     });
+
+    let analyzeFileDependencyCommand = vscode.commands.registerCommand('aida.analyzeFileDependency', async (uri) => {
+        console.log('🎯 Analyze File Dependency command called', uri);
+        try {
+            await analyzeFileDependency(uri);
+        } catch (error) {
+            console.error('Error in analyzeFileDependency command:', error);
+            vscode.window.showErrorMessage(`Failed to analyze file dependency: ${error.message}`);
+        }
+    });
+    context.subscriptions.push(analyzeFileDependencyCommand);
 
     let reviewChangesCommand = vscode.commands.registerCommand('aida.reviewChanges', async (uri) => {
         console.log('🎯 Review Changes command called', uri);

@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { executeAIReview, getUnifiedModel, shouldUseApiKey, displayReviewHeader, loadTemplateWithPriority, displayCommonReviewInfo, showReviewOptions } = require('./review-common');
 const { autoDetectWorkspace, displayDetectionInfo, getLanguageFromExtension } = require('./language-detection');
+const { aidaLogging } = require('./settings');
 
 // Import functions from extension.js
 let handleEnterTwiceLogic;
@@ -12,7 +13,7 @@ try {
     handleEnterTwiceLogic = extensionModule.handleEnterTwiceLogic;
     ensureAidaTemplatesForReview = extensionModule.ensureAidaTemplatesForReview;
 } catch (error) {
-    console.log('⚠️ Could not import functions from extension.js');
+    aidaLogging('⚠️ Could not import functions from extension.js');
 }
 
 /**
@@ -29,11 +30,11 @@ function initializeReviewFile(context) {
                 await ensureAidaTemplatesForReview(context);
             }
             
-            console.log('🎯 review-file participant called');
-            console.log('📥 Request object:', request);
-            console.log('📥 Context object:', context);
-            console.log('📥 Request.model:', request.model);
-            console.log('📥 Context.selectedModel:', context.selectedModel);
+            aidaLogging('🎯 review-file participant called');
+            aidaLogging('📥 Request object:', request);
+            aidaLogging('📥 Context object:', context);
+            aidaLogging('📥 Request.model:', request.model);
+            aidaLogging('📥 Context.selectedModel:', context.selectedModel);
             
             const input = request.prompt.trim();
             
@@ -50,7 +51,7 @@ function initializeReviewFile(context) {
             
             // Simple check - only one key! (after targetInput is defined)
             if (global.selectedBusinessDocs) {
-                console.log('🎯 Enhanced/Quick File Review detected:', global.selectedBusinessDocs);
+                aidaLogging('🎯 Enhanced/Quick File Review detected:', global.selectedBusinessDocs);
                 
                 // Execute review directly
                 await aiReviewFile(targetInput, stream, request.model, context, request);
@@ -120,7 +121,7 @@ function initializeReviewFile(context) {
 
 // Reusable function for AIDA Chatbot integration (similar to review-changes)
 async function processReviewFile(input, stream) {
-    console.log('🎯 processReviewFile called with input:', input);
+    aidaLogging('🎯 processReviewFile called with input:', input);
     
     // Get target input (file path or active editor)
     const activeEditor = vscode.window.activeTextEditor;
@@ -128,7 +129,7 @@ async function processReviewFile(input, stream) {
     
     // Simple check - only one key! (global variable check)
     if (global.selectedBusinessDocs) {
-        console.log('🎯 Enhanced/Quick File Review detected:', global.selectedBusinessDocs);
+        aidaLogging('🎯 Enhanced/Quick File Review detected:', global.selectedBusinessDocs);
         
         // Execute review directly
         await aiReviewFile(targetInput, stream, null, null, {
@@ -414,7 +415,7 @@ async function reviewFile(filePath, stream, requestedModel = null, context = nul
                 displayDetectionInfo(stream, detection, 'review-file.md');
             }
         } catch (error) {
-            console.log('Template detection failed:', error.message);
+            aidaLogging('Template detection failed:', error.message);
         }
         
         // Use reusable header display function
@@ -439,7 +440,7 @@ async function reviewFile(filePath, stream, requestedModel = null, context = nul
                 
                 let template = templateContent || `Please review the following ${fileExtension} file for code quality, best practices, and potential improvements.`;
                 
-                console.log(`✅ Using ${detection?.detected || 'fallback'} template (${template.length} characters)`);
+                aidaLogging(`✅ Using ${detection?.detected || 'fallback'} template (${template.length} characters)`);
                 
                 // Replace template placeholders with actual file information
                 let processedTemplate = template
@@ -463,7 +464,7 @@ async function reviewFile(filePath, stream, requestedModel = null, context = nul
 
             } catch (templateError) {
                 stream.markdown('⚠️ **Template not found** - using basic review\n\n');
-                console.log(`⚠️ Template loading failed: ${templateError.message}`);
+                aidaLogging(`⚠️ Template loading failed: ${templateError.message}`);
                 reviewPrompt = `Please review this TypeScript Angular component file:
 
 **File:** ${fileName}
@@ -541,7 +542,7 @@ async function performBasicFileAnalysis(content, stream, fileExtension) {
         if (line.includes(': any') && !line.includes('// @ts-ignore')) {
             analysis.issues.push(`⚠️ Line ${lineNum}: TypeScript 'any' type - consider proper typing`);
         }
-        if (line.includes('console.log') || line.includes('console.error')) {
+        if (line.includes('aidaLogging') || line.includes('console.error')) {
             analysis.issues.push(`🔍 Line ${lineNum}: Console statement - remove for production`);
         }
         if (line.length > 120) {

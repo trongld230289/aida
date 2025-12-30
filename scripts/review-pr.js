@@ -4,6 +4,7 @@ const https = require('https');
 const { execSync } = require('child_process');
 const { getUnifiedModel, executeAIReview, shouldUseApiKey, processTemplateContent, showReviewOptions, getTokenForPR, parsePRUrl, showTokenConfigurationHelp } = require('./review-common');
 const { detectFromPRFiles, getReviewTemplateWithDetection, displayDetectionInfo } = require('./language-detection');
+const { aidaLogging } = require('./settings');
 
 /**
  * Parse PR URL and extract repository information
@@ -89,7 +90,7 @@ try {
     const extensionModule = require('../extension');
     checkAndInitializeTemplates = extensionModule.ensureAidaTemplatesForReview;
 } catch (error) {
-    console.log('⚠️ Could not import functions from extension.js');
+    aidaLogging('⚠️ Could not import functions from extension.js');
 }
 
 /**
@@ -100,7 +101,7 @@ try {
  */
 async function getPRReviewTemplate(templateType, prData) {
     try {
-        console.log('🔍 Starting PR detection for template selection...');
+        aidaLogging('🔍 Starting PR detection for template selection...');
         
         // Convert PR files to detection format
         const prFiles = (prData.fileChanges || []).map(f => ({
@@ -111,12 +112,12 @@ async function getPRReviewTemplate(templateType, prData) {
             deletions: f.deletions || 0
         }));
 
-        console.log(`📊 Processing ${prFiles.length} files for detection`);
+        aidaLogging(`📊 Processing ${prFiles.length} files for detection`);
 
         // Run PR detection
         const detection = await detectFromPRFiles(prFiles);
         
-        console.log('🎯 PR Detection Results:', {
+        aidaLogging('🎯 PR Detection Results:', {
             language: detection.language,
             framework: detection.framework,
             templatePath: detection.template.path,
@@ -166,7 +167,7 @@ async function getPRReviewTemplate(templateType, prData) {
                     templateSource = 'workspace/AIDA/templates';
                 }
                 
-                console.log(`✅ Loaded template from: ${templateSource} - ${fullTemplatePath}`);
+                aidaLogging(`✅ Loaded template from: ${templateSource} - ${fullTemplatePath}`);
                 break;
             }
         }
@@ -191,7 +192,7 @@ async function getPRReviewTemplate(templateType, prData) {
         console.error('❌ PR template detection failed:', error);
         
         // Final fallback - use workspace detection
-        console.log('🔄 Falling back to workspace detection...');
+        aidaLogging('🔄 Falling back to workspace detection...');
         return await getReviewTemplateWithDetection(templateType);
     }
 }
@@ -225,7 +226,7 @@ function filterReviewableFiles(fileChanges, provider = 'Unknown') {
         const isMigrationDesigner = filePath.includes('/Migrations/') && filePath.endsWith('.Designer.cs');
         
         if (isMigrationDesigner) {
-            console.log(`🚫 [FILTERED] ${provider} Migration Designer file: ${filePath}`);
+            aidaLogging(`🚫 [FILTERED] ${provider} Migration Designer file: ${filePath}`);
             return false;
         }
 
@@ -236,9 +237,9 @@ function filterReviewableFiles(fileChanges, provider = 'Unknown') {
         return true;
     });
 
-    console.log(`📊 ${provider}: ${fileChanges.length} total files, ${reviewableFiles.length} reviewable files`);
+    aidaLogging(`📊 ${provider}: ${fileChanges.length} total files, ${reviewableFiles.length} reviewable files`);
     if (fileChanges.length !== reviewableFiles.length) {
-        console.log(`🚫 Filtered ${fileChanges.length - reviewableFiles.length} auto-generated files from review`);
+        aidaLogging(`🚫 Filtered ${fileChanges.length - reviewableFiles.length} auto-generated files from review`);
     }
 
     return reviewableFiles;
@@ -260,14 +261,14 @@ function clearPrDiffCache(provider, prId) {
     const keysToDelete = Object.keys(global.prDiffCache).filter(key => key.startsWith(prefix));
     
     if (keysToDelete.length > 0) {
-        console.log(`🧹 Clearing ${keysToDelete.length} cached entries for ${provider} PR ${prId}:`);
+        aidaLogging(`🧹 Clearing ${keysToDelete.length} cached entries for ${provider} PR ${prId}:`);
         keysToDelete.forEach(key => {
-            console.log(`  ❌ Removing: ${key}`);
+            aidaLogging(`  ❌ Removing: ${key}`);
             delete global.prDiffCache[key];
         });
-        console.log(`✅ Cache cleared for ${provider} PR ${prId}`);
+        aidaLogging(`✅ Cache cleared for ${provider} PR ${prId}`);
     } else {
-        console.log(`💡 No cached entries found for ${provider} PR ${prId}`);
+        aidaLogging(`💡 No cached entries found for ${provider} PR ${prId}`);
     }
 }
 
@@ -279,7 +280,7 @@ function clearPrDiffCache(provider, prId) {
  * @param {object} stream - VS Code stream for output
  */
 async function showGitHubDiffInWebview(prAnalysis, stream) {
-    console.log('🐙 GitHub Function B: Starting GitHub diff webview display');
+    aidaLogging('🐙 GitHub Function B: Starting GitHub diff webview display');
     
     if (!prAnalysis || !prAnalysis.data || !prAnalysis.data.fileChanges) {
         stream.markdown('❌ **No GitHub diff data available**\n\n');
@@ -315,13 +316,13 @@ async function showGitHubDiffInWebview(prAnalysis, stream) {
             diffContent: fileChange.diffContent || fileChange.diff || ''
         };
         
-        console.log(`🔍 Cached GitHub diff: ${diffId} for ${fileChange.path}`);
-        console.log(`📊 DEBUG: owner=${data.owner}, repo=${data.repository}, provider=github`);
+        aidaLogging(`🔍 Cached GitHub diff: ${diffId} for ${fileChange.path}`);
+        aidaLogging(`📊 DEBUG: owner=${data.owner}, repo=${data.repository}, provider=github`);
     });
 
     // Debug cache summary for GitHub (ALL files)
     const githubCacheKeys = Object.keys(global.prDiffCache).filter(k => k.startsWith(`github_${data.id}_`));
-    console.log(`🐙 GitHub cache summary: ${githubCacheKeys.length} files cached:`, githubCacheKeys);
+    aidaLogging(`🐙 GitHub cache summary: ${githubCacheKeys.length} files cached:`, githubCacheKeys);
 
     // Display file links with webview buttons (hover for details)
     stream.markdown('📁 **Files in this GitHub PR:**\n\n');
@@ -350,7 +351,7 @@ async function showGitHubDiffInWebview(prAnalysis, stream) {
  * @param {object} stream - VS Code stream for output
  */
 async function showGitLabDiffInWebview(mrAnalysis, stream) {
-    console.log('🦊 GitLab Function C: Starting GitLab diff webview display');
+    aidaLogging('🦊 GitLab Function C: Starting GitLab diff webview display');
     
     if (!mrAnalysis || !mrAnalysis.data || !mrAnalysis.data.fileChanges) {
         stream.markdown('❌ **No GitLab diff data available**\n\n');
@@ -387,13 +388,13 @@ async function showGitLabDiffInWebview(mrAnalysis, stream) {
             diffContent: fileChange.diffContent || fileChange.diff || ''
         };
         
-        console.log(`🔍 Cached GitLab diff: ${diffId} for ${fileChange.path}`);
-        console.log(`📊 DEBUG: owner=${data.owner}, repo=${data.repository}, host=${data.gitlabHost}, provider=gitlab`);
+        aidaLogging(`🔍 Cached GitLab diff: ${diffId} for ${fileChange.path}`);
+        aidaLogging(`📊 DEBUG: owner=${data.owner}, repo=${data.repository}, host=${data.gitlabHost}, provider=gitlab`);
     });
 
     // Debug cache summary for GitLab (ALL files)
     const gitlabCacheKeys = Object.keys(global.prDiffCache).filter(k => k.startsWith(`gitlab_${data.id}_`));
-    console.log(`🦊 GitLab cache summary: ${gitlabCacheKeys.length} files cached:`, gitlabCacheKeys);
+    aidaLogging(`🦊 GitLab cache summary: ${gitlabCacheKeys.length} files cached:`, gitlabCacheKeys);
 
     // Display file links with webview buttons (hover for details)
     stream.markdown('📁 **Files in this GitLab MR:**\n\n');
@@ -422,7 +423,7 @@ async function showGitLabDiffInWebview(mrAnalysis, stream) {
  * @param {object} stream - VS Code stream for output
  */
 async function showAzureDevOpsDiffInWebview(prAnalysis, stream) {
-    console.log('🔵 Azure Function A: Starting Azure DevOps diff webview display');
+    aidaLogging('🔵 Azure Function A: Starting Azure DevOps diff webview display');
     
     if (!prAnalysis || !prAnalysis.data || !prAnalysis.data.fileChanges) {
         stream.markdown('❌ **No Azure DevOps diff data available**\n\n');
@@ -457,14 +458,14 @@ async function showAzureDevOpsDiffInWebview(prAnalysis, stream) {
     global.prDiffCache.targetCommit = data.targetCommit; // This is now merge base
     global.prDiffCache.mergeBaseCommit = data.mergeBaseCommit; // Explicit merge base reference
     
-    console.log('🚀 Cached Azure DevOps API credentials for full content retrieval:');
-    console.log(`   Organization: ${data.organization}`);
-    console.log(`   Project: ${data.project}`);
-    console.log(`   Repository: ${data.repository}`);
-    console.log(`   Source Commit (PR): ${data.sourceCommit?.substring(0, 7)}`);
-    console.log(`   Target Commit (Merge Base): ${data.targetCommit?.substring(0, 7)} - CORRECTED`);
-    console.log(`   Merge Base: ${data.mergeBaseCommit?.substring(0, 7)} - for Monaco diff accuracy`);
-    console.log(`   Access Token: ${accessToken ? '✅ Available' : '❌ Missing'}`);
+    aidaLogging('🚀 Cached Azure DevOps API credentials for full content retrieval:');
+    aidaLogging(`   Organization: ${data.organization}`);
+    aidaLogging(`   Project: ${data.project}`);
+    aidaLogging(`   Repository: ${data.repository}`);
+    aidaLogging(`   Source Commit (PR): ${data.sourceCommit?.substring(0, 7)}`);
+    aidaLogging(`   Target Commit (Merge Base): ${data.targetCommit?.substring(0, 7)} - CORRECTED`);
+    aidaLogging(`   Merge Base: ${data.mergeBaseCommit?.substring(0, 7)} - for Monaco diff accuracy`);
+    aidaLogging(`   Access Token: ${accessToken ? '✅ Available' : '❌ Missing'}`);
 
     stream.markdown('🔵 **Azure DevOps Diff Webview Display**\n\n');
     
@@ -492,8 +493,8 @@ async function showAzureDevOpsDiffInWebview(prAnalysis, stream) {
             useFullContent: true
         };
         
-        console.log(`🔍 Cached Azure DevOps diff: ${diffId} for ${fileChange.path}`);
-        console.log(`   📊 Commits: base=${data.targetCommit?.substring(0, 7)}, source=${data.sourceCommit?.substring(0, 7)}`);
+        aidaLogging(`🔍 Cached Azure DevOps diff: ${diffId} for ${fileChange.path}`);
+        aidaLogging(`   📊 Commits: base=${data.targetCommit?.substring(0, 7)}, source=${data.sourceCommit?.substring(0, 7)}`);
     });
 
     // Display file links with webview buttons (hover for details)
@@ -575,7 +576,7 @@ function initializePrReview(extensionContext) {
  * @param {object} stream - Chat stream object
  */
 async function processReviewPr(userMessage, stream) {
-    console.log('🔄 processReviewPr: Starting PR review with options');
+    aidaLogging('🔄 processReviewPr: Starting PR review with options');
     
     // Parse repo URL and detect type using centralized function
     const parsedInfo = parsePRUrlInfo(userMessage);
@@ -583,7 +584,7 @@ async function processReviewPr(userMessage, stream) {
 
     // Check for global selectedBusinessDocs (unified pattern with other review modules)
     if (global.selectedBusinessDocs) {
-        console.log('🎯 Enhanced/Quick PR Review detected:', global.selectedBusinessDocs);
+        aidaLogging('🎯 Enhanced/Quick PR Review detected:', global.selectedBusinessDocs);
         
         // Execute review directly
         await processPrReview(userMessage, repoType, prId, owner, repo, organization, project, repository, originalUrl, stream, null);
@@ -602,14 +603,14 @@ async function processReviewPr(userMessage, stream) {
                 const businessDocs = await getBusinessDocumentFolders(workspaceFolder);
                 hasBusinessDocs = businessDocs && businessDocs.length > 0;
             } catch (error) {
-                console.log('❌ Error checking business documents:', error.message);
+                aidaLogging('❌ Error checking business documents:', error.message);
                 hasBusinessDocs = false;
             }
         }
         
         // If no business documents, execute Quick Review immediately
         if (!hasBusinessDocs) {
-            console.log('📋 No business documents found - executing Quick Review automatically');
+            aidaLogging('📋 No business documents found - executing Quick Review automatically');
             stream.markdown('� **Starting Quick Review automatically** (no business documents found)\n\n');
             
             // Set Quick Review mode
@@ -717,7 +718,7 @@ async function handleReviewPr(request, context, stream, token) {
 
         // Check for global selectedBusinessDocs (like review-file.js)
         if (global.selectedBusinessDocs) {
-            console.log('🎯 Enhanced/Quick PR Review detected:', global.selectedBusinessDocs);
+            aidaLogging('🎯 Enhanced/Quick PR Review detected:', global.selectedBusinessDocs);
             
             // Execute review directly
             await processPrReview(userMessage, repoType, prId, owner, repo, organization, project, repository, originalUrl, stream, context, request);
@@ -736,14 +737,14 @@ async function handleReviewPr(request, context, stream, token) {
                     const businessDocs = await getBusinessDocumentFolders(workspaceFolder);
                     hasBusinessDocs = businessDocs && businessDocs.length > 0;
                 } catch (error) {
-                    console.log('❌ Error checking business documents:', error.message);
+                    aidaLogging('❌ Error checking business documents:', error.message);
                     hasBusinessDocs = false;
                 }
             }
             
             // If no business documents, execute Quick Review immediately
             if (!hasBusinessDocs) {
-                console.log('📋 No business documents found - executing Quick Review automatically');
+                aidaLogging('📋 No business documents found - executing Quick Review automatically');
                 stream.markdown('🚀 **Starting Quick Review automatically** (no business documents found)\n\n');
                 
                 // Set Quick Review mode
@@ -827,17 +828,17 @@ async function processPrReview(userMessage, repoType, prId, owner, repo, organiz
         // Get PR diff and analyze based on repo type
         let prAnalysis;
         if (repoType === 'github') {
-            console.log(`🐙 DEBUG: Starting GitHub PR analysis for ${owner}/${repo}#${prId}`);
+            aidaLogging(`🐙 DEBUG: Starting GitHub PR analysis for ${owner}/${repo}#${prId}`);
             prAnalysis = await analyzeGitHubPullRequest(stream, owner, repo, prId);
-            console.log('🐙 DEBUG: GitHub PR analysis result:', JSON.stringify(prAnalysis, null, 2));
+            aidaLogging('🐙 DEBUG: GitHub PR analysis result:', JSON.stringify(prAnalysis, null, 2));
         } else if (repoType === 'gitlab') {
-            console.log(`🦊 DEBUG: Starting GitLab MR analysis for ${owner}/${repo}!${prId}`);
+            aidaLogging(`🦊 DEBUG: Starting GitLab MR analysis for ${owner}/${repo}!${prId}`);
             prAnalysis = await analyzeGitLabMergeRequest(stream, organization, owner, repo, prId);
-            console.log('🦊 DEBUG: GitLab MR analysis result:', JSON.stringify(prAnalysis, null, 2));
+            aidaLogging('🦊 DEBUG: GitLab MR analysis result:', JSON.stringify(prAnalysis, null, 2));
         } else {
-            console.log(`🔵 DEBUG: Starting Azure DevOps PR analysis for PR #${prId}`);
+            aidaLogging(`🔵 DEBUG: Starting Azure DevOps PR analysis for PR #${prId}`);
             prAnalysis = await analyzePullRequest(stream, prId, organization, project, repository);
-            console.log('🔵 DEBUG: Azure PR analysis result:', JSON.stringify(prAnalysis, null, 2));
+            aidaLogging('🔵 DEBUG: Azure PR analysis result:', JSON.stringify(prAnalysis, null, 2));
         }
 
         if (prAnalysis.error) {
@@ -863,7 +864,7 @@ async function processPrReview(userMessage, repoType, prId, owner, repo, organiz
         // Display basic PR info after successful fetch
         const data = prAnalysis.data;
         if (data) {
-            console.log(`📊 DEBUG: PR data structure:`, {
+            aidaLogging(`📊 DEBUG: PR data structure:`, {
                 title: data.title,
                 author: data.author,
                 status: data.status,
@@ -882,7 +883,7 @@ async function processPrReview(userMessage, repoType, prId, owner, repo, organiz
             
             // Debug file changes for GitHub
             if (repoType === 'github' && data.fileChanges) {
-                console.log(`🐙 DEBUG: GitHub file changes:`, data.fileChanges.map(f => ({
+                aidaLogging(`🐙 DEBUG: GitHub file changes:`, data.fileChanges.map(f => ({
                     path: f.path,
                     changeType: f.changeType,
                     additions: f.additions,
@@ -938,13 +939,13 @@ async function reviewPullRequestCommand() {
             project = azureMatch[2];
             repository = azureMatch[3];
             prId = azureMatch[4];
-            console.log(`🔍 Parsed from URL: org=${organization}, project=${project}, repo=${repository}, prId=${prId}`);
+            aidaLogging(`🔍 Parsed from URL: org=${organization}, project=${project}, repo=${repository}, prId=${prId}`);
         } else {
             // Fallback to simple PR ID pattern
             const prPattern = /(?:pullrequest(?:s)?\/(\d+)|pr[#\s]?(\d+)|id[:\s]?(\d+))/i;
             const match = prInput.match(prPattern);
             prId = match ? (match[1] || match[2] || match[3]) : null;
-            console.log(`🔍 Parsed PR ID only: ${prId} (using defaults for org/project)`);
+            aidaLogging(`🔍 Parsed PR ID only: ${prId} (using defaults for org/project)`);
         }
 
         if (!prId) {
@@ -966,7 +967,7 @@ async function reviewPullRequestCommand() {
 
             // Create a mock stream for the command-based call
             const mockStream = {
-                markdown: (text) => console.log(text)
+                markdown: (text) => aidaLogging(text)
             };
             // Pass parsed organization, project, repository to analyzePullRequest
             const prAnalysis = await analyzePullRequest(mockStream, prId, organization, project, repository);
@@ -1007,10 +1008,10 @@ async function analyzePullRequest(stream, prUrl, organization = null, project = 
                 proj = parsed.project;
                 repo = parsed.repository;
                 prId = parsed.prId;
-                console.log(`✅ Auto-detected from URL: org=${org}, project=${proj}, repo=${repo}, PR=${prId}`);
+                aidaLogging(`✅ Auto-detected from URL: org=${org}, project=${proj}, repo=${repo}, PR=${prId}`);
                 stream.markdown(`🔍 **Auto-detected**: ${org}/${proj}/${repo}/PR#${prId}\n\n`);
             } catch (parseError) {
-                console.log('⚠️ Failed to parse URL, using provided values');
+                aidaLogging('⚠️ Failed to parse URL, using provided values');
                 prId = prUrl; // Assume it's just a PR ID
             }
         } else {
@@ -1023,18 +1024,18 @@ async function analyzePullRequest(stream, prUrl, organization = null, project = 
         }
         
         if (!organization && !project && !repository) {
-            console.log(`⚠️ Using defaults: org=${org}, project=${proj}, repo=${repo}`);
+            aidaLogging(`⚠️ Using defaults: org=${org}, project=${proj}, repo=${repo}`);
             stream.markdown(`⚠️ **Using defaults**: ${org}/${proj}/${repo} (provide full URL for auto-detection)\n\n`);
         }
 
         // Get token using new multi-org helper
         const fullPrUrl = `https://dev.azure.com/${org}/${proj}/_git/${repo}/pullrequest/${prId}`;
-        console.log(`🔍 Checking token for Azure DevOps URL: ${fullPrUrl}`);
+        aidaLogging(`🔍 Checking token for Azure DevOps URL: ${fullPrUrl}`);
         const personalAccessToken = getTokenForPR(fullPrUrl);
-        console.log(`🔍 Token found: ${personalAccessToken ? 'YES' : 'NO'}`);
+        aidaLogging(`🔍 Token found: ${personalAccessToken ? 'YES' : 'NO'}`);
 
         if (!personalAccessToken) {
-            console.log(`❌ No token found for Azure DevOps org: ${org}`);
+            aidaLogging(`❌ No token found for Azure DevOps org: ${org}`);
             // Show configuration help using new helper
             showTokenConfigurationHelp('azureDevOps', org, stream);
             return { error: `Azure DevOps Personal Access Token is required for organization: ${org}` };
@@ -1042,9 +1043,9 @@ async function analyzePullRequest(stream, prUrl, organization = null, project = 
 
         try {
             // Call Azure DevOps REST API with token
-            console.log(`🔄 Calling Azure DevOps API for PR ${prId}...`);
+            aidaLogging(`🔄 Calling Azure DevOps API for PR ${prId}...`);
             const prData = await getAzureDevOpsPR(org, proj, repo, prId, personalAccessToken);
-            console.log('✅ Azure DevOps API call successful:', prData);
+            aidaLogging('✅ Azure DevOps API call successful:', prData);
             return prData;
 
         } catch (apiError) {
@@ -1065,7 +1066,7 @@ async function analyzePullRequest(stream, prUrl, organization = null, project = 
  */
 async function getAzureDevOpsPR(organization, project, repository, prId, token) {
     try {
-        console.log(`Fetching PR ${prId} from ${organization}/${project}/${repository}`);
+        aidaLogging(`Fetching PR ${prId} from ${organization}/${project}/${repository}`);
 
         // Get PR details
         const prUrl = `https://dev.azure.com/${organization}/${project}/_apis/git/repositories/${repository}/pullRequests/${prId}?api-version=7.0`;
@@ -1081,7 +1082,7 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
         // Extract branch information
         const sourceBranch = pr.sourceRefName?.replace('refs/heads/', '') || 'Unknown';
         const targetBranch = pr.targetRefName?.replace('refs/heads/', '') || 'Unknown';
-        console.log(`🌿 Branch info: ${sourceBranch} → ${targetBranch}`);
+        aidaLogging(`🌿 Branch info: ${sourceBranch} → ${targetBranch}`);
 
         let commits = [];
         let fileChanges = [];
@@ -1089,25 +1090,25 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
         let diffSource = 'PR-specific changes only';
         // mergeBaseCommit now declared at function scope above
 
-        console.log('🔍 Getting PR-specific changes from source commit...');
+        aidaLogging('🔍 Getting PR-specific changes from source commit...');
 
         // STEP 1: Get ALL commits in this PR
-        console.log('📝 Getting all commits from PR...');
+        aidaLogging('📝 Getting all commits from PR...');
         const commitsUrl = `https://dev.azure.com/${organization}/${project}/_apis/git/repositories/${repository}/pullRequests/${prId}/commits?api-version=7.0&$top=1000`;
         const commitsResponse = await makeAzureDevOpsRequest(commitsUrl, token);
 
         if (commitsResponse.success && commitsResponse.data.value?.length > 0) {
             commits = commitsResponse.data.value;
-            console.log(`✅ Found ${commits.length} commits in PR`);
+            aidaLogging(`✅ Found ${commits.length} commits in PR`);
             commits.forEach((commit, index) => {
-                console.log(`  ${index + 1}. ${commit.commitId.substring(0, 7)} - ${commit.comment || 'No message'}`);
+                aidaLogging(`  ${index + 1}. ${commit.commitId.substring(0, 7)} - ${commit.comment || 'No message'}`);
             });
         } else {
-            console.log('⚠️ No commits found, trying single source commit...');
+            aidaLogging('⚠️ No commits found, trying single source commit...');
             // Fallback to single commit if API fails
             if (pr.lastMergeSourceCommit) {
                 const sourceCommitId = pr.lastMergeSourceCommit.commitId;
-                console.log(`📝 PR source commit: ${sourceCommitId.substring(0, 7)}`);
+                aidaLogging(`📝 PR source commit: ${sourceCommitId.substring(0, 7)}`);
 
                 // Get detailed info about this specific commit
                 const commitUrl = `https://dev.azure.com/${organization}/${project}/_apis/git/repositories/${repository}/commits/${sourceCommitId}?api-version=7.0`;
@@ -1123,7 +1124,7 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
                             date: commit.author?.date || new Date().toISOString()
                         }
                     }];
-                    console.log(`✅ Found PR source commit: ${commit.commitId.substring(0, 7)} - ${commit.comment}`);
+                    aidaLogging(`✅ Found PR source commit: ${commit.commitId.substring(0, 7)} - ${commit.comment}`);
                 }
             }
         }
@@ -1133,17 +1134,17 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
         const iterationsResponse = await makeAzureDevOpsRequest(iterationsUrl, token);
 
         // Initialize variables at FUNCTION scope (not block scope)
-        console.log('🐛 DEBUG: Initializing allFileChanges and reviewableFileChanges at FUNCTION scope...');
+        aidaLogging('🐛 DEBUG: Initializing allFileChanges and reviewableFileChanges at FUNCTION scope...');
         let allFileChanges = [];
         let reviewableFileChanges = [];
         let mergeBaseCommit = null;
-        console.log('🐛 DEBUG: Variables initialized at function scope - allFileChanges.length:', allFileChanges.length);
+        aidaLogging('🐛 DEBUG: Variables initialized at function scope - allFileChanges.length:', allFileChanges.length);
 
         if (iterationsResponse.success && iterationsResponse.data.value?.length > 0) {
             const iterations = iterationsResponse.data.value;
             const latestIteration = iterations[iterations.length - 1];
 
-            console.log(`✅ Found ${iterations.length} iterations, using latest: ${latestIteration.id}`);
+            aidaLogging(`✅ Found ${iterations.length} iterations, using latest: ${latestIteration.id}`);
 
             // STEP 3: Get file changes from the latest iteration (this gives us actual PR changes)
             const changesUrl = `https://dev.azure.com/${organization}/${project}/_apis/git/repositories/${repository}/pullRequests/${prId}/iterations/${latestIteration.id}/changes?api-version=7.0&$top=1000`;
@@ -1160,7 +1161,7 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
                         !filePath.includes('/.git/');
 
                     if (isFile) {
-                        console.log(`📄 All files: ${filePath} (${change.changeType})`);
+                        aidaLogging(`📄 All files: ${filePath} (${change.changeType})`);
                     }
                     return isFile;
                 });
@@ -1169,7 +1170,7 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
                 const reviewableFiles = filterReviewableFiles(allActualFiles, 'Azure DevOps');
 
                 // Process ALL files for diff view (Monaco needs complete file list) 
-                console.log('🔄 Finding merge base (branch point) for accurate diff...');
+                aidaLogging('🔄 Finding merge base (branch point) for accurate diff...');
 
                 // Get source and target commits from PR
                 const sourceCommit = pr.lastMergeSourceCommit?.commitId;
@@ -1179,8 +1180,8 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
                     throw new Error('Missing source or target commit information in PR data');
                 }
                 
-                console.log(`🎯 Source commit (PR): ${sourceCommit.substring(0, 7)}`);
-                console.log(`🎯 Target commit (${targetBranch}): ${targetCommit.substring(0, 7)}`);
+                aidaLogging(`🎯 Source commit (PR): ${sourceCommit.substring(0, 7)}`);
+                aidaLogging(`🎯 Target commit (${targetBranch}): ${targetCommit.substring(0, 7)}`);
                 
                 // Find merge base (the common ancestor commit where the branch diverged)
                 let baseCommit;
@@ -1191,15 +1192,15 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
                     if (mergeBaseResponse.success && mergeBaseResponse.data.value && mergeBaseResponse.data.value.length > 0) {
                         baseCommit = mergeBaseResponse.data.value[0].commitId;
                         mergeBaseCommit = baseCommit; // Store for Monaco diff view
-                        console.log(`✅ Found merge base (branch point): ${baseCommit.substring(0, 7)}`);
-                        console.log(`📊 This will show ONLY changes made in the feature branch, not full target branch diff`);
+                        aidaLogging(`✅ Found merge base (branch point): ${baseCommit.substring(0, 7)}`);
+                        aidaLogging(`📊 This will show ONLY changes made in the feature branch, not full target branch diff`);
                     } else {
-                        console.log(`⚠️ Could not find merge base, falling back to target commit`);
+                        aidaLogging(`⚠️ Could not find merge base, falling back to target commit`);
                         baseCommit = targetCommit;
                         mergeBaseCommit = targetCommit; // Fallback to target commit
                     }
                 } catch (error) {
-                    console.log(`❌ Error finding merge base: ${error.message}, using target commit`);
+                    aidaLogging(`❌ Error finding merge base: ${error.message}, using target commit`);
                     baseCommit = targetCommit;
                     mergeBaseCommit = targetCommit; // Fallback to target commit
                 }
@@ -1207,16 +1208,16 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
                 // Process ALL files for diff view (Monaco needs complete file list)
                 allFileChanges = await Promise.all(allActualFiles.map(async (change) => {
                     const filePath = change.item?.path || change.originalPath || 'Unknown';
-                    console.log(`📁 Processing file: ${filePath} (${change.changeType})`);
+                    aidaLogging(`📁 Processing file: ${filePath} (${change.changeType})`);
                     
                     // 🔥 FIX: Detect rename when Azure reports 'edit' but paths differ
                     let effectiveChangeType = change.changeType?.toLowerCase() || 'edit';
                     if (change.originalPath && change.item?.path && change.originalPath !== change.item.path) {
                         effectiveChangeType = 'rename';
-                        console.log(`🔄 Detected rename: ${change.originalPath} -> ${change.item.path}`);
+                        aidaLogging(`🔄 Detected rename: ${change.originalPath} -> ${change.item.path}`);
                     }
 
-                    console.log(`📁 Processing file: ${filePath} (${effectiveChangeType})`);
+                    aidaLogging(`📁 Processing file: ${filePath} (${effectiveChangeType})`);
 
                     let diffContent = '';
                     let additions = 0;
@@ -1226,10 +1227,10 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
 
                     if (baseCommit && sourceCommit) {
                         try {
-                            console.log(`🔍 Comparing commits for ${filePath} (CORRECTED LOGIC):`);
-                            console.log(`  📍 Base commit (merge base): ${baseCommit.substring(0, 7)} - branch point where ${targetBranch} and feature branch diverged`);
-                            console.log(`  📍 Source commit (PR): ${sourceCommit.substring(0, 7)} - latest commit in feature branch`);
-                            console.log(`  💡 This shows ONLY changes made in feature branch, not full diff vs current ${targetBranch}`);
+                            aidaLogging(`🔍 Comparing commits for ${filePath} (CORRECTED LOGIC):`);
+                            aidaLogging(`  📍 Base commit (merge base): ${baseCommit.substring(0, 7)} - branch point where ${targetBranch} and feature branch diverged`);
+                            aidaLogging(`  📍 Source commit (PR): ${sourceCommit.substring(0, 7)} - latest commit in feature branch`);
+                            aidaLogging(`  💡 This shows ONLY changes made in feature branch, not full diff vs current ${targetBranch}`);
 
                             // FIX: Use correct paths for rename
                             const basePath = (effectiveChangeType === 'rename' && change.originalPath) ? change.originalPath : filePath;
@@ -1246,13 +1247,13 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
                             // Store source content for new files
                             fileSourceContent = sourceContent;
 
-                            console.log(`📊 Content retrieved:`);
-                            console.log(`  Base content (merge base): ${baseContent ? baseContent.length + ' chars' : 'NULL'}`);
-                            console.log(`  Source content (PR): ${sourceContent ? sourceContent.length + ' chars' : 'NULL'}`);
+                            aidaLogging(`📊 Content retrieved:`);
+                            aidaLogging(`  Base content (merge base): ${baseContent ? baseContent.length + ' chars' : 'NULL'}`);
+                            aidaLogging(`  Source content (PR): ${sourceContent ? sourceContent.length + ' chars' : 'NULL'}`);
 
                             if (baseContent !== null || sourceContent !== null) {
                                 // Generate unified diff using diff library
-                                console.log(`🎯 Calling generateUnifiedDiff for ${filePath} with CORRECTED commits...`);
+                                aidaLogging(`🎯 Calling generateUnifiedDiff for ${filePath} with CORRECTED commits...`);
                                 diffContent = generateUnifiedDiff(filePath, baseContent || '', sourceContent || '', effectiveChangeType);
 
                                 // Count changes using our counting function
@@ -1260,17 +1261,17 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
                                 additions = counts.additions;
                                 deletions = counts.deletions;
 
-                                console.log(`✅ Generated diff for ${filePath}: +${additions}/-${deletions} (using merge base)`);
+                                aidaLogging(`✅ Generated diff for ${filePath}: +${additions}/-${deletions} (using merge base)`);
                             } else {
-                                console.log(`⚠️ Could not fetch content for ${filePath}`);
+                                aidaLogging(`⚠️ Could not fetch content for ${filePath}`);
                                 diffContent = `diff --git a/${filePath} b/${filePath}\n[Could not retrieve file content]`;
                             }
                         } catch (err) {
-                            console.log(`❌ Error processing ${filePath}: ${err.message}`);
+                            aidaLogging(`❌ Error processing ${filePath}: ${err.message}`);
                             diffContent = `diff --git a/${filePath} b/${filePath}\n[Error: ${err.message}]`;
                         }
                     } else {
-                        console.log(`⚠️ Missing commit information for ${filePath}`);
+                        aidaLogging(`⚠️ Missing commit information for ${filePath}`);
                         diffContent = `diff --git a/${filePath} b/${filePath}\n[Missing commit information]`;
                     }
 
@@ -1293,17 +1294,17 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
                     const changeTypeLower = (change.changeType || '').toLowerCase();
                     const isAddType = (changeTypeLower === 'add' || changeTypeLower === 'added' || changeTypeLower === 'new');
                     
-                    console.log(`🔍 [DEBUG] File ${filePath}:`);
-                    console.log(`   - changeType="${change.changeType}" (lowercase="${changeTypeLower}")`);
-                    console.log(`   - isAddType=${isAddType}`);
-                    console.log(`   - fileSourceContent=${fileSourceContent ? fileSourceContent.length + ' chars' : 'NULL'}`);
-                    console.log(`   - Will store fullContent? ${isAddType && fileSourceContent ? 'YES ✅' : 'NO ❌'}`);
+                    aidaLogging(`🔍 [DEBUG] File ${filePath}:`);
+                    aidaLogging(`   - changeType="${change.changeType}" (lowercase="${changeTypeLower}")`);
+                    aidaLogging(`   - isAddType=${isAddType}`);
+                    aidaLogging(`   - fileSourceContent=${fileSourceContent ? fileSourceContent.length + ' chars' : 'NULL'}`);
+                    aidaLogging(`   - Will store fullContent? ${isAddType && fileSourceContent ? 'YES ✅' : 'NO ❌'}`);
                     
                     if (isAddType && fileSourceContent) {
                         fileObj.fullContent = fileSourceContent;
-                        console.log(`💾 ✅ STORED fullContent for new file ${filePath}: ${fileSourceContent.length} chars`);
+                        aidaLogging(`💾 ✅ STORED fullContent for new file ${filePath}: ${fileSourceContent.length} chars`);
                     } else {
-                        console.log(`⚠️ NOT storing fullContent for ${filePath}: isAddType=${isAddType}, hasContent=${!!fileSourceContent}`);
+                        aidaLogging(`⚠️ NOT storing fullContent for ${filePath}: isAddType=${isAddType}, hasContent=${!!fileSourceContent}`);
                     }
                     
                     return fileObj;
@@ -1312,13 +1313,13 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
                 // Filter reviewable files from processed results using shared function
                 reviewableFileChanges = filterReviewableFiles(allFileChanges, 'Azure DevOps');
 
-                console.log(`✅ Processed ${allFileChanges.length} total files, ${reviewableFileChanges.length} for review content`);
+                aidaLogging(`✅ Processed ${allFileChanges.length} total files, ${reviewableFileChanges.length} for review content`);
             } else {
-                console.log('⚠️ No file changes found in PR iteration');
+                aidaLogging('⚠️ No file changes found in PR iteration');
             }
 
         } else {
-            console.log('⚠️ No iterations found for PR');
+            aidaLogging('⚠️ No iterations found for PR');
         }
 
         return {
@@ -1439,7 +1440,7 @@ async function makeAzureDevOpsRequest(url, token, method = 'GET', body = null) {
  */
 async function getFileContent(organization, project, repository, filePath, commitId, token) {
     try {
-        console.log(`🔄 Fetching content for ${filePath} at commit ${commitId.substring(0, 7)}`);
+        aidaLogging(`🔄 Fetching content for ${filePath} at commit ${commitId.substring(0, 7)}`);
 
         // Use download parameter to get actual content as text
         const itemUrl = `https://dev.azure.com/${organization}/${project}/_apis/git/repositories/${repository}/items?path=${encodeURIComponent(filePath)}&versionDescriptor.version=${commitId}&versionDescriptor.versionType=commit&download=true&api-version=7.0`;
@@ -1472,7 +1473,7 @@ async function getFileContent(organization, project, repository, filePath, commi
                     if (res.statusCode === 200) {
                         resolve({ success: true, data: data });
                     } else {
-                        console.log(`⚠️ Download failed: ${res.statusCode} ${res.statusMessage}`);
+                        aidaLogging(`⚠️ Download failed: ${res.statusCode} ${res.statusMessage}`);
                         resolve({ success: false, error: `HTTP ${res.statusCode}` });
                     }
                 });
@@ -1491,26 +1492,26 @@ async function getFileContent(organization, project, repository, filePath, commi
         });
 
         if (response.success && response.data) {
-            console.log(`✅ Got file content: ${response.data.length} chars`);
+            aidaLogging(`✅ Got file content: ${response.data.length} chars`);
             
             // Debug indentation in API response
             const lines = response.data.split('\n');
-            console.log(`📊 DEBUG API CONTENT - Total lines: ${lines.length}`);
-            console.log(`📊 First 5 lines analysis:`);
+            aidaLogging(`📊 DEBUG API CONTENT - Total lines: ${lines.length}`);
+            aidaLogging(`📊 First 5 lines analysis:`);
             for (let i = 0; i < Math.min(5, lines.length); i++) {
                 const line = lines[i];
                 const leadingSpaces = line.match(/^ */)[0].length;
                 const leadingTabs = line.match(/^\t*/)[0].length;
-                console.log(`📊 Line ${i + 1}: spaces=${leadingSpaces}, tabs=${leadingTabs}, content="${line.substring(0, 50)}"`);
+                aidaLogging(`📊 Line ${i + 1}: spaces=${leadingSpaces}, tabs=${leadingTabs}, content="${line.substring(0, 50)}"`);
             }
             
             return response.data;
         }
 
-        console.log(`❌ Could not fetch content: ${response.error || 'unknown'}`);
+        aidaLogging(`❌ Could not fetch content: ${response.error || 'unknown'}`);
         return null;
     } catch (error) {
-        console.log(`❌ Error fetching content for ${filePath}: ${error.message}`);
+        aidaLogging(`❌ Error fetching content for ${filePath}: ${error.message}`);
         return null;
     }
 }
@@ -1526,7 +1527,7 @@ async function getFileContent(organization, project, repository, filePath, commi
  */
 async function getGitHubFileContent(owner, repo, filePath, commitSha, token) {
     try {
-        console.log(`🔄 Fetching GitHub content for ${filePath} at commit ${commitSha.substring(0, 7)}`);
+        aidaLogging(`🔄 Fetching GitHub content for ${filePath} at commit ${commitSha.substring(0, 7)}`);
 
         // GitHub Contents API URL
         const contentsUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${encodeURIComponent(filePath)}?ref=${commitSha}`;
@@ -1537,15 +1538,15 @@ async function getGitHubFileContent(owner, repo, filePath, commitSha, token) {
             // GitHub API returns base64 encoded content
             if (response.data.content && response.data.encoding === 'base64') {
                 const content = Buffer.from(response.data.content, 'base64').toString('utf8');
-                console.log(`✅ Got GitHub file content: ${content.length} chars`);
+                aidaLogging(`✅ Got GitHub file content: ${content.length} chars`);
                 return content;
             }
         }
 
-        console.log(`❌ Could not fetch GitHub content: ${response.error || 'unknown'}`);
+        aidaLogging(`❌ Could not fetch GitHub content: ${response.error || 'unknown'}`);
         return null;
     } catch (error) {
-        console.log(`❌ Error fetching GitHub content for ${filePath}: ${error.message}`);
+        aidaLogging(`❌ Error fetching GitHub content for ${filePath}: ${error.message}`);
         return null;
     }
 }
@@ -1596,7 +1597,7 @@ function generateUnifiedDiff(filePath, baseContent, targetContent, changeType) {
  */
 async function analyzeGitHubPullRequest(stream, owner, repo, prId) {
     try {
-        console.log(`🔄 Fetching GitHub PR ${owner}/${repo}#${prId}`);
+        aidaLogging(`🔄 Fetching GitHub PR ${owner}/${repo}#${prId}`);
 
         // Get token using new multi-org helper
         const prUrl = `https://github.com/${owner}/${repo}/pull/${prId}`;
@@ -1636,7 +1637,7 @@ async function analyzeGitHubPullRequest(stream, owner, repo, prId) {
  */
 async function getGitHubPR(owner, repo, prId, token) {
     try {
-        console.log(`📝 Fetching PR details: ${owner}/${repo}#${prId}`);
+        aidaLogging(`📝 Fetching PR details: ${owner}/${repo}#${prId}`);
 
         // Get PR details
         const prUrl = `https://api.github.com/repos/${owner}/${repo}/pulls/${prId}`;
@@ -1650,7 +1651,7 @@ async function getGitHubPR(owner, repo, prId, token) {
         const pr = prResponse.data;
 
         // Get PR files (changes)
-        console.log('📁 Fetching changed files...');
+        aidaLogging('📁 Fetching changed files...');
         const filesUrl = `https://api.github.com/repos/${owner}/${repo}/pulls/${prId}/files`;
         const filesResponse = await makeGitHubRequest(filesUrl, token);
 
@@ -1660,10 +1661,10 @@ async function getGitHubPR(owner, repo, prId, token) {
         }
 
         const files = filesResponse.data;
-        console.log(`✅ Found ${files.length} changed files`);
+        aidaLogging(`✅ Found ${files.length} changed files`);
 
         // Get diff in unified format
-        console.log('🔄 Fetching unified diff from GitHub...');
+        aidaLogging('🔄 Fetching unified diff from GitHub...');
         const diffUrl = `https://api.github.com/repos/${owner}/${repo}/pulls/${prId}`;
         const diffResponse = await makeGitHubRequest(diffUrl, token, 'GET', {
             'Accept': 'application/vnd.github.v3.diff'
@@ -1672,9 +1673,9 @@ async function getGitHubPR(owner, repo, prId, token) {
         let finalDiff = '';
         if (diffResponse.success && typeof diffResponse.data === 'string') {
             finalDiff = diffResponse.data;
-            console.log(`✅ Got unified diff: ${finalDiff.length} characters`);
+            aidaLogging(`✅ Got unified diff: ${finalDiff.length} characters`);
         } else {
-            console.log('⚠️ Could not get unified diff, will build from file patches');
+            aidaLogging('⚠️ Could not get unified diff, will build from file patches');
         }
 
         // Process file changes
@@ -1706,9 +1707,9 @@ async function getGitHubPR(owner, repo, prId, token) {
                 // Add the patch content (which contains the @@ hunks)
                 diffContent += file.patch;
                 
-                console.log(`🔧 DEBUG: Built complete diff for ${file.filename}: ${diffContent.length} chars`);
-                console.log(`🔍 DEBUG: GitHub patch for ${file.filename}:`, file.patch);
-                console.log(`🔧 DEBUG: Complete diffContent:`, diffContent);
+                aidaLogging(`🔧 DEBUG: Built complete diff for ${file.filename}: ${diffContent.length} chars`);
+                aidaLogging(`🔍 DEBUG: GitHub patch for ${file.filename}:`, file.patch);
+                aidaLogging(`🔧 DEBUG: Complete diffContent:`, diffContent);
             } else if (file.status === 'renamed' && !file.patch) {
                 // Handle renamed files without content changes
                 diffContent = `diff --git a/${file.previous_filename} b/${file.filename}\n`;
@@ -1724,7 +1725,7 @@ async function getGitHubPR(owner, repo, prId, token) {
                 }
             }
 
-            console.log(`🔍 Final diffContent for ${file.filename}: ${diffContent.length} chars`);
+            aidaLogging(`🔍 Final diffContent for ${file.filename}: ${diffContent.length} chars`);
 
             return {
                 path: file.filename,
@@ -1743,7 +1744,7 @@ async function getGitHubPR(owner, repo, prId, token) {
         const reviewableFileChanges = filterReviewableFiles(fileChanges, 'GitHub');
 
         // Get commits
-        console.log('📝 Fetching commits...');
+        aidaLogging('📝 Fetching commits...');
         const commitsUrl = `https://api.github.com/repos/${owner}/${repo}/pulls/${prId}/commits`;
         const commitsResponse = await makeGitHubRequest(commitsUrl, token);
 
@@ -1757,7 +1758,7 @@ async function getGitHubPR(owner, repo, prId, token) {
                     date: commit.commit.author.date
                 }
             }));
-            console.log(`✅ Found ${commits.length} commits`);
+            aidaLogging(`✅ Found ${commits.length} commits`);
         }
 
         return {
@@ -1895,7 +1896,7 @@ async function makeGitHubRequest(url, token, method = 'GET', customHeaders = {})
  */
 async function analyzeGitLabMergeRequest(stream, gitlabHost, owner, repo, mrId) {
     try {
-        console.log(`🔄 Fetching GitLab MR ${owner}/${repo}!${mrId} from ${gitlabHost}`);
+        aidaLogging(`🔄 Fetching GitLab MR ${owner}/${repo}!${mrId} from ${gitlabHost}`);
 
         // Get token using new multi-org helper
         const mrUrl = `https://${gitlabHost}/${owner}/${repo}/-/merge_requests/${mrId}`;
@@ -1918,8 +1919,8 @@ async function analyzeGitLabMergeRequest(stream, gitlabHost, owner, repo, mrId) 
         }
 
         // ✅ FIX: Return the correct structure - extract the data portion
-        console.log(`🔧 DEBUG: GitLab API returned ${mrData.data?.finalDiff?.length || 0} chars of finalDiff`);
-        console.log(`🔧 DEBUG: GitLab API returned ${mrData.data?.fileChanges?.length || 0} file changes`);
+        aidaLogging(`🔧 DEBUG: GitLab API returned ${mrData.data?.finalDiff?.length || 0} chars of finalDiff`);
+        aidaLogging(`🔧 DEBUG: GitLab API returned ${mrData.data?.fileChanges?.length || 0} file changes`);
         
         return {
             success: true,
@@ -1942,7 +1943,7 @@ async function analyzeGitLabMergeRequest(stream, gitlabHost, owner, repo, mrId) 
  */
 async function getGitLabMR(gitlabHost, owner, repo, mrId, token) {
     try {
-        console.log(`📝 Fetching MR details: ${owner}/${repo}!${mrId} from ${gitlabHost}`);
+        aidaLogging(`📝 Fetching MR details: ${owner}/${repo}!${mrId} from ${gitlabHost}`);
 
         // Encode project path for GitLab API (owner/repo becomes owner%2Frepo)
         const projectPath = encodeURIComponent(`${owner}/${repo}`);
@@ -1959,7 +1960,7 @@ async function getGitLabMR(gitlabHost, owner, repo, mrId, token) {
         const mr = mrResponse.data;
 
         // Get MR changes (diffs)
-        console.log('📁 Fetching changed files...');
+        aidaLogging('📁 Fetching changed files...');
         const changesUrl = `https://${gitlabHost}/api/v4/projects/${projectPath}/merge_requests/${mrId}/changes`;
         const changesResponse = await makeGitLabRequest(changesUrl, token);
 
@@ -1969,15 +1970,15 @@ async function getGitLabMR(gitlabHost, owner, repo, mrId, token) {
         }
 
         const changes = changesResponse.data;
-        console.log(`✅ Found ${changes.changes?.length || 0} changed files`);
+        aidaLogging(`✅ Found ${changes.changes?.length || 0} changed files`);
         
         // Debug: Log structure of changes response
         if (changes.changes && changes.changes.length > 0) {
-            console.log('🔍 DEBUG: GitLab changes structure:', JSON.stringify(changes.changes[0], null, 2));
+            aidaLogging('🔍 DEBUG: GitLab changes structure:', JSON.stringify(changes.changes[0], null, 2));
         }
 
         // Get diff in unified format
-        console.log('🔄 Fetching unified diff from GitLab...');
+        aidaLogging('🔄 Fetching unified diff from GitLab...');
         const diffUrl = `https://${gitlabHost}/api/v4/projects/${projectPath}/merge_requests/${mrId}.diff`;
         const diffResponse = await makeGitLabRequest(diffUrl, token, 'GET', {
             'Accept': 'text/plain'
@@ -1986,9 +1987,9 @@ async function getGitLabMR(gitlabHost, owner, repo, mrId, token) {
         let finalDiff = '';
         if (diffResponse.success && typeof diffResponse.data === 'string') {
             finalDiff = diffResponse.data;
-            console.log(`✅ Got unified diff: ${finalDiff.length} characters`);
+            aidaLogging(`✅ Got unified diff: ${finalDiff.length} characters`);
         } else {
-            console.log('⚠️ Could not get unified diff, will build from file changes');
+            aidaLogging('⚠️ Could not get unified diff, will build from file changes');
         }
 
         // Process file changes
@@ -1996,8 +1997,8 @@ async function getGitLabMR(gitlabHost, owner, repo, mrId, token) {
             let diffContent = '';
             
             // Debug: Log each change structure
-            console.log(`🔍 Processing file: ${change.new_path || change.old_path}`);
-            console.log(`🔍 Change has diff: ${!!change.diff}, diff length: ${change.diff?.length || 0}`);
+            aidaLogging(`🔍 Processing file: ${change.new_path || change.old_path}`);
+            aidaLogging(`🔍 Change has diff: ${!!change.diff}, diff length: ${change.diff?.length || 0}`);
 
             // GitLab API provides diff content directly
             if (change.diff) {
@@ -2024,7 +2025,7 @@ async function getGitLabMR(gitlabHost, owner, repo, mrId, token) {
                 // Add the diff content
                 diffContent += change.diff;
                 
-                console.log(`🔧 DEBUG: Built complete diff for ${change.new_path}: ${diffContent.length} chars`);
+                aidaLogging(`🔧 DEBUG: Built complete diff for ${change.new_path}: ${diffContent.length} chars`);
             } else if (finalDiff) {
                 // Extract from unified diff as fallback
                 const fileName = change.new_path || change.old_path;
@@ -2032,11 +2033,11 @@ async function getGitLabMR(gitlabHost, owner, repo, mrId, token) {
                 const match = filePattern.exec(finalDiff);
                 if (match) {
                     diffContent = `diff --git a/${fileName} b/${fileName}${match[1]}`;
-                    console.log(`🔧 DEBUG: Extracted diff from finalDiff for ${fileName}: ${diffContent.length} chars`);
+                    aidaLogging(`🔧 DEBUG: Extracted diff from finalDiff for ${fileName}: ${diffContent.length} chars`);
                 }
             } else {
                 // Last resort: create minimal diff representation
-                console.log(`⚠️ WARNING: No diff content available for ${change.new_path || change.old_path}, creating placeholder`);
+                aidaLogging(`⚠️ WARNING: No diff content available for ${change.new_path || change.old_path}, creating placeholder`);
                 const fileName = change.new_path || change.old_path;
                 diffContent = `diff --git a/${fileName} b/${fileName}\n`;
                 if (change.new_file) {
@@ -2071,7 +2072,7 @@ async function getGitLabMR(gitlabHost, owner, repo, mrId, token) {
         const reviewableFileChanges = filterReviewableFiles(fileChanges, 'GitLab');
 
         // Get commits
-        console.log('📝 Fetching commits...');
+        aidaLogging('📝 Fetching commits...');
         const commitsUrl = `https://${gitlabHost}/api/v4/projects/${projectPath}/merge_requests/${mrId}/commits`;
         const commitsResponse = await makeGitLabRequest(commitsUrl, token);
 
@@ -2085,7 +2086,7 @@ async function getGitLabMR(gitlabHost, owner, repo, mrId, token) {
                     date: commit.authored_date
                 }
             }));
-            console.log(`✅ Found ${commits.length} commits`);
+            aidaLogging(`✅ Found ${commits.length} commits`);
         }
 
         return {
@@ -2323,7 +2324,7 @@ async function addQuickReviewOption(stream, prAnalysis, request, originalUrl = n
     const data = prAnalysis.data;
 
     // 🔍 DEBUG: Check what we have in prAnalysis structure
-    console.log('🔧 DEBUG addQuickReviewOption: prAnalysis structure:', JSON.stringify({
+    aidaLogging('🔧 DEBUG addQuickReviewOption: prAnalysis structure:', JSON.stringify({
         hasData: !!prAnalysis.data,
         finalDiffLength: prAnalysis.data?.finalDiff?.length || 0,
         fileChangesCount: prAnalysis.data?.fileChanges?.length || 0,
@@ -2335,12 +2336,12 @@ async function addQuickReviewOption(stream, prAnalysis, request, originalUrl = n
 
     // Always get diff from reviewableFileChanges (filtered for AI review)
     const reviewableFiles = data.reviewableFileChanges || [];
-    console.log(`🔍 Building diff from reviewableFileChanges: ${reviewableFiles.length} files`);
+    aidaLogging(`🔍 Building diff from reviewableFileChanges: ${reviewableFiles.length} files`);
     
     if (reviewableFiles.length > 0) {
         // Log each reviewable file
         reviewableFiles.forEach((file, index) => {
-            console.log(`🔍 Reviewable file ${index + 1}: ${file.path}, diffContent length: ${file.diffContent?.length || 0}`);
+            aidaLogging(`🔍 Reviewable file ${index + 1}: ${file.path}, diffContent length: ${file.diffContent?.length || 0}`);
         });
         
         // Build diff from reviewable files only
@@ -2348,7 +2349,7 @@ async function addQuickReviewOption(stream, prAnalysis, request, originalUrl = n
             .filter(file => file.diffContent && file.diffContent.trim())
             .map(file => file.diffContent)
             .join('\n\n');
-        console.log(`✅ Built diff from reviewableFileChanges: ${diffContent.length} chars from ${reviewableFiles.length} files`);
+        aidaLogging(`✅ Built diff from reviewableFileChanges: ${diffContent.length} chars from ${reviewableFiles.length} files`);
     }
 
     // Only proceed if we have reviewable diff content
@@ -2356,7 +2357,7 @@ async function addQuickReviewOption(stream, prAnalysis, request, originalUrl = n
         const totalFiles = data.fileChanges ? data.fileChanges.length : 0;
         const reviewableCount = reviewableFiles.length;
         
-        console.log('⚠️ No reviewable diff content available for AI review');
+        aidaLogging('⚠️ No reviewable diff content available for AI review');
         stream.markdown('⚠️ **No reviewable files found for AI review**\n\n');
         
         if (totalFiles > 0 && reviewableCount === 0) {
@@ -2400,7 +2401,7 @@ async function performQuickReviewWithAI(stream, prData, request, diffContent, or
         const templateResult = await getPRReviewTemplate('review-pr.md', prData);
         templateContent = templateResult.content;
 
-        console.log(`✅ Loaded ${templateResult.detection.template.name} review template from: ${templateResult.templatePath} (${templateResult.content.length} characters)`);
+        aidaLogging(`✅ Loaded ${templateResult.detection.template.name} review template from: ${templateResult.templatePath} (${templateResult.content.length} characters)`);
         
         // Import and use displayCommonReviewInfo and displayDetectionInfo functions
         const { displayCommonReviewInfo, displayDetectionInfo } = require('./review-common');
@@ -2433,7 +2434,7 @@ async function performQuickReviewWithAI(stream, prData, request, diffContent, or
     }
 
     // Use provided diffContent (from finalDiff or built from files)
-    console.log(`🔍 Diff content for review: ${diffContent.length} chars`);
+    aidaLogging(`🔍 Diff content for review: ${diffContent.length} chars`);
 
     // Clean up any old diff placeholder and inject diff at end of template
     let processedTemplate = templateContent.replace(/```diff[\s\S]*?\{\{FINAL_DIFF_CONTENT\}\}[\s\S]*?```/g, '');
@@ -2445,7 +2446,7 @@ async function performQuickReviewWithAI(stream, prData, request, diffContent, or
     // Use reviewableFileChanges (filtered files for AI review)
     const sourceFiles = prData.reviewableFileChanges || [];
     
-    console.log(`📊 [REVIEW FILTER] Using reviewableFileChanges: ${sourceFiles.length} files for AI analysis`);
+    aidaLogging(`📊 [REVIEW FILTER] Using reviewableFileChanges: ${sourceFiles.length} files for AI analysis`);
     
     // Separate files by change type for better analysis
     const modifiedFiles = sourceFiles.filter(f => {
@@ -2457,15 +2458,15 @@ async function performQuickReviewWithAI(stream, prData, request, diffContent, or
         const changeType = (f.changeType || '').toLowerCase();
         const isNewFile = (changeType === 'add' || changeType === 'added' || changeType === 'new') && f.fullContent;
         
-        console.log(`🔍 [FILTER] File ${f.path}: changeType="${changeType}", hasFullContent=${!!f.fullContent}, isNewFile=${isNewFile}`);
+        aidaLogging(`🔍 [FILTER] File ${f.path}: changeType="${changeType}", hasFullContent=${!!f.fullContent}, isNewFile=${isNewFile}`);
         
         return isNewFile;
     });
     
-    console.log(`📊 [FILTER RESULT] Total reviewable files: ${sourceFiles.length}, Modified: ${modifiedFiles.length}, New: ${newFiles.length}`);
+    aidaLogging(`📊 [FILTER RESULT] Total reviewable files: ${sourceFiles.length}, Modified: ${modifiedFiles.length}, New: ${newFiles.length}`);
     
     if (newFiles.length > 0) {
-        console.log(`✅ New files to inject as fullContent:`, newFiles.map(f => f.path));
+        aidaLogging(`✅ New files to inject as fullContent:`, newFiles.map(f => f.path));
     }
     
     // 1. Inject modified files as DIFF (like before)
@@ -2486,7 +2487,7 @@ async function performQuickReviewWithAI(stream, prData, request, diffContent, or
             // Check if API key mode is enabled
             if (shouldUseApiKey()) {
                 // API key mode - executeAIReview will handle it
-                console.log('🔑 API key mode enabled for PR review - model is null as expected');
+                aidaLogging('🔑 API key mode enabled for PR review - model is null as expected');
             } else {
                 stream.markdown('❌ **No AI model available**\n\n');
                 stream.markdown('Using fallback basic analysis instead.\n\n');
@@ -2503,14 +2504,14 @@ async function performQuickReviewWithAI(stream, prData, request, diffContent, or
             'PR Quick Review'
         );
 
-        console.log(`🔍 executeAIReview result: ${success}`);
+        aidaLogging(`🔍 executeAIReview result: ${success}`);
 
         if (!success) {
-            console.log('❌ AI review failed, using fallback');
+            aidaLogging('❌ AI review failed, using fallback');
             stream.markdown('⚠️ **AI analysis failed. Using fallback analysis:**\n\n');
             await performBasicQuickAnalysis(stream, prData);
         } else {
-            console.log('✅ AI review completed successfully');
+            aidaLogging('✅ AI review completed successfully');
         }
 
     } catch (error) {
@@ -2547,14 +2548,14 @@ async function performStructuredQuickAnalysis(stream, prData) {
     try {
         const templateResult = await getPRReviewTemplate('review-pr.md', prData);
         templateContent = templateResult.content;
-        console.log(`✅ Loaded ${templateResult.detection.template.name} template for AI file assessment`);
+        aidaLogging(`✅ Loaded ${templateResult.detection.template.name} template for AI file assessment`);
         
         // Display PR detection information
         stream.markdown('## 🎯 Auto-Detection Results\n\n');
         stream.markdown(`**Detection:** ${templateResult.detection.template.name} (${templateResult.confidence})\n`);
         stream.markdown(`**Template:** ${templateResult.templatePath}\n\n`);
     } catch (error) {
-        console.log('⚠️ Template not available, using enhanced fallback');
+        aidaLogging('⚠️ Template not available, using enhanced fallback');
     }
 
     for (let i = 0; i < fileChanges.length; i++) {
@@ -2635,9 +2636,9 @@ async function assessFileQuickly(file, fullDiff, templateContent = null) {
                 const contextData = global.currentPRData || { fileChanges: [file] };
                 const templateResult = await getPRReviewTemplate('review-pr.md', contextData);
                 templateContent = templateResult.content;
-                console.log(`🎯 Using ${templateResult.detection.template.name} template for file assessment`);
+                aidaLogging(`🎯 Using ${templateResult.detection.template.name} template for file assessment`);
             } catch (error) {
-                console.log('⚠️ Template loading failed, using fallback analysis');
+                aidaLogging('⚠️ Template loading failed, using fallback analysis');
                 return assessFileQuicklyFallback(file, fullDiff);
             }
         }
@@ -2654,7 +2655,7 @@ async function assessFileQuickly(file, fullDiff, templateContent = null) {
         processedTemplate += '**Instructions:** Please analyze the diff above using the strict review framework provided in this template.\n';
 
         // TODO: Send processedTemplate to AI for analysis
-        console.log(`🤖 Template ready for AI: ${file.path}`);
+        aidaLogging(`🤖 Template ready for AI: ${file.path}`);
 
         // For now, use enhanced fallback until AI integration
         const aiResponse = simulateAIFileAssessment(file, fullDiff);
@@ -2677,7 +2678,7 @@ function assessFileQuicklyFallback(file, fullDiff) {
     const filePath = file.path.toLowerCase();
     const diffContent = file.diffContent || '';
 
-    console.log(`🔧 Using fallback rule-based assessment for: ${file.path}`);
+    aidaLogging(`🔧 Using fallback rule-based assessment for: ${file.path}`);
 
     // Security checks
     if (diffContent.includes('password') || diffContent.includes('secret') || diffContent.includes('api_key')) {
@@ -2860,7 +2861,7 @@ async function displayPrReviewResults(stream, prAnalysis) {
     const isGitLabMR = data.owner && data.repository && data.gitlabHost; // GitLab has owner/repo and gitlabHost
     const isAzurePR = data.organization && data.project; // Azure has org/project
 
-    console.log(`🔍 Provider detection: GitHub=${isGitHubPR}, GitLab=${isGitLabMR}, Azure=${isAzurePR}`);
+    aidaLogging(`🔍 Provider detection: GitHub=${isGitHubPR}, GitLab=${isGitLabMR}, Azure=${isAzurePR}`);
 
     // Display commits list (common for all providers)
     if (data.commitsList && data.commitsList.length > 0) {
@@ -2884,22 +2885,22 @@ async function displayPrReviewResults(stream, prAnalysis) {
 
     // PROVIDER ROUTING: Route to appropriate diff display function
     if (isGitHubPR) {
-        console.log('🐙 Routing to GitHub Function B');
+        aidaLogging('🐙 Routing to GitHub Function B');
         await showGitHubDiffInWebview(prAnalysis, stream);
     } else if (isGitLabMR) {
-        console.log('🦊 Routing to GitLab Function C');
+        aidaLogging('🦊 Routing to GitLab Function C');
         await showGitLabDiffInWebview(prAnalysis, stream);
     } else if (isAzurePR) {
-        console.log('🔵 Routing to Azure DevOps Function A');
+        aidaLogging('🔵 Routing to Azure DevOps Function A');
         await showAzureDevOpsDiffInWebview(prAnalysis, stream);
     } else {
         // Fallback: assume Azure DevOps for backward compatibility
-        console.log('⚠️ Provider unknown, defaulting to Azure DevOps Function A');
+        aidaLogging('⚠️ Provider unknown, defaulting to Azure DevOps Function A');
         await showAzureDevOpsDiffInWebview(prAnalysis, stream);
     }
 
     // Provider-specific diff display is handled above by Function A, B, or C
-    console.log(`📊 Provider routing complete. ${totalFiles} files processed.`);
+    aidaLogging(`📊 Provider routing complete. ${totalFiles} files processed.`);
 }
 
 /**

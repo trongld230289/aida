@@ -515,7 +515,7 @@ function showNodeDetails(node) {
         ${node.isPRFile && node.prStatus ? `
         <div class="detail-section" style="background: linear-gradient(135deg, #2d2d30 0%, #1a1a1a 100%); border-left: 4px solid ${getPRStatusColor(node.prStatus)};">
             <h4 style="color: ${getPRStatusColor(node.prStatus)};">
-              ${getPRStatusIcon(node.prStatus)} PR File - ${getPRStatusLabel(node.prStatus)}
+                PR File - ${getPRStatusLabel(node.prStatus)}
             </h4>
             ${node.prChanges ? `
             <div style="display: flex; gap: 20px; font-size: 16px; font-weight: bold; margin-top: 10px;">

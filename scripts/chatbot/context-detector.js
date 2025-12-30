@@ -3,6 +3,7 @@ const MLClassifier = require('./ml-classifier');
 const LanguageProcessor = require('./language-processor');
 const fs = require('fs');
 const path = require('path');
+const { aidaLogging } = require('../settings');
 
 class ContextDetector {
   constructor() {
@@ -610,7 +611,7 @@ class ContextDetector {
       const worker = await createWorker('eng+vie', 1, {
         logger: m => {
           if (m.status === 'recognizing text') {
-            console.log(`OCR Progress: ${Math.round(m.progress * 100)}%`);
+            aidaLogging(`OCR Progress: ${Math.round(m.progress * 100)}%`);
           }
         }
       });
@@ -630,7 +631,7 @@ class ContextDetector {
         .replace(/\s+/g, ' ')  // Replace multiple spaces with single space
         .trim();
         
-      console.log(`OCR extracted ${cleanedText.length} characters from image`);
+      aidaLogging(`OCR extracted ${cleanedText.length} characters from image`);
       return cleanedText;
 
     } catch (error) {

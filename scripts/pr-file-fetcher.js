@@ -1,5 +1,6 @@
 const { getTokenForPR } = require('./review-common');
 const { parsePRUrlInfo, getGitHubPR, getAzureDevOpsPR, getGitLabMR } = require('./review-pr');
+const { aidaLogging } = require('./settings');
 
 /**
  * Unified PR file fetcher for all providers
@@ -28,7 +29,7 @@ class PRFileFetcher {
      * @returns {Promise<Array>} File change objects
      */
     async fetchFiles(prInfo) {
-        console.log(`🔍 Fetching files from ${prInfo.repoType} PR...`);
+        aidaLogging(`🔍 Fetching files from ${prInfo.repoType} PR...`);
 
         // Get token
         const token = getTokenForPR(prInfo.originalUrl);
@@ -93,7 +94,7 @@ class PRFileFetcher {
                       statusMap[file.status?.toLowerCase()] || 
                       'edit';
 
-        console.log(`🔍 Normalize ${file.path}: changeType="${file.changeType}" → status="${status}" (+${file.additions}/-${file.deletions})`);
+        aidaLogging(`🔍 Normalize ${file.path}: changeType="${file.changeType}" → status="${status}" (+${file.additions}/-${file.deletions})`);
 
         return {
             path: file.path,

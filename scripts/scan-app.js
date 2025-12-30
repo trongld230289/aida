@@ -2,13 +2,14 @@ const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
 const { showTokenStatistics, estimateTokenCount, callAI, normalizeApiParameters, detectProvider, mapProviderResponse } = require('./review-common');
+const { aidaLogging } = require('./settings');
 
 // Add fetch polyfill for older Node.js versions
 if (!global.fetch) {
     try {
         const fetch = require('node-fetch');
         global.fetch = fetch;
-        console.log('✅ node-fetch loaded successfully');
+        aidaLogging('✅ node-fetch loaded successfully');
     } catch (error) {
         console.warn('⚠️ node-fetch not available, using https module fallback');
         // You can add a custom fetch implementation here if needed
@@ -19,7 +20,7 @@ if (!global.fetch) {
  * Handle scan-app requests from chat interface
  */
 async function handleScanApp(message, stream, token, context) {
-    console.log('🔍 Smart Scanner called from chat:', message);
+    aidaLogging('🔍 Smart Scanner called from chat:', message);
     
     try {
         const query = message.trim().toLowerCase();
@@ -49,14 +50,14 @@ async function handleScanApp(message, stream, token, context) {
  * Initialize Smart App Scanner with AST analysis
  */
 function initializeScanApp(context) {
-    console.log('🚀 Initializing scan-app participant...');
+    aidaLogging('🚀 Initializing scan-app participant...');
     
     try {
         const scanAppParticipant = vscode.chat.createChatParticipant('scan-app', async (request, context, stream, token) => {
             await handleScanApp(request.prompt, stream, token, context);
         });
         
-        console.log('✅ scan-app participant created successfully');
+        aidaLogging('✅ scan-app participant created successfully');
 
         scanAppParticipant.iconPath = vscode.Uri.file(
             path.join(context.extensionPath, 'icons', 'extension-icon.png')
@@ -343,7 +344,7 @@ async function extractAllApiEndpoints(apiFiles, stream) {
                 totalOutputTokens += extractionResult.outputTokens;
                 if (extractionResult.model) aiModel = extractionResult.model;
                 aiUsed++;
-                console.log(`✅ AI used for ${file.name}: ${extractionResult.inputTokens}+${extractionResult.outputTokens} tokens`);
+                aidaLogging(`✅ AI used for ${file.name}: ${extractionResult.inputTokens}+${extractionResult.outputTokens} tokens`);
             }
             
             endpoints.push(...fileEndpoints);
@@ -376,7 +377,7 @@ async function extractApiEndpointsWithAI(content, file) {
     const apiKey = config.get('ai.apiKey');
     
     if (!apiKey) {
-        console.log('⚠️ No AI API key - falling back to rule-based extraction');
+        aidaLogging('⚠️ No AI API key - falling back to rule-based extraction');
         return extractApiEndpointsFromContent(content, file);
     }
     
@@ -504,10 +505,10 @@ async function smartExtractEndpoints(content, file) {
     ].some(pattern => content.includes(pattern));
     
     if (hasComplexPatterns) {
-        console.log(`🤖 Using AI extraction for ${file.name} (complex patterns detected) - FULL FILE SCAN`);
+        aidaLogging(`🤖 Using AI extraction for ${file.name} (complex patterns detected) - FULL FILE SCAN`);
         return await extractApiEndpointsWithAI(content, file);
     } else {
-        console.log(`⚡ Using rule extraction for ${file.name} (simple patterns)`);
+        aidaLogging(`⚡ Using rule extraction for ${file.name} (simple patterns)`);
         // Return in consistent format for non-AI extraction
         return {
             endpoints: extractApiEndpointsFromContent(content, file),
@@ -1018,7 +1019,7 @@ async function callOpenAIForSmartAnalysis(endpoints, analysisType) {
         return null;
     }
     
-    console.log(`🤖 Calling AI API (${apiHost}) with model ${model} for smart ${analysisType} analysis...`);
+    aidaLogging(`🤖 Calling AI API (${apiHost}) with model ${model} for smart ${analysisType} analysis...`);
     
     const instruction = `
 # Smart ${analysisType} Analysis
@@ -1120,9 +1121,9 @@ ${JSON.stringify(endpoints, null, 2)}
         
         const aiAnalysis = mappedResponse.content;
         
-        console.log(`✅ AI API (${result.model}) analysis completed successfully`);
-        console.log(`📊 Token usage: ${(mappedResponse.inputTokens + mappedResponse.outputTokens) || 'unknown'} tokens`);
-        console.log(`🌐 API Host: ${result.apiHost}`);
+        aidaLogging(`✅ AI API (${result.model}) analysis completed successfully`);
+        aidaLogging(`📊 Token usage: ${(mappedResponse.inputTokens + mappedResponse.outputTokens) || 'unknown'} tokens`);
+        aidaLogging(`🌐 API Host: ${result.apiHost}`);
         
         return {
             analysis: aiAnalysis,

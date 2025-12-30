@@ -1,6 +1,7 @@
 const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
+const { aidaLogging } = require('./settings');
 
 // Global AbortController for cancellation
 let globalAbortSignal = null;
@@ -246,7 +247,7 @@ function estimateCost(inputTokens, outputTokens, modelFamily, provider = null, a
         provider = 'copilot'; // Default to copilot for backward compatibility
     }
     
-    console.log(`💰 Cost calculation: ${provider}/${modelFamily} - ${inputTokens}+${outputTokens} tokens`);
+    aidaLogging(`💰 Cost calculation: ${provider}/${modelFamily} - ${inputTokens}+${outputTokens} tokens`);
     
     // Get provider-specific pricing
     const providerPricing = pricing[provider] || pricing['copilot'];
@@ -260,16 +261,16 @@ function estimateCost(inputTokens, outputTokens, modelFamily, provider = null, a
                  providerPricing['gpt-4o'] || 
                  { input: 2.50, output: 10.00 }; // Default fallback rates
     
-    console.log(`💰 Provider pricing keys: ${Object.keys(providerPricing).join(', ')}`);
-    console.log(`💰 Looking for model key: ${modelKey} (original: ${modelFamily})`);
-    console.log(`💰 Using rates for ${provider}/${modelKey}:`, rates);
+    aidaLogging(`💰 Provider pricing keys: ${Object.keys(providerPricing).join(', ')}`);
+    aidaLogging(`💰 Looking for model key: ${modelKey} (original: ${modelFamily})`);
+    aidaLogging(`💰 Using rates for ${provider}/${modelKey}:`, rates);
     
     // Calculate standard per-token pricing
     const inputCost = (inputTokens / 1000000) * rates.input;
     const outputCost = (outputTokens / 1000000) * rates.output;
     const totalCost = inputCost + outputCost;
     
-    console.log(`💰 Calculated costs: input=$${inputCost.toFixed(6)}, output=$${outputCost.toFixed(6)}, total=$${totalCost.toFixed(6)}`);
+    aidaLogging(`💰 Calculated costs: input=$${inputCost.toFixed(6)}, output=$${outputCost.toFixed(6)}, total=$${totalCost.toFixed(6)}`);
     
     return {
         inputCost: inputCost,
@@ -306,7 +307,7 @@ async function getFallbackModel(currentModel, stream, attemptNumber = 1) {
     try {
         // Check if API key mode is enabled - no fallback needed for API key mode
         if (shouldUseApiKey()) {
-            console.log('🔑 API Key mode enabled - no fallback needed');
+            aidaLogging('🔑 API Key mode enabled - no fallback needed');
             return null;
         }
         
@@ -347,7 +348,7 @@ async function getFallbackModel(currentModel, stream, attemptNumber = 1) {
         // Show detailed fallback information with reasoning
         const availableList = availableModels.map(m => m.family).join(', ');
         
-        console.log(`🔄 Fallback ${attemptNumber}: ${currentModel.family} → ${fallbackModel.family}`);
+        aidaLogging(`🔄 Fallback ${attemptNumber}: ${currentModel.family} → ${fallbackModel.family}`);
         
         // Show user-friendly fallback messaging
         stream.markdown(`🔄 **Switching models** (attempt ${attemptNumber}):\n`);
@@ -406,23 +407,23 @@ function mapGoogleResponse(data) {
 }
 
 function mapSTUResponse(data) {
-    console.log('🔍 STU Response Mapping - Full structure analysis:');
-    console.log('📊 Top-level keys:', Object.keys(data));
+    aidaLogging('🔍 STU Response Mapping - Full structure analysis:');
+    aidaLogging('📊 Top-level keys:', Object.keys(data));
     
     if (data.choices) {
-        console.log('📊 Choices array length:', data.choices.length);
+        aidaLogging('📊 Choices array length:', data.choices.length);
         if (data.choices[0]) {
-            console.log('📊 First choice keys:', Object.keys(data.choices[0]));
+            aidaLogging('📊 First choice keys:', Object.keys(data.choices[0]));
             if (data.choices[0].message) {
-                console.log('📊 Message keys:', Object.keys(data.choices[0].message));
-                console.log('📊 Message content type:', typeof data.choices[0].message.content);
-                console.log('📊 Message content length:', data.choices[0].message.content?.length || 'null/undefined');
+                aidaLogging('📊 Message keys:', Object.keys(data.choices[0].message));
+                aidaLogging('📊 Message content type:', typeof data.choices[0].message.content);
+                aidaLogging('📊 Message content length:', data.choices[0].message.content?.length || 'null/undefined');
             }
         }
     }
     
     if (data.usage) {
-        console.log('📊 Usage:', JSON.stringify(data.usage, null, 2));
+        aidaLogging('📊 Usage:', JSON.stringify(data.usage, null, 2));
     }
     
     // STU Platform may have different response structure
@@ -431,7 +432,7 @@ function mapSTUResponse(data) {
     // Primary: Standard OpenAI format
     if (data.choices?.[0]?.message?.content) {
         content = data.choices[0].message.content;
-        console.log('✅ Content found in standard location');
+        aidaLogging('✅ Content found in standard location');
     }
     
     // Special case: STU Platform sometimes returns empty content even with tokens
@@ -446,7 +447,7 @@ function mapSTUResponse(data) {
         const alternatives = ['content', 'answer', 'generated_text', 'completion', 'text'];
         for (const field of alternatives) {
             if (data[field]) {
-                console.log(`✅ Found content in alternative field: ${field}`);
+                aidaLogging(`✅ Found content in alternative field: ${field}`);
                 content = data[field];
                 break;
             }
@@ -454,7 +455,7 @@ function mapSTUResponse(data) {
         
         // Check nested structures
         if (!content && data.data) {
-            console.log('🔍 Checking nested data structure...');
+            aidaLogging('🔍 Checking nested data structure...');
             content = data.data.choices?.[0]?.message?.content || data.data.content;
         }
         
@@ -472,7 +473,7 @@ function mapSTUResponse(data) {
                     const trimmed = obj.trim();
                     // Accept any meaningful text content (even short ones)
                     if (trimmed.length > 10 && (trimmed.includes('#') || trimmed.includes('**') || trimmed.includes('```') || trimmed.length > 50)) {
-                        console.log(`✅ Found meaningful content at ${path}: ${trimmed.substring(0, 150)}...`);
+                        aidaLogging(`✅ Found meaningful content at ${path}: ${trimmed.substring(0, 150)}...`);
                         return trimmed;
                     }
                 }
@@ -542,7 +543,7 @@ function mapSTUResponse(data) {
                     
                     if (meaningfulFragments.length > 0) {
                         content = meaningfulFragments.join('\n\n');
-                        console.log(`✅ STU Platform: Reconstructed content from ${meaningfulFragments.length} fragments`);
+                        aidaLogging(`✅ STU Platform: Reconstructed content from ${meaningfulFragments.length} fragments`);
                     }
                 }
                 
@@ -551,7 +552,7 @@ function mapSTUResponse(data) {
                     const choice = data.choices[0];
                     if (choice.delta && choice.delta.content) {
                         content = choice.delta.content;
-                        console.log('✅ STU Platform: Found content in streaming delta');
+                        aidaLogging('✅ STU Platform: Found content in streaming delta');
                     }
                 }
                 
@@ -567,7 +568,7 @@ function mapSTUResponse(data) {
     
     // Fallback for other fields if still no content
     if (!content) {
-        console.log('🔍 Fallback content search...');
+        aidaLogging('🔍 Fallback content search...');
         content = data.content || 
                   data.answer || 
                   data.generated_text ||
@@ -582,7 +583,7 @@ function mapSTUResponse(data) {
         totalTokens: data.usage?.total_tokens || 0
     };
     
-    console.log('🎯 Final STU mapping result:', {
+    aidaLogging('🎯 Final STU mapping result:', {
         hasContent: !!result.content,
         contentLength: result.content?.length || 0,
         inputTokens: result.inputTokens,
@@ -616,7 +617,7 @@ function mapGenericResponse(data) {
  * @returns {object} - Mapped response with content and token info
  */
 function mapProviderResponse(rawResponse, provider) {
-    console.log(`🔄 Mapping response for provider: ${provider}`);
+    aidaLogging(`🔄 Mapping response for provider: ${provider}`);
     
     switch (provider) {
         case 'openai':
@@ -646,7 +647,7 @@ function shouldUseApiKey() {
     const useApiKey = config.get('useExternalAI', false);
     const apiKey = config.get('ai.apiKey');
     
-    console.log(`🔍 API Key mode check: useExternalAI=${useApiKey}, hasApiKey=${!!apiKey}`);
+    aidaLogging(`🔍 API Key mode check: useExternalAI=${useApiKey}, hasApiKey=${!!apiKey}`);
     
     return useApiKey && !!apiKey;
 }
@@ -682,9 +683,9 @@ async function executeAIReviewWithApiKey(userPrompt, stream, reviewType, attempt
             throw new Error('AI API key not configured. Please set aida.ai.apiKey in VS Code settings.');
         }
         
-        console.log(`📤 API Key mode - Attempt ${attemptCount + 1}: Sending request to ${apiHost} with model: ${model}`);
-        console.log(`🔑 API Key configured: ${apiKey ? 'Yes' : 'No'}`);
-        console.log(`🌐 Final API Host: ${apiHost}`);
+        aidaLogging(`📤 API Key mode - Attempt ${attemptCount + 1}: Sending request to ${apiHost} with model: ${model}`);
+        aidaLogging(`🔑 API Key configured: ${apiKey ? 'Yes' : 'No'}`);
+        aidaLogging(`🌐 Final API Host: ${apiHost}`);
         
         const reviewIcon = reviewType === 'Changes' ? '🔍' : '📄';
         const modelStatus = attemptCount === 0 ? 'API key mode' : `API key fallback (attempt ${attemptCount + 1})`;
@@ -694,10 +695,10 @@ async function executeAIReviewWithApiKey(userPrompt, stream, reviewType, attempt
         stream.markdown('---\n\n');
         
         // Debug: Check if userPrompt contains template and diff
-        console.log(`🔍 UserPrompt length: ${userPrompt.length} characters`);
-        console.log(`🔍 UserPrompt preview (first 500 chars):`, userPrompt.substring(0, 500));
-        console.log(`🔍 UserPrompt contains 'MANDATORY CHANGE ANALYSIS':`, userPrompt.includes('MANDATORY CHANGE ANALYSIS'));
-        console.log(`🔍 UserPrompt contains diff (+++/-):`, userPrompt.includes('+++') || userPrompt.includes('---'));
+        aidaLogging(`🔍 UserPrompt length: ${userPrompt.length} characters`);
+        aidaLogging(`🔍 UserPrompt preview (first 500 chars):`, userPrompt.substring(0, 500));
+        aidaLogging(`🔍 UserPrompt contains 'MANDATORY CHANGE ANALYSIS':`, userPrompt.includes('MANDATORY CHANGE ANALYSIS'));
+        aidaLogging(`🔍 UserPrompt contains diff (+++/-):`, userPrompt.includes('+++') || userPrompt.includes('---'));
         
         // Use the shared callAI function
         const defaultOptions = {
@@ -716,7 +717,7 @@ async function executeAIReviewWithApiKey(userPrompt, stream, reviewType, attempt
         const provider = detectProvider(result.apiHost, result.model || model);
         
         if (result.isStreaming) {
-            console.log('🔄 Handling streaming response...');
+            aidaLogging('🔄 Handling streaming response...');
             
             // Handle streaming response
             const reader = result.streamResponse.body.getReader();
@@ -780,7 +781,7 @@ async function executeAIReviewWithApiKey(userPrompt, stream, reviewType, attempt
             // Handle non-streaming response
             mappedResponse = mapProviderResponse(result.rawResponse, provider);
             
-        console.log(`🎯 Mapped response for ${provider}:`, mappedResponse);
+        aidaLogging(`🎯 Mapped response for ${provider}:`, mappedResponse);
         
         // Handle complex parsing failure - trigger fallback to Copilot
         if (mappedResponse.error === 'COMPLEX_PARSING_FAILED') {
@@ -789,7 +790,7 @@ async function executeAIReviewWithApiKey(userPrompt, stream, reviewType, attempt
             if (!mappedResponse.content || mappedResponse.content.trim().length === 0) {
                 throw new Error(`${provider} complex parsing failed - content too complex for current parser`);
             } else {
-                console.log(`✅ ${provider} recovered content despite parsing complexity - proceeding normally`);
+                aidaLogging(`✅ ${provider} recovered content despite parsing complexity - proceeding normally`);
                 // Clear the error flag since we have content
                 delete mappedResponse.error;
             }
@@ -889,7 +890,7 @@ function normalizeApiParameters(model, apiHost, options) {
     // Detect provider from API host or model name
     const provider = detectProvider(apiHost, model);
     
-    console.log(`🔄 Normalizing parameters for provider: ${provider}`);
+    aidaLogging(`🔄 Normalizing parameters for provider: ${provider}`);
     
     switch (provider) {
         case 'openai':
@@ -935,7 +936,7 @@ function normalizeApiParameters(model, apiHost, options) {
             
         case 'stu':
             // STU Platform - experimental GPT-5 compatibility mode
-            console.log('🔧 STU Platform detected - applying compatibility fixes...');
+            aidaLogging('🔧 STU Platform detected - applying compatibility fixes...');
             
             // Remove ALL potentially problematic parameters for GPT-5
             if (model.includes('gpt-5') || model.toLowerCase().includes('gpt-5')) {
@@ -955,7 +956,7 @@ function normalizeApiParameters(model, apiHost, options) {
                     }
                 });
                 
-                console.log('🔧 STU GPT-5 params:', Object.keys(normalized));
+                aidaLogging('🔧 STU GPT-5 params:', Object.keys(normalized));
             } else {
                 // For non-GPT-5 models, use standard parameter mapping
                 if (options.max_tokens) {
@@ -1082,7 +1083,7 @@ async function callAI(systemPrompt, userPrompt, options = {}, images = [], abort
     
     // Add images for vision models if provided
     if (images && images.length > 0) {
-        console.log(`�️ Adding ${images.length} images to API call`);
+        aidaLogging(`�️ Adding ${images.length} images to API call`);
         
         // Detect provider for image format
         const provider = detectProvider(apiHost, model);
@@ -1136,9 +1137,9 @@ async function callAI(systemPrompt, userPrompt, options = {}, images = [], abort
     
     messages.push(userMessage);
     
-    console.log(`🔑 Making API call to: ${apiHost}`);
-    console.log(`🤖 Using model: ${model}`);
-    console.log(`📋 Request payload:`, JSON.stringify({
+    aidaLogging(`🔑 Making API call to: ${apiHost}`);
+    aidaLogging(`🤖 Using model: ${model}`);
+    aidaLogging(`📋 Request payload:`, JSON.stringify({
         model: model,
         messages: messages.map(m => ({
             role: m.role,
@@ -1169,7 +1170,7 @@ async function callAI(systemPrompt, userPrompt, options = {}, images = [], abort
     
     // Handle streaming vs non-streaming responses
     if (normalizedOptions.stream) {
-        console.log('🔄 Streaming response detected');
+        aidaLogging('🔄 Streaming response detected');
         return {
             streamResponse: response,
             apiHost: apiHost,
@@ -1178,7 +1179,7 @@ async function callAI(systemPrompt, userPrompt, options = {}, images = [], abort
         };
     } else {
         const data = await response.json();
-        console.log('🔍 Raw API response received:', JSON.stringify(data, null, 2));
+        aidaLogging('🔍 Raw API response received:', JSON.stringify(data, null, 2));
         
         // Just return the raw response - mapping will be done by caller
         return {
@@ -1260,7 +1261,7 @@ async function executeAIReview(userPrompt, model, stream, reviewType = 'Analysis
     
     // Check if user wants to use API key instead of Copilot
     if (shouldUseApiKey()) {
-        console.log('🔑 Using API key mode instead of Copilot');
+        aidaLogging('🔑 Using API key mode instead of Copilot');
         stream.markdown(`🔑 **API Key Mode Enabled** - Using your configured AI service\n\n`);
         
         try {
@@ -1269,7 +1270,7 @@ async function executeAIReview(userPrompt, model, stream, reviewType = 'Analysis
             // If API key fails and we have attempts left, fall back to Copilot if available
             if (attemptCount < maxAttempts - 1 && model) {
                 stream.markdown(`🔄 **API key failed, falling back to Copilot...**\n\n`);
-                console.log('🔄 API key failed, attempting Copilot fallback');
+                aidaLogging('🔄 API key failed, attempting Copilot fallback');
                 return await executeAIReviewWithCopilot(userPrompt, model, stream, reviewType, attemptCount + 1, originalRequestedModel, abortSignal);
             } else {
                 throw apiError;
@@ -1303,10 +1304,10 @@ async function executeAIReviewWithCopilot(userPrompt, model, stream, reviewType 
         const messages = [vscode.LanguageModelChatMessage.User(userPrompt)];
         
         // 📊 TOKEN ANALYSIS - Log detailed token information
-        console.log(`📊 Token Analysis for ${model.family}:`);
-        console.log(`   📤 Input tokens: ${inputTokens.toLocaleString()}`);
-        console.log(`   📏 Prompt length: ${userPrompt.length.toLocaleString()} characters`);
-        console.log(`   📋 Model: ${model.family} (${model.id})`);
+        aidaLogging(`📊 Token Analysis for ${model.family}:`);
+        aidaLogging(`   📤 Input tokens: ${inputTokens.toLocaleString()}`);
+        aidaLogging(`   📏 Prompt length: ${userPrompt.length.toLocaleString()} characters`);
+        aidaLogging(`   📋 Model: ${model.family} (${model.id})`);
         
         // ⚠️ TOKEN WARNING SYSTEM
         const COPILOT_SOFT_LIMIT = 25000;  // Warning threshold
@@ -1319,10 +1320,10 @@ async function executeAIReviewWithCopilot(userPrompt, model, stream, reviewType 
             console.warn(`⚠️ WARNING: Token count ${inputTokens} approaching limit (${Math.round(inputTokens/COPILOT_HARD_LIMIT*100)}% of ${COPILOT_HARD_LIMIT})`);
             console.warn(`   🔥 Risk of "Message exceeds token limit" error`);
         } else {
-            console.log(`✅ Token count OK: ${inputTokens} / ${COPILOT_HARD_LIMIT} (${Math.round(inputTokens/COPILOT_HARD_LIMIT*100)}%)`);
+            aidaLogging(`✅ Token count OK: ${inputTokens} / ${COPILOT_HARD_LIMIT} (${Math.round(inputTokens/COPILOT_HARD_LIMIT*100)}%)`);
         }
         
-        console.log(`📤 Copilot mode - Attempt ${attemptCount + 1}: Sending request to model:`, model.family);
+        aidaLogging(`📤 Copilot mode - Attempt ${attemptCount + 1}: Sending request to model:`, model.family);
         
         const chatResponse = await model.sendRequest(messages, {}, new vscode.CancellationTokenSource().token);
         
@@ -1363,13 +1364,13 @@ async function executeAIReviewWithCopilot(userPrompt, model, stream, reviewType 
             
             // Progress indicator every 50 fragments
             if (fragmentCount % 50 === 0) {
-                console.log(`Streaming progress: ${fragmentCount} fragments processed`);
+                aidaLogging(`Streaming progress: ${fragmentCount} fragments processed`);
             }
         }
         
         // TODO: Clean the output to remove internal blocks (temporarily disabled for streaming)
         // const cleanedOutput = stripInternalBlocks(outputText);
-        // console.log(`🧹 Cleaned output: ${outputText.length} chars -> ${cleanedOutput.length} chars`);
+        // aidaLogging(`🧹 Cleaned output: ${outputText.length} chars -> ${cleanedOutput.length} chars`);
         
         // Show completion with token statistics
         showTokenStatistics(stream, userPrompt, outputText, model, reviewType, attemptCount, 'copilot', null, null);
@@ -1441,47 +1442,47 @@ async function executeAIReviewWithCopilot(userPrompt, model, stream, reviewType 
  * @returns {string} - Processed template content with placeholders replaced
  */
 function processTemplateWithPlaceholders(templateContent, templateDir) {
-    console.log('🔍 DEBUG: processTemplateWithPlaceholders called');
-    console.log('🔍 DEBUG: Call stack:', new Error().stack?.split('\n').slice(1, 4).join('\n'));
-    console.log('🔍 DEBUG: templateDir =', templateDir);
-    console.log('🔍 DEBUG: templateContent.length =', templateContent.length);
-    console.log('🔍 DEBUG: contains {{REVIEW_BASE}}?', templateContent.includes('{{REVIEW_BASE}}'));
+    aidaLogging('🔍 DEBUG: processTemplateWithPlaceholders called');
+    aidaLogging('🔍 DEBUG: Call stack:', new Error().stack?.split('\n').slice(1, 4).join('\n'));
+    aidaLogging('🔍 DEBUG: templateDir =', templateDir);
+    aidaLogging('🔍 DEBUG: templateContent.length =', templateContent.length);
+    aidaLogging('🔍 DEBUG: contains {{REVIEW_BASE}}?', templateContent.includes('{{REVIEW_BASE}}'));
     
     // Check if already processed (to avoid double processing)
     if (templateContent.includes('<!-- AIDA_PROCESSED -->')) {
-        console.log('🔍 DEBUG: Template already processed, skipping...');
+        aidaLogging('🔍 DEBUG: Template already processed, skipping...');
         return templateContent.replace('<!-- AIDA_PROCESSED -->\n', '');
     }
     
     // Check if template contains the placeholder
     if (!templateContent.includes('{{REVIEW_BASE}}')) {
-        console.log('🔍 DEBUG: No {{REVIEW_BASE}} placeholder found, returning original content');
+        aidaLogging('🔍 DEBUG: No {{REVIEW_BASE}} placeholder found, returning original content');
         return templateContent; // No placeholders to replace
     }
 
-    console.log('🔄 Processing template with {{REVIEW_BASE}} placeholder...');
+    aidaLogging('🔄 Processing template with {{REVIEW_BASE}} placeholder...');
 
     try {
         // Try to load the review-base.md file from the same directory
         const basePath = path.join(templateDir, 'review-base.md');
-        console.log('🔍 DEBUG: Looking for base template at:', basePath);
-        console.log('🔍 DEBUG: Base template exists?', fs.existsSync(basePath));
+        aidaLogging('🔍 DEBUG: Looking for base template at:', basePath);
+        aidaLogging('🔍 DEBUG: Base template exists?', fs.existsSync(basePath));
         
         if (fs.existsSync(basePath)) {
             const baseContent = fs.readFileSync(basePath, 'utf8');
-            console.log(`✅ Loaded base template from: ${basePath}`);
-            console.log('🔍 DEBUG: baseContent.length =', baseContent.length);
+            aidaLogging(`✅ Loaded base template from: ${basePath}`);
+            aidaLogging('🔍 DEBUG: baseContent.length =', baseContent.length);
             
             // Extract the Angular critical checks content (exclude header comments)
             const angularChecksContent = extractAngularChecks(baseContent);
-            console.log('🔍 DEBUG: angularChecksContent.length =', angularChecksContent.length);
+            aidaLogging('🔍 DEBUG: angularChecksContent.length =', angularChecksContent.length);
             
             // Replace all occurrences of the placeholder
             const processedContent = templateContent.replace(/\{\{REVIEW_BASE\}\}/g, angularChecksContent);
             
-            console.log('✅ Template placeholder replacement completed');
-            console.log('🔍 DEBUG: processedContent.length =', processedContent.length);
-            console.log('🔍 DEBUG: Still contains {{REVIEW_BASE}}?', processedContent.includes('{{REVIEW_BASE}}'));
+            aidaLogging('✅ Template placeholder replacement completed');
+            aidaLogging('🔍 DEBUG: processedContent.length =', processedContent.length);
+            aidaLogging('🔍 DEBUG: Still contains {{REVIEW_BASE}}?', processedContent.includes('{{REVIEW_BASE}}'));
             
             return processedContent;
         } else {
@@ -1521,7 +1522,7 @@ function extractAngularChecks(baseContent) {
     }
 
     const extractedContent = lines.slice(startIndex, endIndex).join('\n').trim();
-    console.log(`📋 Extracted ${extractedContent.split('\n').length} lines from base template`);
+    aidaLogging(`📋 Extracted ${extractedContent.split('\n').length} lines from base template`);
     
     return extractedContent;
 }
@@ -1548,7 +1549,7 @@ function getReviewTemplate(templateName, context = null) {
             const templateDir = path.dirname(templatePath);
             const processedContent = processTemplateWithPlaceholders(rawContent, templateDir);
             
-            console.log(`✅ Loaded and processed template from: ${templatePath}`);
+            aidaLogging(`✅ Loaded and processed template from: ${templatePath}`);
             
             return {
                 content: processedContent,
@@ -1576,103 +1577,103 @@ function getReviewTemplate(templateName, context = null) {
 async function getUnifiedModel(stream, requestedModel = null, chatContext = null, request = null) {
     let models = [];
     
-    console.log('=== getUnifiedModel DEBUG START ===');
+    aidaLogging('=== getUnifiedModel DEBUG START ===');
     
     // PRIORITY 0: Check if API key mode is enabled - if so, skip ALL Copilot model detection
     if (shouldUseApiKey()) {
-        console.log('🔑 API Key mode enabled - skipping ALL Copilot model detection');
-        console.log('=== getUnifiedModel DEBUG END (API KEY MODE) ===');
+        aidaLogging('🔑 API Key mode enabled - skipping ALL Copilot model detection');
+        aidaLogging('=== getUnifiedModel DEBUG END (API KEY MODE) ===');
         return null; // Let API key mode handle the AI calls
     }
     
-    console.log('🔍 Full request object:', JSON.stringify(request, null, 2));
-    console.log('🔍 Request keys:', request ? Object.keys(request) : 'null');
-    console.log('🔍 Request.model:', request?.model);
-    console.log('🔍 Request.model?.family:', request?.model?.family);
-    console.log('🔍 Request.model?.id:', request?.model?.id);
+    aidaLogging('🔍 Full request object:', JSON.stringify(request, null, 2));
+    aidaLogging('🔍 Request keys:', request ? Object.keys(request) : 'null');
+    aidaLogging('🔍 Request.model:', request?.model);
+    aidaLogging('🔍 Request.model?.family:', request?.model?.family);
+    aidaLogging('🔍 Request.model?.id:', request?.model?.id);
     
     // Check ALL possible model locations in request
     if (request) {
-        console.log('🔍 Checking all request properties for model...');
+        aidaLogging('🔍 Checking all request properties for model...');
         for (const key in request) {
-            console.log(`   - request.${key}:`, typeof request[key] === 'object' ? JSON.stringify(request[key]).substring(0, 200) : request[key]);
+            aidaLogging(`   - request.${key}:`, typeof request[key] === 'object' ? JSON.stringify(request[key]).substring(0, 200) : request[key]);
         }
     }
     
     // PRIORITY 1: Check request.model first (this is where VS Code puts the selected model!)
     if (request && request.model) {
-        console.log('✅ Found model in request.model:', request.model);
-        console.log('✅ Model family:', request.model.family);
-        console.log('✅ Model id:', request.model.id);
-        console.log('🎯 Using user-selected model from VS Code chat');
+        aidaLogging('✅ Found model in request.model:', request.model);
+        aidaLogging('✅ Model family:', request.model.family);
+        aidaLogging('✅ Model id:', request.model.id);
+        aidaLogging('🎯 Using user-selected model from VS Code chat');
         
         // Add warning if user selected GPT but wanted Claude
         if (request.model.family && request.model.family.toLowerCase().includes('gpt')) {
-            console.log('ℹ️ NOTE: User selected GPT model. To use Claude, please select a Claude model in VS Code chat dropdown.');
+            aidaLogging('ℹ️ NOTE: User selected GPT model. To use Claude, please select a Claude model in VS Code chat dropdown.');
         }
         
         return request.model;
     } else {
-        console.log('❌ No model found in request.model');
-        console.log('❌ Request is:', request ? 'valid object' : 'null/undefined');
-        console.log('❌ Request.model is:', request?.model ? 'valid' : 'null/undefined');
+        aidaLogging('❌ No model found in request.model');
+        aidaLogging('❌ Request is:', request ? 'valid object' : 'null/undefined');
+        aidaLogging('❌ Request.model is:', request?.model ? 'valid' : 'null/undefined');
     }
     
     // PRIORITY 2: Use passed requestedModel object
     if (requestedModel && typeof requestedModel === 'object' && requestedModel.family) {
-        console.log('Using requested model object:', requestedModel);
+        aidaLogging('Using requested model object:', requestedModel);
         return requestedModel;
     }
     
     // PRIORITY 3: Try to get the current model from chat context  
     if (chatContext) {
-        console.log('🔍 Checking for model in chatContext...');
+        aidaLogging('🔍 Checking for model in chatContext...');
         
         // VS Code chat context may have model at chatContext.model or chatContext.participant.model
         let currentModel = null;
         
         if (chatContext.model) {
-            console.log('✅ Found model at chatContext.model:', chatContext.model);
+            aidaLogging('✅ Found model at chatContext.model:', chatContext.model);
             currentModel = chatContext.model;
         } else {
-            console.log('❌ No model found at chatContext.model');
+            aidaLogging('❌ No model found at chatContext.model');
         }
         
         if (chatContext.participant && chatContext.participant.model) {
-            console.log('✅ Found model at chatContext.participant.model:', chatContext.participant.model);
+            aidaLogging('✅ Found model at chatContext.participant.model:', chatContext.participant.model);
             currentModel = chatContext.participant.model;
         } else {
-            console.log('❌ No model found at chatContext.participant.model');
+            aidaLogging('❌ No model found at chatContext.participant.model');
         }
         
         // Check other possible locations
         if (chatContext.request && chatContext.request.model) {
-            console.log('✅ Found model at chatContext.request.model:', chatContext.request.model);
+            aidaLogging('✅ Found model at chatContext.request.model:', chatContext.request.model);
             currentModel = chatContext.request.model;
         }
         
         if (currentModel) {
-            console.log('Using selected chatbox model:', currentModel);
+            aidaLogging('Using selected chatbox model:', currentModel);
             return currentModel;
         } else {
-            console.log('⚠️ No model found in any chatContext location');
+            aidaLogging('⚠️ No model found in any chatContext location');
         }
     }
     
     // PRIORITY 4: Fallback to available models detection
     // NOTE: Only use this if NO model found in context (user hasn't selected anything)
-    console.log('🔄 Falling back to available models detection...');
+    aidaLogging('🔄 Falling back to available models detection...');
     
     // Get available models and try to find the currently selected one
     try {
         models = await vscode.lm.selectChatModels();
-        console.log('📋 All available models:', models.map(m => `${m.family || m.id} (${m.vendor || 'Unknown'})`));
+        aidaLogging('📋 All available models:', models.map(m => `${m.family || m.id} (${m.vendor || 'Unknown'})`));
         
         if (models.length === 0) {
             console.warn('⚠️ No Copilot models available - check GitHub Copilot installation and authentication');
             // If API key is configured, suggest using it instead
             if (vscode.workspace.getConfiguration('aida').get('ai.apiKey')) {
-                console.log('💡 Suggestion: Enable API key mode in settings: aida.useExternalAI = true');
+                aidaLogging('💡 Suggestion: Enable API key mode in settings: aida.useExternalAI = true');
             }
             return null;
         }
@@ -1708,7 +1709,7 @@ async function getUnifiedModel(stream, requestedModel = null, chatContext = null
                 });
                 
                 if (selectedModel) {
-                    console.log(`✅ Found preferred model: ${selectedModel.family || selectedModel.id} (preference: ${preference})`);
+                    aidaLogging(`✅ Found preferred model: ${selectedModel.family || selectedModel.id} (preference: ${preference})`);
                     break;
                 }
             }
@@ -1716,7 +1717,7 @@ async function getUnifiedModel(stream, requestedModel = null, chatContext = null
             // If no preferred model found, use first available
             if (!selectedModel && models.length > 0) {
                 selectedModel = models[0];
-                console.log(`⚠️ No preferred model found, using first available: ${selectedModel.family || selectedModel.id}`);
+                aidaLogging(`⚠️ No preferred model found, using first available: ${selectedModel.family || selectedModel.id}`);
             }
 
             if (selectedModel) {
@@ -1735,9 +1736,9 @@ async function getUnifiedModel(stream, requestedModel = null, chatContext = null
             const hasApiKey = config.get('ai.apiKey');
             
             if (hasApiKey) {
-                console.log('💡 You have an API key configured. Enable API key mode: aida.useExternalAI = true');
+                aidaLogging('💡 You have an API key configured. Enable API key mode: aida.useExternalAI = true');
             } else {
-                console.log('💡 Configure an API key in settings: aida.ai.apiKey and enable aida.useExternalAI');
+                aidaLogging('💡 Configure an API key in settings: aida.ai.apiKey and enable aida.useExternalAI');
             }
         }
         
@@ -1745,7 +1746,7 @@ async function getUnifiedModel(stream, requestedModel = null, chatContext = null
     }
     
     const finalModel = models.length > 0 ? models[0] : null;
-    console.log('🏁 Final model selected:', finalModel);
+    aidaLogging('🏁 Final model selected:', finalModel);
     
     // If no model is available, provide helpful guidance
     if (!finalModel) {
@@ -1765,7 +1766,7 @@ async function getUnifiedModel(stream, requestedModel = null, chatContext = null
         }
     }
     
-    console.log('=== getUnifiedModel DEBUG END ===');
+    aidaLogging('=== getUnifiedModel DEBUG END ===');
     
     return finalModel;
 }
@@ -1805,10 +1806,10 @@ function displayDocumentReviewHeader(stream)
         stream.markdown(`📋 **Enhanced Review Mode - Business Documents:**\n\n`);
         
         // Debug logging
-        console.log('🔍 Debug selectedBusinessDocs:', global.selectedBusinessDocs);
+        aidaLogging('🔍 Debug selectedBusinessDocs:', global.selectedBusinessDocs);
         
         global.selectedBusinessDocs.forEach((doc, index) => {
-            console.log(`🔍 Debug doc ${index}:`, doc, 'Type:', typeof doc);
+            aidaLogging(`🔍 Debug doc ${index}:`, doc, 'Type:', typeof doc);
             
             // Handle different types of doc entries
             let docName, docPath;
@@ -1841,7 +1842,7 @@ function displayDocumentReviewHeader(stream)
     
     // Cleanup business documents state after display
     global.selectedBusinessDocs = null;
-    console.log('🧹 displayCommonReviewInfo - cleanup: global.selectedBusinessDocs = null');
+    aidaLogging('🧹 displayCommonReviewInfo - cleanup: global.selectedBusinessDocs = null');
 }
 
 /**
@@ -1868,7 +1869,7 @@ async function getAvailableModels() {
     try {
         // Check if API key mode is enabled - return empty array for Copilot models
         if (shouldUseApiKey()) {
-            console.log('🔑 API Key mode enabled - returning API provider models');
+            aidaLogging('🔑 API Key mode enabled - returning API provider models');
             return []; // Return empty for Copilot models since we're using API key
         }
         
@@ -1950,12 +1951,12 @@ function showTokenStatistics(stream, inputText, outputText, model, reviewType, a
         // Use actual tokens from API response (more accurate)
         inputTokens = actualTokens.inputTokens;
         outputTokens = actualTokens.outputTokens;
-        console.log(`📊 Using actual tokens from API: Input=${inputTokens}, Output=${outputTokens}`);
+        aidaLogging(`📊 Using actual tokens from API: Input=${inputTokens}, Output=${outputTokens}`);
     } else {
         // Fall back to estimation (for Copilot mode)
         inputTokens = estimateTokenCount(inputText);
         outputTokens = estimateTokenCount(outputText);
-        console.log(`📊 Using estimated tokens: Input=${inputTokens}, Output=${outputTokens}`);
+        aidaLogging(`📊 Using estimated tokens: Input=${inputTokens}, Output=${outputTokens}`);
     }
     
     // Get cost estimation with GitHub Copilot quota logic
@@ -1978,8 +1979,8 @@ function showTokenStatistics(stream, inputText, outputText, model, reviewType, a
     stream.markdown(`✅ **${reviewType} Analysis complete** - successfully used ${completionStatus}\n\n`);
     
     // Console logging
-    console.log(`✅ ${reviewType} review completed successfully with model:`, model.family);
-    console.log(`📊 Token usage - Input: ${inputTokens}, Output: ${outputTokens}, Cost: $${finalCost.totalCost.toFixed(4)}`);
+    aidaLogging(`✅ ${reviewType} review completed successfully with model:`, model.family);
+    aidaLogging(`📊 Token usage - Input: ${inputTokens}, Output: ${outputTokens}, Cost: $${finalCost.totalCost.toFixed(4)}`);
 }
 
 /**
@@ -1997,7 +1998,7 @@ async function executeApiAnalysisCall(prompt, stream, analysisType = 'API Patter
             // Check if this is API key mode before showing error
             if (shouldUseApiKey()) {
                 // API key mode - try executeAIReview which will handle API key calls
-                console.log('🔑 API key mode enabled for analysis - proceeding with executeAIReview');
+                aidaLogging('🔑 API key mode enabled for analysis - proceeding with executeAIReview');
                 const success = await executeAIReview(prompt, null, stream, analysisType);
                 return success ? { analysis: 'API key mode analysis completed' } : null;
             } else {
@@ -2006,7 +2007,7 @@ async function executeApiAnalysisCall(prompt, stream, analysisType = 'API Patter
             }
         }
         
-        console.log(`📤 Starting ${analysisType} with model:`, model.family);
+        aidaLogging(`📤 Starting ${analysisType} with model:`, model.family);
         
         // Show analysis start
         stream.markdown(`🤖 **${analysisType}** (using ${model.family}):\n\n`);
@@ -2028,10 +2029,10 @@ async function executeApiAnalysisCall(prompt, stream, analysisType = 'API Patter
         // Try to parse JSON response
         try {
             const parsedResponse = JSON.parse(outputText);
-            console.log(`✅ ${analysisType} JSON parsed successfully`);
+            aidaLogging(`✅ ${analysisType} JSON parsed successfully`);
             return parsedResponse;
         } catch (parseError) {
-            console.log(`⚠️ ${analysisType} response is not JSON, returning raw text`);
+            aidaLogging(`⚠️ ${analysisType} response is not JSON, returning raw text`);
             return { rawResponse: outputText };
         }
         
@@ -2060,7 +2061,7 @@ async function executeApiAnalysisCall(prompt, stream, analysisType = 'API Patter
                 
                 try {
                     const parsedResponse = JSON.parse(outputText);
-                    console.log(`✅ ${analysisType} fallback JSON parsed successfully`);
+                    aidaLogging(`✅ ${analysisType} fallback JSON parsed successfully`);
                     return parsedResponse;
                 } catch (parseError) {
                     return { rawResponse: outputText };
@@ -2095,14 +2096,14 @@ async function autoDetectLanguage(workspacePath, targetFilePath = null) {
 
     try {
         // PHASE 1: Framework Detection (Priority 1 - most specific)
-        console.log('🔍 Phase 1: Framework Detection');
+        aidaLogging('🔍 Phase 1: Framework Detection');
         
         // Angular Detection
         const angularConfig = path.join(workspacePath, 'angular.json');
         const packageJson = path.join(workspacePath, 'package.json');
         
         if (fs.existsSync(angularConfig)) {
-            console.log('✅ Angular detected: angular.json found');
+            aidaLogging('✅ Angular detected: angular.json found');
             return {
                 ...detectionResult,
                 type: 'framework',
@@ -2119,7 +2120,7 @@ async function autoDetectLanguage(workspacePath, targetFilePath = null) {
             
             // React Framework
             if (packageContent.dependencies?.react || packageContent.devDependencies?.react) {
-                console.log('✅ React detected: react dependency found');
+                aidaLogging('✅ React detected: react dependency found');
                 return {
                     ...detectionResult,
                     type: 'framework',
@@ -2133,7 +2134,7 @@ async function autoDetectLanguage(workspacePath, targetFilePath = null) {
             // Vue Framework
             if (packageContent.dependencies?.vue || packageContent.devDependencies?.vue || 
                 packageContent.dependencies?.['@vue/core']) {
-                console.log('✅ Vue detected: vue dependency found');
+                aidaLogging('✅ Vue detected: vue dependency found');
                 return {
                     ...detectionResult,
                     type: 'framework',
@@ -2146,7 +2147,7 @@ async function autoDetectLanguage(workspacePath, targetFilePath = null) {
 
             // Express Framework
             if (packageContent.dependencies?.express || packageContent.devDependencies?.express) {
-                console.log('✅ Express detected: express dependency found');
+                aidaLogging('✅ Express detected: express dependency found');
                 return {
                     ...detectionResult,
                     type: 'framework',
@@ -2161,7 +2162,7 @@ async function autoDetectLanguage(workspacePath, targetFilePath = null) {
             if (packageContent.dependencies?.['@nestjs/core'] || 
                 packageContent.devDependencies?.['@nestjs/core'] ||
                 packageContent.dependencies?.['@nestjs/common']) {
-                console.log('✅ NestJS detected: @nestjs dependency found');
+                aidaLogging('✅ NestJS detected: @nestjs dependency found');
                 return {
                     ...detectionResult,
                     type: 'framework',
@@ -2174,13 +2175,13 @@ async function autoDetectLanguage(workspacePath, targetFilePath = null) {
         }
 
         // PHASE 2: Language Detection (Priority 2 - moderately specific)
-        console.log('🔍 Phase 2: Language Detection');
+        aidaLogging('🔍 Phase 2: Language Detection');
 
         // TypeScript Detection
         const tsConfigPath = path.join(workspacePath, 'tsconfig.json');
         if (fs.existsSync(tsConfigPath) || 
             (targetFilePath && targetFilePath.endsWith('.ts'))) {
-            console.log('✅ TypeScript detected: tsconfig.json or .ts file found');
+            aidaLogging('✅ TypeScript detected: tsconfig.json or .ts file found');
             return {
                 ...detectionResult,
                 type: 'language',
@@ -2194,7 +2195,7 @@ async function autoDetectLanguage(workspacePath, targetFilePath = null) {
         // JavaScript Detection (package.json or .js files)
         if (fs.existsSync(packageJson) || 
             (targetFilePath && targetFilePath.endsWith('.js'))) {
-            console.log('✅ JavaScript detected: package.json or .js file found');
+            aidaLogging('✅ JavaScript detected: package.json or .js file found');
             return {
                 ...detectionResult,
                 type: 'language',
@@ -2211,7 +2212,7 @@ async function autoDetectLanguage(workspacePath, targetFilePath = null) {
             if (packageContent.engines?.node || 
                 packageContent.scripts?.start ||
                 packageContent.main) {
-                console.log('✅ Node.js detected: Node.js specific patterns found');
+                aidaLogging('✅ Node.js detected: Node.js specific patterns found');
                 return {
                     ...detectionResult,
                     type: 'language',
@@ -2228,7 +2229,7 @@ async function autoDetectLanguage(workspacePath, targetFilePath = null) {
         const hasPythonConfig = pythonFiles.some(file => fs.existsSync(path.join(workspacePath, file)));
         if (hasPythonConfig || 
             (targetFilePath && targetFilePath.endsWith('.py'))) {
-            console.log('✅ Python detected: Python configuration files or .py files found');
+            aidaLogging('✅ Python detected: Python configuration files or .py files found');
             return {
                 ...detectionResult,
                 type: 'language',
@@ -2246,7 +2247,7 @@ async function autoDetectLanguage(workspacePath, targetFilePath = null) {
         });
         if (hasCsharpConfig || 
             (targetFilePath && targetFilePath.endsWith('.cs'))) {
-            console.log('✅ C# detected: C# project files or .cs files found');
+            aidaLogging('✅ C# detected: C# project files or .cs files found');
             return {
                 ...detectionResult,
                 type: 'language',
@@ -2261,7 +2262,7 @@ async function autoDetectLanguage(workspacePath, targetFilePath = null) {
         const cargoToml = path.join(workspacePath, 'Cargo.toml');
         if (fs.existsSync(cargoToml) || 
             (targetFilePath && targetFilePath.endsWith('.rs'))) {
-            console.log('✅ Rust detected: Cargo.toml or .rs files found');
+            aidaLogging('✅ Rust detected: Cargo.toml or .rs files found');
             return {
                 ...detectionResult,
                 type: 'language',
@@ -2276,7 +2277,7 @@ async function autoDetectLanguage(workspacePath, targetFilePath = null) {
         const goMod = path.join(workspacePath, 'go.mod');
         if (fs.existsSync(goMod) || 
             (targetFilePath && targetFilePath.endsWith('.go'))) {
-            console.log('✅ Go detected: go.mod or .go files found');
+            aidaLogging('✅ Go detected: go.mod or .go files found');
             return {
                 ...detectionResult,
                 type: 'language',
@@ -2288,8 +2289,8 @@ async function autoDetectLanguage(workspacePath, targetFilePath = null) {
         }
 
         // PHASE 3: Fallback (Priority 3 - general)
-        console.log('🔍 Phase 3: Fallback to general templates');
-        console.log('❌ No specific framework or language detected, using fallback');
+        aidaLogging('🔍 Phase 3: Fallback to general templates');
+        aidaLogging('❌ No specific framework or language detected, using fallback');
         
         return {
             ...detectionResult,
@@ -2328,13 +2329,13 @@ async function getReviewTemplateWithDetection(templateType, context = null, targ
         throw new Error('No workspace folder available for template detection');
     }
 
-    console.log(`🎯 Auto-detecting template for: ${templateType}`);
+    aidaLogging(`🎯 Auto-detecting template for: ${templateType}`);
     
     // Auto-detect framework/language
     const detection = await autoDetectLanguage(workspaceFolder.uri.fsPath, targetFilePath);
     detection.templateType = templateType;
     
-    console.log(`🎯 Detection result:`, detection);
+    aidaLogging(`🎯 Detection result:`, detection);
 
     // Resolve AIDA base path using config
     const { basePath, source } = resolveAidaBasePath(workspaceFolder);
@@ -2354,9 +2355,9 @@ async function getReviewTemplateWithDetection(templateType, context = null, targ
     
     // Try each template path in order
     for (const tryPath of templatePaths) {
-        console.log(`🔍 Checking template: ${tryPath}`);
+        aidaLogging(`🔍 Checking template: ${tryPath}`);
         if (fs.existsSync(tryPath)) {
-            console.log(`✅ Found template at: ${tryPath}`);
+            aidaLogging(`✅ Found template at: ${tryPath}`);
             templatePath = tryPath;
             rawContent = fs.readFileSync(templatePath, 'utf8');
             break;
@@ -2381,7 +2382,7 @@ async function getReviewTemplateWithDetection(templateType, context = null, targ
             sourceDisplay = 'extension/templates';
         }
         
-        console.log(`✅ Loaded and processed template from: ${sourceDisplay}`);
+        aidaLogging(`✅ Loaded and processed template from: ${sourceDisplay}`);
         
         return {
             content: processedContent,
@@ -2508,7 +2509,7 @@ function autoDetectLanguage(filePath) {
                 }
             }
         } catch (error) {
-            console.log('NestJS detection error:', error);
+            aidaLogging('NestJS detection error:', error);
         }
     }
     
@@ -2591,7 +2592,7 @@ function autoDetectLanguage(filePath) {
             }
         }
     } catch (error) {
-        console.log('Framework detection error:', error);
+        aidaLogging('Framework detection error:', error);
     }
     
     // Language fallback detection with proper template paths
@@ -2663,9 +2664,9 @@ function getReviewTemplateWithDetection(templateType, filePath) {
     ];
     
     for (const templatePath of templatePaths) {
-        console.log(`🔍 Checking template: ${templatePath}`);
+        aidaLogging(`🔍 Checking template: ${templatePath}`);
         if (fs.existsSync(templatePath)) {
-            console.log(`✅ Found template at: ${templatePath}`);
+            aidaLogging(`✅ Found template at: ${templatePath}`);
             const content = fs.readFileSync(templatePath, 'utf8');
             
             // Source display - show relative path from workspace if config
@@ -2747,7 +2748,7 @@ function resolveAidaBasePath(workspaceFolder) {
         // Check if templates folder exists
         const templatesPath = path.join(resolvedPath, 'templates');
         if (fs.existsSync(templatesPath)) {
-            console.log(`✅ Using configured AIDA path: ${resolvedPath}`);
+            aidaLogging(`✅ Using configured AIDA path: ${resolvedPath}`);
             return {
                 basePath: resolvedPath,
                 source: 'config'
@@ -2755,13 +2756,13 @@ function resolveAidaBasePath(workspaceFolder) {
         } else {
             // Auto-create AIDA structure if base path doesn't exist
             console.warn(`⚠️ Configured AIDA path not found: ${templatesPath}`);
-            console.log(`🔧 Attempting to create AIDA structure at: ${resolvedPath}`);
+            aidaLogging(`🔧 Attempting to create AIDA structure at: ${resolvedPath}`);
             
             try {
                 // Create AIDA base directory
                 if (!fs.existsSync(resolvedPath)) {
                     fs.mkdirSync(resolvedPath, { recursive: true });
-                    console.log(`✅ Created AIDA directory: ${resolvedPath}`);
+                    aidaLogging(`✅ Created AIDA directory: ${resolvedPath}`);
                 }
                 
                 // Create templates directory structure
@@ -2775,7 +2776,7 @@ function resolveAidaBasePath(workspaceFolder) {
                 for (const dir of templatesDirs) {
                     if (!fs.existsSync(dir)) {
                         fs.mkdirSync(dir, { recursive: true });
-                        console.log(`✅ Created directory: ${dir}`);
+                        aidaLogging(`✅ Created directory: ${dir}`);
                     }
                 }
                 
@@ -2783,10 +2784,10 @@ function resolveAidaBasePath(workspaceFolder) {
                 const extensionTemplatesPath = path.join(global.extensionPath, 'templates');
                 if (fs.existsSync(extensionTemplatesPath)) {
                     copyTemplatesRecursive(extensionTemplatesPath, templatesPath);
-                    console.log(`✅ Copied templates from extension to: ${templatesPath}`);
+                    aidaLogging(`✅ Copied templates from extension to: ${templatesPath}`);
                 }
                 
-                console.log(`✅ AIDA structure created successfully at: ${resolvedPath}`);
+                aidaLogging(`✅ AIDA structure created successfully at: ${resolvedPath}`);
                 return {
                     basePath: resolvedPath,
                     source: 'config'
@@ -2800,7 +2801,7 @@ function resolveAidaBasePath(workspaceFolder) {
     }
     
     // Priority 2: Extension templates (fallback)
-    console.log(`✅ Using extension AIDA templates`);
+    aidaLogging(`✅ Using extension AIDA templates`);
     return {
         basePath: global.extensionPath,
         source: 'extension'
@@ -2827,7 +2828,7 @@ function copyTemplatesRecursive(src, dest) {
             copyTemplatesRecursive(srcPath, destPath);
         } else {
             fs.copyFileSync(srcPath, destPath);
-            console.log(`  📄 Copied: ${entry.name}`);
+            aidaLogging(`  📄 Copied: ${entry.name}`);
         }
     }
 }
@@ -2859,9 +2860,9 @@ async function loadTemplateWithPriority(templateType, detection) {
     
     // Try each template path in order
     for (const templatePath of templatePaths) {
-        console.log(`🔍 Checking template: ${templatePath}`);
+        aidaLogging(`🔍 Checking template: ${templatePath}`);
         if (fs.existsSync(templatePath)) {
-            console.log(`✅ Found template at: ${templatePath}`);
+            aidaLogging(`✅ Found template at: ${templatePath}`);
             const rawContent = fs.readFileSync(templatePath, 'utf8');
             
             // Process template with placeholder replacement
@@ -2890,7 +2891,7 @@ async function loadTemplateWithPriority(templateType, detection) {
         sourceDisplay = 'extension\\templates'; // ✅ Use backslash for display
     }
     
-    console.log(`✅ Loaded template from: ${sourceDisplay}/${templatePathDisplay} (${templateContent.length} chars)`);
+    aidaLogging(`✅ Loaded template from: ${sourceDisplay}/${templatePathDisplay} (${templateContent.length} chars)`);
     
     return {
         content: templateContent,
@@ -2926,7 +2927,7 @@ function displayCommonReviewInfo(stream, reviewType, filePath, options = {}) {
         }
     } catch (error) {
         // Fallback to original path if conversion fails
-        console.log('Failed to convert to relative path:', error);
+        aidaLogging('Failed to convert to relative path:', error);
     }
     
     // Display header
@@ -2976,18 +2977,18 @@ function loadBaseTemplate(mainTemplatePath, baseFileName) {
         // Build base template path in same directory
         const baseTemplatePath = path.join(templateDir, baseFileName);
         
-        console.log(`🔍 Looking for base template: ${baseTemplatePath}`);
+        aidaLogging(`🔍 Looking for base template: ${baseTemplatePath}`);
         
         if (fs.existsSync(baseTemplatePath)) {
             const baseContent = fs.readFileSync(baseTemplatePath, 'utf8');
-            console.log(`✅ Loaded base template: ${baseTemplatePath} (${baseContent.length} chars)`);
+            aidaLogging(`✅ Loaded base template: ${baseTemplatePath} (${baseContent.length} chars)`);
             return baseContent;
         } else {
-            console.log(`⚠️ Base template not found: ${baseTemplatePath}`);
+            aidaLogging(`⚠️ Base template not found: ${baseTemplatePath}`);
             return null;
         }
     } catch (error) {
-        console.log(`❌ Error loading base template: ${error.message}`);
+        aidaLogging(`❌ Error loading base template: ${error.message}`);
         return null;
     }
 }
@@ -2999,16 +3000,16 @@ function loadBaseTemplate(mainTemplatePath, baseFileName) {
  */
 function buildBusinessDocsContent(selectedBusinessDocs) {
     if (!selectedBusinessDocs || selectedBusinessDocs.length === 0) {
-        console.log('📚 No business documents selected');
+        aidaLogging('📚 No business documents selected');
         return '';
     }
 
-    console.log(`📚 Building business docs content from ${selectedBusinessDocs.length} categories...`);
+    aidaLogging(`📚 Building business docs content from ${selectedBusinessDocs.length} categories...`);
     
     let docsContent = `## 📚 Business Rules & Documentation\n\n`;
     
     selectedBusinessDocs.forEach(category => {
-        console.log(`📁 Processing category: ${category.displayName} (${category.path})`);
+        aidaLogging(`📁 Processing category: ${category.displayName} (${category.path})`);
         
         docsContent += `### ${category.displayName}\n\n`;
         
@@ -3021,7 +3022,7 @@ function buildBusinessDocsContent(selectedBusinessDocs) {
                     path: path.join(category.path, file.name)
                 }));
             
-            console.log(`📄 Found ${files.length} markdown files in ${category.name}`);
+            aidaLogging(`📄 Found ${files.length} markdown files in ${category.name}`);
             
             files.forEach(file => {
                 try {
@@ -3033,7 +3034,7 @@ function buildBusinessDocsContent(selectedBusinessDocs) {
                     docsContent += fileContent;
                     docsContent += '\n\n';
                     
-                    console.log(`📄 Loaded ${file.name}: ${fileContent.substring(0, 50)}...`);
+                    aidaLogging(`📄 Loaded ${file.name}: ${fileContent.substring(0, 50)}...`);
                 } catch (fileError) {
                     console.error(`❌ Error reading file ${file.path}:`, fileError.message);
                 }
@@ -3046,8 +3047,8 @@ function buildBusinessDocsContent(selectedBusinessDocs) {
         docsContent += '---\n\n';
     });
     
-    console.log(`✅ Built business docs content (${docsContent.length} chars)`);
-    console.log(`📄 Content preview: ${docsContent.substring(0, 100)}...`);
+    aidaLogging(`✅ Built business docs content (${docsContent.length} chars)`);
+    aidaLogging(`📄 Content preview: ${docsContent.substring(0, 100)}...`);
     
     return docsContent;
 }
@@ -3061,37 +3062,37 @@ function buildBusinessDocsContent(selectedBusinessDocs) {
  * @returns {string} - Processed content with placeholders replaced
  */
 function processTemplateContent(content, mainTemplatePath, placeholder = '{{REVIEW_BASE}}', baseFileName = 'review-base.md') {
-    console.log(`🔧 Processing template placeholders for: ${placeholder}`);
+    aidaLogging(`🔧 Processing template placeholders for: ${placeholder}`);
     
     if (!content.includes(placeholder)) {
-        console.log(`ℹ️ No ${placeholder} placeholder found, using content as-is`);
+        aidaLogging(`ℹ️ No ${placeholder} placeholder found, using content as-is`);
         return content;
     }
     
-    console.log(`✅ Found ${placeholder} placeholder, loading base content...`);
+    aidaLogging(`✅ Found ${placeholder} placeholder, loading base content...`);
     
     let baseContent = loadBaseTemplate(mainTemplatePath, baseFileName);
     
     if (baseContent) {
         // Check if we have selected business documents
         if (global.selectedBusinessDocs && global.selectedBusinessDocs.length > 0) {
-            console.log('📚 Business documents selected, building enhanced base content...');
+            aidaLogging('📚 Business documents selected, building enhanced base content...');
             const businessDocsContent = buildBusinessDocsContent(global.selectedBusinessDocs);
             
             if (businessDocsContent) {
                 // Prepend business docs to base content
                 baseContent = businessDocsContent + '\n\n' + baseContent;
-                console.log(`📄 Enhanced businessDocsContent preview: ${businessDocsContent}`);
+                aidaLogging(`📄 Enhanced businessDocsContent preview: ${businessDocsContent}`);
             }
         } else {
-            console.log('📋 No business documents selected, using original base content');
+            aidaLogging('📋 No business documents selected, using original base content');
         }
         
         const processedContent = content.replace(new RegExp(placeholder.replace(/[{}]/g, '\\$&'), 'g'), baseContent);
-        console.log(`🔧 Replaced ${placeholder} with enhanced base content (final length: ${processedContent.length} chars)`);
+        aidaLogging(`🔧 Replaced ${placeholder} with enhanced base content (final length: ${processedContent.length} chars)`);
         return processedContent;
     } else {
-        console.log(`⚠️ Base template not found, keeping ${placeholder} placeholder as-is`);
+        aidaLogging(`⚠️ Base template not found, keeping ${placeholder} placeholder as-is`);
         return content;
     }
     
@@ -3103,12 +3104,12 @@ function processTemplateContent(content, mainTemplatePath, placeholder = '{{REVI
  * @returns {Array} Array of business document folder objects with enhanced path info
  */
 async function getBusinessDocumentFolders(workspaceFolder) {
-    console.log('🔍 getBusinessDocumentFolders called with workspaceFolder:', workspaceFolder?.uri?.fsPath);
+    aidaLogging('🔍 getBusinessDocumentFolders called with workspaceFolder:', workspaceFolder?.uri?.fsPath);
     
     try {
         // Use the same logic as template base path resolution
         const aidaPathInfo = resolveAidaBasePath(workspaceFolder);
-        console.log(`🔍 Resolved AIDA base path: ${aidaPathInfo.basePath} (source: ${aidaPathInfo.source})`);
+        aidaLogging(`🔍 Resolved AIDA base path: ${aidaPathInfo.basePath} (source: ${aidaPathInfo.source})`);
         
         // Build business docs path using the resolved AIDA base path
         const businessDocsPath = path.join(aidaPathInfo.basePath, 'business-docs');
@@ -3116,11 +3117,11 @@ async function getBusinessDocumentFolders(workspaceFolder) {
         let actualPath = null;
         if (fs.existsSync(businessDocsPath)) {
             actualPath = businessDocsPath;
-            console.log('📁 Found business docs at:', businessDocsPath);
+            aidaLogging('📁 Found business docs at:', businessDocsPath);
         }
         
         if (!actualPath) {
-            console.log(`📁 Business document path not found at: ${businessDocsPath}`);
+            aidaLogging(`📁 Business document path not found at: ${businessDocsPath}`);
             return [];
         }
         
@@ -3173,7 +3174,7 @@ async function getBusinessDocumentFolders(workspaceFolder) {
                 };
             });
         
-        console.log(`📚 Found ${subFolders.length} business document categories:`, subFolders.map(f => f.name));
+        aidaLogging(`📚 Found ${subFolders.length} business document categories:`, subFolders.map(f => f.name));
         return subFolders;
     } catch (error) {
         console.error('❌ Error scanning business documents:', error);
@@ -3216,7 +3217,7 @@ async function showReviewOptions(targetInput, stream, options = {}, reviewCallba
     };
     
     const fileName = path.basename(targetInput);
-    console.log(`🔍 ${config.reviewType} review options for: ${targetInput}`);
+    aidaLogging(`🔍 ${config.reviewType} review options for: ${targetInput}`);
 
     // First check if business documents exist before showing any options
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
@@ -3227,14 +3228,14 @@ async function showReviewOptions(targetInput, stream, options = {}, reviewCallba
             const businessDocs = await getBusinessDocumentFolders(workspaceFolder);
             hasBusinessDocs = businessDocs && businessDocs.length > 0;
         } catch (error) {
-            console.log('❌ Error checking business documents:', error.message);
+            aidaLogging('❌ Error checking business documents:', error.message);
             hasBusinessDocs = false;
         }
     }
     
     // If no business documents, execute Quick Review immediately
     if (!hasBusinessDocs) {
-        console.log('📋 No business documents found - executing Quick Review automatically');
+        aidaLogging('📋 No business documents found - executing Quick Review automatically');
         stream.markdown('🚀 **Starting Quick Review automatically** (no business documents found)\n\n');
         
         // Set Quick Review mode
@@ -3418,22 +3419,22 @@ function getTokenForPR(prUrl) {
         const { provider, organization } = parsePRUrl(prUrl);
         const config = vscode.workspace.getConfiguration('aida');
         
-        console.log(`🔍 Looking for token: provider=${provider}, org=${organization}`);
+        aidaLogging(`🔍 Looking for token: provider=${provider}, org=${organization}`);
         
         // Try new multi-organization configuration first
         const sourceControls = config.get('sourceControls', {});
-        console.log(`🔍 DEBUG sourceControls config:`, JSON.stringify(sourceControls, null, 2));
+        aidaLogging(`🔍 DEBUG sourceControls config:`, JSON.stringify(sourceControls, null, 2));
         const providerTokens = sourceControls[provider];
-        console.log(`🔍 DEBUG providerTokens for ${provider}:`, JSON.stringify(providerTokens, null, 2));
+        aidaLogging(`🔍 DEBUG providerTokens for ${provider}:`, JSON.stringify(providerTokens, null, 2));
         
         if (providerTokens && providerTokens[organization]) {
-            console.log(`✅ Found token for ${provider}/${organization} in sourceControls`);
+            aidaLogging(`✅ Found token for ${provider}/${organization} in sourceControls`);
             return providerTokens[organization];
         } else {
-            console.log(`❌ No token found for ${provider}/${organization} in sourceControls`);
+            aidaLogging(`❌ No token found for ${provider}/${organization} in sourceControls`);
         }
         
-        console.log(`❌ No token found for ${provider}/${organization}`);
+        aidaLogging(`❌ No token found for ${provider}/${organization}`);
         return null;
         
     } catch (error) {
@@ -3549,7 +3550,7 @@ const providerNames = {
     // Quick setup button
     
     console.error(`❌ Missing token: ${providerName}/${organization}`);
-    console.log('🔧 Configuration help displayed to user');
+    aidaLogging('🔧 Configuration help displayed to user');
     
     if (stream) {
         stream.markdown(helpContent);

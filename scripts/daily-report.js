@@ -4,6 +4,7 @@
 const vscode = require('vscode');
 const path = require('path');
 const { createDailyReport } = require('./daily/daily-report');
+const { aidaLogging } = require('./settings');
 
 /**
  * Initialize daily report chat participant
@@ -11,12 +12,12 @@ const { createDailyReport } = require('./daily/daily-report');
  * @returns {Object} - Daily report participant and related functions
  */
 function initializeDailyReport(context) {
-    console.log('🚀 Initializing Daily Report participant...');
+    aidaLogging('🚀 Initializing Daily Report participant...');
 
     // Create daily report chat participant
     const dailyReportParticipant = vscode.chat.createChatParticipant('daily-report', async (request, context, stream, token) => {
         try {
-            console.log('📊 Daily Report participant activated');
+            aidaLogging('📊 Daily Report participant activated');
             
             // Show initial loading message
             stream.markdown('# 📊 Daily Report Generator\n\n');
@@ -85,7 +86,7 @@ function initializeDailyReport(context) {
     // Set up participant description and welcome message
     dailyReportParticipant.iconPath = vscode.Uri.file(path.join(__dirname, '..', 'icons', 'daily-report.svg'));
     
-    console.log('✅ Daily Report participant registered successfully');
+    aidaLogging('✅ Daily Report participant registered successfully');
 
     return {
         dailyReportParticipant
@@ -99,7 +100,7 @@ function initializeDailyReport(context) {
  * @returns {vscode.WebviewPanel} - Created webview panel
  */
 function createDailyReportWebview(reportPath, htmlContent) {
-    console.log('🌐 Creating daily report webview...');
+    aidaLogging('🌐 Creating daily report webview...');
 
     // Create webview panel
     const panel = vscode.window.createWebviewPanel(
@@ -121,7 +122,7 @@ function createDailyReportWebview(reportPath, htmlContent) {
         message => {
             switch (message.command) {
                 case 'refresh':
-                    console.log('🔄 Refreshing daily report...');
+                    aidaLogging('🔄 Refreshing daily report...');
                     // Regenerate report and update webview
                     createDailyReport().then(result => {
                         if (result.success) {
@@ -132,7 +133,7 @@ function createDailyReportWebview(reportPath, htmlContent) {
                     break;
                     
                 case 'export':
-                    console.log('💾 Exporting daily report...');
+                    aidaLogging('💾 Exporting daily report...');
                     vscode.window.showSaveDialog({
                         defaultUri: vscode.Uri.file('Daily_Report.html'),
                         filters: {
@@ -153,11 +154,11 @@ function createDailyReportWebview(reportPath, htmlContent) {
     // Update panel when it becomes visible
     panel.onDidChangeViewState(e => {
         if (e.webviewPanel.visible) {
-            console.log('👁️ Daily report webview became visible');
+            aidaLogging('👁️ Daily report webview became visible');
         }
     });
 
-    console.log('✅ Daily report webview created successfully');
+    aidaLogging('✅ Daily report webview created successfully');
     return panel;
 }
 

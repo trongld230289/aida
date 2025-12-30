@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 
 // Import settings
-const { isProd } = require('./settings');
+const { isProd, aidaLogging } = require('./settings');
 
 // Import VS Code API analyzer - required
 const { VSCodeApiDependencyAnalyzer } = require('./dependency-graph/vscode-api-analyzer');

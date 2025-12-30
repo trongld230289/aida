@@ -1,5 +1,6 @@
 const natural = require('natural');
 const stringSimilarity = require('string-similarity');
+const { aidaLogging } = require('../settings');
 
 class MLClassifier {
   constructor() {
@@ -105,7 +106,7 @@ class MLClassifier {
       this.classifier.train();
       this.trained = true;
       
-      console.log('✅ ML Classifier trained with', contextRequired.length + noContext.length, 'examples');
+      aidaLogging('✅ ML Classifier trained with', contextRequired.length + noContext.length, 'examples');
     } catch (error) {
       console.warn('❌ Failed to train ML classifier:', error.message);
       this.trained = false;

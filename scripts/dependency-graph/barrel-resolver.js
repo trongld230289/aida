@@ -1,6 +1,7 @@
 const vscode = require('vscode');
 const path = require('path');
 const fs = require('fs');
+const { aidaLogging } = require('../settings');
 
 /**
  * BarrelResolver - Module xử lý barrel files (index.ts re-exports)
@@ -91,18 +92,18 @@ class BarrelResolver {
             allReferences.push(...realUsages);
             
             const indent = '  '.repeat(currentLevel);
-            console.log(`         ${indent}📍 Level ${currentLevel}: ${barrels.length} barrels, ${realUsages.length} real usages`);
+            aidaLogging(`         ${indent}📍 Level ${currentLevel}: ${barrels.length} barrels, ${realUsages.length} real usages`);
             
             // Process barrels
             for (const barrelRef of barrels) {
                 const refPath = barrelRef.uri.fsPath;
                 const refKey = `${refPath}:${barrelRef.range.start.line}:${barrelRef.range.start.character}`;
                 
-                console.log(`         ${indent}🔄 Barrel: ${path.basename(refPath)}:${barrelRef.range.start.line}`);
+                aidaLogging(`         ${indent}🔄 Barrel: ${path.basename(refPath)}:${barrelRef.range.start.line}`);
                 
                 // Avoid infinite loops
                 if (visitedBarrels.has(refKey)) {
-                    console.log(`         ${indent}⏭️ Already visited, skipping`);
+                    aidaLogging(`         ${indent}⏭️ Already visited, skipping`);
                     continue;
                 }
                 
@@ -112,7 +113,7 @@ class BarrelResolver {
                 const barrelSymbolInfo = await this.getBarrelExportSymbolImproved(barrelRef, symbolName);
                 
                 if (!barrelSymbolInfo) {
-                    console.log(`         ${indent}⚠️ Could not parse barrel export`);
+                    aidaLogging(`         ${indent}⚠️ Could not parse barrel export`);
                     continue;
                 }
                 
@@ -126,17 +127,17 @@ class BarrelResolver {
                 
                 // Handle wildcard exports
                 if (barrelSymbolInfo.isWildcard) {
-                    console.log(`         ${indent}⭐ Wildcard: finding imports of barrel...`);
+                    aidaLogging(`         ${indent}⭐ Wildcard: finding imports of barrel...`);
                     const wildcardRefs = await this.findImportsOfBarrelFileImproved(
                         barrelRef.uri, 
                         symbolName,
                         currentLevel
                     );
-                    console.log(`         ${indent}✅ Found ${wildcardRefs.length} usages through wildcard`);
+                    aidaLogging(`         ${indent}✅ Found ${wildcardRefs.length} usages through wildcard`);
                     allReferences.push(...wildcardRefs);
                 } else {
                     // Recursively resolve named exports
-                    console.log(`         ${indent}🔍 Following named export: ${barrelSymbolInfo.name}`);
+                    aidaLogging(`         ${indent}🔍 Following named export: ${barrelSymbolInfo.name}`);
                     const result = await this.resolveBarrelReferences(
                         barrelRef.uri,
                         barrelSymbolInfo.position,
@@ -145,7 +146,7 @@ class BarrelResolver {
                         currentLevel + 1
                     );
                     
-                    console.log(`         ${indent}✅ Found ${result.references.length} refs through chain`);
+                    aidaLogging(`         ${indent}✅ Found ${result.references.length} refs through chain`);
                     allReferences.push(...result.references);
                     barrelChain.push(...result.barrelChain);
                 }
@@ -311,12 +312,12 @@ class BarrelResolver {
             const barrelRelativeToWorkspace = path.relative(workspacePath, barrelDir).replace(/\\/g, '/');
             
             const indent = '  '.repeat(currentLevel);
-            console.log(`${indent}         🔍 Looking for imports of barrel: ${barrelRelativeToWorkspace}`);
-            console.log(`${indent}         🎯 Searching for symbol: ${symbolName}`);
+            aidaLogging(`${indent}         🔍 Looking for imports of barrel: ${barrelRelativeToWorkspace}`);
+            aidaLogging(`${indent}         🎯 Searching for symbol: ${symbolName}`);
             
             // Load tsconfig aliases for better matching
             const pathAliases = await this.loadTSConfigAliases(workspacePath);
-            console.log(`${indent}         📋 Loaded ${pathAliases.size} path aliases`);
+            aidaLogging(`${indent}         📋 Loaded ${pathAliases.size} path aliases`);
             
             const files = await vscode.workspace.findFiles(
                 new vscode.RelativePattern(workspaceFolder, '**/*.{ts,tsx,js,jsx}'),
@@ -371,7 +372,7 @@ class BarrelResolver {
                     }
                     
                     if (foundInFile > 0) {
-                        console.log(`${indent}         ✅ ${path.basename(fileUri.fsPath)}: ${foundInFile} usages`);
+                        aidaLogging(`${indent}         ✅ ${path.basename(fileUri.fsPath)}: ${foundInFile} usages`);
                     }
                 } catch (error) {
                     // Skip files that can't be read
@@ -379,7 +380,7 @@ class BarrelResolver {
                 }
             }
             
-            console.log(`${indent}         ✅ Found ${imports.length} usages of ${symbolName} through barrel`);
+            aidaLogging(`${indent}         ✅ Found ${imports.length} usages of ${symbolName} through barrel`);
             return imports;
             
         } catch (error) {
@@ -499,11 +500,11 @@ class BarrelResolver {
                     aliases.set(cleanAlias, cleanTarget);
                 }
                 
-                console.log(`✅ Loaded ${aliases.size} path aliases from tsconfig.json`);
+                aidaLogging(`✅ Loaded ${aliases.size} path aliases from tsconfig.json`);
             }
             
         } catch (error) {
-            console.log(`⚠️ Could not load tsconfig.json:`, error.message);
+            aidaLogging(`⚠️ Could not load tsconfig.json:`, error.message);
         }
         
         // Cache the result

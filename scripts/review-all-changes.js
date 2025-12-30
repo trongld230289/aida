@@ -4,6 +4,7 @@ const path = require('path');
 const { execSync } = require('child_process');
 const { executeAIReview, getUnifiedModel, getChecklistStatusIcon, shouldUseApiKey, displayReviewHeader, loadTemplateWithPriority, displayCommonReviewInfo, showReviewOptions } = require('./review-common');
 const { autoDetectWorkspace, getReviewTemplateWithDetection, displayDetectionInfo } = require('./language-detection');
+const { aidaLogging } = require('./settings');
 
 // Import functions from extension.js
 let handleEnterTwiceLogic;
@@ -13,7 +14,7 @@ try {
     handleEnterTwiceLogic = extensionModule.handleEnterTwiceLogic;
     ensureAidaTemplatesForReview = extensionModule.ensureAidaTemplatesForReview;
 } catch (error) {
-    console.log('⚠️ Could not import functions from extension.js');
+    aidaLogging('⚠️ Could not import functions from extension.js');
 }
 
 /**
@@ -30,11 +31,11 @@ function initializeReviewAllChanges(context) {
                 await ensureAidaTemplatesForReview(context);
             }
             
-            console.log('🎯 review-all-changes participant called');
-            console.log('📥 Request object:', request);
-            console.log('📥 Request.model:', request.model);
-            console.log('📥 Request.model?.family:', request.model?.family);
-            console.log('📥 Request.model?.id:', request.model?.id);
+            aidaLogging('🎯 review-all-changes participant called');
+            aidaLogging('📥 Request object:', request);
+            aidaLogging('📥 Request.model:', request.model);
+            aidaLogging('📥 Request.model?.family:', request.model?.family);
+            aidaLogging('📥 Request.model?.id:', request.model?.id);
             
             const input = request.prompt.trim();
             
@@ -47,7 +48,7 @@ function initializeReviewAllChanges(context) {
             
             // Check for global selectedBusinessDocs (like review-file.js, review-pr.js, review-changes.js)
             if (global.selectedBusinessDocs) {
-                console.log('🎯 Enhanced/Quick All Changes Review detected:', global.selectedBusinessDocs);
+                aidaLogging('🎯 Enhanced/Quick All Changes Review detected:', global.selectedBusinessDocs);
                 
                 // Execute review directly
                 await aiReviewAllChanges(input, stream, null, context, request);
@@ -121,11 +122,11 @@ function initializeReviewAllChanges(context) {
  * @param {object} stream - Chat stream object
  */
 async function processReviewAllChanges(input, stream) {
-    console.log('🔍 processReviewAllChanges: Starting review all changes with options');
+    aidaLogging('🔍 processReviewAllChanges: Starting review all changes with options');
     
     // Check for global selectedBusinessDocs (unified pattern with review-file, review-changes, review-pr)
     if (global.selectedBusinessDocs) {
-        console.log('🎯 Enhanced/Quick All Changes Review detected:', global.selectedBusinessDocs);
+        aidaLogging('🎯 Enhanced/Quick All Changes Review detected:', global.selectedBusinessDocs);
         
         // Execute review directly
         await aiReviewAllChanges(input, stream, null, null, null);
@@ -186,7 +187,7 @@ function findGitRepositoryRoot(startPath) {
         try {
             const gitPath = path.join(currentPath, '.git');
             if (fs.existsSync(gitPath)) {
-                console.log(`📁 Found git repository root: ${currentPath}`);
+                aidaLogging(`📁 Found git repository root: ${currentPath}`);
                 return currentPath;
             }
         } catch (error) {
@@ -195,7 +196,7 @@ function findGitRepositoryRoot(startPath) {
         currentPath = path.dirname(currentPath);
     }
     
-    console.log('❌ Git repository root not found');
+    aidaLogging('❌ Git repository root not found');
     return null;
 }
 
@@ -216,8 +217,8 @@ async function getAllChangedFilesWithDiffs(workspaceFolder) {
             };
         }
         
-        console.log(`🔍 Scanning git changes from repository root: ${gitRoot}`);
-        console.log(`📂 Original workspace folder: ${workspaceFolder.uri.fsPath}`);
+        aidaLogging(`🔍 Scanning git changes from repository root: ${gitRoot}`);
+        aidaLogging(`📂 Original workspace folder: ${workspaceFolder.uri.fsPath}`);
         
         // Get list of all changed files
         let changedFiles = [];
@@ -229,10 +230,10 @@ async function getAllChangedFilesWithDiffs(workspaceFolder) {
                 encoding: 'utf8' 
             }).trim().split('\n').filter(f => f);
             
-            console.log(`📄 Found ${unstagedFiles.length} unstaged files:`, unstagedFiles);
+            aidaLogging(`📄 Found ${unstagedFiles.length} unstaged files:`, unstagedFiles);
             changedFiles = [...changedFiles, ...unstagedFiles.map(f => ({ file: f, type: 'unstaged' }))];
         } catch (error) {
-            console.log('No unstaged changes found');
+            aidaLogging('No unstaged changes found');
         }
         
         // Get staged changes - now using git repository root
@@ -242,10 +243,10 @@ async function getAllChangedFilesWithDiffs(workspaceFolder) {
                 encoding: 'utf8' 
             }).trim().split('\n').filter(f => f);
             
-            console.log(`📄 Found ${stagedFiles.length} staged files:`, stagedFiles);
+            aidaLogging(`📄 Found ${stagedFiles.length} staged files:`, stagedFiles);
             changedFiles = [...changedFiles, ...stagedFiles.map(f => ({ file: f, type: 'staged' }))];
         } catch (error) {
-            console.log('No staged changes found');
+            aidaLogging('No staged changes found');
         }
         
         if (changedFiles.length === 0) {
@@ -285,7 +286,7 @@ async function getAllChangedFilesWithDiffs(workspaceFolder) {
                 });
             });
         
-        console.log(`📁 Found ${uniqueFiles.length} changed files:`, uniqueFiles.map(f => f.file));
+        aidaLogging(`📁 Found ${uniqueFiles.length} changed files:`, uniqueFiles.map(f => f.file));
         
         // Get combined diff for all files
         let allDiffs = [];
@@ -330,7 +331,7 @@ async function getAllChangedFilesWithDiffs(workspaceFolder) {
                     totalLinesRemoved += removed;
                 }
             } catch (fileError) {
-                console.log(`Warning: Could not get diff for ${file}:`, fileError.message);
+                aidaLogging(`Warning: Could not get diff for ${file}:`, fileError.message);
             }
         }
         
@@ -482,7 +483,7 @@ async function reviewAllChanges(diffContent, stream, changeType, selectedModel =
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
         const detection = await autoDetectWorkspace(workspaceFolder.uri.fsPath, null);
         
-        console.log(`🎯 Detection result for all changes: "${detection.detected}" (type: ${detection.type})`);
+        aidaLogging(`🎯 Detection result for all changes: "${detection.detected}" (type: ${detection.type})`);
         
         // Use common template loading function - SAME template as review-changes
         const templateResult = await loadTemplateWithPriority('review-changes.md', detection);
@@ -567,7 +568,7 @@ async function reviewAllChanges(diffContent, stream, changeType, selectedModel =
             // Check if this is API key mode before showing error
             if (shouldUseApiKey()) {
                 // API key mode - executeAIReview will handle it
-                console.log('🔑 API key mode enabled - model is null as expected');
+                aidaLogging('🔑 API key mode enabled - model is null as expected');
             } else {
                 stream.markdown('❌ **AI models not available** - falling back to template display\n\n');
                 throw new Error('No AI models available');
@@ -797,7 +798,7 @@ function analyzeLineForAllChangesChecklist(line, file, lineNumber, analysis) {
         );
     }
 
-    if (content.includes('console.log') || content.includes('console.error')) {
+    if (content.includes('aidaLogging') || content.includes('console.error')) {
         analysis.checklist.bestPractices.issues.push(
             `🔍 **${file}:${lineNumber}** - Console statement found. Remove for production code.`
         );

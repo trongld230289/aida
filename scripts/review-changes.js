@@ -4,13 +4,14 @@ const path = require('path');
 const { execSync } = require('child_process');
 const { executeAIReview, getUnifiedModel, getChecklistStatusIcon, shouldUseApiKey, displayReviewHeader, loadTemplateWithPriority, displayCommonReviewInfo, getBusinessDocumentFolders, showReviewOptions } = require('./review-common');
 const { autoDetectWorkspace, getReviewTemplateWithDetection, displayDetectionInfo } = require('./language-detection');
+const { aidaLogging } = require('./settings');
 
 // Import chatSessions from extension.js for session tracking
 let chatSessions;
 try {
     const extensionModule = require('../extension');
     chatSessions = extensionModule.chatSessions;
-    console.log('✅ Successfully imported chatSessions from extension.js:', typeof chatSessions, chatSessions ? chatSessions.constructor.name : 'null');
+    aidaLogging('✅ Successfully imported chatSessions from extension.js:', typeof chatSessions, chatSessions ? chatSessions.constructor.name : 'null');
 } catch (error) {
     console.warn('⚠️ Could not import chatSessions from extension.js, creating fallback:', error.message);
     chatSessions = new Map();
@@ -24,7 +25,7 @@ try {
     handleEnterTwiceLogic = extensionModule.handleEnterTwiceLogic;
     ensureAidaTemplatesForReview = extensionModule.ensureAidaTemplatesForReview;
 } catch (error) {
-    console.log('⚠️ Could not import additional functions from extension.js');
+    aidaLogging('⚠️ Could not import additional functions from extension.js');
 }
 
 /**
@@ -76,7 +77,7 @@ async function processReviewChanges(targetInput, stream, context = null, request
     try {
         // Simple check - only one key! (after targetInput is defined)
         if (global.selectedBusinessDocs) {
-            console.log('🎯 Enhanced/Quick Changes Review detected:', global.selectedBusinessDocs);
+            aidaLogging('🎯 Enhanced/Quick Changes Review detected:', global.selectedBusinessDocs);
             // Execute review and cleanup
             await aiReviewChanges(targetInput, stream, null, context, request);
             return;
@@ -150,7 +151,7 @@ function getTargetFileInfo(input) {
         );
         
         if (isFilePath) {
-            console.log('🐛 DEBUG - String file path detected:', input);
+            aidaLogging('🐛 DEBUG - String file path detected:', input);
             return {
                 type: 'file',
                 path: input.trim(),
@@ -162,7 +163,7 @@ function getTargetFileInfo(input) {
     // Get current editor file as fallback
     const activeEditor = vscode.window.activeTextEditor;
     if (activeEditor) {
-        console.log('🐛 DEBUG - Using active editor:', activeEditor.document.fileName);
+        aidaLogging('🐛 DEBUG - Using active editor:', activeEditor.document.fileName);
         return {
             type: 'file',
             path: activeEditor.document.fileName,
@@ -170,7 +171,7 @@ function getTargetFileInfo(input) {
         };
     }
     
-    console.log('🐛 DEBUG - No file detected, using workspace');
+    aidaLogging('🐛 DEBUG - No file detected, using workspace');
     return {
         type: 'workspace',
         path: null,
@@ -288,7 +289,7 @@ async function handleNoChangesScenario(stream, selectedModel, context, message, 
         targetFilePath = requestedFilePath;
         fileName = path.basename(requestedFilePath);
         
-        console.log('🐛 DEBUG - Using requested file:', fileName);
+        aidaLogging('🐛 DEBUG - Using requested file:', fileName);
         
         stream.markdown(`💡 **Would you like to review the requested file?**\n`);
         stream.markdown(`📂 **Requested file:** \`${fileName}\`\n\n`);
@@ -301,14 +302,14 @@ async function handleNoChangesScenario(stream, selectedModel, context, message, 
         });
     } else {
         // Fallback to active file if no requested file
-        console.log('🐛 DEBUG - No requestedFilePath, falling back to active editor');
+        aidaLogging('🐛 DEBUG - No requestedFilePath, falling back to active editor');
         
         const activeEditor = vscode.window.activeTextEditor;
         if (activeEditor) {
             targetFilePath = activeEditor.document.fileName;
             fileName = path.basename(activeEditor.document.fileName);
             
-            console.log('🐛 DEBUG - Using active file:', fileName);
+            aidaLogging('🐛 DEBUG - Using active file:', fileName);
             
             stream.markdown(`💡 **Would you like to review the active file?**\n`);
             stream.markdown(`📂 **Current file:** \`${fileName}\`\n\n`);
@@ -401,7 +402,7 @@ async function reviewChanges(diffContent, stream, changeType, selectedModel = nu
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
         const detection = await autoDetectWorkspace(workspaceFolder.uri.fsPath, filePath);
         
-        console.log(`🎯 Detection result: "${detection.detected}" (type: ${detection.type})`);
+        aidaLogging(`🎯 Detection result: "${detection.detected}" (type: ${detection.type})`);
         
         // Use common template loading function
         const templateResult = await loadTemplateWithPriority('review-changes.md', detection);
@@ -425,7 +426,7 @@ async function reviewChanges(diffContent, stream, changeType, selectedModel = nu
         
         // Verify template doesn't have old git diff placeholder
         if (templateContent.includes('# Paste git diff here')) {
-            console.log('⚠️ Template contains old git diff placeholder - will be handled in code');
+            aidaLogging('⚠️ Template contains old git diff placeholder - will be handled in code');
         }
         
     } catch (error) {
@@ -457,7 +458,7 @@ async function reviewChanges(diffContent, stream, changeType, selectedModel = nu
             // Check if this is API key mode before showing error
             if (shouldUseApiKey()) {
                 // API key mode - executeAIReview will handle it
-                console.log('🔑 API key mode enabled - model is null as expected');
+                aidaLogging('🔑 API key mode enabled - model is null as expected');
             } else {
                 stream.markdown('❌ **AI models not available** - falling back to template display\n\n');
                 throw new Error('No AI models available');
@@ -672,7 +673,7 @@ function analyzeLineForChecklist(line, file, lineNumber, analysis) {
         );
     }
 
-    if (content.includes('console.log') || content.includes('console.error')) {
+    if (content.includes('aidaLogging') || content.includes('console.error')) {
         analysis.checklist.bestPractices.issues.push(
             `🔍 **${file}:${lineNumber}** - Console statement found. Remove for production code.`
         );

@@ -1,5 +1,6 @@
 const fs = require('fs').promises;
 const path = require('path');
+const { aidaLogging } = require('../settings');
 
 /**
  * Template Loader for AIDA Chatbot
@@ -36,7 +37,7 @@ class TemplateLoader {
                     '<script src="./sidebar-script.js"></script>',
                     `<script type="text/javascript">\n${scriptContent}\n</script>`
                 );
-                console.log('📜 Inlined script content into template');
+                aidaLogging('📜 Inlined script content into template');
             } catch (scriptError) {
                 console.warn('⚠️ Could not load script file:', scriptError.message);
             }
@@ -118,7 +119,7 @@ class TemplateLoader {
     async preloadTemplates() {
         try {
             await this.getSidebarTemplate();
-            console.log('✅ Templates preloaded successfully');
+            aidaLogging('✅ Templates preloaded successfully');
         } catch (error) {
             console.warn('⚠️ Failed to preload templates:', error.message);
         }

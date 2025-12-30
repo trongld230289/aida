@@ -6,6 +6,7 @@
 
 // Import the new context detector
 const ContextDetector = require('./context-detector');
+const { aidaLogging } = require('../settings');
 
 class ChatbotContextEngine {
     constructor() {
@@ -31,7 +32,7 @@ class ChatbotContextEngine {
             // Use the new context detector
             const decision = this.contextDetector.shouldIncludeContent(userMessage, editorContext);
             
-            console.log('🔍 Context Detection Result:', {
+            aidaLogging('🔍 Context Detection Result:', {
                 message: userMessage.substring(0, 50) + (userMessage.length > 50 ? '...' : ''),
                 includeContent: decision.includeContent,
                 confidence: decision.confidence,
@@ -1155,7 +1156,7 @@ class ChatbotContextEngine {
         if (!images || images.length === 0) return '';
         
         try {
-            console.log(`🔍 Processing ${images.length} image(s) with Tesseract OCR...`);
+            aidaLogging(`🔍 Processing ${images.length} image(s) with Tesseract OCR...`);
             const extractedTexts = [];
             
             for (const image of images) {
@@ -1164,7 +1165,7 @@ class ChatbotContextEngine {
                     
                     if (text && text.trim()) {
                         extractedTexts.push(text.trim());
-                        console.log('✅ Tesseract OCR extracted:', text.substring(0, 100) + '...');
+                        aidaLogging('✅ Tesseract OCR extracted:', text.substring(0, 100) + '...');
                     } else {
                         console.warn('⚠️ No text extracted from image');
                     }
@@ -1176,7 +1177,7 @@ class ChatbotContextEngine {
             }
             
             const combinedText = extractedTexts.join(' ').trim();
-            console.log(`📝 Total OCR extracted: ${combinedText.length} characters from ${images.length} images`);
+            aidaLogging(`📝 Total OCR extracted: ${combinedText.length} characters from ${images.length} images`);
             
             return combinedText;
             
@@ -1202,7 +1203,7 @@ class ChatbotContextEngine {
                     throw new Error('Tesseract.js not installed. Please run: npm install tesseract.js');
                 }
                 
-                console.log('🔄 Starting Tesseract OCR processing...');
+                aidaLogging('🔄 Starting Tesseract OCR processing...');
                 
                 const { data: { text } } = await Tesseract.recognize(
                     imageData,
@@ -1210,7 +1211,7 @@ class ChatbotContextEngine {
                     {
                         logger: m => {
                             if (m.status === 'recognizing text') {
-                                console.log(`OCR Progress: ${(m.progress * 100).toFixed(1)}%`);
+                                aidaLogging(`OCR Progress: ${(m.progress * 100).toFixed(1)}%`);
                             }
                         }
                     }
