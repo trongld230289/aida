@@ -12,6 +12,47 @@ class DependencyGraphService {
         this.vscodeAnalyzer = new VSCodeApiDependencyAnalyzer();
         this.fullGraph = null;
         this.cacheFilePath = path.join(workspaceRoot, '.vscode', 'dependency-cache.json');
+        
+        // 🔥 NEW: Listen for incremental updates
+        this.vscodeAnalyzer.onGraphUpdate = () => {
+            this.handleGraphUpdate();
+        };
+    }
+
+    /**
+     * Handle graph updates with debounce
+     */
+    handleGraphUpdate() {
+        if (this.saveTimeout) clearTimeout(this.saveTimeout);
+        this.saveTimeout = setTimeout(() => {
+            aidaLogging('💾 Graph updated, saving cache...');
+            this.fullGraph = this.vscodeAnalyzer.buildGraphResult();
+            this.saveCache();
+        }, 2000); // Wait 2 seconds after last change
+    }
+
+    /**
+     * Save graph to disk
+     */
+    saveCache() {
+        if (!this.fullGraph) return;
+        
+        try {
+            const cacheDir = path.dirname(this.cacheFilePath);
+            if (!fs.existsSync(cacheDir)) {
+                fs.mkdirSync(cacheDir, { recursive: true });
+            }
+
+            fs.writeFileSync(this.cacheFilePath, JSON.stringify({
+                version: CACHE_VERSION,
+                timestamp: Date.now(),
+                graph: this.fullGraph
+            }, null, 2));
+
+            aidaLogging(`✅ Saved graph cache: ${this.fullGraph.nodes.length} nodes`);
+        } catch (error) {
+            aidaLogging(`⚠️ Cache write error: ${error.message}`);
+        }
     }
 
     /**
@@ -29,6 +70,10 @@ class DependencyGraphService {
                 const cacheData = JSON.parse(fs.readFileSync(this.cacheFilePath, 'utf8'));
                 if (cacheData.version === CACHE_VERSION && cacheData.graph) {
                     this.fullGraph = cacheData.graph;
+                    
+                    // 🔥 NEW: Restore analyzer state from cache so Watcher works
+                    this.vscodeAnalyzer.loadFromCache(this.fullGraph);
+                    
                     aidaLogging(`✅ Loaded graph from cache: ${this.fullGraph.nodes.length} nodes, ${this.fullGraph.edges.length} edges`);
                     return this.fullGraph;
                 }
@@ -42,22 +87,7 @@ class DependencyGraphService {
         this.fullGraph = await this.buildFullGraph();
 
         // Save cache
-        try {
-            const cacheDir = path.dirname(this.cacheFilePath);
-            if (!fs.existsSync(cacheDir)) {
-                fs.mkdirSync(cacheDir, { recursive: true });
-            }
-
-            fs.writeFileSync(this.cacheFilePath, JSON.stringify({
-                version: CACHE_VERSION,
-                timestamp: Date.now(),
-                graph: this.fullGraph
-            }, null, 2));
-
-            aidaLogging(`✅ Saved graph cache: ${this.fullGraph.nodes.length} nodes`);
-        } catch (error) {
-            aidaLogging(`⚠️ Cache write error: ${error.message}`);
-        }
+        this.saveCache();
 
         return this.fullGraph;
     }

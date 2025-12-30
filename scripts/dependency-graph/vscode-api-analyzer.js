@@ -1,8 +1,12 @@
 const vscode = require('vscode');
 const path = require('path');
+const fs = require('fs');
 const { BarrelResolver } = require('./barrel-resolver');
 const { aidaLogging } = require('../settings');
 const { languageConfig } = require('./language-rules');
+const { DependencyGraphModel } = require('./graph-model');
+const { GraphWatcher } = require('./graph-watcher');
+const { DependencyUtils } = require('./dependency-utils');
 
 /**
  * Enhanced Dependency Analyzer using VS Code Language Server APIs
@@ -11,8 +15,14 @@ const { languageConfig } = require('./language-rules');
 class VSCodeApiDependencyAnalyzer {
     constructor(workspaceRoot) {
         this.workspaceRoot = workspaceRoot;
-        // Graph: SourcePath -> Set<TargetPaths>
-        this.graph = new Map();
+        
+        // 🔥 NEW: Use Graph Model instead of raw Map
+        this.model = new DependencyGraphModel();
+        
+        // 🔥 NEW: Watcher for incremental updates
+        this.watcher = new GraphWatcher(this);
+        this.isReady = false;
+
         // 🔥 NEW: Barrel resolver for advanced barrel file handling
         this.barrelResolver = new BarrelResolver();
         
@@ -36,6 +46,32 @@ class VSCodeApiDependencyAnalyzer {
     }
 
     /**
+     * Load graph from cache data
+     * @param {Object} graphData - The serialized graph data (nodes, edges)
+     */
+    loadFromCache(graphData) {
+        try {
+            this.model.clear();
+            
+            // Reconstruct adjacency list from edges
+            if (graphData.edges) {
+                for (const edge of graphData.edges) {
+                    this.model.addDependency(edge.source, edge.target);
+                }
+            }
+            
+            // Mark as ready and start watching
+            this.isReady = true;
+            this.watcher.startWatching();
+            
+            aidaLogging('✅ Graph model restored from cache');
+        } catch (error) {
+            console.error('❌ Failed to load graph from cache:', error);
+            this.isReady = false;
+        }
+    }
+
+    /**
      * Main entry point - scan workspace for dependencies
      * @returns {Object} - Complete dependency graph
      */
@@ -44,7 +80,8 @@ class VSCodeApiDependencyAnalyzer {
             aidaLogging('🔍 Starting Symbol Crawling analysis...');
             
             // Reset graph
-            this.graph.clear();
+            this.model.clear();
+            this.isReady = false;
             
             // Step 1: Find all source files
             const sourceFiles = await this.findSourceFiles();
@@ -60,6 +97,10 @@ class VSCodeApiDependencyAnalyzer {
                 // Throttle to prevent freezing Extension Host
                 await this.sleep(5);
             }
+            
+            // Mark graph as ready and start watching
+            this.isReady = true;
+            this.watcher.startWatching();
             
             // Step 3: Convert to nodes/edges format
             return this.buildGraphResult();
@@ -141,14 +182,15 @@ class VSCodeApiDependencyAnalyzer {
             
             // Initialize source file in graph
             const sourceFile = this.getRelativePath(fileUri.fsPath);
-            if (!this.graph.has(sourceFile)) {
-                this.graph.set(sourceFile, new Set());
+            // Ensure node exists in model
+            if (!this.model.adjacencyList.has(sourceFile)) {
+                this.model.adjacencyList.set(sourceFile, new Set());
             }
             
             // Auto-detect language from extension
             const language = this.extensionMap.get(extension);
             if (!language) {
-                console.warn(`⚠️ Unsupported file extension: ${extension}`);
+                // console.warn(`⚠️ Unsupported file extension: ${extension}`);
                 return;
             }
             
@@ -156,8 +198,31 @@ class VSCodeApiDependencyAnalyzer {
             const config = this.languageConfig[language];
             await this.processWithConfig(document, text, sourceFile, config, language);
             
+            // 🔥 NEW: Asset Fallback (Sibling Convention)
+            // If it's a TS/JS file, check for sibling HTML/CSS
+            if (language === 'typescript' || language === 'javascript') {
+                await this.processSiblingAssets(fileUri, sourceFile);
+            }
+            
         } catch (error) {
             console.warn(`⚠️ Error processing file ${fileUri.fsPath}:`, error.message);
+        }
+    }
+
+    /**
+     * Check for sibling asset files (HTML/CSS) and add them as dependencies
+     * @param {vscode.Uri} fileUri 
+     * @param {string} sourceFile 
+     */
+    async processSiblingAssets(fileUri, sourceFile) {
+        const extensions = ['.html', '.css', '.scss', '.less', '.sass'];
+        
+        // Use shared utility
+        const siblings = DependencyUtils.findSiblingFiles(fileUri.fsPath, extensions);
+        
+        for (const siblingPath of siblings) {
+            const targetFile = this.getRelativePath(siblingPath);
+            this.model.addDependency(sourceFile, targetFile);
         }
     }
 
@@ -190,7 +255,7 @@ class VSCodeApiDependencyAnalyzer {
                         // Add to graph if it's in workspace
                         if (targetPath.startsWith(this.workspaceRoot)) {
                             const targetFile = this.getRelativePath(targetPath);
-                            this.graph.get(sourceFile).add(targetFile);
+                            this.model.addDependency(sourceFile, targetFile);
                         }
                     }
                 }
@@ -213,7 +278,7 @@ class VSCodeApiDependencyAnalyzer {
                         const targetFile = await this.resolveDefinition(document, position);
                         
                         if (targetFile) {
-                            this.graph.get(sourceFile).add(targetFile);
+                            this.model.addDependency(sourceFile, targetFile);
                             aidaLogging(`🔗 ${sourceFile} -> ${targetFile} (symbol-provider)`);
                         }
                     }
@@ -272,6 +337,19 @@ class VSCodeApiDependencyAnalyzer {
      */
     async resolveAndAddDependency(document, text, match, sourceFile, type) {
         try {
+            // 🔥 OPTIMIZATION: Try manual resolution for relative imports first
+            // This avoids expensive LSP calls for simple cases like import ... from './utils'
+            if (type === 'import' && match[1] && match[1].startsWith('.')) {
+                const dir = path.dirname(document.uri.fsPath);
+                const candidate = DependencyUtils.resolveRelativeImport(dir, match[1]);
+                
+                if (candidate) {
+                     const targetFile = this.getRelativePath(candidate);
+                     this.model.addDependency(sourceFile, targetFile);
+                     return; // Skip LSP
+                }
+            }
+
             // Calculate position for LSP resolution
             // FIX: Point to the captured group (the path/symbol) instead of the start of the match
             // This ensures VS Code API receives the correct context
@@ -290,7 +368,7 @@ class VSCodeApiDependencyAnalyzer {
             // Use VS Code LSP to resolve actual file
             const targetFile = await this.resolveDefinition(document, position);
             if (targetFile) {
-                this.graph.get(sourceFile).add(targetFile);
+                this.model.addDependency(sourceFile, targetFile);
                 aidaLogging(`🔗 ${sourceFile} -> ${targetFile} (${type})`);
             }
         } catch (error) {
@@ -378,24 +456,14 @@ class VSCodeApiDependencyAnalyzer {
      * Check if a path is external dependency (should be filtered)
      */
     isExternalDependency(filePath) {
-        const pathLower = filePath.toLowerCase();
-        return (
-            pathLower.includes('node_modules') ||
-            pathLower.includes('omnisharp-metadata') ||
-            pathLower.includes('.nuget') ||
-            pathLower.includes('microsoft.netcore') ||
-            pathLower.includes('system.') ||
-            pathLower.includes('bin/debug') ||
-            pathLower.includes('bin/release') ||
-            pathLower.includes('obj/')
-        );
+        return DependencyUtils.isExternalDependency(filePath);
     }
 
     /**
      * Get relative path from workspace root
      */
     getRelativePath(absolutePath) {
-        return path.relative(this.workspaceRoot, absolutePath).replace(/\\/g, '/');
+        return DependencyUtils.getRelativePath(this.workspaceRoot, absolutePath);
     }
 
     /**
@@ -403,6 +471,48 @@ class VSCodeApiDependencyAnalyzer {
      */
     async sleep(ms) {
         return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    /**
+     * Check if graph is ready for incremental updates
+     */
+    isGraphReady() {
+        return this.isReady;
+    }
+
+    /**
+     * Update a single file in the graph (Incremental Update)
+     * @param {vscode.Uri} fileUri 
+     */
+    async updateFile(fileUri) {
+        const sourceFile = this.getRelativePath(fileUri.fsPath);
+        
+        // 1. Clear existing dependencies for this file
+        this.model.clearDependencies(sourceFile);
+        
+        // 2. Re-analyze the file
+        aidaLogging(`🔄 Updating graph for: ${sourceFile}`);
+        await this.processFile(fileUri);
+        
+        // 3. Notify listeners
+        if (this.onGraphUpdate) {
+            this.onGraphUpdate();
+        }
+    }
+
+    /**
+     * Remove a file from the graph
+     * @param {vscode.Uri} fileUri 
+     */
+    removeFile(fileUri) {
+        const sourceFile = this.getRelativePath(fileUri.fsPath);
+        this.model.removeNode(sourceFile);
+        aidaLogging(`🗑️ Removed from graph: ${sourceFile}`);
+        
+        // Notify listeners
+        if (this.onGraphUpdate) {
+            this.onGraphUpdate();
+        }
     }
 
     /**
@@ -414,7 +524,7 @@ class VSCodeApiDependencyAnalyzer {
         
         // Create nodes for all files that have dependencies or are dependencies
         const allFileIds = new Set();
-        for (const [sourceFile, dependencies] of this.graph) {
+        for (const [sourceFile, dependencies] of this.model.adjacencyList) {
             allFileIds.add(sourceFile);
             dependencies.forEach(dep => allFileIds.add(dep));
         }
@@ -431,7 +541,7 @@ class VSCodeApiDependencyAnalyzer {
                 relativePath: fileId,
                 language: this.getLanguageFromExtension(fileName),
                 type: this.inferFileType(fileName),
-                dependencies: Array.from(this.graph.get(fileId) || []),
+                dependencies: Array.from(this.model.getDependencies(fileId)),
                 dependents: []
             };
             
@@ -442,7 +552,7 @@ class VSCodeApiDependencyAnalyzer {
         let edgeId = 0;
         const nodeIdSet = new Set(nodes.map(n => n.id));
         
-        for (const [sourceFile, dependencies] of this.graph) {
+        for (const [sourceFile, dependencies] of this.model.adjacencyList) {
             for (const targetFile of dependencies) {
                 // Only create edge if both source and target nodes exist
                 if (nodeIdSet.has(sourceFile) && nodeIdSet.has(targetFile)) {
@@ -483,44 +593,14 @@ class VSCodeApiDependencyAnalyzer {
      * Get programming language from file extension
      */
     getLanguageFromExtension(fileName) {
-        const ext = path.extname(fileName).toLowerCase();
-        const languageMap = {
-            '.ts': 'typescript',
-            '.tsx': 'typescript',
-            '.js': 'javascript',
-            '.jsx': 'javascript',
-            '.vue': 'vue',
-            '.cs': 'csharp',
-            '.java': 'java',
-            '.py': 'python'
-        };
-        
-        return languageMap[ext] || 'unknown';
+        return DependencyUtils.getLanguageFromExtension(fileName);
     }
 
     /**
      * Infer file type (component, service, etc.)
      */
     inferFileType(fileName) {
-        const name = fileName.toLowerCase();
-        
-        if (name.includes('.service.')) return 'service';
-        if (name.includes('.component.')) return 'component';
-        if (name.includes('.directive.')) return 'directive';
-        if (name.includes('.pipe.')) return 'pipe';
-        if (name.includes('.guard.')) return 'guard';
-        if (name.includes('.resolver.')) return 'resolver';
-        if (name.includes('.interceptor.')) return 'interceptor';
-        if (name.includes('.module.')) return 'module';
-        if (name.includes('controller')) return 'controller';
-        if (name.includes('model')) return 'model';
-        if (name.includes('interface')) return 'interface';
-        if (name.includes('enum')) return 'enum';
-        if (name.includes('constant')) return 'constant';
-        if (name.includes('config')) return 'config';
-        if (name.includes('util')) return 'utility';
-        
-        return 'file';
+        return DependencyUtils.inferFileType(fileName);
     }
 
     /**

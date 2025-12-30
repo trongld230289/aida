@@ -2,6 +2,7 @@ const vscode = require('vscode');
 const path = require('path');
 const { DependencyGraphService } = require('./dependency-graph-service');
 const { VSCodeApiDependencyAnalyzer } = require('./dependency-graph/vscode-api-analyzer');
+const { DependencyUtils } = require('./dependency-graph/dependency-utils');
 const { aidaLogging } = require('./settings');
 
 class FileDependencyAnalyzer {
@@ -33,7 +34,7 @@ class FileDependencyAnalyzer {
         const nodes = new Map();
         const edges = [];
         
-        const relativePath = path.relative(this.workspaceRoot, filePath).replace(/\\/g, '/');
+        const relativePath = DependencyUtils.getRelativePath(this.workspaceRoot, filePath);
         const fileName = path.basename(filePath);
         
         // 1. Create Target Node
@@ -44,7 +45,7 @@ class FileDependencyAnalyzer {
             fileName: fileName,
             displayName: fileName,
             type: 'file',
-            entityType: this.inferEntityType(fileName),
+            entityType: DependencyUtils.inferFileType(fileName),
             nodeType: 'target',
             fsPath: filePath
         };
@@ -71,7 +72,7 @@ class FileDependencyAnalyzer {
                         fileName: depFileName,
                         displayName: depFileName,
                         type: 'file',
-                        entityType: this.inferEntityType(depFileName),
+                        entityType: DependencyUtils.inferFileType(depFileName),
                         nodeType: 'dependency'
                     });
                 }
@@ -102,7 +103,7 @@ class FileDependencyAnalyzer {
                     fileName: depFileName,
                     displayName: depFileName,
                     type: 'file',
-                    entityType: this.inferEntityType(depFileName),
+                    entityType: DependencyUtils.inferFileType(depFileName),
                     nodeType: 'dependent'
                 });
             } else {
@@ -133,22 +134,6 @@ class FileDependencyAnalyzer {
                 dependents: dependents.size
             }
         };
-    }
-
-    /**
-     * Infer entity type from file name
-     * @param {string} fileName 
-     */
-    inferEntityType(fileName) {
-        const name = fileName.toLowerCase();
-        if (name.includes('.service.')) return 'service';
-        if (name.includes('.component.')) return 'component';
-        if (name.includes('.module.')) return 'module';
-        if (name.includes('.model.')) return 'model';
-        if (name.includes('.guard.')) return 'guard';
-        if (name.includes('.directive.')) return 'directive';
-        if (name.includes('.pipe.')) return 'pipe';
-        return 'file';
     }
 
     /**
@@ -204,10 +189,43 @@ class FileDependencyAnalyzer {
                     if (refPath === fileUri.fsPath) continue;
                     
                     // Ignore external/node_modules
-                    if (refPath.includes('node_modules')) continue;
+                    if (DependencyUtils.isExternalDependency(refPath)) continue;
                     
-                    const relativePath = path.relative(this.workspaceRoot, refPath).replace(/\\/g, '/');
+                    const relativePath = DependencyUtils.getRelativePath(this.workspaceRoot, refPath);
                     dependents.add(relativePath);
+                }
+            }
+            
+            // 🔥 NEW: Asset Fallback Strategy
+            // If no dependents found via LSP, and it's an asset file (html, css, scss...), try Text Search
+            if (dependents.size === 0) {
+                const ext = path.extname(fileUri.fsPath).toLowerCase();
+                const assetExtensions = ['.html', '.css', '.scss', '.less', '.sass', '.json', '.xml', '.svg', '.png', '.jpg'];
+                
+                if (assetExtensions.includes(ext)) {
+                    aidaLogging(`   ⚠️ No LSP dependents found for asset file. Trying Sibling Convention...`);
+                    const fileName = path.basename(fileUri.fsPath);
+                    
+                    // Strategy: Check "Sibling" TS file (Convention over Configuration)
+                    // e.g. 'abc.component.html' -> check 'abc.component.ts'
+                    if (fileName.includes('.component.') || fileName.includes('.service.')) {
+                        // Use shared utility
+                        const siblings = DependencyUtils.findSiblingFiles(fileUri.fsPath, ['.ts']);
+                        
+                        for (const tsPath of siblings) {
+                            try {
+                                const doc = await vscode.workspace.openTextDocument(tsPath);
+                                const text = doc.getText();
+                                if (text.includes(fileName)) {
+                                    const relativePath = path.relative(this.workspaceRoot, tsPath).replace(/\\/g, '/');
+                                    dependents.add(relativePath);
+                                    aidaLogging(`   ✅ Found dependent via Sibling Convention: ${relativePath}`);
+                                }
+                            } catch (e) {
+                                // Sibling ts file might not exist or error reading
+                            }
+                        }
+                    }
                 }
             }
             
