@@ -59132,6 +59132,433 @@ module.exports = { BarrelResolver };
 
 /***/ }),
 
+/***/ "./scripts/dependency-graph/language-rules.js":
+/*!****************************************************!*\
+  !*** ./scripts/dependency-graph/language-rules.js ***!
+  \****************************************************/
+/***/ ((module) => {
+
+/**
+ * Language Configuration Rules for Dependency Analysis
+ * Defines regex patterns and rules for different programming languages
+ */
+const languageConfig = {
+    typescript: {
+        extensions: ['.ts', '.tsx', '.js', '.jsx'],
+        // 🔥 NEW: Barrel/Entry file names
+        barrelFiles: ['index.ts', 'index.tsx', 'index.js', 'index.jsx', 'public_api.ts'],
+        importPatterns: [
+            /(?:from|import)\s+['"]([^'"]+)['"]/g,
+            /require\s*\(\s*['"]([^'"]+)['"]\s*\)/g
+        ],
+        // 🔥 NEW: Asset patterns for UI templates/styles
+        assetPatterns: [
+            // Angular
+            { type: 'html', regex: /templateUrl\s*:\s*['"`]([^'"`]+)['"`]/ }
+            // CSS/SCSS patterns removed to disable style impact analysis
+        ],
+        // 🔥 NEW: Ignore patterns for Impact Analysis (e.g. Angular Modules)
+        ignorePatterns: [
+            // '**/*.module.ts', // 🔥 ENABLED: Angular Modules are critical for dependency graph
+            '**/*.spec.ts',   // Tests
+            '**/*.test.ts'
+        ],
+        // Expanded pattern to catch CONSTANTS and camelCase functions
+        classPattern: /\b([a-zA-Z_][a-zA-Z0-9_]*)\b/g,
+        // 🔥 NEW: Regex patterns for symbol extraction from patches
+        symbolPatterns: {
+            objectStart: /^([a-zA-Z_$][a-zA-Z0-9_$]*)\s*:\s*\{/,
+            blockEnd: /^\},?$/,
+            property: /^([a-zA-Z_$][a-zA-Z0-9_$]*)\s*:\s*/,
+            function: /function\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(/,
+            const: /const\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=/,
+            class: /class\s+([a-zA-Z_$][a-zA-Z0-9_$]*)/,
+            interface: /interface\s+([a-zA-Z_$][a-zA-Z0-9_$]*)/
+        },
+        standardLibraries: ['String', 'Number', 'Boolean', 'Object', 'Array', 'Function',
+                           'Promise', 'Date', 'RegExp', 'Error', 'Map', 'Set', 'WeakMap',
+                           'Component', 'Injectable', 'NgModule', 'Directive', 'Pipe'],
+        excludePatterns: [
+            '**/node_modules/**',
+            '**/dist/**',
+            '**/build/**',
+            '**/coverage/**',
+            '**/*.spec.ts',
+            '**/*.spec.js',
+            '**/*.test.ts',
+            '**/*.test.js',
+            '**/*.min.js',
+            '**/*.d.ts'
+        ]
+    },
+    python: {
+        extensions: ['.py'],
+        // 🔥 NEW: Barrel/Entry file names
+        barrelFiles: ['__init__.py'],
+        importPatterns: [
+            /(?:import|from)\s+([a-zA-Z_][a-zA-Z0-9_.]*)/g
+        ],
+        // 🔥 NEW: Asset patterns
+        assetPatterns: [
+            // Flask/Django templates
+            { type: 'template', regex: /render_template\s*\(\s*['"`]([^'"`]+)['"`]/ }
+        ],
+        // 🔥 NEW: Ignore patterns
+        ignorePatterns: [
+            '**/tests/**',
+            '**/test_*.py',
+            '**/*_test.py'
+        ],
+        classPattern: /class\s+([A-Z][a-zA-Z0-9_]*)/g,
+        // 🔥 NEW: Regex patterns for symbol extraction from patches
+        symbolPatterns: {
+            class: /class\s+([a-zA-Z_][a-zA-Z0-9_]*)/,
+            function: /def\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/,
+        },
+        standardLibraries: ['os', 'sys', 'json', 'urllib', 'datetime', 'collections',
+                           'itertools', 'functools', 'typing', 're', 'math', 'random'],
+        excludePatterns: [
+            '**/__pycache__/**',
+            '**/venv/**',
+            '**/env/**',
+            '**/.venv/**',
+            '**/dist/**',
+            '**/build/**',
+            '**/*.pyc',
+            '**/test_*.py',
+            '**/*_test.py'
+        ]
+    },
+    csharp: {
+        extensions: ['.cs'],
+        importPatterns: [
+            /using\s+([a-zA-Z_][a-zA-Z0-9_.]*)/g
+        ],
+        // 🔥 NEW: Asset patterns for Views/Layouts
+        assetPatterns: [
+            { type: 'view', regex: /View\s*\(\s*['"]([^'"]+)['"]/ },
+            { type: 'view', regex: /PartialView\s*\(\s*['"]([^'"]+)['"]/ },
+            { type: 'layout', regex: /Layout\s*=\s*['"]([^'"]+)['"]/ }
+        ],
+        // 🔥 NEW: Ignore patterns
+        ignorePatterns: [
+            '**/*.Test.cs',
+            '**/*.Tests.cs'
+        ],
+        classPattern: /\b([A-Z][a-zA-Z0-9]*(?:[A-Z][a-zA-Z0-9]*)*)\b/g,
+        // 🔥 NEW: Regex patterns for symbol extraction from patches
+        symbolPatterns: {
+            class: /class\s+([a-zA-Z_][a-zA-Z0-9_]*)/,
+            interface: /interface\s+([a-zA-Z_][a-zA-Z0-9_]*)/,
+            function: /(?:public|private|protected|internal|static|\s)+[\w<>[\]]+\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/,
+            const: /const\s+[\w<>[\]]+\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=/,
+            blockEnd: /^\s*\}\s*$/
+        },
+        standardLibraries: ['String', 'Int32', 'Boolean', 'Object', 'Void', 'Task', 'IEnumerable',
+                           'List', 'Dictionary', 'HttpClient', 'JsonSerializer', 'DateTime',
+                           'Guid', 'Exception', 'StringBuilder', 'Console', 'Math'],
+        excludePatterns: [
+            '**/bin/**',
+            '**/obj/**',
+            '**/packages/**',
+            '**/.vs/**',
+            '**/Debug/**',
+            '**/Release/**',
+            '**/*.AssemblyInfo.cs',
+            '**/*.Designer.cs'
+        ]
+    },
+    java: {
+        extensions: ['.java'],
+        importPatterns: [
+            /import\s+([a-zA-Z_][a-zA-Z0-9_.]*)/g
+        ],
+        // 🔥 NEW: Asset patterns for Views/JSP
+        assetPatterns: [
+            { type: 'view', regex: /return\s+['"]([^'"]+)['"]\s*;/ },
+            { type: 'jsp', regex: /<jsp:include\s+page=['"]([^'"]+)['"]/ }
+        ],
+        // 🔥 NEW: Ignore patterns
+        ignorePatterns: [
+            '**/*Test.java',
+            '**/Test*.java',
+            '**/*.spec.java'
+        ],
+        classPattern: /\b([A-Z][a-zA-Z0-9]*)\b/g,
+        // 🔥 NEW: Regex patterns for symbol extraction from patches
+        symbolPatterns: {
+            class: /class\s+([a-zA-Z_][a-zA-Z0-9_]*)/,
+            interface: /interface\s+([a-zA-Z_][a-zA-Z0-9_]*)/,
+            function: /(?:public|private|protected|static|\s)+[\w<>[\]]+\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/,
+            const: /(?:final|static)\s+[\w<>[\]]+\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=/,
+            blockEnd: /^\s*\}\s*$/
+        },
+        standardLibraries: ['String', 'Integer', 'Boolean', 'Object', 'List', 'Map', 'Set',
+                           'ArrayList', 'HashMap', 'Exception', 'System'],
+        excludePatterns: [
+            '**/target/**',
+            '**/build/**',
+            '**/.gradle/**',
+            '**/bin/**',
+            '**/*.class',
+            '**/Test*.java',
+            '**/*Test.java'
+        ]
+    },
+    vue: {
+        extensions: ['.vue'],
+        importPatterns: [
+            /(?:from|import)\s+['"]([^'"]+)['"]/g
+        ],
+        // 🔥 NEW: Asset patterns for external templates/styles
+        assetPatterns: [
+            { type: 'template', regex: /<template\s+src=['"]([^'"]+)['"]/ },
+            { type: 'style', regex: /<style\s+src=['"]([^'"]+)['"]/ }
+        ],
+        // 🔥 NEW: Ignore patterns
+        ignorePatterns: [
+            '**/*.spec.js',
+            '**/*.test.js',
+            '**/*.spec.ts',
+            '**/*.test.ts'
+        ],
+        classPattern: /\b([A-Z][a-zA-Z0-9]*)\b/g,
+        // 🔥 NEW: Regex patterns for symbol extraction from patches (similar to JS/TS)
+        symbolPatterns: {
+            objectStart: /^([a-zA-Z_$][a-zA-Z0-9_$]*)\s*:\s*\{/,
+            blockEnd: /^\},?$/,
+            property: /^([a-zA-Z_$][a-zA-Z0-9_$]*)\s*:\s*/,
+            function: /(?:function\s+)?([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(/,
+            const: /(?:const|let|var)\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=/,
+            class: /class\s+([a-zA-Z_$][a-zA-Z0-9_$]*)/
+        },
+        standardLibraries: ['Vue', 'Vuex', 'VueRouter'],
+        excludePatterns: [
+            '**/node_modules/**',
+            '**/dist/**',
+            '**/.nuxt/**',
+            '**/coverage/**'
+        ]
+    },
+    php: {
+        extensions: ['.php'],
+        // 🔥 NEW: Barrel/Entry file names
+        barrelFiles: ['index.php'],
+        importPatterns: [
+            /(?:use|require|include)\s+['"]?([^'";\s]+)/g
+        ],
+        // 🔥 NEW: Asset patterns for Views/Includes
+        assetPatterns: [
+            { type: 'view', regex: /view\s*\(\s*['"]([^'"]+)['"]/ },
+            { type: 'include', regex: /(?:include|require)(?:_once)?\s*['"]([^'"]+)['"]/ }
+        ],
+        // 🔥 NEW: Ignore patterns
+        ignorePatterns: [
+            '**/tests/**',
+            '**/*Test.php'
+        ],
+        classPattern: /\b([A-Z][a-zA-Z0-9]*)\b/g,
+        // 🔥 NEW: Regex patterns for symbol extraction from patches
+        symbolPatterns: {
+            class: /class\s+([a-zA-Z_][a-zA-Z0-9_]*)/,
+            interface: /interface\s+([a-zA-Z_][a-zA-Z0-9_]*)/,
+            function: /function\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/,
+            const: /const\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=/,
+            property: /(?:public|private|protected|var)\s+\$([a-zA-Z_][a-zA-Z0-9_]*)/,
+            blockEnd: /^\s*\}\s*$/
+        },
+        standardLibraries: ['stdClass', 'Exception', 'DateTime', 'PDO'],
+        excludePatterns: [
+            '**/vendor/**',
+            '**/cache/**',
+            '**/storage/**',
+            '**/*.blade.php'
+        ]
+    },
+    go: {
+        extensions: ['.go'],
+        importPatterns: [
+            /import\s+"([^"]+)"/g
+        ],
+        // 🔥 NEW: Asset patterns for templates
+        assetPatterns: [
+            { type: 'template', regex: /template\.ParseFiles\s*\(\s*['"]([^'"]+)['"]/ }
+        ],
+        // 🔥 NEW: Ignore patterns
+        ignorePatterns: [
+            '**/*_test.go'
+        ],
+        classPattern: /type\s+([A-Z][a-zA-Z0-9]*)/g,
+        // 🔥 NEW: Regex patterns for symbol extraction from patches
+        symbolPatterns: {
+            class: /type\s+([a-zA-Z_][a-zA-Z0-9_]*)\s+(?:struct|interface)/,
+            function: /func\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/,
+            const: /const\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=/,
+            blockEnd: /^\s*\}\s*$/
+        },
+        standardLibraries: ['fmt', 'os', 'io', 'net', 'http', 'context'],
+        excludePatterns: [
+            '**/vendor/**',
+            '**/*_test.go',
+            '**/testdata/**'
+        ]
+    },
+    rust: {
+        extensions: ['.rs'],
+        // 🔥 NEW: Barrel/Entry file names
+        barrelFiles: ['mod.rs', 'lib.rs', 'main.rs'],
+        importPatterns: [
+            /use\s+([a-zA-Z_][a-zA-Z0-9_:]*)/g
+        ],
+        // 🔥 NEW: Asset patterns for includes
+        assetPatterns: [
+            { type: 'include', regex: /include_(?:str|bytes)!\s*\(\s*['"]([^'"]+)['"]\s*\)/ }
+        ],
+        // 🔥 NEW: Ignore patterns
+        ignorePatterns: [
+            '**/*_test.rs'
+        ],
+        classPattern: /(?:struct|enum|trait)\s+([A-Z][a-zA-Z0-9]*)/g,
+        // 🔥 NEW: Regex patterns for symbol extraction from patches
+        symbolPatterns: {
+            class: /(?:struct|enum|trait)\s+([a-zA-Z_][a-zA-Z0-9_]*)/,
+            function: /fn\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/,
+            const: /const\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*:/,
+            blockEnd: /^\s*\}\s*$/
+        },
+        standardLibraries: ['std', 'String', 'Vec', 'Option', 'Result'],
+        excludePatterns: [
+            '**/target/**',
+            '**/Cargo.lock',
+            '**/*_test.rs'
+        ]
+    },
+    kotlin: {
+        extensions: ['.kt'],
+        importPatterns: [
+            /import\s+([a-zA-Z_][a-zA-Z0-9_.]*)/g
+        ],
+        // 🔥 NEW: Asset patterns for Android layouts
+        assetPatterns: [
+            { type: 'layout', regex: /R\.layout\.([a-zA-Z0-9_]+)/ }
+        ],
+        // 🔥 NEW: Ignore patterns
+        ignorePatterns: [
+            '**/*Test.kt',
+            '**/Test*.kt'
+        ],
+        classPattern: /\b([A-Z][a-zA-Z0-9]*)\b/g,
+        // 🔥 NEW: Regex patterns for symbol extraction from patches
+        symbolPatterns: {
+            class: /(?:class|interface|object)\s+([a-zA-Z_][a-zA-Z0-9_]*)/,
+            function: /fun\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/,
+            const: /(?:val|const\s+val)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=/,
+            blockEnd: /^\s*\}\s*$/
+        },
+        standardLibraries: ['String', 'Int', 'Boolean', 'List', 'Map', 'Any'],
+        excludePatterns: [
+            '**/build/**',
+            '**/.gradle/**',
+            '**/Test*.kt',
+            '**/*Test.kt'
+        ]
+    },
+    swift: {
+        extensions: ['.swift'],
+        importPatterns: [
+            /import\s+([a-zA-Z_][a-zA-Z0-9_.]*)/g
+        ],
+        // 🔥 NEW: Asset patterns for Nibs/Storyboards
+        assetPatterns: [
+            { type: 'nib', regex: /nibName:\s*['"]([^'"]+)['"]/ },
+            { type: 'storyboard', regex: /name:\s*['"]([^'"]+)['"]/ }
+        ],
+        // 🔥 NEW: Ignore patterns
+        ignorePatterns: [
+            '**/*Tests.swift',
+            '**/*UITests.swift'
+        ],
+        classPattern: /\b([A-Z][a-zA-Z0-9]*)\b/g,
+        // 🔥 NEW: Regex patterns for symbol extraction from patches
+        symbolPatterns: {
+            class: /(?:class|struct|enum|protocol)\s+([a-zA-Z_][a-zA-Z0-9_]*)/,
+            function: /func\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/,
+            const: /let\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=/,
+            blockEnd: /^\s*\}\s*$/
+        },
+        standardLibraries: ['String', 'Int', 'Bool', 'Array', 'Dictionary', 'Foundation'],
+        excludePatterns: [
+            '**/.build/**',
+            '**/DerivedData/**',
+            '**/*.xcodeproj/**',
+            '**/*Tests.swift'
+        ]
+    },
+    dart: {
+        extensions: ['.dart'],
+        importPatterns: [
+            /import\s+['"]([^'"]+)['"]/g
+        ],
+        // 🔥 NEW: Asset patterns for Flutter assets
+        assetPatterns: [
+            { type: 'asset', regex: /asset\s*\(\s*['"]([^'"]+)['"]/ },
+            { type: 'image', regex: /Image\.asset\s*\(\s*['"]([^'"]+)['"]/ }
+        ],
+        // 🔥 NEW: Ignore patterns
+        ignorePatterns: [
+            '**/*_test.dart'
+        ],
+        classPattern: /\b([A-Z][a-zA-Z0-9]*)\b/g,
+        standardLibraries: ['String', 'int', 'bool', 'List', 'Map', 'dart:'],
+        excludePatterns: [
+            '**/.dart_tool/**',
+            '**/build/**',
+            '**/*_test.dart',
+            '**/*.g.dart'
+        ]
+    },
+    ruby: {
+        extensions: ['.rb'],
+        importPatterns: [
+            /require\s+['"]([^'"]+)['"]/g
+        ],
+        // 🔥 NEW: Asset patterns for Rails views
+        assetPatterns: [
+            { type: 'view', regex: /render\s+['"]([^'"]+)['"]/ },
+            { type: 'partial', regex: /render\s+partial:\s*['"]([^'"]+)['"]/ }
+        ],
+        // 🔥 NEW: Ignore patterns
+        ignorePatterns: [
+            '**/spec/**',
+            '**/test/**',
+            '**/*_spec.rb',
+            '**/*_test.rb'
+        ],
+        classPattern: /class\s+([A-Z][a-zA-Z0-9]*)/g,
+        standardLibraries: ['String', 'Integer', 'Array', 'Hash', 'File'],
+        excludePatterns: [
+            '**/vendor/**',
+            '**/.bundle/**',
+            '**/spec/**',
+            '**/*_spec.rb'
+        ]
+    },
+    // HTML Templates
+    html: {
+        extensions: ['.html'],
+        importPatterns: [],
+        assetPatterns: [],
+        symbolPatterns: {},
+        standardLibraries: [],
+        excludePatterns: []
+    }
+};
+
+module.exports = { languageConfig };
+
+
+/***/ }),
+
 /***/ "./scripts/dependency-graph/symbol-analyzer.js":
 /*!*****************************************************!*\
   !*** ./scripts/dependency-graph/symbol-analyzer.js ***!
@@ -59680,6 +60107,7 @@ const vscode = __webpack_require__(/*! vscode */ "vscode");
 const path = __webpack_require__(/*! path */ "path");
 const { BarrelResolver } = __webpack_require__(/*! ./barrel-resolver */ "./scripts/dependency-graph/barrel-resolver.js");
 const { aidaLogging } = __webpack_require__(/*! ../settings */ "./scripts/settings.js");
+const { languageConfig } = __webpack_require__(/*! ./language-rules */ "./scripts/dependency-graph/language-rules.js");
 
 /**
  * Enhanced Dependency Analyzer using VS Code Language Server APIs
@@ -59694,417 +60122,7 @@ class VSCodeApiDependencyAnalyzer {
         this.barrelResolver = new BarrelResolver();
         
         // Configuration-driven language support
-        this.languageConfig = {
-            typescript: {
-                extensions: ['.ts', '.tsx', '.js', '.jsx'],
-                // 🔥 NEW: Barrel/Entry file names
-                barrelFiles: ['index.ts', 'index.tsx', 'index.js', 'index.jsx', 'public_api.ts'],
-                importPatterns: [
-                    /(?:from|import)\s+['"]([^'"]+)['"]/g,
-                    /require\s*\(\s*['"]([^'"]+)['"]\s*\)/g
-                ],
-                // 🔥 NEW: Asset patterns for UI templates/styles
-                assetPatterns: [
-                    // Angular
-                    { type: 'html', regex: /templateUrl\s*:\s*['"`]([^'"`]+)['"`]/ }
-                    // CSS/SCSS patterns removed to disable style impact analysis
-                ],
-                // 🔥 NEW: Ignore patterns for Impact Analysis (e.g. Angular Modules)
-                ignorePatterns: [
-                    '**/*.module.ts', // Angular Modules are just declarations
-                    '**/*.spec.ts',   // Tests
-                    '**/*.test.ts'
-                ],
-                // Expanded pattern to catch CONSTANTS and camelCase functions
-                classPattern: /\b([a-zA-Z_][a-zA-Z0-9_]*)\b/g,
-                // 🔥 NEW: Regex patterns for symbol extraction from patches
-                symbolPatterns: {
-                    objectStart: /^([a-zA-Z_$][a-zA-Z0-9_$]*)\s*:\s*\{/,
-                    blockEnd: /^\},?$/,
-                    property: /^([a-zA-Z_$][a-zA-Z0-9_$]*)\s*:\s*/,
-                    function: /function\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(/,
-                    const: /const\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=/,
-                    class: /class\s+([a-zA-Z_$][a-zA-Z0-9_$]*)/,
-                    interface: /interface\s+([a-zA-Z_$][a-zA-Z0-9_$]*)/
-                },
-                standardLibraries: ['String', 'Number', 'Boolean', 'Object', 'Array', 'Function',
-                                   'Promise', 'Date', 'RegExp', 'Error', 'Map', 'Set', 'WeakMap',
-                                   'Component', 'Injectable', 'NgModule', 'Directive', 'Pipe'],
-                excludePatterns: [
-                    '**/node_modules/**',
-                    '**/dist/**',
-                    '**/build/**',
-                    '**/coverage/**',
-                    '**/*.spec.ts',
-                    '**/*.spec.js',
-                    '**/*.test.ts',
-                    '**/*.test.js',
-                    '**/*.min.js',
-                    '**/*.d.ts'
-                ]
-            },
-            python: {
-                extensions: ['.py'],
-                // 🔥 NEW: Barrel/Entry file names
-                barrelFiles: ['__init__.py'],
-                importPatterns: [
-                    /(?:import|from)\s+([a-zA-Z_][a-zA-Z0-9_.]*)/g
-                ],
-                // 🔥 NEW: Asset patterns
-                assetPatterns: [
-                    // Flask/Django templates
-                    { type: 'template', regex: /render_template\s*\(\s*['"`]([^'"`]+)['"`]/ }
-                ],
-                // 🔥 NEW: Ignore patterns
-                ignorePatterns: [
-                    '**/tests/**',
-                    '**/test_*.py',
-                    '**/*_test.py'
-                ],
-                classPattern: /class\s+([A-Z][a-zA-Z0-9_]*)/g,
-                // 🔥 NEW: Regex patterns for symbol extraction from patches
-                symbolPatterns: {
-                    class: /class\s+([a-zA-Z_][a-zA-Z0-9_]*)/,
-                    function: /def\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/,
-                },
-                standardLibraries: ['os', 'sys', 'json', 'urllib', 'datetime', 'collections',
-                                   'itertools', 'functools', 'typing', 're', 'math', 'random'],
-                excludePatterns: [
-                    '**/__pycache__/**',
-                    '**/venv/**',
-                    '**/env/**',
-                    '**/.venv/**',
-                    '**/dist/**',
-                    '**/build/**',
-                    '**/*.pyc',
-                    '**/test_*.py',
-                    '**/*_test.py'
-                ]
-            },
-            csharp: {
-                extensions: ['.cs'],
-                importPatterns: [
-                    /using\s+([a-zA-Z_][a-zA-Z0-9_.]*)/g
-                ],
-                // 🔥 NEW: Asset patterns for Views/Layouts
-                assetPatterns: [
-                    { type: 'view', regex: /View\s*\(\s*['"]([^'"]+)['"]/ },
-                    { type: 'view', regex: /PartialView\s*\(\s*['"]([^'"]+)['"]/ },
-                    { type: 'layout', regex: /Layout\s*=\s*['"]([^'"]+)['"]/ }
-                ],
-                // 🔥 NEW: Ignore patterns
-                ignorePatterns: [
-                    '**/*.Test.cs',
-                    '**/*.Tests.cs'
-                ],
-                classPattern: /\b([A-Z][a-zA-Z0-9]*(?:[A-Z][a-zA-Z0-9]*)*)\b/g,
-                // 🔥 NEW: Regex patterns for symbol extraction from patches
-                symbolPatterns: {
-                    class: /class\s+([a-zA-Z_][a-zA-Z0-9_]*)/,
-                    interface: /interface\s+([a-zA-Z_][a-zA-Z0-9_]*)/,
-                    function: /(?:public|private|protected|internal|static|\s)+[\w<>[\]]+\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/,
-                    const: /const\s+[\w<>[\]]+\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=/,
-                    blockEnd: /^\s*\}\s*$/
-                },
-                standardLibraries: ['String', 'Int32', 'Boolean', 'Object', 'Void', 'Task', 'IEnumerable',
-                                   'List', 'Dictionary', 'HttpClient', 'JsonSerializer', 'DateTime',
-                                   'Guid', 'Exception', 'StringBuilder', 'Console', 'Math'],
-                excludePatterns: [
-                    '**/bin/**',
-                    '**/obj/**',
-                    '**/packages/**',
-                    '**/.vs/**',
-                    '**/Debug/**',
-                    '**/Release/**',
-                    '**/*.AssemblyInfo.cs',
-                    '**/*.Designer.cs'
-                ]
-            },
-            java: {
-                extensions: ['.java'],
-                importPatterns: [
-                    /import\s+([a-zA-Z_][a-zA-Z0-9_.]*)/g
-                ],
-                // 🔥 NEW: Asset patterns for Views/JSP
-                assetPatterns: [
-                    { type: 'view', regex: /return\s+['"]([^'"]+)['"]\s*;/ },
-                    { type: 'jsp', regex: /<jsp:include\s+page=['"]([^'"]+)['"]/ }
-                ],
-                // 🔥 NEW: Ignore patterns
-                ignorePatterns: [
-                    '**/*Test.java',
-                    '**/Test*.java',
-                    '**/*.spec.java'
-                ],
-                classPattern: /\b([A-Z][a-zA-Z0-9]*)\b/g,
-                // 🔥 NEW: Regex patterns for symbol extraction from patches
-                symbolPatterns: {
-                    class: /class\s+([a-zA-Z_][a-zA-Z0-9_]*)/,
-                    interface: /interface\s+([a-zA-Z_][a-zA-Z0-9_]*)/,
-                    function: /(?:public|private|protected|static|\s)+[\w<>[\]]+\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/,
-                    const: /(?:final|static)\s+[\w<>[\]]+\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=/,
-                    blockEnd: /^\s*\}\s*$/
-                },
-                standardLibraries: ['String', 'Integer', 'Boolean', 'Object', 'List', 'Map', 'Set',
-                                   'ArrayList', 'HashMap', 'Exception', 'System'],
-                excludePatterns: [
-                    '**/target/**',
-                    '**/build/**',
-                    '**/.gradle/**',
-                    '**/bin/**',
-                    '**/*.class',
-                    '**/Test*.java',
-                    '**/*Test.java'
-                ]
-            },
-            vue: {
-                extensions: ['.vue'],
-                importPatterns: [
-                    /(?:from|import)\s+['"]([^'"]+)['"]/g
-                ],
-                // 🔥 NEW: Asset patterns for external templates/styles
-                assetPatterns: [
-                    { type: 'template', regex: /<template\s+src=['"]([^'"]+)['"]/ },
-                    { type: 'style', regex: /<style\s+src=['"]([^'"]+)['"]/ }
-                ],
-                // 🔥 NEW: Ignore patterns
-                ignorePatterns: [
-                    '**/*.spec.js',
-                    '**/*.test.js',
-                    '**/*.spec.ts',
-                    '**/*.test.ts'
-                ],
-                classPattern: /\b([A-Z][a-zA-Z0-9]*)\b/g,
-                // 🔥 NEW: Regex patterns for symbol extraction from patches (similar to JS/TS)
-                symbolPatterns: {
-                    objectStart: /^([a-zA-Z_$][a-zA-Z0-9_$]*)\s*:\s*\{/,
-                    blockEnd: /^\},?$/,
-                    property: /^([a-zA-Z_$][a-zA-Z0-9_$]*)\s*:\s*/,
-                    function: /(?:function\s+)?([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(/,
-                    const: /(?:const|let|var)\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=/,
-                    class: /class\s+([a-zA-Z_$][a-zA-Z0-9_$]*)/
-                },
-                standardLibraries: ['Vue', 'Vuex', 'VueRouter'],
-                excludePatterns: [
-                    '**/node_modules/**',
-                    '**/dist/**',
-                    '**/.nuxt/**',
-                    '**/coverage/**'
-                ]
-            },
-            php: {
-                extensions: ['.php'],
-                // 🔥 NEW: Barrel/Entry file names
-                barrelFiles: ['index.php'],
-                importPatterns: [
-                    /(?:use|require|include)\s+['"]?([^'";\s]+)/g
-                ],
-                // 🔥 NEW: Asset patterns for Views/Includes
-                assetPatterns: [
-                    { type: 'view', regex: /view\s*\(\s*['"]([^'"]+)['"]/ },
-                    { type: 'include', regex: /(?:include|require)(?:_once)?\s*['"]([^'"]+)['"]/ }
-                ],
-                // 🔥 NEW: Ignore patterns
-                ignorePatterns: [
-                    '**/tests/**',
-                    '**/*Test.php'
-                ],
-                classPattern: /\b([A-Z][a-zA-Z0-9]*)\b/g,
-                // 🔥 NEW: Regex patterns for symbol extraction from patches
-                symbolPatterns: {
-                    class: /class\s+([a-zA-Z_][a-zA-Z0-9_]*)/,
-                    interface: /interface\s+([a-zA-Z_][a-zA-Z0-9_]*)/,
-                    function: /function\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/,
-                    const: /const\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=/,
-                    property: /(?:public|private|protected|var)\s+\$([a-zA-Z_][a-zA-Z0-9_]*)/,
-                    blockEnd: /^\s*\}\s*$/
-                },
-                standardLibraries: ['stdClass', 'Exception', 'DateTime', 'PDO'],
-                excludePatterns: [
-                    '**/vendor/**',
-                    '**/cache/**',
-                    '**/storage/**',
-                    '**/*.blade.php'
-                ]
-            },
-            go: {
-                extensions: ['.go'],
-                importPatterns: [
-                    /import\s+"([^"]+)"/g
-                ],
-                // 🔥 NEW: Asset patterns for templates
-                assetPatterns: [
-                    { type: 'template', regex: /template\.ParseFiles\s*\(\s*['"]([^'"]+)['"]/ }
-                ],
-                // 🔥 NEW: Ignore patterns
-                ignorePatterns: [
-                    '**/*_test.go'
-                ],
-                classPattern: /type\s+([A-Z][a-zA-Z0-9]*)/g,
-                // 🔥 NEW: Regex patterns for symbol extraction from patches
-                symbolPatterns: {
-                    class: /type\s+([a-zA-Z_][a-zA-Z0-9_]*)\s+(?:struct|interface)/,
-                    function: /func\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/,
-                    const: /const\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=/,
-                    blockEnd: /^\s*\}\s*$/
-                },
-                standardLibraries: ['fmt', 'os', 'io', 'net', 'http', 'context'],
-                excludePatterns: [
-                    '**/vendor/**',
-                    '**/*_test.go',
-                    '**/testdata/**'
-                ]
-            },
-            rust: {
-                extensions: ['.rs'],
-                // 🔥 NEW: Barrel/Entry file names
-                barrelFiles: ['mod.rs', 'lib.rs', 'main.rs'],
-                importPatterns: [
-                    /use\s+([a-zA-Z_][a-zA-Z0-9_:]*)/g
-                ],
-                // 🔥 NEW: Asset patterns for includes
-                assetPatterns: [
-                    { type: 'include', regex: /include_(?:str|bytes)!\s*\(\s*['"]([^'"]+)['"]\s*\)/ }
-                ],
-                // 🔥 NEW: Ignore patterns
-                ignorePatterns: [
-                    '**/*_test.rs'
-                ],
-                classPattern: /(?:struct|enum|trait)\s+([A-Z][a-zA-Z0-9]*)/g,
-                // 🔥 NEW: Regex patterns for symbol extraction from patches
-                symbolPatterns: {
-                    class: /(?:struct|enum|trait)\s+([a-zA-Z_][a-zA-Z0-9_]*)/,
-                    function: /fn\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/,
-                    const: /const\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*:/,
-                    blockEnd: /^\s*\}\s*$/
-                },
-                standardLibraries: ['std', 'String', 'Vec', 'Option', 'Result'],
-                excludePatterns: [
-                    '**/target/**',
-                    '**/Cargo.lock',
-                    '**/*_test.rs'
-                ]
-            },
-            kotlin: {
-                extensions: ['.kt'],
-                importPatterns: [
-                    /import\s+([a-zA-Z_][a-zA-Z0-9_.]*)/g
-                ],
-                // 🔥 NEW: Asset patterns for Android layouts
-                assetPatterns: [
-                    { type: 'layout', regex: /R\.layout\.([a-zA-Z0-9_]+)/ }
-                ],
-                // 🔥 NEW: Ignore patterns
-                ignorePatterns: [
-                    '**/*Test.kt',
-                    '**/Test*.kt'
-                ],
-                classPattern: /\b([A-Z][a-zA-Z0-9]*)\b/g,
-                // 🔥 NEW: Regex patterns for symbol extraction from patches
-                symbolPatterns: {
-                    class: /(?:class|interface|object)\s+([a-zA-Z_][a-zA-Z0-9_]*)/,
-                    function: /fun\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/,
-                    const: /(?:val|const\s+val)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=/,
-                    blockEnd: /^\s*\}\s*$/
-                },
-                standardLibraries: ['String', 'Int', 'Boolean', 'List', 'Map', 'Any'],
-                excludePatterns: [
-                    '**/build/**',
-                    '**/.gradle/**',
-                    '**/Test*.kt',
-                    '**/*Test.kt'
-                ]
-            },
-            swift: {
-                extensions: ['.swift'],
-                importPatterns: [
-                    /import\s+([a-zA-Z_][a-zA-Z0-9_.]*)/g
-                ],
-                // 🔥 NEW: Asset patterns for Nibs/Storyboards
-                assetPatterns: [
-                    { type: 'nib', regex: /nibName:\s*['"]([^'"]+)['"]/ },
-                    { type: 'storyboard', regex: /name:\s*['"]([^'"]+)['"]/ }
-                ],
-                // 🔥 NEW: Ignore patterns
-                ignorePatterns: [
-                    '**/*Tests.swift',
-                    '**/*UITests.swift'
-                ],
-                classPattern: /\b([A-Z][a-zA-Z0-9]*)\b/g,
-                // 🔥 NEW: Regex patterns for symbol extraction from patches
-                symbolPatterns: {
-                    class: /(?:class|struct|enum|protocol)\s+([a-zA-Z_][a-zA-Z0-9_]*)/,
-                    function: /func\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/,
-                    const: /let\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=/,
-                    blockEnd: /^\s*\}\s*$/
-                },
-                standardLibraries: ['String', 'Int', 'Bool', 'Array', 'Dictionary', 'Foundation'],
-                excludePatterns: [
-                    '**/.build/**',
-                    '**/DerivedData/**',
-                    '**/*.xcodeproj/**',
-                    '**/*Tests.swift'
-                ]
-            },
-            dart: {
-                extensions: ['.dart'],
-                importPatterns: [
-                    /import\s+['"]([^'"]+)['"]/g
-                ],
-                // 🔥 NEW: Asset patterns for Flutter assets
-                assetPatterns: [
-                    { type: 'asset', regex: /asset\s*\(\s*['"]([^'"]+)['"]/ },
-                    { type: 'image', regex: /Image\.asset\s*\(\s*['"]([^'"]+)['"]/ }
-                ],
-                // 🔥 NEW: Ignore patterns
-                ignorePatterns: [
-                    '**/*_test.dart'
-                ],
-                classPattern: /\b([A-Z][a-zA-Z0-9]*)\b/g,
-                standardLibraries: ['String', 'int', 'bool', 'List', 'Map', 'dart:'],
-                excludePatterns: [
-                    '**/.dart_tool/**',
-                    '**/build/**',
-                    '**/*_test.dart',
-                    '**/*.g.dart'
-                ]
-            },
-            ruby: {
-                extensions: ['.rb'],
-                importPatterns: [
-                    /require\s+['"]([^'"]+)['"]/g
-                ],
-                // 🔥 NEW: Asset patterns for Rails views
-                assetPatterns: [
-                    { type: 'view', regex: /render\s+['"]([^'"]+)['"]/ },
-                    { type: 'partial', regex: /render\s+partial:\s*['"]([^'"]+)['"]/ }
-                ],
-                // 🔥 NEW: Ignore patterns
-                ignorePatterns: [
-                    '**/spec/**',
-                    '**/test/**',
-                    '**/*_spec.rb',
-                    '**/*_test.rb'
-                ],
-                classPattern: /class\s+([A-Z][a-zA-Z0-9]*)/g,
-                standardLibraries: ['String', 'Integer', 'Array', 'Hash', 'File'],
-                excludePatterns: [
-                    '**/vendor/**',
-                    '**/.bundle/**',
-                    '**/spec/**',
-                    '**/*_spec.rb'
-                ]
-            },
-            // HTML Templates
-            html: {
-                extensions: ['.html'],
-                importPatterns: [],
-                assetPatterns: [],
-                symbolPatterns: {},
-                standardLibraries: [],
-                excludePatterns: []
-            }
-        };
+        this.languageConfig = languageConfig;
         
         // Build extension to language mapping for fast lookup
         this.extensionMap = this.buildExtensionMap();
@@ -60283,6 +60301,30 @@ class VSCodeApiDependencyAnalyzer {
                 }
             } catch (e) {
                 // Link provider failed, continue to regex
+            }
+
+            // 🔥 NEW: Try VS Code Document Symbol Provider (High Accuracy for Imports)
+            // This helps find imports that Link Provider might miss (e.g. named imports)
+            try {
+                const symbols = await vscode.commands.executeCommand('vscode.executeDocumentSymbolProvider', document.uri);
+                if (symbols && symbols.length > 0) {
+                    // Filter for Module/Namespace/Package symbols which usually represent imports
+                    // SymbolKind: Module=2, Namespace=3, Package=4
+                    const importSymbols = symbols.filter(s => s.kind === 2 || s.kind === 3 || s.kind === 4);
+                    
+                    for (const symbol of importSymbols) {
+                        // Use the symbol location to resolve definition
+                        const position = symbol.selectionRange ? symbol.selectionRange.start : symbol.location.range.start;
+                        const targetFile = await this.resolveDefinition(document, position);
+                        
+                        if (targetFile) {
+                            this.graph.get(sourceFile).add(targetFile);
+                            aidaLogging(`🔗 ${sourceFile} -> ${targetFile} (symbol-provider)`);
+                        }
+                    }
+                }
+            } catch (e) {
+                // Symbol provider failed, continue
             }
 
             // 2. Process import patterns (Fallback & Complementary)
@@ -62436,6 +62478,19 @@ async function createFileGraphWebview(graph, filePath) {
         const html = generateFileGraphWebviewHtml(graph, fileName);
         panel.webview.html = html;
         
+        // Handle messages from webview
+        panel.webview.onDidReceiveMessage(
+            async message => {
+                if (message.command === 'buildSelectedNodeObject') {
+                    // Handle AI analysis request
+                    const nodeId = message.nodeId;
+                    await buildSelectedNodeObject(nodeId, graph, panel);
+                }
+            },
+            undefined,
+            extensionContext.subscriptions
+        );
+        
     } catch (error) {
         console.error('❌ Error creating file graph webview:', error);
         vscode.window.showErrorMessage(`Failed to create graph viewer: ${error.message}`);
@@ -62491,8 +62546,10 @@ module.exports = {
   \*********************************************/
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
+const vscode = __webpack_require__(/*! vscode */ "vscode");
 const path = __webpack_require__(/*! path */ "path");
 const { DependencyGraphService } = __webpack_require__(/*! ./dependency-graph-service */ "./scripts/dependency-graph-service.js");
+const { VSCodeApiDependencyAnalyzer } = __webpack_require__(/*! ./dependency-graph/vscode-api-analyzer */ "./scripts/dependency-graph/vscode-api-analyzer.js");
 const { aidaLogging } = __webpack_require__(/*! ./settings */ "./scripts/settings.js");
 
 class FileDependencyAnalyzer {
@@ -62501,88 +62558,212 @@ class FileDependencyAnalyzer {
         this.graphService = new DependencyGraphService(workspaceRoot);
     }
 
+    /**
+     * Analyze a single file using Fast Scan strategy
+     * @param {string} filePath - Absolute path to the file
+     */
     async analyzeFile(filePath) {
         aidaLogging(`🔍 Analyzing single file: ${filePath}`);
         
-        // Ensure graph is loaded
-        const fullGraph = await this.graphService.ensureFullGraph();
+        // Strategy: Try Fast Scan first for immediate results
+        // This avoids building the full graph (which takes 30s+)
+        return this.analyzeFileFast(filePath);
+    }
+
+    /**
+     * Fast Local Scan - Only analyzes the target file and its direct neighbors
+     * @param {string} filePath 
+     */
+    async analyzeFileFast(filePath) {
+        aidaLogging(`🚀 Starting Fast Local Scan for: ${filePath}`);
+        const startTime = Date.now();
+
+        const nodes = new Map();
+        const edges = [];
         
-        // Normalize path
-        const normalizedPath = filePath.replace(/\\/g, '/');
         const relativePath = path.relative(this.workspaceRoot, filePath).replace(/\\/g, '/');
+        const fileName = path.basename(filePath);
         
-        // Find node
-        const node = fullGraph.nodes.find(n => {
-            const nodeRelPath = (n.relativePath || '').replace(/\\/g, '/');
-            // Try exact match first
-            if (nodeRelPath === relativePath) return true;
-            // Try absolute path match if node has it
-            if (n.fsPath && n.fsPath.replace(/\\/g, '/') === normalizedPath) return true;
-            
-            return false;
-        });
+        // 1. Create Target Node
+        const targetNode = {
+            id: relativePath,
+            relativePath: relativePath,
+            label: fileName,
+            fileName: fileName,
+            displayName: fileName,
+            type: 'file',
+            entityType: this.inferEntityType(fileName),
+            nodeType: 'target',
+            fsPath: filePath
+        };
+        nodes.set(relativePath, targetNode);
+
+        // 2. Find Outgoing Dependencies (Imports)
+        // We reuse VSCodeApiDependencyAnalyzer but ONLY for this file
+        const analyzer = new VSCodeApiDependencyAnalyzer(this.workspaceRoot);
+        const fileUri = vscode.Uri.file(filePath);
         
-        if (!node) {
-            aidaLogging(`⚠️ File not found in graph: ${relativePath}`);
-            return {
-                nodes: [{
-                    id: relativePath,
-                    relativePath: relativePath,
-                    label: path.basename(relativePath),
-                    type: 'file',
-                    nodeType: 'target'
-                }],
-                edges: [],
-                summary: {
-                    filePath: relativePath,
-                    dependencies: 0,
-                    dependents: 0
+        // This populates analyzer.graph with outgoing edges
+        await analyzer.processFile(fileUri);
+        
+        const outgoingDeps = analyzer.graph.get(relativePath);
+        if (outgoingDeps) {
+            for (const depPath of outgoingDeps) {
+                // Add dependency node
+                if (!nodes.has(depPath)) {
+                    const depFileName = path.basename(depPath);
+                    nodes.set(depPath, {
+                        id: depPath,
+                        relativePath: depPath,
+                        label: depFileName,
+                        fileName: depFileName,
+                        displayName: depFileName,
+                        type: 'file',
+                        entityType: this.inferEntityType(depFileName),
+                        nodeType: 'dependency'
+                    });
                 }
-            };
+                
+                // Add edge: Target -> Dep
+                edges.push({
+                    source: relativePath,
+                    target: depPath,
+                    id: `${relativePath}->${depPath}`
+                });
+            }
         }
         
-        // Find dependencies (outgoing)
-        const dependencies = fullGraph.edges
-            .filter(e => e.source === node.id)
-            .map(e => e.target);
-            
-        // Find dependents (incoming)
-        const dependents = fullGraph.edges
-            .filter(e => e.target === node.id)
-            .map(e => e.source);
-            
-        aidaLogging(`✅ Found ${dependencies.length} dependencies and ${dependents.length} dependents`);
+        aidaLogging(`   ✅ Found ${outgoingDeps ? outgoingDeps.size : 0} outgoing dependencies`);
+
+        // 3. Find Incoming Dependents (Usages)
+        // Use VS Code Reference Provider on the file's symbols
+        const dependents = await this.findDependents(fileUri);
         
-        // Build filtered graph
-        const relevantNodeIds = new Set([node.id, ...dependencies, ...dependents]);
-        
-        const nodes = fullGraph.nodes
-            .filter(n => relevantNodeIds.has(n.id))
-            .map(n => {
-                const clone = { ...n };
-                if (n.id === node.id) {
-                    clone.nodeType = 'target';
-                } else if (dependencies.includes(n.id)) {
-                    clone.nodeType = 'dependency';
-                } else if (dependents.includes(n.id)) {
-                    clone.nodeType = 'dependent';
+        for (const depPath of dependents) {
+             // Add dependent node
+             if (!nodes.has(depPath)) {
+                const depFileName = path.basename(depPath);
+                nodes.set(depPath, {
+                    id: depPath,
+                    relativePath: depPath,
+                    label: depFileName,
+                    fileName: depFileName,
+                    displayName: depFileName,
+                    type: 'file',
+                    entityType: this.inferEntityType(depFileName),
+                    nodeType: 'dependent'
+                });
+            } else {
+                // If it was already a dependency, mark as both (Circular)
+                const node = nodes.get(depPath);
+                if (node.nodeType === 'dependency') {
+                    node.nodeType = 'both'; 
                 }
-                return clone;
-            });
+            }
             
-        const edges = fullGraph.edges.filter(e => 
-            relevantNodeIds.has(e.source) && relevantNodeIds.has(e.target)
-        );
+            // Add edge: Dependent -> Target
+            edges.push({
+                source: depPath,
+                target: relativePath,
+                id: `${depPath}->${relativePath}`
+            });
+        }
         
+        aidaLogging(`   ✅ Found ${dependents.size} incoming dependents`);
+        aidaLogging(` Fast Scan completed in ${Date.now() - startTime}ms`);
+
         return {
-            nodes,
-            edges,
+            nodes: Array.from(nodes.values()),
+            edges: edges,
             summary: {
                 filePath: relativePath,
-                dependencies: dependencies.length,
-                dependents: dependents.length
+                dependencies: (outgoingDeps ? outgoingDeps.size : 0),
+                dependents: dependents.size
             }
         };
+    }
+
+    /**
+     * Infer entity type from file name
+     * @param {string} fileName 
+     */
+    inferEntityType(fileName) {
+        const name = fileName.toLowerCase();
+        if (name.includes('.service.')) return 'service';
+        if (name.includes('.component.')) return 'component';
+        if (name.includes('.module.')) return 'module';
+        if (name.includes('.model.')) return 'model';
+        if (name.includes('.guard.')) return 'guard';
+        if (name.includes('.directive.')) return 'directive';
+        if (name.includes('.pipe.')) return 'pipe';
+        return 'file';
+    }
+
+    /**
+     * Find files that reference symbols in the target file
+     * @param {vscode.Uri} fileUri 
+     */
+    async findDependents(fileUri) {
+        const dependents = new Set();
+        
+        try {
+            // Get all symbols in the file
+            // We use executeDocumentSymbolProvider to get classes, functions, etc.
+            const symbols = await vscode.commands.executeCommand(
+                'vscode.executeDocumentSymbolProvider',
+                fileUri
+            );
+            
+            if (!symbols || symbols.length === 0) return dependents;
+            
+            // 🔥 FIX: Scan ALL top-level symbols, not just first 10
+            // Filter to keep only relevant types (Class, Function, Interface, Variable, Enum, Constant)
+            // SymbolKind: Class=4, Method=5, Property=6, Field=7, Constructor=8, Enum=9, Interface=10, Function=11, Variable=12, Constant=13
+            const relevantSymbols = symbols.filter(s => {
+                const kind = s.kind;
+                return (kind === 4 || kind === 9 || kind === 10 || kind === 11 || kind === 12 || kind === 13);
+            });
+
+            aidaLogging(`   🔍 Scanning references for ${relevantSymbols.length} symbols...`);
+            
+            // Use Promise.all to run in parallel (much faster)
+            const referencePromises = relevantSymbols.map(async (symbol) => {
+                const position = symbol.selectionRange ? symbol.selectionRange.start : symbol.location.range.start;
+                try {
+                    const refs = await vscode.commands.executeCommand(
+                        'vscode.executeReferenceProvider',
+                        fileUri,
+                        position
+                    );
+                    return refs || [];
+                } catch (e) {
+                    return [];
+                }
+            });
+
+            const results = await Promise.all(referencePromises);
+            
+            // Process results
+            for (const references of results) {
+                for (const ref of references) {
+                    const refPath = ref.uri.fsPath;
+                    
+                    // Ignore self-references
+                    if (refPath === fileUri.fsPath) continue;
+                    
+                    // Ignore external/node_modules
+                    if (refPath.includes('node_modules')) continue;
+                    
+                    const relativePath = path.relative(this.workspaceRoot, refPath).replace(/\\/g, '/');
+                    dependents.add(relativePath);
+                }
+            }
+            
+        } catch (error) {
+            aidaLogging(`⚠️ Error finding dependents: ${error.message}`);
+        }
+        
+        return dependents;
     }
 }
 

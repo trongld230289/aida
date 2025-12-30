@@ -1647,6 +1647,19 @@ async function createFileGraphWebview(graph, filePath) {
         const html = generateFileGraphWebviewHtml(graph, fileName);
         panel.webview.html = html;
         
+        // Handle messages from webview
+        panel.webview.onDidReceiveMessage(
+            async message => {
+                if (message.command === 'buildSelectedNodeObject') {
+                    // Handle AI analysis request
+                    const nodeId = message.nodeId;
+                    await buildSelectedNodeObject(nodeId, graph, panel);
+                }
+            },
+            undefined,
+            extensionContext.subscriptions
+        );
+        
     } catch (error) {
         console.error('❌ Error creating file graph webview:', error);
         vscode.window.showErrorMessage(`Failed to create graph viewer: ${error.message}`);

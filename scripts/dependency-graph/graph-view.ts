@@ -96,6 +96,24 @@ function initializeGraph() {
       .strength(d => isolatedNodeIds.has(d.id) ? 0.3 : 0.05));
 
   renderGraph();
+
+  // Auto-select target file if in file mode
+  if (graphData.mode === 'file' && graphData.targetFile) {
+    const targetNode = graphData.nodes.find(n => n.nodeType === 'target');
+    if (targetNode) {
+      // Wait for simulation to stabilize a bit
+      setTimeout(() => {
+        showNodeDetails(targetNode);
+        // Highlight node
+        g.selectAll('.node-circle')
+          .filter(d => d.id === targetNode.id)
+          .classed('selected', true)
+          .attr('r', 12)
+          .style('stroke', '#fff')
+          .style('stroke-width', '3px');
+      }, 500);
+    }
+  }
 }
 
 function renderGraph() {

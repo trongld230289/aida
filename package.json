@@ -301,7 +301,7 @@
         },
         "aida.debugMode": {
           "type": "boolean",
-          "default": false,
+          "default": true,
           "description": "Enable debug mode for AIDA extension logging",
           "scope": "window"
         }
