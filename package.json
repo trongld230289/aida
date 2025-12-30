@@ -129,6 +129,12 @@
         "title": "Close Chat",
         "category": "AIDA",
         "icon": "$(close)"
+      },
+      {
+        "command": "aida.analyzeDependency",
+        "title": "Analyze Dependency",
+        "category": "AIDA",
+        "icon": "$(hubot)"
       }
     ],
     "keybindings": [
@@ -150,6 +156,11 @@
           "command": "aida.reviewFile",
           "group": "z_commands@2",
           "when": "editorTextFocus"
+        },
+        {
+          "command": "aida.analyzeDependency",
+          "group": "z_commands@3",
+          "when": "editorTextFocus"
         }
       ],
       "explorer/context": [
@@ -161,6 +172,11 @@
         {
           "command": "aida.reviewFile",
           "group": "navigation@2",
+          "when": "resourceExtname =~ /\\.(ts|js|tsx|jsx|html|htm|css|scss|less|py|java|cs|cpp|c|php|rb|go|rs|kt|swift)$/"
+        },
+        {
+          "command": "aida.analyzeDependency",
+          "group": "navigation@3",
           "when": "resourceExtname =~ /\\.(ts|js|tsx|jsx|html|htm|css|scss|less|py|java|cs|cpp|c|php|rb|go|rs|kt|swift)$/"
         }
       ],
@@ -282,6 +298,12 @@
           "default": "Claude-4-Sonnet",
           "description": "AI Model to use for code analysis (gpt-4, gpt-5, claude-4-sonnet, or custom model)",
           "scope": "application"
+        },
+        "aida.debugMode": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable debug mode for AIDA extension logging",
+          "scope": "window"
         }
       }
     },

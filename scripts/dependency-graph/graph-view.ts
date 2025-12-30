@@ -978,6 +978,7 @@ function getPRStatusLabel(status) {
 
 function getNodeTypeLabel(nodeType) {
   const labels = {
+    target: '🎯 Target File',
     dependency: '📦 Dependency',
     dependent: '🔗 Dependent',
     both: '🔄 Dependency & Dependent',
@@ -988,10 +989,11 @@ function getNodeTypeLabel(nodeType) {
 
 function getNodeTypeDescription(nodeType) {
   const descriptions = {
-    dependency: 'This file is imported by PR files',
-    dependent: 'This file imports PR files',
-    both: 'This file both imports and is imported by PR files',
-    indirect: 'This file has an indirect relationship with PR files'
+    target: 'The file being analyzed',
+    dependency: 'This file is imported by the target file',
+    dependent: 'This file imports the target file',
+    both: 'This file both imports and is imported by the target file',
+    indirect: 'This file has an indirect relationship'
   };
   return descriptions[nodeType] || '';
 }

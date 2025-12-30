@@ -12,6 +12,7 @@ const { SymbolAnalyzer } = require('./dependency-graph/symbol-analyzer');
 // Import PR analysis modules
 const { PRFileFetcher } = require('./pr-file-fetcher');
 const { PRDependencyAnalyzer } = require('./pr-dependency-analyzer');
+const { FileDependencyAnalyzer } = require('./file-dependency-analyzer');
 
 // Cache management
 const CACHE_VERSION = '1.0';
@@ -1587,8 +1588,108 @@ function generateFilteredGraphWebviewHtml(graph, summary, searchTerm) {
     return htmlTemplate;
 }
 
+/**
+ * Analyze dependencies for a single file
+ */
+async function analyzeFileDependency(uri) {
+    if (!uri) {
+        vscode.window.showErrorMessage('No file selected for analysis');
+        return;
+    }
+
+    const filePath = uri.fsPath;
+    const workspaceFolder = vscode.workspace.getWorkspaceFolder(uri);
+    
+    if (!workspaceFolder) {
+        vscode.window.showErrorMessage('File must be part of a workspace');
+        return;
+    }
+
+    const workspaceRoot = workspaceFolder.uri.fsPath;
+    
+    vscode.window.withProgress({
+        location: vscode.ProgressLocation.Notification,
+        title: "Analyzing File Dependencies",
+        cancellable: false
+    }, async (progress) => {
+        progress.report({ message: "Building dependency graph..." });
+        
+        try {
+            const analyzer = new FileDependencyAnalyzer(workspaceRoot);
+            const graph = await analyzer.analyzeFile(filePath);
+            
+            progress.report({ message: "Generating visualization..." });
+            await createFileGraphWebview(graph, filePath);
+            
+        } catch (error) {
+            console.error('Error analyzing file dependency:', error);
+            vscode.window.showErrorMessage(`Analysis failed: ${error.message}`);
+        }
+    });
+}
+
+/**
+ * Create webview for single file dependency graph
+ */
+async function createFileGraphWebview(graph, filePath) {
+    try {
+        const fileName = path.basename(filePath);
+        const panel = vscode.window.createWebviewPanel(
+            'fileDependencyGraph',
+            `Dependency Graph - ${fileName}`,
+            vscode.ViewColumn.One,
+            {
+                enableScripts: true,
+                retainContextWhenHidden: true
+            }
+        );
+        
+        const html = generateFileGraphWebviewHtml(graph, fileName);
+        panel.webview.html = html;
+        
+    } catch (error) {
+        console.error('❌ Error creating file graph webview:', error);
+        vscode.window.showErrorMessage(`Failed to create graph viewer: ${error.message}`);
+    }
+}
+
+function generateFileGraphWebviewHtml(graph, fileName) {
+    const extensionPath = extensionContext ? extensionContext.extensionPath : __dirname;
+    
+    // Read HTML template
+    const htmlTemplatePath = path.join(extensionPath, 'scripts', 'dependency-graph', 'graph-view.html');
+    let htmlTemplate = fs.readFileSync(htmlTemplatePath, 'utf8');
+    
+    // Read TypeScript script
+    const scriptPath = path.join(extensionPath, 'scripts', 'dependency-graph', 'graph-view.ts');
+    let scriptContent = fs.readFileSync(scriptPath, 'utf8');
+    
+    // Prepare data for the view
+    const graphData = {
+        nodes: graph.nodes,
+        edges: graph.edges,
+        summary: graph.summary,
+        mode: 'file', // Tell the view it's single file mode
+        targetFile: fileName
+    };
+    
+    const graphDataJson = JSON.stringify(graphData);
+    
+    // Inject data
+    scriptContent = scriptContent.replace('__GRAPH_DATA__', graphDataJson);
+    // Inject empty search term and workspace root
+    scriptContent = scriptContent.replace('__SEARCH_TERM__', '""');
+    scriptContent = scriptContent.replace('__WORKSPACE_ROOT__', '""');
+    
+    // Inject script into HTML
+    htmlTemplate = htmlTemplate.replace('/*__GRAPH_SCRIPT__*/', scriptContent);
+    
+    return htmlTemplate;
+}
+
 
 module.exports = {
     initializeDependencyGraph,
-    aiDependencyAnalysis
+    aiDependencyAnalysis,
+    analyzeFileDependency
 };

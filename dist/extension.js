@@ -330,10 +330,19 @@ function activate(context) {
         }
     });
 
-    let analyzeFileDependencyCommand = vscode.commands.registerCommand('aida.analyzeFileDependency', async (uri) => {
+    let analyzeFileDependencyCommand = vscode.commands.registerCommand('aida.analyzeDependency', async (uri) => {
         console.log('🎯 Analyze File Dependency command called', uri);
         try {
-            await analyzeFileDependency(uri);
+            // If uri is undefined (called from command palette), try to get active editor
+            if (!uri && vscode.window.activeTextEditor) {
+                uri = vscode.window.activeTextEditor.document.uri;
+            }
+            
+            if (uri) {
+                await analyzeFileDependency(uri);
+            } else {
+                vscode.window.showErrorMessage('Please open a file to analyze dependencies.');
+            }
         } catch (error) {
             console.error('Error in analyzeFileDependency command:', error);
             vscode.window.showErrorMessage(`Failed to analyze file dependency: ${error.message}`);
@@ -58291,6 +58300,105 @@ if (__webpack_require__.c[__webpack_require__.s] === module) {
 
 /***/ }),
 
+/***/ "./scripts/dependency-graph-service.js":
+/*!*********************************************!*\
+  !*** ./scripts/dependency-graph-service.js ***!
+  \*********************************************/
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+const vscode = __webpack_require__(/*! vscode */ "vscode");
+const path = __webpack_require__(/*! path */ "path");
+const fs = __webpack_require__(/*! fs */ "fs");
+const { VSCodeApiDependencyAnalyzer } = __webpack_require__(/*! ./dependency-graph/vscode-api-analyzer */ "./scripts/dependency-graph/vscode-api-analyzer.js");
+const { aidaLogging } = __webpack_require__(/*! ./settings */ "./scripts/settings.js");
+
+const CACHE_VERSION = '1.0';
+
+class DependencyGraphService {
+    constructor(workspaceRoot) {
+        this.workspaceRoot = workspaceRoot;
+        this.vscodeAnalyzer = new VSCodeApiDependencyAnalyzer();
+        this.fullGraph = null;
+        this.cacheFilePath = path.join(workspaceRoot, '.vscode', 'dependency-cache.json');
+    }
+
+    /**
+     * Get or build full workspace graph
+     */
+    async ensureFullGraph() {
+        if (this.fullGraph) {
+            aidaLogging('✅ Using cached full graph');
+            return this.fullGraph;
+        }
+
+        // Try load from cache
+        if (fs.existsSync(this.cacheFilePath)) {
+            try {
+                const cacheData = JSON.parse(fs.readFileSync(this.cacheFilePath, 'utf8'));
+                if (cacheData.version === CACHE_VERSION && cacheData.graph) {
+                    this.fullGraph = cacheData.graph;
+                    aidaLogging(`✅ Loaded graph from cache: ${this.fullGraph.nodes.length} nodes, ${this.fullGraph.edges.length} edges`);
+                    return this.fullGraph;
+                }
+            } catch (error) {
+                aidaLogging(`⚠️ Cache read error: ${error.message}`);
+            }
+        }
+
+        // Build new graph
+        aidaLogging('🔨 Building new dependency graph...');
+        this.fullGraph = await this.buildFullGraph();
+
+        // Save cache
+        try {
+            const cacheDir = path.dirname(this.cacheFilePath);
+            if (!fs.existsSync(cacheDir)) {
+                fs.mkdirSync(cacheDir, { recursive: true });
+            }
+
+            fs.writeFileSync(this.cacheFilePath, JSON.stringify({
+                version: CACHE_VERSION,
+                timestamp: Date.now(),
+                graph: this.fullGraph
+            }, null, 2));
+
+            aidaLogging(`✅ Saved graph cache: ${this.fullGraph.nodes.length} nodes`);
+        } catch (error) {
+            aidaLogging(`⚠️ Cache write error: ${error.message}`);
+        }
+
+        return this.fullGraph;
+    }
+
+    /**
+     * Build full workspace dependency graph
+     */
+    async buildFullGraph() {
+        aidaLogging('📊 Analyzing workspace dependencies...');
+        
+        try {
+            const graph = await this.vscodeAnalyzer.analyze();
+            aidaLogging(`✅ Built graph: ${graph.nodes.length} nodes, ${graph.edges.length} edges`);
+            return graph;
+        } catch (error) {
+            console.error('❌ Error building graph:', error);
+            throw error;
+        }
+    }
+    
+    /**
+     * Get the language configuration from the analyzer
+     */
+    getLanguageConfig() {
+        return this.vscodeAnalyzer.languageConfig;
+    }
+}
+
+module.exports = { DependencyGraphService };
+
+
+/***/ }),
+
 /***/ "./scripts/dependency-graph/asset-loader-factory.js":
 /*!**********************************************************!*\
   !*** ./scripts/dependency-graph/asset-loader-factory.js ***!
@@ -60693,6 +60801,7 @@ const { SymbolAnalyzer } = __webpack_require__(/*! ./dependency-graph/symbol-ana
 // Import PR analysis modules
 const { PRFileFetcher } = __webpack_require__(/*! ./pr-file-fetcher */ "./scripts/pr-file-fetcher.js");
 const { PRDependencyAnalyzer } = __webpack_require__(/*! ./pr-dependency-analyzer */ "./scripts/pr-dependency-analyzer.js");
+const { FileDependencyAnalyzer } = __webpack_require__(/*! ./file-dependency-analyzer */ "./scripts/file-dependency-analyzer.js");
 
 // Cache management
 const CACHE_VERSION = '1.0';
@@ -62268,11 +62377,217 @@ function generateFilteredGraphWebviewHtml(graph, summary, searchTerm) {
     return htmlTemplate;
 }
 
+/**
+ * Analyze dependencies for a single file
+ */
+async function analyzeFileDependency(uri) {
+    if (!uri) {
+        vscode.window.showErrorMessage('No file selected for analysis');
+        return;
+    }
+
+    const filePath = uri.fsPath;
+    const workspaceFolder = vscode.workspace.getWorkspaceFolder(uri);
+    
+    if (!workspaceFolder) {
+        vscode.window.showErrorMessage('File must be part of a workspace');
+        return;
+    }
+
+    const workspaceRoot = workspaceFolder.uri.fsPath;
+    
+    vscode.window.withProgress({
+        location: vscode.ProgressLocation.Notification,
+        title: "Analyzing File Dependencies",
+        cancellable: false
+    }, async (progress) => {
+        progress.report({ message: "Building dependency graph..." });
+        
+        try {
+            const analyzer = new FileDependencyAnalyzer(workspaceRoot);
+            const graph = await analyzer.analyzeFile(filePath);
+            
+            progress.report({ message: "Generating visualization..." });
+            await createFileGraphWebview(graph, filePath);
+            
+        } catch (error) {
+            console.error('Error analyzing file dependency:', error);
+            vscode.window.showErrorMessage(`Analysis failed: ${error.message}`);
+        }
+    });
+}
+
+/**
+ * Create webview for single file dependency graph
+ */
+async function createFileGraphWebview(graph, filePath) {
+    try {
+        const fileName = path.basename(filePath);
+        const panel = vscode.window.createWebviewPanel(
+            'fileDependencyGraph',
+            `Dependency Graph - ${fileName}`,
+            vscode.ViewColumn.One,
+            {
+                enableScripts: true,
+                retainContextWhenHidden: true
+            }
+        );
+        
+        const html = generateFileGraphWebviewHtml(graph, fileName);
+        panel.webview.html = html;
+        
+    } catch (error) {
+        console.error('❌ Error creating file graph webview:', error);
+        vscode.window.showErrorMessage(`Failed to create graph viewer: ${error.message}`);
+    }
+}
+
+function generateFileGraphWebviewHtml(graph, fileName) {
+    const extensionPath = extensionContext ? extensionContext.extensionPath : __dirname;
+    
+    // Read HTML template
+    const htmlTemplatePath = path.join(extensionPath, 'scripts', 'dependency-graph', 'graph-view.html');
+    let htmlTemplate = fs.readFileSync(htmlTemplatePath, 'utf8');
+    
+    // Read TypeScript script
+    const scriptPath = path.join(extensionPath, 'scripts', 'dependency-graph', 'graph-view.ts');
+    let scriptContent = fs.readFileSync(scriptPath, 'utf8');
+    
+    // Prepare data for the view
+    const graphData = {
+        nodes: graph.nodes,
+        edges: graph.edges,
+        summary: graph.summary,
+        mode: 'file', // Tell the view it's single file mode
+        targetFile: fileName
+    };
+    
+    const graphDataJson = JSON.stringify(graphData);
+    
+    // Inject data
+    scriptContent = scriptContent.replace('__GRAPH_DATA__', graphDataJson);
+    // Inject empty search term and workspace root
+    scriptContent = scriptContent.replace('__SEARCH_TERM__', '""');
+    scriptContent = scriptContent.replace('__WORKSPACE_ROOT__', '""');
+    
+    // Inject script into HTML
+    htmlTemplate = htmlTemplate.replace('/*__GRAPH_SCRIPT__*/', scriptContent);
+    
+    return htmlTemplate;
+}
+
 
 module.exports = {
     initializeDependencyGraph,
-    aiDependencyAnalysis
+    aiDependencyAnalysis,
+    analyzeFileDependency
 };
+
+/***/ }),
+
+/***/ "./scripts/file-dependency-analyzer.js":
+/*!*********************************************!*\
+  !*** ./scripts/file-dependency-analyzer.js ***!
+  \*********************************************/
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+const path = __webpack_require__(/*! path */ "path");
+const { DependencyGraphService } = __webpack_require__(/*! ./dependency-graph-service */ "./scripts/dependency-graph-service.js");
+const { aidaLogging } = __webpack_require__(/*! ./settings */ "./scripts/settings.js");
+
+class FileDependencyAnalyzer {
+    constructor(workspaceRoot) {
+        this.workspaceRoot = workspaceRoot;
+        this.graphService = new DependencyGraphService(workspaceRoot);
+    }
+
+    async analyzeFile(filePath) {
+        aidaLogging(`🔍 Analyzing single file: ${filePath}`);
+        
+        // Ensure graph is loaded
+        const fullGraph = await this.graphService.ensureFullGraph();
+        
+        // Normalize path
+        const normalizedPath = filePath.replace(/\\/g, '/');
+        const relativePath = path.relative(this.workspaceRoot, filePath).replace(/\\/g, '/');
+        
+        // Find node
+        const node = fullGraph.nodes.find(n => {
+            const nodeRelPath = (n.relativePath || '').replace(/\\/g, '/');
+            // Try exact match first
+            if (nodeRelPath === relativePath) return true;
+            // Try absolute path match if node has it
+            if (n.fsPath && n.fsPath.replace(/\\/g, '/') === normalizedPath) return true;
+            
+            return false;
+        });
+        
+        if (!node) {
+            aidaLogging(`⚠️ File not found in graph: ${relativePath}`);
+            return {
+                nodes: [{
+                    id: relativePath,
+                    relativePath: relativePath,
+                    label: path.basename(relativePath),
+                    type: 'file',
+                    nodeType: 'target'
+                }],
+                edges: [],
+                summary: {
+                    filePath: relativePath,
+                    dependencies: 0,
+                    dependents: 0
+                }
+            };
+        }
+        
+        // Find dependencies (outgoing)
+        const dependencies = fullGraph.edges
+            .filter(e => e.source === node.id)
+            .map(e => e.target);
+            
+        // Find dependents (incoming)
+        const dependents = fullGraph.edges
+            .filter(e => e.target === node.id)
+            .map(e => e.source);
+            
+        aidaLogging(`✅ Found ${dependencies.length} dependencies and ${dependents.length} dependents`);
+        
+        // Build filtered graph
+        const relevantNodeIds = new Set([node.id, ...dependencies, ...dependents]);
+        
+        const nodes = fullGraph.nodes
+            .filter(n => relevantNodeIds.has(n.id))
+            .map(n => {
+                const clone = { ...n };
+                if (n.id === node.id) {
+                    clone.nodeType = 'target';
+                } else if (dependencies.includes(n.id)) {
+                    clone.nodeType = 'dependency';
+                } else if (dependents.includes(n.id)) {
+                    clone.nodeType = 'dependent';
+                }
+                return clone;
+            });
+            
+        const edges = fullGraph.edges.filter(e => 
+            relevantNodeIds.has(e.source) && relevantNodeIds.has(e.target)
+        );
+        
+        return {
+            nodes,
+            edges,
+            summary: {
+                filePath: relativePath,
+                dependencies: dependencies.length,
+                dependents: dependents.length
+            }
+        };
+    }
+}
+
+module.exports = { FileDependencyAnalyzer };
+
 
 /***/ }),
 
@@ -63176,6 +63491,7 @@ const fs = __webpack_require__(/*! fs */ "fs");
 const { VSCodeApiDependencyAnalyzer } = __webpack_require__(/*! ./dependency-graph/vscode-api-analyzer */ "./scripts/dependency-graph/vscode-api-analyzer.js");
 const { SymbolAnalyzer } = __webpack_require__(/*! ./dependency-graph/symbol-analyzer */ "./scripts/dependency-graph/symbol-analyzer.js");
 const { BarrelResolver } = __webpack_require__(/*! ./dependency-graph/barrel-resolver */ "./scripts/dependency-graph/barrel-resolver.js");
+const { DependencyGraphService } = __webpack_require__(/*! ./dependency-graph-service */ "./scripts/dependency-graph-service.js");
 const { aidaLogging } = __webpack_require__(/*! ./settings */ "./scripts/settings.js");
 
 // Cache management
@@ -63188,12 +63504,18 @@ const CACHE_VERSION = '1.0';
 class PRDependencyAnalyzer {
     constructor(workspaceRoot) {
         this.workspaceRoot = workspaceRoot;
-        this.vscodeAnalyzer = new VSCodeApiDependencyAnalyzer();
+        this.graphService = new DependencyGraphService(workspaceRoot);
         this.symbolAnalyzer = new SymbolAnalyzer();
         this.barrelResolver = new BarrelResolver(); // 🔥 NEW: Barrel resolver
-        this.fullGraph = null; // Cache full graph
-        this.cacheFilePath = path.join(workspaceRoot, '.vscode', 'dependency-cache.json');
         this.referenceCache = new Map(); // Cache for reference lookups (legacy, will be deprecated)
+    }
+
+    get fullGraph() {
+        return this.graphService.fullGraph;
+    }
+
+    get vscodeAnalyzer() {
+        return this.graphService.vscodeAnalyzer;
     }
 
     /**
@@ -63228,7 +63550,7 @@ class PRDependencyAnalyzer {
         aidaLogging(`🔍 Analyzing ${filteredPRFiles.length} PR files (filtered from ${prFiles.length})...`);
 
         // Step 1: Load or build full graph (with cache)
-        await this.ensureFullGraph();
+        await this.graphService.ensureFullGraph();
 
         // Step 2: Find PR file nodes in full graph
         const prNodes = this.findPRNodes(filteredPRFiles);
@@ -63567,67 +63889,7 @@ class PRDependencyAnalyzer {
         return filteredGraph;
     }
 
-    /**
-     * Get or build full workspace graph
-     */
-    async ensureFullGraph() {
-        if (this.fullGraph) {
-            aidaLogging('✅ Using cached full graph');
-            return;
-        }
 
-        // Try load from cache
-        if (fs.existsSync(this.cacheFilePath)) {
-            try {
-                const cacheData = JSON.parse(fs.readFileSync(this.cacheFilePath, 'utf8'));
-                if (cacheData.version === CACHE_VERSION && cacheData.graph) {
-                    this.fullGraph = cacheData.graph;
-                    aidaLogging(`✅ Loaded graph from cache: ${this.fullGraph.nodes.length} nodes, ${this.fullGraph.edges.length} edges`);
-                    return;
-                }
-            } catch (error) {
-                aidaLogging(`⚠️ Cache read error: ${error.message}`);
-            }
-        }
-
-        // Build new graph
-        aidaLogging('🔨 Building new dependency graph...');
-        this.fullGraph = await this.buildFullGraph();
-
-        // Save cache
-        try {
-            const cacheDir = path.dirname(this.cacheFilePath);
-            if (!fs.existsSync(cacheDir)) {
-                fs.mkdirSync(cacheDir, { recursive: true });
-            }
-
-            fs.writeFileSync(this.cacheFilePath, JSON.stringify({
-                version: CACHE_VERSION,
-                timestamp: Date.now(),
-                graph: this.fullGraph
-            }, null, 2));
-
-            aidaLogging(`✅ Saved graph cache: ${this.fullGraph.nodes.length} nodes`);
-        } catch (error) {
-            aidaLogging(`⚠️ Cache write error: ${error.message}`);
-        }
-    }
-
-    /**
-     * Build full workspace dependency graph
-     */
-    async buildFullGraph() {
-        aidaLogging('📊 Analyzing workspace dependencies...');
-        
-        try {
-            const graph = await this.vscodeAnalyzer.analyze();
-            aidaLogging(`✅ Built graph: ${graph.nodes.length} nodes, ${graph.edges.length} edges`);
-            return graph;
-        } catch (error) {
-            console.error('❌ Error building graph:', error);
-            throw error;
-        }
-    }
 
     /**
      * Find nodes matching PR files

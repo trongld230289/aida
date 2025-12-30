@@ -5,6 +5,7 @@ const fs = require('fs');
 const { VSCodeApiDependencyAnalyzer } = require('./dependency-graph/vscode-api-analyzer');
 const { SymbolAnalyzer } = require('./dependency-graph/symbol-analyzer');
 const { BarrelResolver } = require('./dependency-graph/barrel-resolver');
+const { DependencyGraphService } = require('./dependency-graph-service');
 const { aidaLogging } = require('./settings');
 
 // Cache management
@@ -17,12 +18,18 @@ const CACHE_VERSION = '1.0';
 class PRDependencyAnalyzer {
     constructor(workspaceRoot) {
         this.workspaceRoot = workspaceRoot;
-        this.vscodeAnalyzer = new VSCodeApiDependencyAnalyzer();
+        this.graphService = new DependencyGraphService(workspaceRoot);
         this.symbolAnalyzer = new SymbolAnalyzer();
         this.barrelResolver = new BarrelResolver(); // 🔥 NEW: Barrel resolver
-        this.fullGraph = null; // Cache full graph
-        this.cacheFilePath = path.join(workspaceRoot, '.vscode', 'dependency-cache.json');
         this.referenceCache = new Map(); // Cache for reference lookups (legacy, will be deprecated)
+    }
+
+    get fullGraph() {
+        return this.graphService.fullGraph;
+    }
+
+    get vscodeAnalyzer() {
+        return this.graphService.vscodeAnalyzer;
     }
 
     /**
@@ -57,7 +64,7 @@ class PRDependencyAnalyzer {
         aidaLogging(`🔍 Analyzing ${filteredPRFiles.length} PR files (filtered from ${prFiles.length})...`);
 
         // Step 1: Load or build full graph (with cache)
-        await this.ensureFullGraph();
+        await this.graphService.ensureFullGraph();
 
         // Step 2: Find PR file nodes in full graph
         const prNodes = this.findPRNodes(filteredPRFiles);
@@ -396,67 +403,7 @@ class PRDependencyAnalyzer {
         return filteredGraph;
     }
 
-    /**
-     * Get or build full workspace graph
-     */
-    async ensureFullGraph() {
-        if (this.fullGraph) {
-            aidaLogging('✅ Using cached full graph');
-            return;
-        }
 
-        // Try load from cache
-        if (fs.existsSync(this.cacheFilePath)) {
-            try {
-                const cacheData = JSON.parse(fs.readFileSync(this.cacheFilePath, 'utf8'));
-                if (cacheData.version === CACHE_VERSION && cacheData.graph) {
-                    this.fullGraph = cacheData.graph;
-                    aidaLogging(`✅ Loaded graph from cache: ${this.fullGraph.nodes.length} nodes, ${this.fullGraph.edges.length} edges`);
-                    return;
-                }
-            } catch (error) {
-                aidaLogging(`⚠️ Cache read error: ${error.message}`);
-            }
-        }
-
-        // Build new graph
-        aidaLogging('🔨 Building new dependency graph...');
-        this.fullGraph = await this.buildFullGraph();
-
-        // Save cache
-        try {
-            const cacheDir = path.dirname(this.cacheFilePath);
-            if (!fs.existsSync(cacheDir)) {
-                fs.mkdirSync(cacheDir, { recursive: true });
-            }
-
-            fs.writeFileSync(this.cacheFilePath, JSON.stringify({
-                version: CACHE_VERSION,
-                timestamp: Date.now(),
-                graph: this.fullGraph
-            }, null, 2));
-
-            aidaLogging(`✅ Saved graph cache: ${this.fullGraph.nodes.length} nodes`);
-        } catch (error) {
-            aidaLogging(`⚠️ Cache write error: ${error.message}`);
-        }
-    }
-
-    /**
-     * Build full workspace dependency graph
-     */
-    async buildFullGraph() {
-        aidaLogging('📊 Analyzing workspace dependencies...');
-        
-        try {
-            const graph = await this.vscodeAnalyzer.analyze();
-            aidaLogging(`✅ Built graph: ${graph.nodes.length} nodes, ${graph.edges.length} edges`);
-            return graph;
-        } catch (error) {
-            console.error('❌ Error building graph:', error);
-            throw error;
-        }
-    }
 
     /**
      * Find nodes matching PR files

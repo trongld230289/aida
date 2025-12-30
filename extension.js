@@ -303,10 +303,19 @@ function activate(context) {
         }
     });
 
-    let analyzeFileDependencyCommand = vscode.commands.registerCommand('aida.analyzeFileDependency', async (uri) => {
+    let analyzeFileDependencyCommand = vscode.commands.registerCommand('aida.analyzeDependency', async (uri) => {
         console.log('🎯 Analyze File Dependency command called', uri);
         try {
-            await analyzeFileDependency(uri);
+            // If uri is undefined (called from command palette), try to get active editor
+            if (!uri && vscode.window.activeTextEditor) {
+                uri = vscode.window.activeTextEditor.document.uri;
+            }
+            
+            if (uri) {
+                await analyzeFileDependency(uri);
+            } else {
+                vscode.window.showErrorMessage('Please open a file to analyze dependencies.');
+            }
         } catch (error) {
             console.error('Error in analyzeFileDependency command:', error);
             vscode.window.showErrorMessage(`Failed to analyze file dependency: ${error.message}`);
