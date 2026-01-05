@@ -5,6 +5,14 @@ All notable changes to the "AIDA - AI Development Assistant" extension will be d
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.34/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.3] - 2025-12-31
+
+### Improved
+- **🔧 Configuration**: Unified ignore rules for PR Review and Dependency Analysis
+- **🔧 Configuration**: Added centralized `ignore-rules.js` for easier management of excluded files/folders
+- **🔍 PR Review**: Applied consistent ignore patterns (including C# specific rules) to PR reviews
+- **🕸️ Dependency Analysis**: Updated dependency analyzer to use the shared ignore configuration
+
 ## [1.1.2] - 2025-12-30
 
 ### Fixed

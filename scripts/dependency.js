@@ -13,11 +13,92 @@ const { SymbolAnalyzer } = require('./dependency-graph/symbol-analyzer');
 const { PRFileFetcher } = require('./pr-file-fetcher');
 const { PRDependencyAnalyzer } = require('./pr-dependency-analyzer');
 const { FileDependencyAnalyzer } = require('./file-dependency-analyzer');
+const { DependencyGraphService } = require('./dependency-graph-service');
+
+// Import Capability Check
+const { checkEnvironmentCapabilities } = require('./capability-check');
 
 // Cache management
-const CACHE_VERSION = '1.0';
+const CACHE_VERSION = '1.1';
 let cacheFilePath = null;
 let extensionContext = null;
+let skipCapabilityCheck = false;
+let globalGraphService = null;
+
+/**
+ * Auto-activate dependency watcher if cache exists
+ * @param {vscode.ExtensionContext} context
+ */
+async function activateDependencyWatcherIfCacheExists(context) {
+    try {
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath;
+        if (!workspaceRoot) return;
+
+        const cachePath = path.join(workspaceRoot, '.vscode', 'dependency-cache.json');
+
+        if (fs.existsSync(cachePath)) {
+            aidaLogging('🚀 Found dependency cache, auto-activating watcher...');
+
+            if (!globalGraphService) {
+                globalGraphService = new DependencyGraphService(workspaceRoot);
+            }
+
+            // This will load cache and start watcher
+            await globalGraphService.ensureFullGraph();
+            aidaLogging('✅ Dependency watcher activated from cache');
+        }
+    } catch (error) {
+        console.error('❌ Failed to auto-activate dependency watcher:', error);
+    }
+}
+
+/**
+ * Check environment capabilities and report issues to stream
+ * @returns {Promise<boolean>} - Returns true if analysis should be aborted (missing capabilities)
+ */
+async function handleEnvironmentCheck(stream, workspaceRoot) {
+    // If skip flag is set, reset it and proceed without check
+    if (skipCapabilityCheck) {
+        skipCapabilityCheck = false;
+        return false;
+    }
+
+    const missingCapabilities = await checkEnvironmentCapabilities(workspaceRoot);
+
+    if (missingCapabilities.length > 0) {
+        stream.markdown('### ⚠️ Environment Check Required\n\n');
+        stream.markdown('Dependency analysis relies on the **Language Server Protocol (LSP)** to accurately resolve symbols and imports. Please install the following extensions to enable this capability:\n\n');
+
+        for (const missing of missingCapabilities) {
+            for (const ext of missing.recommendedExtensions) {
+                stream.markdown(`> ### 📦 ${ext.name}\n`);
+                stream.markdown(`> ${missing.message}\n\n`);
+
+                stream.button({
+                    command: 'workbench.extensions.installExtension',
+                    title: `Install ${ext.name}`,
+                    arguments: [ext.id]
+                });
+
+                stream.markdown('\n\n');
+            }
+        }
+
+        stream.markdown('---\n\n');
+
+        stream.markdown('**Or proceed with limited accuracy:**\n\n');
+        stream.button({
+            command: 'aida.analyzeDependencies',
+            title: '⚠️ Continue Anyway',
+            arguments: [workspaceRoot, true]
+        });
+        stream.markdown('\n\n');
+
+        return true; // Abort
+    }
+
+    return false; // Continue
+}
 
 /**
  * Initialize dependency graph functionality
@@ -39,56 +120,62 @@ function initializeDependencyGraph(context) {
 
             // Set cache file path
             cacheFilePath = path.join(workspaceRoot, '.vscode', 'dependency-cache.json');
-            
+
             const userMessage = request.prompt.trim();
-            
+
             // ✅ NEW: Check if message contains PR URL
             if (isPRUrl(userMessage)) {
                 await handlePRDependencyAnalysis(userMessage, stream, token, workspaceRoot);
                 return;
             }
-            
+
             // Check if user explicitly requested re-analysis
             const isReAnalyzeRequest = userMessage.toLowerCase().includes('re-analyze') || userMessage.toLowerCase().includes('reanalyze');
-            
+
             // Check for existing cache
             const cacheExists = await checkCacheExists();
-            
+
             if (cacheExists && !isReAnalyzeRequest) {
                 // Show cache options
                 stream.markdown(`## 🔍 Dependency Analysis Options\n\n`);
                 stream.markdown(`📁 **Found existing cache** from previous analysis\n\n`);
                 stream.markdown(`**Choose your option:**\n\n`);
-                
+
                 stream.button({
                     command: 'aida.loadDependencyCache',
                     title: '⚡ Load from Cache (Fast)',
                     arguments: [workspaceRoot]
                 });
-                
+
                 stream.markdown('   ');
-                
+
                 stream.button({
-                    command: 'aida.analyzeDependencies', 
+                    command: 'aida.analyzeDependencies',
                     title: '🔄 Re-analyze (Slow but Fresh)',
                     arguments: [workspaceRoot]
                 });
-                
+
                 stream.markdown('\n\n✨ **Note:** Dependency scanning uses **VS Code Language Server APIs** - **No AI Tokens consumed!** 🆓');
-                
+
             } else {
                 // No cache or explicit re-analyze request - analyze directly in background
-                const message = isReAnalyzeRequest 
+
+                // Check environment capabilities
+                if (await handleEnvironmentCheck(stream, workspaceRoot)) {
+                    return;
+                }
+
+                const message = isReAnalyzeRequest
                     ? '🔄 **Re-analyzing dependencies...** - This will take some time\n\n'
                     : '🔍 **No cache found** - Starting fresh analysis...\n\n';
                 stream.markdown(message);
                 stream.markdown('✅ **Analysis started in background** - You can continue working!\n\n');
                 stream.markdown('💡 The dependency graph will open automatically when complete.\n\n');
-                
+
                 // Run in background without blocking chat
                 performDependencyAnalysisInBackground(workspaceRoot);
             }
-            
+
         } catch (error) {
             console.error('❌ Dependency analysis error:', error);
             console.error('❌ Stack trace:', error.stack);
@@ -100,7 +187,7 @@ function initializeDependencyGraph(context) {
     dependencyParticipant.iconPath = vscode.Uri.file(
         path.join(context.extensionPath, 'icons', 'dependency-icon.svg')
     );
-    
+
     // Remove followup provider that might be causing help responses
     // dependencyParticipant.followupProvider = null;
 
@@ -120,7 +207,7 @@ function initializeDependencyGraph(context) {
 async function aiDependencyAnalysis(message, stream, token, context) {
     try {
         stream.markdown('# 🔍 AIDA Dependency Analysis\n\n');
-        
+
         const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath;
         if (!workspaceRoot) {
             stream.markdown('❌ **Error:** No workspace folder found. Please open a project folder.\n\n');
@@ -129,7 +216,7 @@ async function aiDependencyAnalysis(message, stream, token, context) {
 
         // Set cache file path
         cacheFilePath = path.join(workspaceRoot, '.vscode', 'dependency-cache.json');
-        
+
         const userMessage = message.trim();
 
         // ✅ NEW: Check if message contains PR URL (Support for AIDA Chatbot)
@@ -137,49 +224,55 @@ async function aiDependencyAnalysis(message, stream, token, context) {
             await handlePRDependencyAnalysis(userMessage, stream, token, workspaceRoot);
             return;
         }
-        
+
         // Check if user explicitly requested re-analysis
         const lowerMessage = userMessage.toLowerCase();
         const isReAnalyzeRequest = lowerMessage.includes('re-analyze') || lowerMessage.includes('reanalyze');
-        
+
         // Check for existing cache
         const cacheExists = await checkCacheExists();
-        
+
         if (cacheExists && !isReAnalyzeRequest) {
             // Show cache options (same as Copilot)
             stream.markdown(`## 🔍 Dependency Analysis Options\n\n`);
             stream.markdown(`📁 **Found existing cache** from previous analysis\n\n`);
             stream.markdown(`**Choose your option:**\n\n`);
-            
+
             stream.button({
                 command: 'aida.loadDependencyCache',
                 title: '⚡ Load from Cache (Fast)',
                 arguments: [workspaceRoot]
             });
-            
+
             stream.markdown('   ');
-            
+
             stream.button({
-                command: 'aida.analyzeDependencies', 
+                command: 'aida.analyzeDependencies',
                 title: '🔄 Re-analyze (Slow but Fresh)',
                 arguments: [workspaceRoot]
             });
-            
+
             stream.markdown('\n\n✨ **Note:** Dependency scanning uses **VS Code Language Server APIs** - **No AI Tokens consumed!** 🆓');
-            
+
         } else {
             // No cache or explicit re-analyze request
-            const message = isReAnalyzeRequest 
+
+            // Check environment capabilities
+            if (await handleEnvironmentCheck(stream, workspaceRoot)) {
+                return;
+            }
+
+            const message = isReAnalyzeRequest
                 ? '🔄 **Re-analyzing dependencies...** - This will take some time\n\n'
                 : '🔍 **No cache found** - Starting fresh analysis...\n\n';
             stream.markdown(message);
             stream.markdown('✅ **Analysis started in background** - You can continue working!\n\n');
             stream.markdown('💡 The dependency graph will open automatically when complete.\n\n');
-            
+
             // Run in background without blocking chat
             performDependencyAnalysisInBackground(workspaceRoot);
         }
-        
+
     } catch (error) {
         console.error('❌ aiDependencyAnalysis error:', error);
         stream.markdown(`❌ **Error:** ${error.message}\n\n`);
@@ -208,8 +301,11 @@ function registerCacheCommands(context) {
     });
 
     // Command to re-analyze
-    const analyzeCommand = vscode.commands.registerCommand('aida.analyzeDependencies', async (workspaceRoot) => {
+    const analyzeCommand = vscode.commands.registerCommand('aida.analyzeDependencies', async (workspaceRoot, force = false) => {
         try {
+            if (force) {
+                skipCapabilityCheck = true;
+            }
             // Trigger chat participant with re-analyze command
             await vscode.commands.executeCommand('workbench.action.chat.open', {
                 query: '@dependency re-analyze'
@@ -229,11 +325,11 @@ function registerCacheCommands(context) {
 async function checkCacheExists() {
     try {
         if (!cacheFilePath) return false;
-        
+
         const cacheStats = await fs.promises.stat(cacheFilePath);
         const cacheAge = Date.now() - cacheStats.mtime.getTime();
         const maxAge = 24 * 60 * 60 * 1000; // 24 hours
-        
+
         return cacheAge < maxAge;
     } catch (error) {
         return false;
@@ -246,11 +342,11 @@ async function checkCacheExists() {
 async function saveToCache(graph, report, analysisType) {
     try {
         if (!cacheFilePath) return;
-        
+
         // Ensure .vscode directory exists
         const vscodeDir = path.dirname(cacheFilePath);
         await fs.promises.mkdir(vscodeDir, { recursive: true });
-        
+
         const cacheData = {
             version: CACHE_VERSION,
             timestamp: new Date().toISOString(),
@@ -258,7 +354,7 @@ async function saveToCache(graph, report, analysisType) {
             graph,
             report
         };
-        
+
         await fs.promises.writeFile(cacheFilePath, JSON.stringify(cacheData, null, 2));
         console.log('💾 Dependency analysis cached successfully');
     } catch (error) {
@@ -272,14 +368,20 @@ async function saveToCache(graph, report, analysisType) {
 async function loadFromCache() {
     try {
         if (!cacheFilePath) return null;
-        
+
         const cacheData = JSON.parse(await fs.promises.readFile(cacheFilePath, 'utf8'));
-        
+
         if (cacheData.version !== CACHE_VERSION) {
             console.log('🔄 Cache version mismatch, will regenerate');
             return null;
         }
-        
+
+        // Validate cache structure
+        if (!cacheData.graph || !cacheData.report || !cacheData.report.summary) {
+            console.log('⚠️ Invalid cache data structure, will regenerate');
+            return null;
+        }
+
         console.log('💾 Loaded dependency analysis from cache');
         return cacheData;
     } catch (error) {
@@ -300,33 +402,33 @@ function performDependencyAnalysisInBackground(workspaceRoot) {
     }, async (progress) => {
         try {
             progress.report({ increment: 0, message: "You can continue working - this runs in background..." });
-            
+
             // Use VS Code API analyzer
             const analyzer = new VSCodeApiDependencyAnalyzer(workspaceRoot);
             const analysisType = 'VS Code API (Symbol Crawling)';
-            
+
             progress.report({ increment: 20, message: "Scanning files and building dependency tree..." });
             const graph = await analyzer.analyze();
-            
+
             progress.report({ increment: 60, message: "Calculating metrics and generating report..." });
             const report = analyzer.generateReport(graph);
-            
+
             // Validate graph data
             if (!graph || !graph.nodes || !Array.isArray(graph.nodes)) {
                 throw new Error('Invalid graph data: missing or invalid nodes array');
             }
             if (!graph.edges || !Array.isArray(graph.edges)) {
-                throw new Error('Invalid graph data: missing or invalid edges array');  
+                throw new Error('Invalid graph data: missing or invalid edges array');
             }
-            
+
             console.log(`🔍 Graph validation: ${graph.nodes.length} nodes, ${graph.edges.length} edges`);
-            
+
             progress.report({ increment: 85, message: "Saving cache..." });
             await saveToCache(graph, report, analysisType);
-            
+
             progress.report({ increment: 95, message: "Opening visualization..." });
             await createWebviewFromData(graph, report, analysisType);
-            
+
             // Show completion notification
             vscode.window.showInformationMessage(
                 `✅ Dependency analysis complete! Found ${graph.nodes.length} files with ${graph.edges.length} dependencies.`,
@@ -337,7 +439,7 @@ function performDependencyAnalysisInBackground(workspaceRoot) {
                     vscode.commands.executeCommand('workbench.view.extension.aida-dependency-view');
                 }
             });
-            
+
         } catch (error) {
             console.error('❌ Background analysis error:', error);
             console.error('❌ Stack trace:', error.stack);
@@ -369,17 +471,17 @@ async function createWebviewFromData(graph, report, analysisType) {
             retainContextWhenHidden: true
         }
     );
-    
+
     // Generate webview content
     console.log(`📊 Creating webview with data:`, {
         nodeCount: graph.nodes.length,
         edgeCount: graph.edges.length,
         analysisType
     });
-    
+
     const webviewHtml = generateFilteredGraphWebviewHtml(graph, report.summary, 'all');
     panel.webview.html = webviewHtml;
-    
+
     // Handle messages from webview
     panel.webview.onDidReceiveMessage(async (message) => {
         if (message.command === 'buildSelectedNodeObject') {
@@ -391,7 +493,7 @@ async function createWebviewFromData(graph, report, analysisType) {
             await openImpactAnalysisWebview(message.nodeId, graph);
         }
     });
-    
+
     console.log(`✅ Webview created with ${graph.nodes.length} nodes, ${graph.edges.length} edges`);
 }
 
@@ -417,9 +519,9 @@ async function buildSelectedNodeObject(nodeId, graph, panel) {
         // Helper function to load assets for a node
         const loadNodeAssets = async (node) => {
             const result = { main: node.id };
-            
+
             const fileName = node.fileName || path.basename(node.id);
-            
+
             // Get absolute path
             let absolutePath = node.id;
             if (!path.isAbsolute(node.id) && workspaceRoot) {
@@ -438,7 +540,7 @@ async function buildSelectedNodeObject(nodeId, graph, panel) {
             // 🔥 REFACTORED: Use AssetLoaderStrategy pattern instead of hardcoded if/else
             const { AssetLoaderFactory } = require('./dependency-graph/asset-loader-factory');
             const assetLoader = AssetLoaderFactory.getLoader(fileName);
-            
+
             if (assetLoader) {
                 const assets = await assetLoader.loadAssets(absolutePath, fileContent, workspaceRoot);
                 Object.assign(result, assets);
@@ -562,9 +664,9 @@ async function analyzeImpactWithAI(data, originalPanel) {
     try {
         // Import review-common for executeAIReview and getUnifiedModel
         const { executeAIReview, getUnifiedModel } = require('./review-common');
-        
+
         let prompt = '';
-        
+
         if (data.isPRAnalysis) {
             // PR Analysis Prompt
             prompt = `You are an expert code reviewer and architect.
@@ -572,12 +674,12 @@ Analyze the impact of this Pull Request based on the dependency graph data.
 
 PR Context:
 ${JSON.stringify({
-    summary: data.prSummary,
-    changes: data.changes,
-    impact: data.impact,
-    // Limit symbol map to avoid token limits if necessary
-    symbolMap: data.symbolMap
-}, null, 2)}
+                summary: data.prSummary,
+                changes: data.changes,
+                impact: data.impact,
+                // Limit symbol map to avoid token limits if necessary
+                symbolMap: data.symbolMap
+            }, null, 2)}
 
 Please provide a comprehensive report covering:
 1. Summary of Changes: What is being changed at a high level?
@@ -608,19 +710,19 @@ Keep the language simple and focus on USER IMPACT.`;
 
 **This file uses these components/modules (${data.dependencies.length} dependencies):**
 ${data.dependencies.map(dep => {
-    let parts = [`- ${dep.main}`];
-    if (dep.html) parts.push(`(has UI template: ${dep.html})`);
-    if (dep.css) parts.push(`(has styles: ${dep.css})`);
-    return parts.join(' ');
-}).join('\n')}
+                let parts = [`- ${dep.main}`];
+                if (dep.html) parts.push(`(has UI template: ${dep.html})`);
+                if (dep.css) parts.push(`(has styles: ${dep.css})`);
+                return parts.join(' ');
+            }).join('\n')}
 
 **These components/modules depend on this file (${data.dependents.length} dependents):**
 ${data.dependents.map(dep => {
-    let parts = [`- ${dep.main}`];
-    if (dep.html) parts.push(`(has UI template: ${dep.html})`);
-    if (dep.css) parts.push(`(has styles: ${dep.css})`);
-    return parts.join(' ');
-}).join('\n')}
+                let parts = [`- ${dep.main}`];
+                if (dep.html) parts.push(`(has UI template: ${dep.html})`);
+                if (dep.css) parts.push(`(has styles: ${dep.css})`);
+                return parts.join(' ');
+            }).join('\n')}
 
 IMPORTANT INSTRUCTION:
 If the list of dependents is EMPTY (0 dependents), it means this file is NOT used by any other file in the scanned codebase.
@@ -670,7 +772,7 @@ Keep the language simple and focus on USER IMPACT, not technical details.`;
 
         if (success) {
             console.log('✅ AI Response received, length:', aiResponse.length);
-            
+
             // Clean up the response - remove markdown decorations that we added
             let cleanResponse = aiResponse
                 .replace(/^[\s\S]*?---\s*/, '') // Remove everything up to and including the first separator
@@ -682,7 +784,7 @@ Keep the language simple and focus on USER IMPACT, not technical details.`;
 
             // Update panel with result
             analysisPanel.webview.html = getHtml(formatMarkdown(cleanResponse));
-            
+
         } else {
             throw new Error('AI analysis failed');
         }
@@ -739,7 +841,7 @@ async function openImpactAnalysisWebview(nodeId, graph = null) {
                 const analyzer = new SymbolAnalyzer();
                 // Pass graph to analyzer for consistent dependency/dependent resolution
                 const data = await analyzer.analyzeFile(absolutePath, graph);
-                
+
                 if (data) {
                     panel.webview.postMessage({
                         command: 'loadData',
@@ -837,14 +939,14 @@ async function loadAngularAssets(absolutePath, fileContent, workspaceRoot) {
     try {
         const uri = vscode.Uri.file(absolutePath);
         const links = await vscode.commands.executeCommand('vscode.executeLinkProvider', uri);
-        
+
         if (links && links.length > 0) {
             for (const link of links) {
                 if (!link.target) continue;
-                
+
                 const targetPath = link.target.fsPath;
                 const ext = path.extname(targetPath).toLowerCase();
-                
+
                 if (ext === '.html') {
                     result.html = path.relative(workspaceRoot, targetPath);
                 } else if (['.css', '.scss', '.sass', '.less'].includes(ext)) {
@@ -897,14 +999,14 @@ async function loadReactAssets(absolutePath, fileContent, workspaceRoot) {
     try {
         const uri = vscode.Uri.file(absolutePath);
         const links = await vscode.commands.executeCommand('vscode.executeLinkProvider', uri);
-        
+
         if (links && links.length > 0) {
             for (const link of links) {
                 if (!link.target) continue;
-                
+
                 const targetPath = link.target.fsPath;
                 const ext = path.extname(targetPath).toLowerCase();
-                
+
                 if (['.css', '.scss', '.sass', '.less'].includes(ext)) {
                     result.css = path.relative(workspaceRoot, targetPath);
                     break; // Take first CSS file found
@@ -921,7 +1023,7 @@ async function loadReactAssets(absolutePath, fileContent, workspaceRoot) {
         // import styles from './Component.module.css'
         // import './styles.scss'
         const cssImports = fileContent.matchAll(/import\s+(?:['"`]([^'"`]+\.(?:css|scss|sass|less))['"`]|.*?from\s+['"`]([^'"`]+\.(?:css|scss|sass|less))['"`])/gi);
-        
+
         for (const match of cssImports) {
             const cssFile = match[1] || match[2];
             if (cssFile) {
@@ -1001,7 +1103,7 @@ async function loadCSharpAssets(absolutePath, fileContent, workspaceRoot) {
 
     // Check for associated .cshtml or .razor files (same name convention)
     const baseName = path.basename(absolutePath, '.cs');
-    
+
     // Check for Razor views (e.g., HomeController.cs -> Home folder)
     if (baseName.endsWith('Controller')) {
         const viewName = baseName.replace('Controller', '');
@@ -1091,9 +1193,9 @@ function getNodeDisplayName(node, angularEntities) {
         return { name: angularEntities.interfaces[0], type: 'interface' };
     }
     // Fallback to filename
-    return { 
-        name: node.fileName || 'unknown', 
-        type: 'file' 
+    return {
+        name: node.fileName || 'unknown',
+        type: 'file'
     };
 }
 
@@ -1116,34 +1218,34 @@ async function handlePRDependencyAnalysis(prUrl, stream, token, workspaceRoot) {
     try {
         stream.markdown('## 🔍 PR Dependency Analysis\n\n');
         stream.markdown(`📌 **Analyzing PR:** ${prUrl}\n\n`);
-        
+
         // Step 1: Parse PR URL
         const fetcher = new PRFileFetcher();
         const prInfo = fetcher.parsePRUrl(prUrl);
-        
+
         // Step 2: Fetch PR files
         stream.markdown('⏳ Fetching PR file changes...\n\n');
-        
+
         let prFiles;
         try {
             prFiles = await fetcher.fetchFiles(prInfo);
         } catch (error) {
             stream.markdown(`❌ **Error fetching PR files:** ${error.message}\n\n`);
-            
+
             if (error.message.includes('token')) {
                 stream.markdown('💡 **Setup Required:**\n\n');
                 stream.markdown(`- Configure your ${prInfo.repoType.toUpperCase()} token in settings\n`);
                 stream.markdown('- Check AIDA documentation for token setup instructions\n\n');
             }
-            
+
             return;
         }
-        
+
         if (!prFiles || prFiles.length === 0) {
             stream.markdown('❌ No files found in PR\n\n');
             return;
         }
-        
+
         // 🧪 TEST: Filter to specific files for debugging
         // prFiles = prFiles.filter(f => 
         //     f.path.includes('constants.ts')
@@ -1155,87 +1257,87 @@ async function handlePRDependencyAnalysis(prUrl, stream, token, workspaceRoot) {
         //      ||
         //     f.path.includes('maintain-equipment-list.component.ts')
         // );
-        
+
         if (prFiles.length === 0) {
             stream.markdown('⚠️ No test files found in PR\n\n');
             return;
         }
-        
+
         stream.markdown(`✅ Found **${prFiles.length} files** in PR:\n\n`);
-        
+
         // Show file summary
         const added = prFiles.filter(f => f.status === 'add').length;
         const modified = prFiles.filter(f => f.status === 'edit').length;
         const deleted = prFiles.filter(f => f.status === 'delete').length;
         const renamed = prFiles.filter(f => f.status === 'rename').length;
-        
+
         stream.markdown(`🟢 Added: ${added}\n`);
         stream.markdown(`🟡 Modified: ${modified}\n`);
         stream.markdown(`🔴 Deleted: ${deleted}\n`);
         if (renamed > 0) stream.markdown(`🔵 Renamed: ${renamed}\n`);
         stream.markdown('\n');
-        
+
         // Step 3: Analyze dependencies for PR files
         stream.markdown('🔗 Analyzing dependencies and dependents...\n\n');
-        
+
         const analyzer = new PRDependencyAnalyzer(workspaceRoot);
         let graph;
-        
+
         try {
             graph = await analyzer.analyzePRFiles(prFiles);
         } catch (error) {
             stream.markdown(`❌ **Analysis Error:** ${error.message}\n\n`);
-            
+
             if (error.message.includes('cache') || error.message.includes('graph')) {
                 stream.markdown('💡 **Tip:** Run `@dependency` first to build the workspace dependency cache\n\n');
             }
-            
+
             return;
         }
-        
+
         // Step 4: Show extracted symbols with impact analysis
         if (!isProd) {
             stream.markdown('✨ **Symbol Extraction Results:**\n\n');
-            
+
             const prNodesWithSymbols = graph.nodes.filter(n => n.isPRFile);
-            
+
             if (prNodesWithSymbols.length === 0) {
                 stream.markdown('ℹ️ No PR files found\n\n');
             }
-            
+
             let totalSymbols = 0;
             const symbolToDependentsMap = graph.symbolToDependentsMap || new Map();
-            
+
             for (const prNode of prNodesWithSymbols) {
                 stream.markdown(`📄 **File:** ${prNode.prPath}\n\n`);
-                
+
                 if (!prNode.changedSymbols || prNode.changedSymbols.length === 0) {
                     stream.markdown('  ℹ️ No symbols extracted\n\n');
                     continue;
                 }
-                
+
                 stream.markdown(`🔤 **Symbols (${prNode.changedSymbols.length}):**\n\n`);
-                
+
                 for (const symbol of prNode.changedSymbols) {
                     // Handle both string and object formats
                     const symbolName = typeof symbol === 'string' ? symbol : symbol.fullName;
                     const symbolType = typeof symbol === 'object' ? symbol.type : 'unknown';
-                    
+
                     stream.markdown(`  - \`${symbolName}\` _(${symbolType})_`);
-                    
+
                     // Show impacted files for this symbol
                     const impactedFiles = symbolToDependentsMap.get(symbolName) || [];
                     if (impactedFiles.length > 0) {
                         stream.markdown(` → **${impactedFiles.length} files**`);
                     }
-                    
+
                     stream.markdown('\n');
                     totalSymbols++;
                 }
-                
+
                 stream.markdown('\n');
             }
-            
+
             // Step 5: Show Impact Analysis Summary
             stream.markdown('\n---\n\n');
             stream.markdown('📊 **Impact Analysis Summary:**\n\n');
@@ -1243,20 +1345,20 @@ async function handlePRDependencyAnalysis(prUrl, stream, token, workspaceRoot) {
             stream.markdown(`- **Total Files Analyzed:** ${graph.nodes.length}\n`);
             stream.markdown(`- **Impacted Files:** ${graph.nodes.filter(n => n.nodeType === 'dependent').length}\n`);
             stream.markdown(`- **Dependencies:** ${graph.nodes.filter(n => n.nodeType === 'dependency').length}\n\n`);
-            
+
             // Show top impacted symbols
             if (symbolToDependentsMap.size > 0) {
                 stream.markdown('🔥 **Top Impacted Symbols:**\n\n');
-                
+
                 const sortedSymbols = Array.from(symbolToDependentsMap.entries())
                     .sort((a, b) => b[1].length - a[1].length)
                     .slice(0, 5);
-                
+
                 for (const [symbolName, dependents] of sortedSymbols) {
-                    const impactLevel = dependents.length > 5 ? '🔴 HIGH' : 
-                                    dependents.length > 2 ? '🟡 MEDIUM' : '🟢 LOW';
+                    const impactLevel = dependents.length > 5 ? '🔴 HIGH' :
+                        dependents.length > 2 ? '🟡 MEDIUM' : '🟢 LOW';
                     stream.markdown(`  ${impactLevel} \`${symbolName}\` → **${dependents.length} files**\n`);
-                    
+
                     // Show first 3 impacted files
                     const preview = dependents.slice(0, 3);
                     for (const file of preview) {
@@ -1272,15 +1374,15 @@ async function handlePRDependencyAnalysis(prUrl, stream, token, workspaceRoot) {
                 stream.markdown('✅ **No external files impacted** (low risk change)\n\n');
             }
         }
-        
+
         // Step 6: Display graph
         stream.markdown('\n🎨 Opening graph viewer...\n\n');
-        
+
         const summary = graph.prSummary;
         await createPRGraphWebview(graph, prInfo, summary);
-        
+
         stream.markdown('✅ **Graph viewer opened!** Check the new tab for visual analysis.\n\n');
-        
+
     } catch (error) {
         console.error('❌ PR dependency analysis error:', error);
         stream.markdown(`❌ **Unexpected Error:** ${error.message}\n\n`);
@@ -1344,11 +1446,11 @@ async function createPRGraphWebview(graph, prInfo, summary) {
                 retainContextWhenHidden: true
             }
         );
-        
+
         // Generate HTML with PR-enhanced graph
         const html = generatePRGraphWebviewHtml(graph, summary, prInfo);
         panel.webview.html = html;
-        
+
         // Handle messages from webview
         panel.webview.onDidReceiveMessage(
             async message => {
@@ -1357,7 +1459,7 @@ async function createPRGraphWebview(graph, prInfo, summary) {
             undefined,
             extensionContext.subscriptions
         );
-        
+
     } catch (error) {
         console.error('❌ Error creating PR graph webview:', error);
         vscode.window.showErrorMessage(`Failed to create graph viewer: ${error.message}`);
@@ -1369,34 +1471,34 @@ async function createPRGraphWebview(graph, prInfo, summary) {
  */
 function generatePRGraphWebviewHtml(graph, summary, prInfo) {
     const extensionPath = extensionContext ? extensionContext.extensionPath : __dirname;
-    
+
     // Read HTML template
     const htmlTemplatePath = path.join(extensionPath, 'scripts', 'dependency-graph', 'graph-view.html');
     let htmlTemplate = fs.readFileSync(htmlTemplatePath, 'utf8');
-    
+
     // Read TypeScript script
     const scriptPath = path.join(extensionPath, 'scripts', 'dependency-graph', 'graph-view.ts');
     let scriptContent = fs.readFileSync(scriptPath, 'utf8');
-    
+
     // 🔥 Filter graph to show only impacted nodes in PR mode
     const symbolToDependentsMap = graph.symbolToDependentsMap;
     let filteredNodes = graph.nodes;
     let filteredEdges = graph.edges;
     let impactedPaths = new Set(); // ✅ Moved outside for access in map()
-    
+
     console.log(`📊 Original graph: ${graph.nodes.length} nodes, ${graph.edges.length} edges`);
     console.log(`📊 symbolToDependentsMap type:`, symbolToDependentsMap?.constructor?.name, 'size:', symbolToDependentsMap?.size);
-    
+
     // Check if symbolToDependentsMap exists and has data (could be Map or Object)
     const hasImpactData = symbolToDependentsMap && (
         (symbolToDependentsMap instanceof Map && symbolToDependentsMap.size > 0) ||
         (typeof symbolToDependentsMap === 'object' && Object.keys(symbolToDependentsMap).length > 0)
     );
-    
+
     if (hasImpactData) {
         // Collect all impacted file paths
         // impactedPaths is already defined
-        
+
         // Handle both Map and Object formats
         if (symbolToDependentsMap instanceof Map) {
             for (const [symbol, files] of symbolToDependentsMap) {
@@ -1409,15 +1511,15 @@ function generatePRGraphWebviewHtml(graph, summary, prInfo) {
                 files.forEach(f => impactedPaths.add(f));
             }
         }
-        
+
         console.log(`🎯 Total impacted files from symbols: ${impactedPaths.size}`);
         console.log(`🎯 Impacted paths:`, Array.from(impactedPaths));
-        
+
         // Keep: PR files + dependencies + actually impacted dependents
         const keepNodeIds = new Set();
         filteredNodes = graph.nodes.filter(node => {
             console.log(`   Checking node: ${node.id}, type: ${node.nodeType}, isPR: ${node.isPRFile}`);
-            
+
             // Always keep PR files
             if (node.isPRFile) {
                 keepNodeIds.add(node.id);
@@ -1459,14 +1561,14 @@ function generatePRGraphWebviewHtml(graph, summary, prInfo) {
             console.log(`      ❌ Filter out (other type)`);
             return false;
         });
-        
+
         // Filter edges to only include connections between kept nodes
         filteredEdges = graph.edges.filter(edge => {
             const sourceId = edge.source.id || edge.source;
             const targetId = edge.target.id || edge.target;
             return keepNodeIds.has(sourceId) && keepNodeIds.has(targetId);
         });
-        
+
         console.log(`🎯 Filtered graph: ${filteredNodes.length} nodes (from ${graph.nodes.length}), ${filteredEdges.length} edges (from ${graph.edges.length})`);
     } else {
         console.log(`⚠️ No impact data available, filtering to show ONLY PR files`);
@@ -1475,13 +1577,13 @@ function generatePRGraphWebviewHtml(graph, summary, prInfo) {
         filteredNodes = graph.nodes.filter(node => node.isPRFile);
         filteredEdges = []; // No edges if no impacts
     }
-    
+
     // Prepare PR-enhanced graph data
     const graphDataJson = JSON.stringify({
         nodes: filteredNodes.map(node => {
             const angularEntities = node.metadata?.angularEntities || {};
             const primaryEntity = getNodeDisplayName(node, angularEntities);
-            
+
             return {
                 id: node.id,
                 fileName: node.fileName || 'unknown',
@@ -1514,24 +1616,24 @@ function generatePRGraphWebviewHtml(graph, summary, prInfo) {
             summary: summary
         },
         // Add symbol impact mapping for accurate dependent filtering
-        symbolToDependentsMap: graph.symbolToDependentsMap ? 
+        symbolToDependentsMap: graph.symbolToDependentsMap ?
             Object.fromEntries(graph.symbolToDependentsMap) : null
     });
-    
+
     const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath || '';
     const searchTerm = `PR #${prInfo.prId}`;
-    
+
     // Replace placeholders
     htmlTemplate = htmlTemplate.replace('{{SEARCH_TERM}}', searchTerm);
     htmlTemplate = htmlTemplate.replace('{{NODE_COUNT}}', filteredNodes.length);
-    
+
     scriptContent = scriptContent.replace('__GRAPH_DATA__', graphDataJson);
     scriptContent = scriptContent.replace('__SEARCH_TERM__', JSON.stringify(searchTerm));
     scriptContent = scriptContent.replace('__WORKSPACE_ROOT__', JSON.stringify(workspaceRoot));
-    
+
     // Inject script into HTML
     htmlTemplate = htmlTemplate.replace('/*__GRAPH_SCRIPT__*/', scriptContent);
-    
+
     return htmlTemplate;
 }
 
@@ -1543,26 +1645,26 @@ function generatePRGraphWebviewHtml(graph, summary, prInfo) {
 function generateFilteredGraphWebviewHtml(graph, summary, searchTerm) {
     // Get extension path from context
     const extensionPath = extensionContext ? extensionContext.extensionPath : __dirname;
-    
+
     // Read HTML template
     const htmlTemplatePath = path.join(extensionPath, 'scripts', 'dependency-graph', 'graph-view.html');
     let htmlTemplate = fs.readFileSync(htmlTemplatePath, 'utf8');
-    
+
     // Read TypeScript script
     const scriptPath = path.join(extensionPath, 'scripts', 'dependency-graph', 'graph-view.ts');
     let scriptContent = fs.readFileSync(scriptPath, 'utf8');
-    
+
     // Replace placeholders in HTML
     htmlTemplate = htmlTemplate.replace('{{SEARCH_TERM}}', searchTerm);
     htmlTemplate = htmlTemplate.replace('{{NODE_COUNT}}', graph.nodes.length);
-    
+
     // Prepare graph data with Angular entity info
     const graphDataJson = JSON.stringify({
         nodes: graph.nodes.map(node => {
             // Extract Angular entities for display
             const angularEntities = node.metadata?.angularEntities || {};
             const primaryEntity = getNodeDisplayName(node, angularEntities);
-            
+
             return {
                 id: node.id,
                 fileName: node.fileName || 'unknown',
@@ -1581,18 +1683,18 @@ function generateFilteredGraphWebviewHtml(graph, summary, searchTerm) {
         }),
         edges: graph.edges
     });
-    
+
     // Get workspace root for file reading in AI analysis
     const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath || '';
-    
+
     // Replace script placeholders
     scriptContent = scriptContent.replace('__GRAPH_DATA__', graphDataJson);
     scriptContent = scriptContent.replace('__SEARCH_TERM__', JSON.stringify(searchTerm));
     scriptContent = scriptContent.replace('__WORKSPACE_ROOT__', JSON.stringify(workspaceRoot));
-    
+
     // Inject script into HTML
     htmlTemplate = htmlTemplate.replace('/*__GRAPH_SCRIPT__*/', scriptContent);
-    
+
     return htmlTemplate;
 }
 
@@ -1607,28 +1709,28 @@ async function analyzeFileDependency(uri) {
 
     const filePath = uri.fsPath;
     const workspaceFolder = vscode.workspace.getWorkspaceFolder(uri);
-    
+
     if (!workspaceFolder) {
         vscode.window.showErrorMessage('File must be part of a workspace');
         return;
     }
 
     const workspaceRoot = workspaceFolder.uri.fsPath;
-    
+
     vscode.window.withProgress({
         location: vscode.ProgressLocation.Notification,
         title: "Analyzing File Dependencies",
         cancellable: false
     }, async (progress) => {
         progress.report({ message: "Building dependency graph..." });
-        
+
         try {
             const analyzer = new FileDependencyAnalyzer(workspaceRoot);
             const graph = await analyzer.analyzeFile(filePath);
-            
+
             progress.report({ message: "Generating visualization..." });
             await createFileGraphWebview(graph, filePath);
-            
+
         } catch (error) {
             console.error('Error analyzing file dependency:', error);
             vscode.window.showErrorMessage(`Analysis failed: ${error.message}`);
@@ -1651,10 +1753,10 @@ async function createFileGraphWebview(graph, filePath) {
                 retainContextWhenHidden: true
             }
         );
-        
+
         const html = generateFileGraphWebviewHtml(graph, fileName);
         panel.webview.html = html;
-        
+
         // Handle messages from webview
         panel.webview.onDidReceiveMessage(
             async message => {
@@ -1667,7 +1769,7 @@ async function createFileGraphWebview(graph, filePath) {
             undefined,
             extensionContext.subscriptions
         );
-        
+
     } catch (error) {
         console.error('❌ Error creating file graph webview:', error);
         vscode.window.showErrorMessage(`Failed to create graph viewer: ${error.message}`);
@@ -1676,15 +1778,15 @@ async function createFileGraphWebview(graph, filePath) {
 
 function generateFileGraphWebviewHtml(graph, fileName) {
     const extensionPath = extensionContext ? extensionContext.extensionPath : __dirname;
-    
+
     // Read HTML template
     const htmlTemplatePath = path.join(extensionPath, 'scripts', 'dependency-graph', 'graph-view.html');
     let htmlTemplate = fs.readFileSync(htmlTemplatePath, 'utf8');
-    
+
     // Read TypeScript script
     const scriptPath = path.join(extensionPath, 'scripts', 'dependency-graph', 'graph-view.ts');
     let scriptContent = fs.readFileSync(scriptPath, 'utf8');
-    
+
     // Prepare data for the view
     const graphData = {
         nodes: graph.nodes,
@@ -1693,18 +1795,18 @@ function generateFileGraphWebviewHtml(graph, fileName) {
         mode: 'file', // Tell the view it's single file mode
         targetFile: fileName
     };
-    
+
     const graphDataJson = JSON.stringify(graphData);
-    
+
     // Inject data
     scriptContent = scriptContent.replace('__GRAPH_DATA__', graphDataJson);
     // Inject empty search term and workspace root
     scriptContent = scriptContent.replace('__SEARCH_TERM__', '""');
     scriptContent = scriptContent.replace('__WORKSPACE_ROOT__', '""');
-    
+
     // Inject script into HTML
     htmlTemplate = htmlTemplate.replace('/*__GRAPH_SCRIPT__*/', scriptContent);
-    
+
     return htmlTemplate;
 }
 
@@ -1712,5 +1814,6 @@ function generateFileGraphWebviewHtml(graph, fileName) {
 module.exports = {
     initializeDependencyGraph,
     aiDependencyAnalysis,
-    analyzeFileDependency
+    analyzeFileDependency,
+    activateDependencyWatcherIfCacheExists
 };

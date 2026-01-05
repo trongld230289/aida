@@ -4,19 +4,23 @@ const fs = require('fs');
 const { VSCodeApiDependencyAnalyzer } = require('./dependency-graph/vscode-api-analyzer');
 const { aidaLogging } = require('./settings');
 
-const CACHE_VERSION = '1.0';
+const CACHE_VERSION = '1.1';
 
 class DependencyGraphService {
     constructor(workspaceRoot) {
         this.workspaceRoot = workspaceRoot;
-        this.vscodeAnalyzer = new VSCodeApiDependencyAnalyzer();
+        this.vscodeAnalyzer = new VSCodeApiDependencyAnalyzer(workspaceRoot);
         this.fullGraph = null;
         this.cacheFilePath = path.join(workspaceRoot, '.vscode', 'dependency-cache.json');
-        
+
         // 🔥 NEW: Listen for incremental updates
         this.vscodeAnalyzer.onGraphUpdate = () => {
             this.handleGraphUpdate();
         };
+    }
+
+    isGraphReady() {
+        return this.vscodeAnalyzer && this.vscodeAnalyzer.isReady;
     }
 
     /**
@@ -43,17 +47,21 @@ class DependencyGraphService {
      */
     saveCache() {
         if (!this.fullGraph) return;
-        
+
         try {
             const cacheDir = path.dirname(this.cacheFilePath);
             if (!fs.existsSync(cacheDir)) {
                 fs.mkdirSync(cacheDir, { recursive: true });
             }
 
+            // Generate report to ensure compatibility with dependency.js
+            const report = this.vscodeAnalyzer.generateReport(this.fullGraph);
+
             fs.writeFileSync(this.cacheFilePath, JSON.stringify({
                 version: CACHE_VERSION,
                 timestamp: Date.now(),
-                graph: this.fullGraph
+                graph: this.fullGraph,
+                report: report // 🔥 Save report
             }, null, 2));
 
             aidaLogging(`✅ Saved graph cache: ${this.fullGraph.nodes.length} nodes`);
@@ -77,10 +85,10 @@ class DependencyGraphService {
                 const cacheData = JSON.parse(fs.readFileSync(this.cacheFilePath, 'utf8'));
                 if (cacheData.version === CACHE_VERSION && cacheData.graph) {
                     this.fullGraph = cacheData.graph;
-                    
+
                     // 🔥 NEW: Restore analyzer state from cache so Watcher works
                     this.vscodeAnalyzer.loadFromCache(this.fullGraph);
-                    
+
                     aidaLogging(`✅ Loaded graph from cache: ${this.fullGraph.nodes.length} nodes, ${this.fullGraph.edges.length} edges`);
                     return this.fullGraph;
                 }
@@ -100,11 +108,30 @@ class DependencyGraphService {
     }
 
     /**
+     * Update a single file in the graph
+     */
+    async updateFile(uri) {
+        if (this.vscodeAnalyzer) {
+            await this.vscodeAnalyzer.processFile(uri);
+        }
+    }
+
+    /**
+     * Remove a file from the graph
+     */
+    removeFile(uri) {
+        if (this.vscodeAnalyzer) {
+            // Not implemented in analyzer yet, but good to have the hook
+            // this.vscodeAnalyzer.removeFile(uri);
+        }
+    }
+
+    /**
      * Build full workspace dependency graph
      */
     async buildFullGraph() {
         aidaLogging('📊 Analyzing workspace dependencies...');
-        
+
         try {
             const graph = await this.vscodeAnalyzer.analyze();
             aidaLogging(`✅ Built graph: ${graph.nodes.length} nodes, ${graph.edges.length} edges`);
@@ -114,7 +141,7 @@ class DependencyGraphService {
             throw error;
         }
     }
-    
+
     /**
      * Get the language configuration from the analyzer
      */

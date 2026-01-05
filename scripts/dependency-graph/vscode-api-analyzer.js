@@ -15,24 +15,24 @@ const { DependencyUtils } = require('./dependency-utils');
 class VSCodeApiDependencyAnalyzer {
     constructor(workspaceRoot) {
         this.workspaceRoot = workspaceRoot;
-        
+
         // 🔥 NEW: Use Graph Model instead of raw Map
         this.model = new DependencyGraphModel();
-        
+
         // 🔥 NEW: Watcher for incremental updates
         this.watcher = new GraphWatcher(this);
         this.isReady = false;
 
         // 🔥 NEW: Barrel resolver for advanced barrel file handling
         this.barrelResolver = new BarrelResolver();
-        
+
         // Configuration-driven language support
         this.languageConfig = languageConfig;
-        
+
         // Build extension to language mapping for fast lookup
         this.extensionMap = this.buildExtensionMap();
     }
-    
+
     /**
      * Build extension to language mapping
      * @returns {Map} - Extension to language map
@@ -52,18 +52,18 @@ class VSCodeApiDependencyAnalyzer {
     loadFromCache(graphData) {
         try {
             this.model.clear();
-            
+
             // Reconstruct adjacency list from edges
             if (graphData.edges) {
                 for (const edge of graphData.edges) {
                     this.model.addDependency(edge.source, edge.target);
                 }
             }
-            
+
             // Mark as ready and start watching
             this.isReady = true;
             this.watcher.startWatching();
-            
+
             aidaLogging('✅ Graph model restored from cache');
         } catch (error) {
             console.error('❌ Failed to load graph from cache:', error);
@@ -78,33 +78,33 @@ class VSCodeApiDependencyAnalyzer {
     async analyze() {
         try {
             aidaLogging('🔍 Starting Symbol Crawling analysis...');
-            
+
             // Reset graph
             this.model.clear();
             this.isReady = false;
-            
+
             // Step 1: Find all source files
             const sourceFiles = await this.findSourceFiles();
             aidaLogging(`📁 Found ${sourceFiles.length} source files`);
-            
+
             // Step 2: Process each file with throttling
             for (let i = 0; i < sourceFiles.length; i++) {
                 const fileUri = sourceFiles[i];
                 aidaLogging(`📝 Processing ${i + 1}/${sourceFiles.length}: ${path.basename(fileUri.fsPath)}`);
-                
+
                 await this.processFile(fileUri);
-                
+
                 // Throttle to prevent freezing Extension Host
                 await this.sleep(5);
             }
-            
+
             // Mark graph as ready and start watching
             this.isReady = true;
             this.watcher.startWatching();
-            
+
             // Step 3: Convert to nodes/edges format
             return this.buildGraphResult();
-            
+
         } catch (error) {
             console.error('❌ Symbol crawling failed:', error);
             throw new Error(`Symbol crawling analysis failed: ${error.message}`);
@@ -121,28 +121,20 @@ class VSCodeApiDependencyAnalyzer {
             Object.values(this.languageConfig)
                 .flatMap(config => config.extensions.map(ext => `**/*${ext}`))
         )];
-        
+
         // Collect all exclude patterns from language configs + common excludes
-        const commonExcludes = [
-            '**/.vscode/**',
-            '**/.git/**',
-            '**/.vs/**',
-            '**/.*/**',           // Any folder starting with dot
-            '**/test/**',         // Generic test folders
-            '**/tests/**',
-            '**/environments/**', // 🔥 Exclude environments
-            '**/scripts/**'       // 🔥 Exclude scripts folder
-        ];
-        
+        const { commonIgnores } = require('../ignore-rules');
+        const commonExcludes = commonIgnores;
+
         const languageExcludes = [...new Set(
             Object.values(this.languageConfig)
                 .flatMap(config => config.excludePatterns || [])
         )];
-        
+
         const excludePatterns = [...commonExcludes, ...languageExcludes];
-        
+
         const allFiles = [];
-        
+
         for (const pattern of patterns) {
             try {
                 const files = await vscode.workspace.findFiles(
@@ -154,7 +146,7 @@ class VSCodeApiDependencyAnalyzer {
                 console.warn(`⚠️ Error finding files with pattern ${pattern}:`, error.message);
             }
         }
-        
+
         // Remove duplicates and filter workspace files
         const uniqueFiles = Array.from(new Set(allFiles.map(uri => uri.toString())))
             .map(uriString => vscode.Uri.parse(uriString))
@@ -166,7 +158,7 @@ class VSCodeApiDependencyAnalyzer {
                 // We compare normalized paths to be safe
                 return path.normalize(fileDir) !== path.normalize(this.workspaceRoot);
             });
-            
+
         return uniqueFiles;
     }
 
@@ -175,35 +167,43 @@ class VSCodeApiDependencyAnalyzer {
      * @param {vscode.Uri} fileUri - File to process
      */
     async processFile(fileUri) {
+        // 🔥 Safety Check: Explicitly ignore node_modules and output directories
+        // This prevents accidental scanning if glob patterns fail
+        if (fileUri.fsPath.includes('node_modules') ||
+            fileUri.fsPath.includes('out-tsc') ||
+            fileUri.fsPath.includes('coverage')) {
+            return;
+        }
+
         try {
             const document = await vscode.workspace.openTextDocument(fileUri);
             const text = document.getText();
             const extension = path.extname(fileUri.fsPath).toLowerCase();
-            
+
             // Initialize source file in graph
             const sourceFile = this.getRelativePath(fileUri.fsPath);
             // Ensure node exists in model
             if (!this.model.adjacencyList.has(sourceFile)) {
                 this.model.adjacencyList.set(sourceFile, new Set());
             }
-            
+
             // Auto-detect language from extension
             const language = this.extensionMap.get(extension);
             if (!language) {
                 // console.warn(`⚠️ Unsupported file extension: ${extension}`);
                 return;
             }
-            
+
             // Process file with language-specific configuration
             const config = this.languageConfig[language];
             await this.processWithConfig(document, text, sourceFile, config, language);
-            
+
             // 🔥 NEW: Asset Fallback (Sibling Convention)
             // If it's a TS/JS file, check for sibling HTML/CSS
             if (language === 'typescript' || language === 'javascript') {
                 await this.processSiblingAssets(fileUri, sourceFile);
             }
-            
+
         } catch (error) {
             console.warn(`⚠️ Error processing file ${fileUri.fsPath}:`, error.message);
         }
@@ -216,10 +216,10 @@ class VSCodeApiDependencyAnalyzer {
      */
     async processSiblingAssets(fileUri, sourceFile) {
         const extensions = ['.html', '.css', '.scss', '.less', '.sass'];
-        
+
         // Use shared utility
         const siblings = DependencyUtils.findSiblingFiles(fileUri.fsPath, extensions);
-        
+
         for (const siblingPath of siblings) {
             const targetFile = this.getRelativePath(siblingPath);
             this.model.addDependency(sourceFile, targetFile);
@@ -237,16 +237,16 @@ class VSCodeApiDependencyAnalyzer {
     async processWithConfig(document, text, sourceFile, config, language) {
         try {
             const processedSymbols = new Set();
-            
+
             // 1. Try VS Code Link Provider (High Accuracy for Imports)
             try {
                 const links = await vscode.commands.executeCommand('vscode.executeLinkProvider', document.uri);
                 if (links && links.length > 0) {
                     for (const link of links) {
                         if (!link.target) continue;
-                        
+
                         const targetPath = link.target.fsPath;
-                        
+
                         // Filter out external dependencies & self-references
                         if (this.isExternalDependency(targetPath) || targetPath === document.uri.fsPath) {
                             continue;
@@ -271,12 +271,12 @@ class VSCodeApiDependencyAnalyzer {
                     // Filter for Module/Namespace/Package symbols which usually represent imports
                     // SymbolKind: Module=2, Namespace=3, Package=4
                     const importSymbols = symbols.filter(s => s.kind === 2 || s.kind === 3 || s.kind === 4);
-                    
+
                     for (const symbol of importSymbols) {
                         // Use the symbol location to resolve definition
                         const position = symbol.selectionRange ? symbol.selectionRange.start : symbol.location.range.start;
                         const targetFile = await this.resolveDefinition(document, position);
-                        
+
                         if (targetFile) {
                             this.model.addDependency(sourceFile, targetFile);
                             aidaLogging(`🔗 ${sourceFile} -> ${targetFile} (symbol-provider)`);
@@ -292,36 +292,36 @@ class VSCodeApiDependencyAnalyzer {
                 let match;
                 // Reset regex lastIndex for reuse
                 pattern.lastIndex = 0;
-                
+
                 while ((match = pattern.exec(text)) !== null) {
                     // We no longer filter by isExternalImport here
                     // We let the LSP resolve it and check the final path
-                    
+
                     await this.resolveAndAddDependency(document, text, match, sourceFile, 'import');
                     await this.sleep(5);
                 }
             }
-            
+
             // 3. Process class/type references (Symbol Crawling)
             if (config.classPattern) {
                 let match;
                 config.classPattern.lastIndex = 0;
-                
+
                 while ((match = config.classPattern.exec(text)) !== null) {
                     const symbol = match[1];
-                    
+
                     // Skip already processed symbols
                     // We no longer filter by standardLibraries here
                     if (processedSymbols.has(symbol)) {
                         continue;
                     }
                     processedSymbols.add(symbol);
-                    
+
                     await this.resolveAndAddDependency(document, text, match, sourceFile, `class: ${symbol}`);
                     await this.sleep(5);
                 }
             }
-            
+
         } catch (error) {
             console.warn(`⚠️ Error processing ${language} file:`, error.message);
         }
@@ -342,11 +342,11 @@ class VSCodeApiDependencyAnalyzer {
             if (type === 'import' && match[1] && match[1].startsWith('.')) {
                 const dir = path.dirname(document.uri.fsPath);
                 const candidate = DependencyUtils.resolveRelativeImport(dir, match[1]);
-                
+
                 if (candidate) {
-                     const targetFile = this.getRelativePath(candidate);
-                     this.model.addDependency(sourceFile, targetFile);
-                     return; // Skip LSP
+                    const targetFile = this.getRelativePath(candidate);
+                    this.model.addDependency(sourceFile, targetFile);
+                    return; // Skip LSP
                 }
             }
 
@@ -364,7 +364,7 @@ class VSCodeApiDependencyAnalyzer {
             const line = text.substring(0, absoluteIndex).split('\n').length - 1;
             const character = absoluteIndex - text.lastIndexOf('\n', absoluteIndex) - 1;
             const position = new vscode.Position(line, character);
-            
+
             // Use VS Code LSP to resolve actual file
             const targetFile = await this.resolveDefinition(document, position);
             if (targetFile) {
@@ -398,11 +398,11 @@ class VSCodeApiDependencyAnalyzer {
                 console.warn(`⚠️ LSP error for ${document.fileName}:${position.line} - ${lspError.message}`);
                 return null;
             });
-            
+
             if (!definitions || definitions.length === 0) {
                 return null;
             }
-            
+
             // Handle both Location and LocationLink formats
             for (const definition of definitions) {
                 let targetUri;
@@ -415,14 +415,14 @@ class VSCodeApiDependencyAnalyzer {
                 } else {
                     continue;
                 }
-                
+
                 const targetPath = targetUri.fsPath;
-                
+
                 // Filter out external dependencies
                 if (this.isExternalDependency(targetPath) || targetPath === document.uri.fsPath) {
                     continue;
                 }
-                
+
                 // Return first valid workspace file
                 if (targetPath.startsWith(this.workspaceRoot)) {
                     // Check if it's a barrel file (index.ts/js)
@@ -433,7 +433,7 @@ class VSCodeApiDependencyAnalyzer {
                         // Since we don't have the symbol name easily here, we accept the barrel file as a dependency.
                         // The consumer -> barrel link is valid.
                         // Ideally, we should also link barrel -> implementation, which happens when we scan the barrel file itself.
-                        
+
                         // However, if the user wants "Consumer -> Implementation" direct link, we would need to parse the barrel.
                         // For now, let's return the barrel file. The graph will be Consumer -> Barrel -> Implementation.
                         // This is technically correct for a dependency graph.
@@ -443,9 +443,9 @@ class VSCodeApiDependencyAnalyzer {
                     return this.getRelativePath(targetPath);
                 }
             }
-            
+
             return null;
-            
+
         } catch (error) {
             // Language server might not be available
             return null;
@@ -486,14 +486,14 @@ class VSCodeApiDependencyAnalyzer {
      */
     async updateFile(fileUri) {
         const sourceFile = this.getRelativePath(fileUri.fsPath);
-        
+
         // 1. Clear existing dependencies for this file
         this.model.clearDependencies(sourceFile);
-        
+
         // 2. Re-analyze the file
         aidaLogging(`🔄 Updating graph for: ${sourceFile}`);
         await this.processFile(fileUri);
-        
+
         // 3. Notify listeners
         if (this.onGraphUpdate) {
             this.onGraphUpdate();
@@ -508,7 +508,7 @@ class VSCodeApiDependencyAnalyzer {
         const sourceFile = this.getRelativePath(fileUri.fsPath);
         this.model.removeNode(sourceFile);
         aidaLogging(`🗑️ Removed from graph: ${sourceFile}`);
-        
+
         // Notify listeners
         if (this.onGraphUpdate) {
             this.onGraphUpdate();
@@ -521,19 +521,19 @@ class VSCodeApiDependencyAnalyzer {
     buildGraphResult() {
         const nodes = [];
         const edges = [];
-        
+
         // Create nodes for all files that have dependencies or are dependencies
         const allFileIds = new Set();
         for (const [sourceFile, dependencies] of this.model.adjacencyList) {
             allFileIds.add(sourceFile);
             dependencies.forEach(dep => allFileIds.add(dep));
         }
-        
+
         // Create nodes for all referenced files
         for (const fileId of allFileIds) {
             const fullPath = path.join(this.workspaceRoot, fileId);
             const fileName = path.basename(fullPath);
-            
+
             const node = {
                 id: fileId,
                 fileName,
@@ -544,14 +544,14 @@ class VSCodeApiDependencyAnalyzer {
                 dependencies: Array.from(this.model.getDependencies(fileId)),
                 dependents: []
             };
-            
+
             nodes.push(node);
         }
-        
+
         // Create edges and update dependents
         let edgeId = 0;
         const nodeIdSet = new Set(nodes.map(n => n.id));
-        
+
         for (const [sourceFile, dependencies] of this.model.adjacencyList) {
             for (const targetFile of dependencies) {
                 // Only create edge if both source and target nodes exist
@@ -565,9 +565,9 @@ class VSCodeApiDependencyAnalyzer {
                         strength: 'medium',
                         discoveredBy: 'symbol-crawling'
                     };
-                    
+
                     edges.push(edge);
-                    
+
                     // Update dependents
                     const targetNode = nodes.find(n => n.id === targetFile);
                     if (targetNode && !targetNode.dependents.includes(sourceFile)) {
@@ -576,7 +576,7 @@ class VSCodeApiDependencyAnalyzer {
                 }
             }
         }
-        
+
         return {
             nodes,
             edges,
@@ -610,28 +610,28 @@ class VSCodeApiDependencyAnalyzer {
         // Calculate basic metrics
         const totalFiles = graph.nodes.length;
         const totalDependencies = graph.edges.length;
-        
+
         // Calculate file type distribution
         const typeDistribution = {};
         graph.nodes.forEach(node => {
             typeDistribution[node.type] = (typeDistribution[node.type] || 0) + 1;
         });
-        
+
         // Calculate language distribution  
         const languageDistribution = {};
         graph.nodes.forEach(node => {
             languageDistribution[node.language] = (languageDistribution[node.language] || 0) + 1;
         });
-        
+
         // Find most connected files
         const connectionCounts = {};
         graph.edges.forEach(edge => {
             connectionCounts[edge.source] = (connectionCounts[edge.source] || 0) + 1;
             connectionCounts[edge.target] = (connectionCounts[edge.target] || 0) + 1;
         });
-        
+
         const mostConnected = Object.entries(connectionCounts)
-            .sort(([,a], [,b]) => b - a)
+            .sort(([, a], [, b]) => b - a)
             .slice(0, 10)
             .map(([file, count]) => ({
                 file: file,
@@ -641,7 +641,7 @@ class VSCodeApiDependencyAnalyzer {
 
         // Detect potential circular dependencies
         const circularDeps = this.detectCircularDependencies(graph);
-        
+
         return {
             summary: {
                 totalFiles,
@@ -667,7 +667,7 @@ class VSCodeApiDependencyAnalyzer {
         const visited = new Set();
         const recursionStack = new Set();
         const cycles = [];
-        
+
         const dfs = (nodeId, path = []) => {
             if (recursionStack.has(nodeId)) {
                 // Found a cycle
@@ -676,30 +676,30 @@ class VSCodeApiDependencyAnalyzer {
                 cycles.push(cycle);
                 return;
             }
-            
+
             if (visited.has(nodeId)) return;
-            
+
             visited.add(nodeId);
             recursionStack.add(nodeId);
             path.push(nodeId);
-            
+
             // Find outgoing edges
             const outgoingEdges = graph.edges.filter(edge => edge.source === nodeId);
             for (const edge of outgoingEdges) {
                 dfs(edge.target, [...path]);
             }
-            
+
             recursionStack.delete(nodeId);
             path.pop();
         };
-        
+
         // Start DFS from each unvisited node
         for (const node of graph.nodes) {
             if (!visited.has(node.relativePath)) {
                 dfs(node.relativePath, []);
             }
         }
-        
+
         return cycles;
     }
 
@@ -708,11 +708,11 @@ class VSCodeApiDependencyAnalyzer {
      */
     generateRecommendations(graph, mostConnected, circularDeps) {
         const recommendations = [];
-        
+
         // High coupling recommendations
         const highCouplingThreshold = 10;
         const highCouplingFiles = mostConnected.filter(item => item.connections > highCouplingThreshold);
-        
+
         if (highCouplingFiles.length > 0) {
             recommendations.push({
                 type: 'high-coupling',
@@ -723,7 +723,7 @@ class VSCodeApiDependencyAnalyzer {
                 action: 'Consider breaking down large components or services into smaller, more focused units.'
             });
         }
-        
+
         // Circular dependency recommendations
         if (circularDeps.length > 0) {
             recommendations.push({
@@ -735,11 +735,11 @@ class VSCodeApiDependencyAnalyzer {
                 action: 'Break circular dependencies by introducing interfaces, moving shared code to utilities, or restructuring the dependency flow.'
             });
         }
-        
+
         // Service vs Component balance
         const services = graph.nodes.filter(n => n.type === 'service').length;
         const components = graph.nodes.filter(n => n.type === 'component').length;
-        
+
         if (components > 0 && services === 0) {
             recommendations.push({
                 type: 'architecture',
@@ -749,7 +749,7 @@ class VSCodeApiDependencyAnalyzer {
                 action: 'Create services to handle business logic, data access, and shared functionality.'
             });
         }
-        
+
         return recommendations;
     }
 

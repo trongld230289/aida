@@ -51,9 +51,15 @@ class GraphWatcher {
         // 2. File Changed
         watcher.onDidChange(async (uri) => {
             if (this.shouldIgnore(uri)) return;
+            
+            // Always log to confirm watcher is alive
+            aidaLogging(`📝 File changed event received: ${uri.fsPath}`);
+
             if (this.dependencyService.isGraphReady()) {
-                aidaLogging(`📝 File changed (FS): ${uri.fsPath}`);
+                aidaLogging(`   ✅ Graph ready, updating file...`);
                 await this.dependencyService.updateFile(uri);
+            } else {
+                aidaLogging(`   ⚠️ Graph NOT ready, skipping update.`);
             }
         });
 

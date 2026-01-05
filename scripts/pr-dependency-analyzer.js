@@ -9,7 +9,7 @@ const { DependencyGraphService } = require('./dependency-graph-service');
 const { aidaLogging } = require('./settings');
 
 // Cache management
-const CACHE_VERSION = '1.0';
+const CACHE_VERSION = '1.1';
 
 /**
  * PR Dependency Analyzer
@@ -39,23 +39,21 @@ class PRDependencyAnalyzer {
      */
     async analyzePRFiles(prFiles) {
         // 🔥 Filter out unnecessary files from analysis
+        const { commonIgnores, extensionIgnores } = require('./ignore-rules');
+        const minimatch = require('minimatch');
+
         const filteredPRFiles = prFiles.filter(file => {
             const ext = path.extname(file.path).toLowerCase();
-            const ignoredExtensions = [
-                // '.css', '.scss', '.sass', '.less', // 🔥 Allow styles to appear in PR list
-                '.json', '.xml', '.yaml', '.yml', 
-                '.md', '.txt', '.lock', '.map', 
-                '.config', '.ini', '.env'
-            ];
-            
-            // 🔥 Also ignore environment files and scripts
-            if (file.path.includes('environments/') || file.path.includes('scripts/')) {
-                aidaLogging(`🚫 Ignoring env/script file: ${file.path}`);
+
+            // Check against common ignores using minimatch
+            const isIgnored = commonIgnores.some(pattern => minimatch(file.path, pattern, { dot: true }));
+            if (isIgnored) {
+                aidaLogging(`🚫 Ignoring file (common rule): ${file.path}`);
                 return false;
             }
-            
-            if (ignoredExtensions.includes(ext)) {
-                aidaLogging(`🚫 Ignoring file: ${file.path}`);
+
+            if (extensionIgnores.includes(ext)) {
+                aidaLogging(`🚫 Ignoring file (extension): ${file.path}`);
                 return false;
             }
             return true;
@@ -71,6 +69,22 @@ class PRDependencyAnalyzer {
         // Step 2: Load full graph
         await this.graphService.ensureFullGraph();
 
+        // 🔥 FORCE UPDATE for new files
+        // The cache might be stale and missing the new files.
+        // We force the analyzer to process them now so they appear in the graph.
+        for (const file of filteredPRFiles) {
+            if (file.status === 'added' || file.status === 'add') {
+                const fullPath = path.join(this.workspaceRoot, file.path);
+                const fileUri = vscode.Uri.file(fullPath);
+                aidaLogging(`🔄 Force updating graph for new file: ${file.path}`);
+                try {
+                    await this.vscodeAnalyzer.processFile(fileUri);
+                } catch (e) {
+                    aidaLogging(`⚠️ Failed to force update file ${file.path}: ${e.message}`);
+                }
+            }
+        }
+
         // Step 3: Find PR file nodes in full graph
         const prNodes = this.findPRNodes(filteredPRFiles);
         aidaLogging(`✅ Matched ${prNodes.length} PR files to graph nodes`);
@@ -85,10 +99,10 @@ class PRDependencyAnalyzer {
                 aidaLogging(`\n🔍 Extracting symbols from: ${node.prPath}`);
                 aidaLogging(`   Patch length: ${node.prPatch?.length || 0} chars`);
                 aidaLogging(`   Patch preview: ${node.prPatch?.substring(0, 200)}...`);
-                
+
                 // 🔥 Use async extraction with VS Code API
                 const changedSymbols = await this.extractChangedSymbols(node.prPatch, node.relativePath);
-                
+
                 if (changedSymbols.length === 0) {
                     aidaLogging(`⚠️ No changed symbols extracted for: ${node.prPath}`);
                     // Don't fallback - if extraction fails, log clearly
@@ -98,13 +112,13 @@ class PRDependencyAnalyzer {
                     aidaLogging(`   Symbols: ${changedSymbols.map(s => s.fullName).join(', ')}`);
                     nodeChangedSymbols.set(node.id, changedSymbols);
                 }
-                
+
                 // Store in node for Deep Impact
                 node.changedSymbols = changedSymbols;
             } else if (node.prStatus === 'rename' && node.prPatch) {
                 // Renamed + modified file: extract changed symbols if patch exists
                 const changedSymbols = await this.extractChangedSymbols(node.prPatch, node.relativePath);
-                
+
                 if (changedSymbols.length > 0) {
                     aidaLogging(`✅ Extracted ${changedSymbols.length} changed symbols from renamed file: ${node.prPath}`);
                     aidaLogging(`   Symbols: ${changedSymbols.map(s => s.fullName).join(', ')}`);
@@ -125,10 +139,10 @@ class PRDependencyAnalyzer {
         // Step 4: Scan dependencies/dependents for each PR node
         // 🔥 REFACTOR: Simplified logic - we only need to find dependents based on symbol usage
         // The graph construction will happen in buildFilteredGraph based on edges found here
-        
+
         const relevantNodeIds = new Set(prNodes.map(n => n.id));
         let filteredDependents = 0;
-        
+
         // Track which files use which specific symbols
         const symbolToDependentsMap = new Map(); // symbol → [dependent file paths]
 
@@ -137,30 +151,35 @@ class PRDependencyAnalyzer {
                 aidaLogging(`🚫 Skipping dependency/dependent scan for deleted file: ${node.prPath}`);
                 continue;
             }
-            
+
             // Get direct dependents
             const allDependents = this.getDependents(node.id);
-            
+
             aidaLogging(`\n🔍 Analyzing file: ${node.prPath}`);
             aidaLogging(`   Node ID: ${node.id}`);
             aidaLogging(`   Node relative path: ${node.relativePath}`);
             aidaLogging(`   Changed symbols: [${node.changedSymbols?.map(s => s.fullName).join(', ') || 'none'}]`);
             aidaLogging(`   Dependents found in graph: ${allDependents.length}`);
-            
+
             if ((node.prStatus === 'edit' || node.prStatus === 'rename') && node.changedSymbols && node.changedSymbols.length > 0) {
-                // 🔥 NEW: If no direct dependents, check if this is a barrel export source
+                // ---------------------------------------------------------
+                // STRATEGY 1: Barrel / Deep Reference Analysis (VS Code API)
+                // ---------------------------------------------------------
+                // Only check for barrel usage if NO direct dependents are found.
+                // This avoids noise when we already have a clear dependency chain.
+
                 if (allDependents.length === 0) {
-                    aidaLogging(`🔍 No direct dependents → Checking for barrel export usage`);
-                    
+                    aidaLogging(`🔍 No direct dependents found → Checking for barrel export usage (Deep Impact)`);
+
                     const fullPRFilePath = path.join(this.workspaceRoot, node.relativePath);
                     const symbolFileUri = vscode.Uri.file(fullPRFilePath);
-                    
+
                     // Try to find users through barrel exports
                     for (const symbol of node.changedSymbols) {
                         const symbolPosition = new vscode.Position(symbol.lineNumber, symbol.column);
-                        
+
                         aidaLogging(`         🔍 Finding users of: ${symbol.fullName} via barrel chain`);
-                        
+
                         try {
                             const result = await this.resolveBarrelReferences(
                                 symbolFileUri,
@@ -169,58 +188,58 @@ class PRDependencyAnalyzer {
                                 new Set(),
                                 0
                             );
-                            
+
                             if (result.references.length > 0) {
                                 aidaLogging(`            📍 Found ${result.references.length} references through barrel`);
-                                
+
                                 // Extract unique file paths (excluding definition and barrel files)
                                 const userFiles = new Set();
                                 for (const ref of result.references) {
                                     const refPath = ref.uri.fsPath;
                                     const isDefinition = path.normalize(refPath) === path.normalize(fullPRFilePath);
                                     const isBarrel = await this.isBarrelExport(ref);
-                                    
+
                                     aidaLogging(`               🔍 Checking ref: ${path.basename(refPath)} (def=${isDefinition}, barrel=${isBarrel})`);
-                                    
+
                                     if (!isDefinition && !isBarrel) {
                                         const relativePath = path.relative(this.workspaceRoot, refPath).replace(/\\/g, '/');
                                         userFiles.add(relativePath);
                                     }
                                 }
-                                
+
                                 aidaLogging(`            ✅ Found ${userFiles.size} actual user files`);
-                                
+
                                 // 🔥 NEW: If no users found via references, try wildcard search through barrel
                                 if (userFiles.size === 0 && result.barrelChain && result.barrelChain.length > 0) {
                                     aidaLogging(`            🔍 No users via references → Trying wildcard search through barrel`);
-                                    
+
                                     // Find barrel file in chain
                                     for (const barrelInfo of result.barrelChain) {
                                         if (barrelInfo.isWildcard) {
                                             aidaLogging(`               📦 Found wildcard barrel: ${path.basename(barrelInfo.location.uri.fsPath)}`);
-                                            
+
                                             const wildcardRefs = await this.findImportsOfBarrelFile(
                                                 barrelInfo.location.uri,
                                                 symbol.fullName
                                             );
-                                            
+
                                             aidaLogging(`               ✅ Wildcard search found ${wildcardRefs.length} usages`);
-                                            
+
                                             for (const ref of wildcardRefs) {
                                                 const refPath = ref.uri.fsPath;
                                                 const isDefinition = path.normalize(refPath) === path.normalize(fullPRFilePath);
-                                                
+
                                                 if (!isDefinition) {
                                                     const relativePath = path.relative(this.workspaceRoot, refPath).replace(/\\/g, '/');
                                                     userFiles.add(relativePath);
                                                 }
                                             }
-                                            
+
                                             break; // Only use first wildcard barrel
                                         }
                                     }
                                 }
-                                
+
                                 // Add these files to dependents
                                 for (const userFilePath of userFiles) {
                                     // Find or create node for this file
@@ -235,17 +254,17 @@ class PRDependencyAnalyzer {
                                         };
                                         this.fullGraph.nodes.push(userNode);
                                     }
-                                    
+
                                     relevantNodeIds.add(userNode.id);
                                     filteredDependents++;
-                                    
+
                                     // Track symbols
                                     const symbolFullName = symbol.fullName;
                                     if (!symbolToDependentsMap.has(symbolFullName)) {
                                         symbolToDependentsMap.set(symbolFullName, []);
                                     }
                                     symbolToDependentsMap.get(symbolFullName).push(userFilePath);
-                                    
+
                                     // Add children if any
                                     if (symbol.children && symbol.children.length > 0) {
                                         symbol.children.forEach(childName => {
@@ -255,45 +274,45 @@ class PRDependencyAnalyzer {
                                             symbolToDependentsMap.get(childName).push(userFilePath);
                                         });
                                     }
-                                    
+
                                     aidaLogging(`            ✅ Added: ${userFilePath}`);
                                 }
                             } else {
                                 aidaLogging(`            ⚠️ No references found via VS Code API → Trying wildcard search`);
-                                
+
                                 // 🔥 NEW: Fallback to wildcard search if no references at all
                                 // Find barrel file that re-exports this symbol
                                 const prDir = path.dirname(fullPRFilePath);
-                                
+
                                 // 🔥 FIX: Use configuration for barrel files
                                 const possibleBarrelFiles = this.getBarrelFiles(fullPRFilePath);
-                                
+
                                 for (const barrelName of possibleBarrelFiles) {
                                     const barrelPath = path.join(prDir, barrelName);
-                                    
+
                                     if (fs.existsSync(barrelPath)) {
                                         aidaLogging(`               📦 Found barrel: ${path.basename(barrelPath)}`);
-                                        
+
                                         const barrelUri = vscode.Uri.file(barrelPath);
                                         const wildcardRefs = await this.findImportsOfBarrelFile(
                                             barrelUri,
                                             symbol.fullName
                                         );
-                                        
+
                                         if (wildcardRefs.length > 0) {
                                             aidaLogging(`               ✅ Wildcard search found ${wildcardRefs.length} usages`);
-                                            
+
                                             const userFiles = new Set();
                                             for (const ref of wildcardRefs) {
                                                 const refPath = ref.uri.fsPath;
                                                 const isDefinition = path.normalize(refPath) === path.normalize(fullPRFilePath);
-                                                
+
                                                 if (!isDefinition) {
                                                     const relativePath = path.relative(this.workspaceRoot, refPath).replace(/\\/g, '/');
                                                     userFiles.add(relativePath);
                                                 }
                                             }
-                                            
+
                                             // Add these files
                                             for (const userFilePath of userFiles) {
                                                 let userNode = this.fullGraph.nodes.find(n => n.relativePath === userFilePath);
@@ -306,16 +325,16 @@ class PRDependencyAnalyzer {
                                                     };
                                                     this.fullGraph.nodes.push(userNode);
                                                 }
-                                                
+
                                                 relevantNodeIds.add(userNode.id);
                                                 filteredDependents++;
-                                                
+
                                                 const symbolFullName = symbol.fullName;
                                                 if (!symbolToDependentsMap.has(symbolFullName)) {
                                                     symbolToDependentsMap.set(symbolFullName, []);
                                                 }
                                                 symbolToDependentsMap.get(symbolFullName).push(userFilePath);
-                                                
+
                                                 if (symbol.children && symbol.children.length > 0) {
                                                     symbol.children.forEach(childName => {
                                                         if (!symbolToDependentsMap.has(childName)) {
@@ -324,10 +343,10 @@ class PRDependencyAnalyzer {
                                                         symbolToDependentsMap.get(childName).push(userFilePath);
                                                     });
                                                 }
-                                                
+
                                                 aidaLogging(`            ✅ Added via fallback: ${userFilePath}`);
                                             }
-                                            
+
                                             // Stop after finding the first valid barrel with usages
                                             break;
                                         }
@@ -338,10 +357,15 @@ class PRDependencyAnalyzer {
                             console.error(`            ❌ Error finding barrel references: ${error.message}`);
                         }
                     }
-                } else {
+                }
+
+                // ---------------------------------------------------------
+                // STRATEGY 2: Static Graph Analysis (Direct Dependents)
+                // ---------------------------------------------------------
+                if (allDependents.length > 0) {
                     // Has direct dependents - filter them normally
                     aidaLogging(`🔎 Filtering ${allDependents.length} dependents for ${node.prStatus} file: ${node.prPath}`);
-                    
+
                     for (const depId of allDependents) {
                         const depNode = this.fullGraph.nodes.find(n => n.id === depId);
                         if (!depNode) continue;
@@ -356,7 +380,7 @@ class PRDependencyAnalyzer {
                         if (usedSymbols.length > 0) {
                             relevantNodeIds.add(depId);
                             filteredDependents++;
-                            
+
                             // Track which symbols are used by this dependent
                             usedSymbols.forEach(symbolFullName => {
                                 if (!symbolToDependentsMap.has(symbolFullName)) {
@@ -364,7 +388,7 @@ class PRDependencyAnalyzer {
                                 }
                                 symbolToDependentsMap.get(symbolFullName).push(depNode.relativePath);
                             });
-                            
+
                             aidaLogging(`   ✅ Dependent uses symbols [${usedSymbols.join(', ')}]: ${depNode.relativePath}`);
                         } else {
                             aidaLogging(`   ⏭️ Skipping dependent (no symbol usage): ${depNode.relativePath}`);
@@ -401,7 +425,7 @@ class PRDependencyAnalyzer {
             totalAdditions: prFiles.reduce((sum, f) => sum + f.additions, 0),
             totalDeletions: prFiles.reduce((sum, f) => sum + f.deletions, 0)
         };
-        
+
         // Attach symbol-to-dependents mapping for detailed output
         filteredGraph.symbolToDependentsMap = symbolToDependentsMap;
 
@@ -425,22 +449,22 @@ class PRDependencyAnalyzer {
             const node = this.fullGraph.nodes.find(n => {
                 const nodeRelPath = (n.relativePath || '').replace(/\\/g, '/');
                 const nodeFileName = path.basename(nodeRelPath);
-                
+
                 // Try exact match first
                 if (nodeRelPath === normalizedPath) {
                     return true;
                 }
-                
+
                 // Try end-of-path match (for cases where PR path is relative)
                 if (nodeRelPath.endsWith(normalizedPath)) {
                     return true;
                 }
-                
+
                 // Try filename match as last resort
                 if (nodeFileName === fileName) {
                     return true;
                 }
-                
+
                 return false;
             });
 
@@ -458,7 +482,7 @@ class PRDependencyAnalyzer {
                     prPath: prFile.path,
                     prPatch: prFile.patch || null // Add patch data for symbol extraction
                 });
-                
+
                 aidaLogging(`✅ Matched PR file: ${prFile.path} → ${node.relativePath} (${prFile.status})`);
             } else {
                 // Handle files not present in cached graph (new or deleted)
@@ -483,7 +507,7 @@ class PRDependencyAnalyzer {
 
         // Determine category based on extension
         let category = 'file';
-        
+
         // 🔥 FIX: Configuration-driven category detection
         if (this.vscodeAnalyzer && this.vscodeAnalyzer.languageConfig) {
             for (const [lang, config] of Object.entries(this.vscodeAnalyzer.languageConfig)) {
@@ -568,16 +592,16 @@ class PRDependencyAnalyzer {
      */
     shouldIgnoreNode(filePath) {
         if (!filePath) return false;
-        
+
         // Get language config from VSCode Analyzer
         const languageConfig = this.vscodeAnalyzer.languageConfig;
         const ext = path.extname(filePath).toLowerCase();
-        
+
         // Find matching language
-        const language = Object.values(languageConfig).find(config => 
+        const language = Object.values(languageConfig).find(config =>
             config.extensions.includes(ext)
         );
-        
+
         if (language && language.ignorePatterns) {
             return language.ignorePatterns.some(pattern => {
                 // Simple glob to regex conversion
@@ -586,12 +610,12 @@ class PRDependencyAnalyzer {
                     .replace(/\./g, '\\.')
                     .replace(/\*\*\//g, '.*')
                     .replace(/\*/g, '[^/]*');
-                
+
                 // Handle leading **/
                 if (!regexStr.startsWith('.*')) {
                     regexStr = '.*' + regexStr; // Ensure we match anywhere if it was **/
                 }
-                
+
                 const regex = new RegExp(regexStr + '$');
                 return regex.test(filePath);
             });
@@ -615,7 +639,7 @@ class PRDependencyAnalyzer {
         // Source can be anything (PR file or External file).
         // Target MUST be a PR file.
         const edges = [];
-        
+
         // 2a. Scan Full Graph Edges
         this.fullGraph.edges.forEach(e => {
             // Skip if touching deleted files
@@ -646,10 +670,10 @@ class PRDependencyAnalyzer {
                 // However, to be precise, we should have tracked the relationship.
                 // FALLBACK: If we found a dependent but no edge exists in full graph, 
                 // we check if we can infer the connection or if it was added by barrel logic.
-                
+
                 // Check if we already added an edge for this node
                 const isConnected = edges.some(e => e.source === nodeId);
-                
+
                 if (!isConnected) {
                     // This node was deemed relevant but has no edge in full graph pointing to a PR file.
                     // This likely means it was found via Barrel/Wildcard search.
@@ -657,12 +681,12 @@ class PRDependencyAnalyzer {
                     // Since we don't have that mapping here easily without re-scanning, 
                     // we will try to find a connection in the full graph again (maybe missed?)
                     // OR we assume it connects to the PR file that triggered its inclusion.
-                    
+
                     // RE-SCAN: Check which PR file's symbol analysis added this node
                     // This is a bit expensive but accurate.
                     // Actually, we can just look at the 'symbolToDependentsMap' if we had access to it here,
                     // but we don't.
-                    
+
                     // SIMPLIFICATION: If we can't find a static edge, we skip it for now to avoid false positives,
                     // UNLESS we explicitly passed the dynamic edges (which we didn't).
                     // Wait! The previous logic iterated over prNodes to find barrel usages.
@@ -670,28 +694,28 @@ class PRDependencyAnalyzer {
                 }
             }
         }
-        
+
         // 🔥 RE-INTEGRATE BARREL LOGIC (Cleaner)
         // We need to add edges for dependents found via barrel resolution that aren't in the static graph
         for (const prNode of prNodes) {
             if (prNode.prStatus === 'delete') continue;
-            
+
             // We need to know which dependents this PR node is responsible for.
             // Since we don't have that map passed in, we have to rely on the fact that
             // if a node is in relevantNodeIds and NOT in PR, it's a dependent.
             // But we don't know WHICH PR node it depends on without the map.
-            
+
             // FIX: We will trust the 'edges' array we built from Full Graph for standard deps.
             // For barrel deps, we need to rely on the fact that 'relevantNodeIds' contains them.
             // If a relevant node has NO edge to any PR node, it's an orphan dependent.
             // We should probably have passed the 'symbolToDependentsMap' or similar.
-            
+
             // FOR NOW: We will stick to the Full Graph edges + strict filtering.
             // If barrel resolution added nodes to 'relevantNodeIds', but didn't create an edge in 'fullGraph',
             // they will be missing edges.
             // However, 'relevantNodeIds' was populated by 'getDependents' (which uses full graph) 
             // AND 'resolveBarrelReferences' (which finds new files).
-            
+
             // Let's try to recover the barrel edges by checking if any relevant node 
             // is NOT connected yet.
         }
@@ -707,14 +731,14 @@ class PRDependencyAnalyzer {
         // Helper to add node
         const addNode = (id, sourceNode = null) => {
             if (addedNodeIds.has(id)) return;
-            
+
             let nodeToAdd = sourceNode;
-            
+
             if (!nodeToAdd) {
                 // Try finding in full graph
                 nodeToAdd = this.fullGraph.nodes.find(n => n.id === id);
             }
-            
+
             if (!nodeToAdd) {
                 // Create placeholder if not found (e.g. new file or dynamic barrel file)
                 nodeToAdd = {
@@ -730,7 +754,7 @@ class PRDependencyAnalyzer {
                 const prNode = prNodes.find(pn => pn.id === id);
                 nodeToAdd = { ...nodeToAdd, ...prNode };
                 nodeToAdd.nodeType = 'pr-file';
-                
+
                 if (nodeChangedSymbols.has(id)) {
                     nodeToAdd.changedSymbols = nodeChangedSymbols.get(id);
                 }
@@ -786,7 +810,7 @@ class PRDependencyAnalyzer {
     calculateRiskLevel(graph) {
         const prNodes = graph.nodes.filter(n => n.isPRFile);
         const dependents = graph.nodes.filter(n => n.nodeType === 'dependent');
-        
+
         const totalChanges = prNodes.reduce((sum, n) => sum + (n.prChanges?.total || 0), 0);
         const dependentCount = dependents.length;
 
@@ -820,12 +844,12 @@ class PRDependencyAnalyzer {
             recommendations.push('Large PR - Consider breaking into smaller changes');
         }
 
-        const coreFiles = prNodes.filter(n => 
-            n.relativePath.includes('core') || 
+        const coreFiles = prNodes.filter(n =>
+            n.relativePath.includes('core') ||
             n.relativePath.includes('shared') ||
             n.relativePath.includes('common')
         );
-        
+
         if (coreFiles.length > 0) {
             recommendations.push('Core module changes detected - Extra scrutiny recommended');
         }
@@ -843,16 +867,16 @@ class PRDependencyAnalyzer {
      */
     async extractChangedSymbols(patch, prFilePath) {
         aidaLogging(`   🔍 Extracting symbols using Hybrid approach (Regex + VS Code API)...`);
-        
+
         // 1. Run Regex extraction (using the existing method)
         const regexSymbols = await this.extractChangedSymbolsRegex(patch, prFilePath);
-        
+
         // 2. Run VS Code API extraction
         const vscodeSymbols = await this.extractChangedSymbolsVscode(patch, prFilePath);
-        
+
         // 3. Merge and Deduplicate
         const mergedMap = new Map();
-        
+
         // Helper to add symbol if valid
         const addSymbol = (sym, source) => {
             // Filter out symbols that match the filename (likely module wrappers)
@@ -861,7 +885,7 @@ class PRDependencyAnalyzer {
                 aidaLogging(`   🚫 Ignoring symbol '${sym.name}' (matches filename) from ${source}`);
                 return;
             }
-            
+
             if (!mergedMap.has(sym.fullName)) {
                 mergedMap.set(sym.fullName, sym);
             } else {
@@ -872,10 +896,10 @@ class PRDependencyAnalyzer {
                 }
             }
         };
-        
+
         regexSymbols.forEach(s => addSymbol(s, 'Regex'));
         vscodeSymbols.forEach(s => addSymbol(s, 'VSCode'));
-        
+
         const finalSymbols = Array.from(mergedMap.values());
         aidaLogging(`   ✅ Hybrid extraction found ${finalSymbols.length} unique symbols`);
         return finalSymbols;
@@ -892,12 +916,12 @@ class PRDependencyAnalyzer {
         }
 
         aidaLogging(`   📄 Extracting symbols from patch content (VS Code API)...`);
-        
+
         // 1. Extract "New Code" from patch (lines starting with +)
         const lines = patch.split('\n');
         let newCodeContent = '';
         let hasContent = false;
-        
+
         for (const line of lines) {
             if (line.startsWith('+++') || line.startsWith('---') || line.startsWith('@@')) {
                 continue;
@@ -906,9 +930,9 @@ class PRDependencyAnalyzer {
                 const cleanLine = line.substring(1);
                 newCodeContent += cleanLine + '\n';
                 hasContent = true;
-            } 
+            }
         }
-        
+
         if (!hasContent || !newCodeContent.trim()) {
             return [];
         }
@@ -917,41 +941,41 @@ class PRDependencyAnalyzer {
         try {
             // 🔥 IMPROVED: Use virtual content provider to avoid opening "Untitled" tabs
             const { virtualContentProvider } = require('./virtual-content-provider');
-            
+
             // Store content in memory and get URI (scheme: aida-memory)
             const virtualUri = virtualContentProvider.setFileContent(prFilePath, newCodeContent);
-            
+
             // Open the virtual document (read-only, no tab opened)
             const doc = await vscode.workspace.openTextDocument(virtualUri);
-            
+
             // 3. Execute Symbol Provider
             const symbols = await vscode.commands.executeCommand(
                 'vscode.executeDocumentSymbolProvider',
                 doc.uri
             );
-            
+
             // Clean up memory
             virtualContentProvider.clearFileContent(prFilePath);
-            
+
             if (!symbols || symbols.length === 0) {
                 return [];
             }
-            
+
             // 4. Process Symbols
             const extractedSymbols = [];
-            
+
             const processSymbol = (symbol, parentName = null) => {
                 // 🔥 FIX: Dynamic symbol type mapping
                 let typeStr = vscode.SymbolKind[symbol.kind] ? vscode.SymbolKind[symbol.kind].toLowerCase() : 'unknown';
-                
+
                 // Handle special cases
                 if (typeStr === 'enummember') typeStr = 'enum-member';
                 if (typeStr === 'typeparameter') typeStr = 'type-param';
-                
+
                 // 🔥 FIX: Configuration-driven significance check
                 let isSignificant = false;
                 const patterns = this.getLanguagePatterns(prFilePath);
-                
+
                 if (patterns) {
                     // Check if type is configured in patterns
                     if (patterns[typeStr]) {
@@ -982,21 +1006,21 @@ class PRDependencyAnalyzer {
                         name: symbol.name,
                         fullName: parentName ? `${parentName}.${symbol.name}` : symbol.name,
                         type: typeStr,
-                        lineNumber: 0, 
+                        lineNumber: 0,
                         column: 0,
                         filePath: prFilePath,
                         isRoot: !parentName,
                         kind: symbol.kind
                     });
                 }
-                
+
                 if (symbol.children && symbol.children.length > 0) {
                     symbol.children.forEach(child => processSymbol(child, symbol.name));
                 }
             };
-            
+
             symbols.forEach(s => processSymbol(s));
-            
+
             // Deduplicate
             const uniqueSymbols = [];
             const seenNames = new Set();
@@ -1006,9 +1030,9 @@ class PRDependencyAnalyzer {
                     uniqueSymbols.push(sym);
                 }
             }
-            
+
             return uniqueSymbols;
-            
+
         } catch (error) {
             console.error(`   ❌ Error in VS Code symbol extraction: ${error.message}`);
             return [];
@@ -1025,15 +1049,15 @@ class PRDependencyAnalyzer {
         }
 
         aidaLogging(`   📄 Extracting from patch (${patch.length} chars)...`);
-        
+
         const allSymbols = [];
         const lines = patch.split('\n');
         const contextStack = [];
         let currentLineNumber = 0;
-        
+
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i];
-            
+
             if (line.startsWith('@@')) {
                 const match = line.match(/@@ -\d+,?\d* \+(\d+),?\d* @@/);
                 if (match) {
@@ -1041,20 +1065,20 @@ class PRDependencyAnalyzer {
                 }
                 continue;
             }
-            
+
             if (line.startsWith('+') && !line.startsWith('+++')) {
                 const codeLine = line.substring(1);
                 const trimmed = codeLine.trim();
-                
+
                 // Detect object start
                 const objectStartMatch = trimmed.match(/^([a-zA-Z_$][a-zA-Z0-9_$]*)\s*:\s*\{/);
                 if (objectStartMatch) {
                     const objectName = objectStartMatch[1];
                     const column = codeLine.indexOf(objectName);
                     contextStack.push(objectName);
-                    
-                    allSymbols.push({ 
-                        name: objectName, 
+
+                    allSymbols.push({
+                        name: objectName,
                         fullName: objectName,
                         type: 'object',
                         lineNumber: currentLineNumber,
@@ -1065,7 +1089,7 @@ class PRDependencyAnalyzer {
                     currentLineNumber++;
                     continue;
                 }
-                
+
                 if (trimmed === '},' || trimmed === '}') {
                     if (contextStack.length > 0) {
                         contextStack.pop();
@@ -1073,7 +1097,7 @@ class PRDependencyAnalyzer {
                     currentLineNumber++;
                     continue;
                 }
-                
+
                 const extracted = this.extractSymbolsFromLine(codeLine, contextStack, currentLineNumber, prFilePath);
                 allSymbols.push(...extracted);
                 currentLineNumber++;
@@ -1083,14 +1107,14 @@ class PRDependencyAnalyzer {
                 currentLineNumber++;
             }
         }
-        
+
         // 🔥 KEY FIX: Group by root object
         const rootSymbolMap = new Map();
-        
+
         for (const sym of allSymbols) {
             let rootName;
             let rootSymbol;
-            
+
             if (sym.type === 'object' && sym.isRoot) {
                 // This is a root object
                 rootName = sym.name;
@@ -1098,12 +1122,12 @@ class PRDependencyAnalyzer {
             } else if (sym.parentName) {
                 // This is a nested property - find its root
                 rootName = sym.parentName;
-                
+
                 // Find the root object definition
-                rootSymbol = allSymbols.find(s => 
+                rootSymbol = allSymbols.find(s =>
                     s.name === rootName && s.isRoot
                 );
-                
+
                 if (!rootSymbol) {
                     // Create virtual root if not found
                     rootSymbol = {
@@ -1122,23 +1146,23 @@ class PRDependencyAnalyzer {
                 rootName = sym.name;
                 rootSymbol = sym;
             }
-            
+
             if (!rootSymbolMap.has(rootName)) {
                 rootSymbolMap.set(rootName, {
                     ...rootSymbol,
                     children: []
                 });
             }
-            
+
             // Track child properties
             if (sym.parentName && sym.parentName === rootName) {
                 rootSymbolMap.get(rootName).children.push(sym.fullName);
             }
         }
-        
+
         // Convert to array
         const uniqueRootSymbols = Array.from(rootSymbolMap.values());
-        
+
         aidaLogging(`   ✅ Found ${uniqueRootSymbols.length} root symbols:`);
         uniqueRootSymbols.forEach(s => {
             if (s.children && s.children.length > 0) {
@@ -1150,7 +1174,7 @@ class PRDependencyAnalyzer {
                 aidaLogging(`      - ${s.fullName}`);
             }
         });
-        
+
         return uniqueRootSymbols;
     }
 
@@ -1164,27 +1188,27 @@ class PRDependencyAnalyzer {
     extractSymbolsFromLine(line, contextStack = [], lineNumber = 0, filePath = '') {
         const symbols = [];
         const trimmedLine = line.trim();
-        
+
         if (!trimmedLine || trimmedLine.length === 0) return symbols;
 
         // 🔥 FIX: Use configuration-driven patterns
         const patterns = this.getLanguagePatterns(filePath);
-        
+
         if (patterns) {
             for (const [type, regex] of Object.entries(patterns)) {
                 if (type === 'objectStart' || type === 'blockEnd') continue;
-                
+
                 try {
                     const pattern = regex instanceof RegExp ? regex : new RegExp(regex);
                     const match = trimmedLine.match(pattern);
-                    
+
                     if (match) {
                         const name = match[1];
                         const column = line.indexOf(name);
-                        
+
                         if (type === 'property' && contextStack.length > 0) {
                             const nestedPath = [...contextStack, name].join('.');
-                            symbols.push({ 
+                            symbols.push({
                                 name: name,
                                 fullName: nestedPath,
                                 type: 'property',
@@ -1194,7 +1218,7 @@ class PRDependencyAnalyzer {
                                 filePath: filePath
                             });
                         } else {
-                            symbols.push({ 
+                            symbols.push({
                                 name: name,
                                 fullName: name,
                                 type: type,
@@ -1204,22 +1228,22 @@ class PRDependencyAnalyzer {
                             });
                         }
                     }
-                } catch (e) {}
+                } catch (e) { }
             }
             return symbols;
         }
-        
+
         // Fallback to hardcoded JS/TS regexes
         // Property within object: propertyName: value
         const propertyMatch = trimmedLine.match(/^([a-zA-Z_$][a-zA-Z0-9_$]*)\s*:\s*/);
         if (propertyMatch) {
             const propertyName = propertyMatch[1];
             const column = line.indexOf(propertyName);
-            
+
             if (contextStack.length > 0) {
                 // Nested property: parentObject.propertyName
                 const nestedPath = [...contextStack, propertyName].join('.');
-                symbols.push({ 
+                symbols.push({
                     name: propertyName,
                     fullName: nestedPath,
                     type: 'property',
@@ -1230,7 +1254,7 @@ class PRDependencyAnalyzer {
                 });
             } else {
                 // Top-level property
-                symbols.push({ 
+                symbols.push({
                     name: propertyName,
                     fullName: propertyName,
                     type: 'property',
@@ -1240,13 +1264,13 @@ class PRDependencyAnalyzer {
                 });
             }
         }
-        
+
         // Function declarations: function name() {}
         const functionMatch = trimmedLine.match(/function\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(/);
         if (functionMatch) {
             const funcName = functionMatch[1];
             const column = line.indexOf(funcName);
-            symbols.push({ 
+            symbols.push({
                 name: funcName,
                 fullName: funcName,
                 type: 'function',
@@ -1255,13 +1279,13 @@ class PRDependencyAnalyzer {
                 filePath: filePath
             });
         }
-        
+
         // Const declarations: const NAME = ...
         const constMatch = trimmedLine.match(/const\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=/);
         if (constMatch) {
             const constName = constMatch[1];
             const column = line.indexOf(constName);
-            symbols.push({ 
+            symbols.push({
                 name: constName,
                 fullName: constName,
                 type: 'const',
@@ -1270,13 +1294,13 @@ class PRDependencyAnalyzer {
                 filePath: filePath
             });
         }
-        
+
         // Class declarations: class ClassName {}
         const classMatch = trimmedLine.match(/class\s+([a-zA-Z_$][a-zA-Z0-9_$]*)/);
         if (classMatch) {
             const className = classMatch[1];
             const column = line.indexOf(className);
-            symbols.push({ 
+            symbols.push({
                 name: className,
                 fullName: className,
                 type: 'class',
@@ -1285,13 +1309,13 @@ class PRDependencyAnalyzer {
                 filePath: filePath
             });
         }
-        
+
         // Interface declarations: interface InterfaceName {}
         const interfaceMatch = trimmedLine.match(/interface\s+([a-zA-Z_$][a-zA-Z0-9_$]*)/);
         if (interfaceMatch) {
             const interfaceName = interfaceMatch[1];
             const column = line.indexOf(interfaceName);
-            symbols.push({ 
+            symbols.push({
                 name: interfaceName,
                 fullName: interfaceName,
                 type: 'interface',
@@ -1300,7 +1324,7 @@ class PRDependencyAnalyzer {
                 filePath: filePath
             });
         }
-        
+
         return symbols;
     }
 
@@ -1311,7 +1335,7 @@ class PRDependencyAnalyzer {
         const changedLines = [];
         const lines = patch.split('\n');
         let currentLineNumber = 0;
-        
+
         for (const line of lines) {
             // Parse @@ -a,b +c,d @@ headers
             const hunkHeader = line.match(/^@@ -\d+,?\d* \+(\d+),?\d* @@/);
@@ -1319,7 +1343,7 @@ class PRDependencyAnalyzer {
                 currentLineNumber = parseInt(hunkHeader[1], 10);
                 continue;
             }
-            
+
             // Track added/modified lines
             if (line.startsWith('+') && !line.startsWith('+++')) {
                 changedLines.push(currentLineNumber);
@@ -1328,7 +1352,7 @@ class PRDependencyAnalyzer {
                 currentLineNumber++;
             }
         }
-        
+
         return changedLines;
     }
 
@@ -1338,7 +1362,7 @@ class PRDependencyAnalyzer {
      */
     async getUsedSymbols(dependentPath, prFilePath, changedSymbols) {
         const usedSymbols = [];
-        
+
         if (!changedSymbols || changedSymbols.length === 0) {
             return usedSymbols;
         }
@@ -1346,10 +1370,10 @@ class PRDependencyAnalyzer {
         try {
             aidaLogging(`      🔍 Checking dependent: ${dependentPath}`);
             aidaLogging(`         Root symbols to check: [${changedSymbols.map(s => s.fullName).join(', ')}]`);
-            
+
             const fullDependentPath = path.join(this.workspaceRoot, dependentPath);
             const fullPRFilePath = path.join(this.workspaceRoot, prFilePath);
-            
+
             if (!fs.existsSync(fullDependentPath)) {
                 aidaLogging(`         ❌ File not found: ${fullDependentPath}`);
                 return usedSymbols;
@@ -1360,9 +1384,9 @@ class PRDependencyAnalyzer {
             // Check each root symbol
             for (const symbol of changedSymbols) {
                 const symbolPosition = new vscode.Position(symbol.lineNumber, symbol.column);
-                
+
                 aidaLogging(`         🔍 Searching: ${symbol.fullName}`);
-                
+
                 try {
                     const result = await this.resolveBarrelReferences(
                         symbolFileUri,
@@ -1371,16 +1395,16 @@ class PRDependencyAnalyzer {
                         new Set(),
                         0
                     );
-                    
+
                     const allReferences = result.references;
-                    
+
                     if (allReferences.length === 0) {
                         aidaLogging(`            ⏭️ No references found`);
                         continue;
                     }
-                    
+
                     aidaLogging(`            📍 Found ${allReferences.length} total references`);
-                    
+
                     // Filter to this dependent file only
                     const referencesInDependent = allReferences.filter(ref => {
                         const refPath = ref.uri.fsPath;
@@ -1388,7 +1412,7 @@ class PRDependencyAnalyzer {
                         const isNotDefinition = ref.range.start.line !== symbol.lineNumber;
                         return isSameFile && isNotDefinition;
                     });
-                    
+
                     if (referencesInDependent.length > 0) {
                         // Filter out barrel exports
                         const realRefs = [];
@@ -1398,27 +1422,27 @@ class PRDependencyAnalyzer {
                                 realRefs.push(ref);
                             }
                         }
-                        
+
                         if (realRefs.length > 0) {
                             usedSymbols.push(symbol.fullName);
-                            
+
                             // Also add all child properties
                             if (symbol.children && symbol.children.length > 0) {
                                 usedSymbols.push(...symbol.children);
                             }
-                            
+
                             aidaLogging(`            ✅ Found ${realRefs.length} real usages`);
                             if (symbol.children && symbol.children.length > 0) {
                                 aidaLogging(`            ✅ Including ${symbol.children.length} child properties`);
                             }
                         }
                     }
-                    
+
                 } catch (error) {
                     console.error(`            ❌ Reference error: ${error.message}`);
                 }
             }
-            
+
             if (usedSymbols.length > 0) {
                 aidaLogging(`         ✅ Total confirmed: ${usedSymbols.length} symbols`);
             } else {
@@ -1438,10 +1462,10 @@ class PRDependencyAnalyzer {
     async resolveBarrelReferences(symbolUri, symbolPosition, symbolName, visitedBarrels, currentLevel = 0) {
         // 🔥 Delegate to BarrelResolver
         return await this.barrelResolver.resolveBarrelReferences(
-            symbolUri, 
-            symbolPosition, 
-            symbolName, 
-            visitedBarrels, 
+            symbolUri,
+            symbolPosition,
+            symbolName,
+            visitedBarrels,
             currentLevel
         );
     }
@@ -1497,9 +1521,9 @@ class PRDependencyAnalyzer {
     buildImportPatterns(importerPath, barrelDir, barrelRelativeToWorkspace, pathAliases) {
         // 🔥 Delegate to BarrelResolver
         return this.barrelResolver.buildImportPatterns(
-            importerPath, 
-            barrelDir, 
-            barrelRelativeToWorkspace, 
+            importerPath,
+            barrelDir,
+            barrelRelativeToWorkspace,
             pathAliases
         );
     }
@@ -1509,7 +1533,7 @@ class PRDependencyAnalyzer {
      */
     getLanguagePatterns(filePath) {
         const ext = path.extname(filePath).toLowerCase();
-        
+
         if (this.vscodeAnalyzer && this.vscodeAnalyzer.languageConfig) {
             for (const [lang, config] of Object.entries(this.vscodeAnalyzer.languageConfig)) {
                 if (config.extensions && config.extensions.includes(ext)) {
@@ -1525,7 +1549,7 @@ class PRDependencyAnalyzer {
      */
     getBarrelFiles(filePath) {
         const ext = path.extname(filePath).toLowerCase();
-        
+
         if (this.vscodeAnalyzer && this.vscodeAnalyzer.languageConfig) {
             for (const [lang, config] of Object.entries(this.vscodeAnalyzer.languageConfig)) {
                 if (config.extensions && config.extensions.includes(ext)) {

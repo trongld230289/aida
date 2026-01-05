@@ -219,8 +219,22 @@ try {
  * @returns {Array} Filtered array of reviewable files
  */
 function filterReviewableFiles(fileChanges, provider = 'Unknown') {
+    const { commonIgnores, languageIgnores, isIgnored } = require('./ignore-rules');
+    
     const reviewableFiles = fileChanges.filter(file => {
         const filePath = file.path || file.filename || '';
+        
+        // Check common ignores
+        if (isIgnored(filePath, commonIgnores)) {
+            aidaLogging(`🚫 [FILTERED] ${provider} Common ignore: ${filePath}`);
+            return false;
+        }
+
+        // Check C# specific ignores
+        if (isIgnored(filePath, languageIgnores.csharp)) {
+            aidaLogging(`🚫 [FILTERED] ${provider} C# ignore: ${filePath}`);
+            return false;
+        }
         
         // Filter out Migration Designer files (auto-generated, no review value)
         const isMigrationDesigner = filePath.includes('/Migrations/') && filePath.endsWith('.Designer.cs');

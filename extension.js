@@ -15,7 +15,7 @@ const {
     getBusinessDocumentFolders
 } = require('./scripts/review-common');
 
-const { analyzeFileDependency } = require('./scripts/dependency');
+const { analyzeFileDependency, activateDependencyWatcherIfCacheExists } = require('./scripts/dependency');
 
 
 // Session tracking for "Enter twice" functionality and change scores
@@ -133,10 +133,13 @@ function activate(context) {
     // console.log('Reload 4');
     console.log('🤖 AIDA v1.1.2 - AI Development Assistant');
     console.log('🚀 AIDA extension is now active!');
-    
+
     // Store extension path globally
     global.extensionPath = context.extensionPath;
-    
+
+    // Auto-activate dependency watcher if cache exists
+    activateDependencyWatcherIfCacheExists(context);
+
     // Register Virtual Content Provider for in-memory files (aida-memory scheme)
     try {
         const { virtualContentProvider } = require('./scripts/virtual-content-provider');
@@ -147,7 +150,7 @@ function activate(context) {
     } catch (error) {
         console.error('❌ Failed to register virtual content provider:', error);
     }
-    
+
     // Make business docs state accessible globally
     global.businessDocsState = businessDocsState;
 
@@ -205,21 +208,21 @@ function activate(context) {
 
     let confirmReviewDocs = vscode.commands.registerCommand('aida.confirmReviewDocs', async (filePath, chatCommand = 'review-changes', keepSelectedDocs = false) => {
         // Simple logic - set Quick Review mode (unified for both changes and file review)
-        if(!keepSelectedDocs) {
+        if (!keepSelectedDocs) {
             global.selectedBusinessDocs = [];
         }
-        
+
         console.log(`🚀 Quick Review button clicked - set global.selectedBusinessDocs = [] (command: ${chatCommand})`);
         console.log('🔍 DEBUG: filePath received =', filePath);
 
         // Check if user is currently in AIDA Sidebar Chat or Copilot Chat
         const activeView = vscode.window.activeTextEditor?.document.uri.scheme;
         console.log('🔍 Active view scheme:', activeView);
-        
+
         // Try to detect if AIDA sidebar is visible/active
         const aidaSidebarActive = copilotSidebarChat?.webviewView?.visible;
         console.log('📱 AIDA Sidebar active:', aidaSidebarActive);
-        
+
         if (aidaSidebarActive && copilotSidebarChat) {
             // User is in AIDA chatbot - send message directly to AIDA
             console.log('🤖 Redirecting to AIDA Chatbot');
@@ -270,10 +273,10 @@ function activate(context) {
             // Check if AIDA chat should be used
             const config = vscode.workspace.getConfiguration('aida');
             const useAIDAChatbot = config.get('useAIDAChatbot', false);
-            
+
             console.log('🔍 useAIDAChatbot flag:', useAIDAChatbot);
             console.log('🔍 GitHub Copilot extension active:', vscode.extensions.getExtension('GitHub.copilot')?.isActive);
-            
+
             if (useAIDAChatbot) {
                 console.log('➡️ Using AIDA chatbot (useAIDAChatbot=true)');
                 // Use AIDA Copilot-style chat
@@ -310,7 +313,7 @@ function activate(context) {
             if (!uri && vscode.window.activeTextEditor) {
                 uri = vscode.window.activeTextEditor.document.uri;
             }
-            
+
             if (uri) {
                 await analyzeFileDependency(uri);
             } else {
@@ -329,10 +332,10 @@ function activate(context) {
             // Check if AIDA chat should be used
             const config = vscode.workspace.getConfiguration('aida');
             const useAIDAChatbot = config.get('useAIDAChatbot', false);
-            
+
             console.log('🔍 useAIDAChatbot flag:', useAIDAChatbot);
             console.log('🔍 GitHub Copilot extension active:', vscode.extensions.getExtension('GitHub.copilot')?.isActive);
-            
+
             if (useAIDAChatbot) {
                 console.log('➡️ Using AIDA chatbot (useAIDAChatbot=true)');
                 // Use AIDA Copilot-style chat
@@ -368,7 +371,7 @@ function activate(context) {
             // Check if AIDA chat should be used
             const config = vscode.workspace.getConfiguration('aida');
             const useAIDAChatbot = config.get('useAIDAChatbot', false);
-            
+
             if (useAIDAChatbot) {
                 // Use AIDA Copilot-style chat
                 await vscode.commands.executeCommand('aida.reviewAllChangesContext', uri);
@@ -393,10 +396,10 @@ function activate(context) {
                 vscode.window.showErrorMessage('AIDA Sidebar Chat is not initialized');
                 return;
             }
-            
+
             // Show the sidebar
             copilotSidebarChat.show();
-            
+
             // Send review file message
             if (uri && uri.fsPath) {
                 const workspaceFolder = vscode.workspace.getWorkspaceFolder(uri);
@@ -421,10 +424,10 @@ function activate(context) {
                 vscode.window.showErrorMessage('AIDA Sidebar Chat is not initialized');
                 return;
             }
-            
+
             // Show the sidebar
             copilotSidebarChat.show();
-            
+
             // Send review changes message
             if (uri && uri.fsPath) {
                 const workspaceFolder = vscode.workspace.getWorkspaceFolder(uri);
@@ -449,10 +452,10 @@ function activate(context) {
                 vscode.window.showErrorMessage('AIDA Sidebar Chat is not initialized');
                 return;
             }
-            
+
             // Show the sidebar
             copilotSidebarChat.show();
-            
+
             // Send review all changes message
             await copilotSidebarChat.sendMessage('@review-all-changes');
         } catch (error) {
@@ -462,18 +465,18 @@ function activate(context) {
     });
 
     console.log('🔄 About to initialize review modules...');
-    
+
     // Always register chat participants for both AIDA and GitHub Copilot compatibility
     const config = vscode.workspace.getConfiguration('aida');
     const useAIDAChatbot = config.get('useAIDAChatbot', false);
     const shouldRegisterParticipants = true; // Always register for GitHub Copilot compatibility
-    
+
     console.log('🔍 Always register AIDA chat participants for GitHub Copilot compatibility');
     console.log('🔍 useAIDAChatbot flag:', useAIDAChatbot);
     console.log('🔍 GitHub Copilot active:', vscode.extensions.getExtension('GitHub.copilot')?.isActive);
-    
+
     let reviewChangesParticipant, reviewFileParticipant, reviewAllChangesParticipant, dependencyParticipant;
-    
+
     if (shouldRegisterParticipants) {
         // Always initialize review modules for both AIDA and GitHub Copilot compatibility
         const reviewChanges = require('./scripts/review-changes');
@@ -490,7 +493,7 @@ function activate(context) {
             const dependency = require('./scripts/dependency');
             const dependencyResult = dependency.initializeDependencyGraph(context);
             dependencyParticipant = dependencyResult.dependencyParticipant;
-            
+
             // Register cache commands if available
             if (dependencyResult && typeof dependencyResult.registerCacheCommands === 'function') {
                 dependencyResult.registerCacheCommands(context);
@@ -498,13 +501,13 @@ function activate(context) {
             } else {
                 console.log('⚠️ Cache commands not available, using basic dependency analysis');
             }
-            
+
             console.log('✅ Dependency graph analysis participant registered');
         } catch (error) {
             console.error('❌ Failed to initialize dependency graph analysis:', error.message);
             console.log('⚠️ Continuing without dependency analysis...');
         }
-        
+
         console.log('✅ Chat participants registered for both AIDA and GitHub Copilot compatibility');
     } else {
         console.log('⚠️ Chat participants NOT registered (this should never happen)');
@@ -567,21 +570,21 @@ function activate(context) {
             // Add message handler for file switching
             panel.webview.onDidReceiveMessage(async (message) => {
                 console.log('� Received message from webview:', message);
-                
+
                 if (message.type === 'openFileInMonaco') {
                     try {
                         const filePath = message.filePath;
                         console.log('�🔄 Loading new file for Monaco:', filePath);
-                        
+
                         // Find file in cache using the same PR context as current diffData
                         const cache = global.prDiffCache;
                         let newDiffData = null;
-                        
+
                         if (cache) {
                             // Determine PR prefix based on current diffData's provider
                             const { provider, prId } = diffData;
                             let prPrefix;
-                            
+
                             if (provider === 'github') {
                                 prPrefix = `github_${prId}_`;
                             } else if (provider === 'gitlab') {
@@ -590,9 +593,9 @@ function activate(context) {
                                 // Azure DevOps
                                 prPrefix = `azure_${prId}_`;
                             }
-                            
+
                             console.log(`🔄 Looking for file in ${provider} PR ${prId} with prefix: ${prPrefix}`);
-                            
+
                             const cacheKeys = Object.keys(cache);
                             for (const key of cacheKeys) {
                                 if (key.startsWith(prPrefix) && cache[key].path === filePath) {
@@ -601,7 +604,7 @@ function activate(context) {
                                 }
                             }
                         }
-                        
+
                         if (newDiffData) {
                             // Update panel title and content
                             panel.title = `Diff: ${path.basename(filePath)}`;
@@ -611,7 +614,7 @@ function activate(context) {
                             console.error('❌ File not found in cache:', filePath);
                             vscode.window.showErrorMessage(`File not found: ${filePath}`);
                         }
-                        
+
                     } catch (error) {
                         console.error('❌ Error loading file:', error);
                         vscode.window.showErrorMessage(`Failed to load file: ${error.message}`);
@@ -645,11 +648,11 @@ function activate(context) {
     const showDailyReportCommand = vscode.commands.registerCommand('aida.showDailyReport', async (reportPath, htmlContent) => {
         try {
             console.log('📊 Opening daily report webview...');
-            
+
             // Import the daily report module and create webview
             const dailyReport = require('./scripts/daily-report');
             dailyReport.createDailyReportWebview(reportPath, htmlContent);
-            
+
         } catch (error) {
             console.error('❌ Error opening daily report webview:', error);
             vscode.window.showErrorMessage(`Failed to open daily report: ${error.message}`);
@@ -660,7 +663,7 @@ function activate(context) {
     const showDailyReportTemplateCommand = vscode.commands.registerCommand('aida.showDailyReportTemplate', async () => {
         try {
             console.log('📋 Showing daily report template...');
-            
+
             const panel = vscode.window.createWebviewPanel(
                 'dailyReportTemplate',
                 '📋 Daily Report Template',
@@ -681,7 +684,7 @@ function activate(context) {
                     <li>📝 Technical notes</li>
                 </ul>
             `;
-            
+
         } catch (error) {
             console.error('❌ Error showing daily report template:', error);
             vscode.window.showErrorMessage(`Failed to show template: ${error.message}`);
@@ -692,10 +695,10 @@ function activate(context) {
     const showEnhancedReviewOptionsCommand = vscode.commands.registerCommand('aida.showEnhancedReviewOptions', async (filePath, chatCommand = 'review-changes') => {
         try {
             console.log(`📚 Showing enhanced review options for: ${filePath}, command: ${chatCommand}`);
-            
+
             // Show QuickPick first to select business documents
             await showEnhancedReviewOptionsInChat(filePath, chatCommand);
-            
+
         } catch (error) {
             console.error('❌ Error showing enhanced review options:', error);
             vscode.window.showErrorMessage(`Failed to show enhanced options: ${error.message}`);
@@ -706,22 +709,22 @@ function activate(context) {
     async function showEnhancedReviewOptionsInChat(filePath, chatCommand = 'review-changes') {
         console.log(`🔍 DEBUG: showEnhancedReviewOptionsInChat called with filePath = ${filePath}, chatCommand = ${chatCommand}`);
         console.log(`🔍 DEBUG: typeof filePath = ${typeof filePath}, filePath exists = ${filePath ? 'yes' : 'no'}`);
-        
+
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-        
+
         if (!workspaceFolder) {
             vscode.window.showErrorMessage('❌ No workspace found for business documents');
             return;
         }
-        
+
         // Get business document folders
         const businessDocs = await getBusinessDocumentFolders(workspaceFolder);
-        
+
         if (businessDocs.length === 0) {
             vscode.window.showInformationMessage('⚠️ No business-docs folders found for enhanced review.');
             return; // Exit without showing any UI
         }
-        
+
         // Generate description for each folder using the enhanced getFiles method
         function generateDescription(folder) {
             try {
@@ -729,14 +732,14 @@ function activate(context) {
                 if (files.length === 0) {
                     return `: 📋 (no documents)`;
                 }
-                
+
                 // Extract titles from first few files for preview
                 const previewFiles = files.slice(0, 3);
                 const titles = previewFiles.map(file => {
                     const fileName = file.name.replace('.md', '').replace(/-/g, ' ');
                     return fileName.charAt(0).toUpperCase() + fileName.slice(1);
                 });
-                
+
                 const titlesList = titles.join(', ');
                 const moreText = files.length > 3 ? ` (+${files.length - 3} more)` : '';
                 return `: 📋 ${titlesList}${moreText}`;
@@ -745,11 +748,11 @@ function activate(context) {
                 return `📋 ${folder.displayName}`;
             }
         }
-        
+
         // Customize UI based on chat command
         const reviewDisplayName = chatCommand === 'review-file' ? 'file review' : 'review';
         const titleText = chatCommand === 'review-file' ? '📚 Enhanced File Review Options' : '📚 Enhanced Review Options';
-        
+
         // Show selection UI via quick pick
         const items = [
             ...businessDocs.map(folder => ({
@@ -760,18 +763,18 @@ function activate(context) {
                 categoryDisplayName: folder.displayName
             }))
         ];
-        
+
         const selected = await vscode.window.showQuickPick(items, {
             placeHolder: `📚 Select business docs for enhanced review, or select none for quick review of ${path.basename(filePath)}`,
             title: titleText,
             canPickMany: true,
             ignoreFocusOut: false
         });
-        
+
         if (!selected) {
             return; // User cancelled (pressed Escape)
         }
-        
+
         // Allow empty selection - means Quick Review without business docs
         let selectedCategories = [];
         if (selected.length > 0) {
@@ -795,15 +798,15 @@ function activate(context) {
         // Check if user is currently in AIDA Sidebar Chat or Copilot Chat
         const aidaSidebarActive = copilotSidebarChat?.webviewView?.visible;
         console.log('📱 AIDA Sidebar active:', aidaSidebarActive);
-        
+
         // Start enhanced review with original filePath using chat command
         console.log('🔍 DEBUG: About to submit chat with filePath =', filePath);
         console.log('🔍 DEBUG: typeof filePath =', typeof filePath, 'length =', filePath?.length);
-        
+
         const chatText = `@${chatCommand} ${filePath}`;
         console.log(`🔍 DEBUG: ${chatCommand} chat text =`, chatText);
         console.log(`🔍 DEBUG: Final chatText length =`, chatText.length);
-        
+
         if (aidaSidebarActive && copilotSidebarChat) {
             // User is in AIDA chatbot - send message directly to AIDA
             console.log('🤖 Redirecting Enhanced Review to AIDA Chatbot');
@@ -871,7 +874,7 @@ async function ensureAidaTemplatesForReview(context) {
         }
 
         const workspaceAidaPath = path.join(workspaceFolder.uri.fsPath, 'AIDA');
-        
+
         // Check if AIDA folder exists
         if (!fs.existsSync(workspaceAidaPath)) {
             console.log('🆕 AIDA folder not found - creating complete template structure...');
@@ -881,7 +884,7 @@ async function ensureAidaTemplatesForReview(context) {
         } else {
             console.log('✅ AIDA folder exists - no action needed for review commands');
         }
-        
+
     } catch (error) {
         console.error('Error ensuring AIDA templates for review:', error);
     }
@@ -903,7 +906,7 @@ async function handleSyncTemplates(context) {
 
         const extensionTemplatesPath = path.join(context.extensionPath, 'templates');
         const workspaceAidaPath = path.join(workspaceFolder.uri.fsPath, 'AIDA', 'templates');
-        
+
         if (!fs.existsSync(workspaceAidaPath)) {
             console.log('🆕 AIDA not found - creating complete template structure via sync...');
             await createAidaTemplateStructure(extensionTemplatesPath, workspaceAidaPath);
@@ -911,7 +914,7 @@ async function handleSyncTemplates(context) {
             console.log('🔄 AIDA exists - syncing new language templates...');
             await syncNewLanguageTemplates(extensionTemplatesPath, workspaceAidaPath);
         }
-        
+
     } catch (error) {
         console.error('Error handling sync templates:', error);
     }
@@ -936,15 +939,15 @@ async function ensureTemplatesExistLazy(context) {
  */
 async function createAidaTemplateStructure(sourceTemplatePath, targetAidaPath) {
     const fs = require('fs').promises;
-    
+
     try {
         // Create AIDA directory structure
         await fs.mkdir(targetAidaPath, { recursive: true });
-        
+
         // Copy all language templates
         const reviewCodePath = path.join(sourceTemplatePath, 'review-code');
         const targetReviewCodePath = path.join(targetAidaPath, 'review-code');
-        
+
         if (require('fs').existsSync(reviewCodePath)) {
             await copyDirectory(reviewCodePath, targetReviewCodePath);
             console.log('✅ AIDA templates created with all available languages');
@@ -961,29 +964,29 @@ async function createAidaTemplateStructure(sourceTemplatePath, targetAidaPath) {
  */
 async function syncNewLanguageTemplates(sourceTemplatePath, targetAidaPath) {
     const fs = require('fs').promises;
-    
+
     try {
         const sourceLanguagesPath = path.join(sourceTemplatePath, 'review-code', 'languages');
         const targetLanguagesPath = path.join(targetAidaPath, 'review-code', 'languages');
-        
+
         if (require('fs').existsSync(sourceLanguagesPath)) {
             const sourceLanguages = await fs.readdir(sourceLanguagesPath);
-            const targetLanguages = require('fs').existsSync(targetLanguagesPath) 
-                ? await fs.readdir(targetLanguagesPath) 
+            const targetLanguages = require('fs').existsSync(targetLanguagesPath)
+                ? await fs.readdir(targetLanguagesPath)
                 : [];
-            
+
             // Find new languages to sync
             const newLanguages = sourceLanguages.filter(lang => !targetLanguages.includes(lang));
-            
+
             if (newLanguages.length > 0) {
                 console.log(`🔄 Syncing ${newLanguages.length} new language(s): ${newLanguages.join(', ')}`);
-                
+
                 for (const newLang of newLanguages) {
                     const sourceLangPath = path.join(sourceLanguagesPath, newLang);
                     const targetLangPath = path.join(targetLanguagesPath, newLang);
                     await copyDirectory(sourceLangPath, targetLangPath);
                 }
-                
+
                 console.log('✅ New language templates synced to AIDA');
             }
         }
@@ -999,15 +1002,15 @@ async function syncNewLanguageTemplates(sourceTemplatePath, targetAidaPath) {
  */
 async function copyDirectory(source, target) {
     const fs = require('fs').promises;
-    
+
     try {
         await fs.mkdir(target, { recursive: true });
         const entries = await fs.readdir(source, { withFileTypes: true });
-        
+
         for (const entry of entries) {
             const sourcePath = path.join(source, entry.name);
             const targetPath = path.join(target, entry.name);
-            
+
             if (entry.isDirectory()) {
                 await copyDirectory(sourcePath, targetPath);
             } else {
@@ -1064,7 +1067,7 @@ function getMonacoLanguage(fileExtension) {
         '.dart': 'dart',
         '.vue': 'vue'
     };
-    
+
     return languageMap[fileExtension.toLowerCase()] || 'plaintext';
 }
 
@@ -1077,19 +1080,19 @@ function getMonacoLanguage(fileExtension) {
  */
 async function getMonacoWebviewContent(diffData, panel, context) {
     const { path: filePath, changeType, additions, deletions, diff } = diffData;
-    
+
     console.log('🚀 Monaco webview content generation started for:', filePath);
 
     // Get all files in PR for sidebar
     let allFiles = [];
     let currentFileIndex = 0;
     const cache = global.prDiffCache;
-    
+
     if (cache) {
         // Determine PR prefix based on provider to filter correct files
         const { provider, prId } = diffData;
         let prPrefix;
-        
+
         if (provider === 'github') {
             prPrefix = `github_${prId}_`;
         } else if (provider === 'gitlab') {
@@ -1098,17 +1101,17 @@ async function getMonacoWebviewContent(diffData, panel, context) {
             // Azure DevOps
             prPrefix = `azure_${prId}_`;
         }
-        
+
         console.log(`📁 Filtering cache for ${provider} PR ${prId} with prefix: ${prPrefix}`);
-        
-        const cacheKeys = Object.keys(cache).filter(key => 
+
+        const cacheKeys = Object.keys(cache).filter(key =>
             key.startsWith(prPrefix) && cache[key].path
         );
         allFiles = cacheKeys.map((key, index) => {
             const file = cache[key];
             const isCurrentFile = file.path === filePath;
             if (isCurrentFile) currentFileIndex = index;
-            
+
             return {
                 path: file.path,
                 name: file.path.split('/').pop(),
@@ -1118,22 +1121,22 @@ async function getMonacoWebviewContent(diffData, panel, context) {
                 active: isCurrentFile
             };
         });
-        
+
         // Sort files alphabetically by path (A-Z)
         allFiles.sort((a, b) => a.path.localeCompare(b.path));
-        
+
         // Recalculate currentFileIndex after sorting
         currentFileIndex = allFiles.findIndex(file => file.active);
-        
+
         console.log('📁 Found', allFiles.length, 'files in PR, sorted A-Z, current file index:', currentFileIndex);
-        
+
         // Background preloading of next few files (async, non-blocking)
         if (allFiles.length > 1) {
             setTimeout(async () => {
                 console.log('🔄 Starting background preload of other files...');
                 let preloadCount = 0;
                 const maxPreload = Math.min(3, allFiles.length - 1); // Preload max 3 files
-                
+
                 for (const file of allFiles) {
                     if (file.path !== filePath && preloadCount < maxPreload) {
                         const contentCacheKey = `content_${file.path}`;
@@ -1145,13 +1148,13 @@ async function getMonacoWebviewContent(diffData, panel, context) {
                                     if (key.startsWith('pr') && cache[key].path === file.path) {
                                         console.log('📋 Preloading:', file.path);
                                         const { originalLines, modifiedLines } = await parseFullDiffContentEnhanced(cache[key].diff, file.path);
-                                        
+
                                         cache[contentCacheKey] = {
                                             originalContent: originalLines.map(line => line.content).join('\n'),
                                             modifiedContent: modifiedLines.map(line => line.content).join('\n'),
                                             timestamp: Date.now()
                                         };
-                                        
+
                                         preloadCount++;
                                         console.log('💾 Preloaded:', file.path);
                                         break;
@@ -1170,7 +1173,7 @@ async function getMonacoWebviewContent(diffData, panel, context) {
 
     // Generate file URL for Azure DevOps/GitHub (PR context)
     let fileUrl = null;
-    
+
     if (cache && cache.organization && cache.project && cache.repository) {
         // Get PR ID from any cached diff data
         let prId = null;
@@ -1181,7 +1184,7 @@ async function getMonacoWebviewContent(diffData, panel, context) {
                 break;
             }
         }
-        
+
         if (prId) {
             // Azure DevOps PR file URL format
             fileUrl = `https://dev.azure.com/${cache.organization}/${cache.project}/_git/${cache.repository}/pullrequest/${prId}?_a=files&path=${encodeURIComponent(filePath)}`;
@@ -1201,13 +1204,13 @@ async function getMonacoWebviewContent(diffData, panel, context) {
     const monacoUri = panel.webview.asWebviewUri(
         vscode.Uri.file(path.join(context.extensionPath, 'node_modules', 'monaco-editor', 'min', 'vs'))
     );
-    
+
     console.log('📁 Monaco URI:', monacoUri.toString());
 
     // Lazy load: Only parse current file content, cache others for later
     let originalContent = '';
     let modifiedContent = '';
-    
+
     // Check if content is already cached
     const contentCacheKey = `content_${filePath}`;
     if (global.prDiffCache && global.prDiffCache[contentCacheKey]) {
@@ -1217,7 +1220,7 @@ async function getMonacoWebviewContent(diffData, panel, context) {
         modifiedContent = cached.modifiedContent;
     } else {
         console.log('🔄 Fetching FULL file content for:', filePath);
-        
+
         // PRIORITY 1: Check if full content already stored in diffData (from Azure DevOps API)
         if (diffData.fullBaseContent !== undefined && diffData.fullSourceContent !== undefined) {
             console.log('✅ Using pre-fetched full content from diffData');
@@ -1232,17 +1235,17 @@ async function getMonacoWebviewContent(diffData, panel, context) {
                 const reviewPrPath = path.join(context.extensionPath, 'scripts', 'review-pr.js');
                 const reviewPrModule = require(reviewPrPath);
                 const getFileContent = reviewPrModule.getFileContent;
-                
+
                 if (typeof getFileContent === 'function') {
                     // Fetch both versions in parallel
                     const [baseContent, sourceContent] = await Promise.all([
                         getFileContent(diffData.organization, diffData.project, diffData.repository, filePath, diffData.targetCommit, diffData.accessToken),
                         getFileContent(diffData.organization, diffData.project, diffData.repository, filePath, diffData.sourceCommit, diffData.accessToken)
                     ]);
-                    
+
                     originalContent = baseContent || '';
                     modifiedContent = sourceContent || '';
-                    
+
                     console.log(`✅ Full content fetched: Original=${originalContent.length} chars, Modified=${modifiedContent.length} chars`);
                 } else {
                     console.log('⚠️ getFileContent not available, falling back to diff parsing');
@@ -1262,14 +1265,14 @@ async function getMonacoWebviewContent(diffData, panel, context) {
         else {
             console.log('⚠️ Not Azure DevOps or missing required info, using diff parsing');
             const { originalLines, modifiedLines } = await parseFullDiffContentEnhanced(diff, filePath);
-            
+
             console.log('📊 Original lines:', originalLines.length, 'Modified lines:', modifiedLines.length);
-            
+
             // Reconstruct full file content
             originalContent = originalLines.map(line => line.content).join('\n');
             modifiedContent = modifiedLines.map(line => line.content).join('\n');
         }
-        
+
         // Cache the parsed content for future use
         if (global.prDiffCache) {
             global.prDiffCache[contentCacheKey] = {
@@ -1278,16 +1281,16 @@ async function getMonacoWebviewContent(diffData, panel, context) {
                 timestamp: Date.now()
             };
         }
-        
+
         console.log('� Cached parsed content for:', filePath);
     }
-    
+
     console.log('📝 Content lengths - Original:', originalContent.length, 'Modified:', modifiedContent.length);
-    
+
     // Detect file language from extension
     const fileExtension = path.extname(filePath);
     const language = getMonacoLanguage(fileExtension);
-    
+
     console.log('🔤 Detected language:', language, 'for extension:', fileExtension);
 
     // Generate file list HTML for sidebar
@@ -1801,10 +1804,10 @@ async function getMonacoWebviewContent(diffData, panel, context) {
             <div class="file-info">
                 <div class="file-path">
                     🚀 Monaco Diff View: 
-                    ${fileUrl ? 
-                        `<a href="${fileUrl}" target="_blank" class="file-path-link" title="Open this file in PR on Azure DevOps">${escapeHtml(filePath)}</a>` : 
-                        escapeHtml(filePath)
-                    }
+                    ${fileUrl ?
+            `<a href="${fileUrl}" target="_blank" class="file-path-link" title="Open this file in PR on Azure DevOps">${escapeHtml(filePath)}</a>` :
+            escapeHtml(filePath)
+        }
                 </div>
                 <div class="file-stats">
                     <span class="stats-badge badge-type">${escapeHtml(changeType)}</span>
@@ -2410,10 +2413,10 @@ async function getMonacoWebviewContent(diffData, panel, context) {
  */
 async function parseFullDiffContentEnhanced(diff, filePath) {
     console.log('🔍 parseFullDiffContentEnhanced - FULL FILE CONTENT mode for:', filePath);
-    
+
     // Check if we have Azure DevOps cache data for full file content retrieval
     const cache = global.prDiffCache;
-    
+
     console.log('📊 prDiffCache exists:', !!cache);
     if (cache) {
         console.log('📊 Cache keys (first 10):', Object.keys(cache).filter(k => !k.startsWith('content_')).slice(0, 10));
@@ -2431,21 +2434,21 @@ async function parseFullDiffContentEnhanced(diff, filePath) {
             targetCommit: cache.targetCommit?.substring(0, 7)
         });
     }
-    
+
     if (cache && cache.accessToken && cache.sourceCommit && cache.targetCommit) {
         console.log('✅ Azure DevOps cache available - fetching FULL FILE CONTENT');
         return await getFullFileContentFromAzureDevOps(filePath, diff);
     } else {
         console.log('⚠️ No Azure DevOps cache - falling back to diff reconstruction');
         console.log('🔍 Attempting DIRECT Azure DevOps detection from diff content...');
-        
+
         // Try to detect Azure DevOps info from diff and fetch full content anyway
         const azureInfo = detectAzureDevOpsFromDiff(diff);
         if (azureInfo && azureInfo.organization) {
             console.log('🎯 Detected Azure DevOps info from diff:', azureInfo);
             return await getFullContentWithDetectedInfo(filePath, diff, azureInfo);
         }
-        
+
         return await reconstructFromDiffFallback(diff, filePath);
     }
 }
@@ -2457,7 +2460,7 @@ function detectAzureDevOpsFromDiff(diff) {
     // Look for Azure DevOps patterns in diff
     const orgMatch = diff.match(/dev\.azure\.com\/([^\/]+)/);
     const projectMatch = diff.match(/\/_git\/([^\/]+)/);
-    
+
     if (orgMatch && projectMatch) {
         return {
             organization: orgMatch[1],
@@ -2465,16 +2468,16 @@ function detectAzureDevOpsFromDiff(diff) {
             repository: projectMatch[1] // Assume same as project for now
         };
     }
-    
+
     // Check if this looks like Azure DevOps based on diff format
     if (diff.includes('BusinessWebUS') || diff.includes('Shippo')) {
         return {
             organization: 'BusinessWebUS',
-            project: 'Shippo', 
+            project: 'Shippo',
             repository: 'Shippo-Web'
         };
     }
-    
+
     return null;
 }
 
@@ -2483,32 +2486,32 @@ function detectAzureDevOpsFromDiff(diff) {
  */
 async function getFullContentWithDetectedInfo(filePath, diff, azureInfo) {
     console.log('🔄 Attempting to fetch full content with detected info...');
-    
+
     // Try to get access token from vscode settings or prompt user
     const config = vscode.workspace.getConfiguration('aida');
     const accessToken = config.get('azureDevOps.personalAccessToken');
-    
+
     if (!accessToken) {
         console.log('❌ No Azure DevOps token available in settings');
         return await reconstructFromDiffFallback(diff, filePath);
     }
-    
+
     // Extract commit info from diff if possible
     const commits = extractCommitsFromDiff(diff);
     if (!commits.sourceCommit || !commits.targetCommit) {
         console.log('❌ Could not extract commit info from diff');
         return await reconstructFromDiffFallback(diff, filePath);
     }
-    
+
     console.log('✅ Detected commits:', commits);
-    
+
     try {
         // Import and use getFileContent if available
         const reviewPrPath = path.join(__dirname, 'scripts', 'review-pr.js');
         if (fs.existsSync(reviewPrPath)) {
             const reviewPrModule = require(reviewPrPath);
             const getFileContent = reviewPrModule.getFileContent;
-            
+
             if (typeof getFileContent === 'function') {
                 // 🔧 FIX: Commit terminology - need to swap for correct Monaco display
                 // commits.sourceCommit = NEW code = Monaco "modified" (RIGHT)
@@ -2517,20 +2520,20 @@ async function getFullContentWithDetectedInfo(filePath, diff, azureInfo) {
                     getFileContent(azureInfo.organization, azureInfo.project, azureInfo.repository, filePath, commits.targetCommit, accessToken), // OLD = original = LEFT
                     getFileContent(azureInfo.organization, azureInfo.project, azureInfo.repository, filePath, commits.sourceCommit, accessToken)  // NEW = modified = RIGHT
                 ]);
-                
+
                 if (targetContent || sourceContent) {
                     console.log(`✅ SUCCESS: Got full content - Original (OLD): ${targetContent ? targetContent.length : 0}, Modified (NEW): ${sourceContent ? sourceContent.length : 0}`);
-                    
+
                     // Convert to format using the enhanced logic
                     return convertFullContentToLineFormat(targetContent || '', sourceContent || '');
                 }
             }
         }
-        
+
     } catch (error) {
         console.log('❌ Error fetching with detected info:', error.message);
     }
-    
+
     return await reconstructFromDiffFallback(diff, filePath);
 }
 
@@ -2546,7 +2549,7 @@ function extractCommitsFromDiff(diff) {
             targetCommit: indexMatch[2]
         };
     }
-    
+
     // Look for other patterns
     const commitMatches = diff.match(/[a-f0-9]{40}/g);
     if (commitMatches && commitMatches.length >= 2) {
@@ -2555,7 +2558,7 @@ function extractCommitsFromDiff(diff) {
             targetCommit: commitMatches[1]
         };
     }
-    
+
     return {};
 }
 
@@ -2564,7 +2567,7 @@ function extractCommitsFromDiff(diff) {
  */
 async function getFullFileContentFromAzureDevOps(filePath, diff) {
     const cache = global.prDiffCache;
-    
+
     try {
         console.log(`🔄 Fetching FULL content for ${filePath} from both commits`);
         console.log(`📊 Cache data:`, {
@@ -2575,18 +2578,18 @@ async function getFullFileContentFromAzureDevOps(filePath, diff) {
             targetCommit: cache.targetCommit?.substring(0, 7),
             hasAccessToken: !!cache.accessToken
         });
-        
+
         // Import getFileContent function from review-pr.js if available
         const reviewPrPath = path.join(__dirname, 'scripts', 'review-pr.js');
         if (fs.existsSync(reviewPrPath)) {
             const reviewPrModule = require(reviewPrPath);
             const getFileContent = reviewPrModule.getFileContent;
-            
+
             if (typeof getFileContent === 'function') {
                 console.log(`🚀 Calling getFileContent for both commits...`);
                 console.log(`   LEFT (Original/Base): ${cache.targetCommit?.substring(0, 7)}`);
                 console.log(`   RIGHT (Modified/Feature): ${cache.sourceCommit?.substring(0, 7)}`);
-                
+
                 // 🔧 FIX: Azure DevOps PR terminology vs Monaco terminology
                 // sourceCommit = NEW code (feature branch) = Monaco "modified" (RIGHT)
                 // targetCommit = OLD code (base branch) = Monaco "original" (LEFT)
@@ -2594,17 +2597,17 @@ async function getFullFileContentFromAzureDevOps(filePath, diff) {
                     getFileContent(cache.organization, cache.project, cache.repository, filePath, cache.targetCommit, cache.accessToken), // OLD = original = LEFT
                     getFileContent(cache.organization, cache.project, cache.repository, filePath, cache.sourceCommit, cache.accessToken)  // NEW = modified = RIGHT
                 ]);
-                
+
                 console.log(`📊 API Response:`, {
                     targetContentLength: targetContent ? targetContent.length : 'NULL',
                     sourceContentLength: sourceContent ? sourceContent.length : 'NULL',
                     targetContentFirstLines: targetContent ? targetContent.split('\n').slice(0, 3).join('\n') : 'NULL',
                     sourceContentFirstLines: sourceContent ? sourceContent.split('\n').slice(0, 3).join('\n') : 'NULL'
                 });
-                
+
                 if (targetContent || sourceContent) {
                     console.log(`✅ SUCCESS: Got full content - Original (OLD): ${targetContent ? targetContent.length : 0}, Modified (NEW): ${sourceContent ? sourceContent.length : 0}`);
-                    
+
                     return convertFullContentToLineFormat(targetContent || '', sourceContent || '');
                 } else {
                     console.log(`⚠️ Both API calls returned NULL - file might not exist in one or both commits`);
@@ -2615,12 +2618,12 @@ async function getFullFileContentFromAzureDevOps(filePath, diff) {
         } else {
             console.log(`❌ review-pr.js not found at:`, reviewPrPath);
         }
-        
+
     } catch (error) {
         console.log('❌ Error fetching from Azure DevOps API:', error.message);
         console.log('❌ Stack trace:', error.stack);
     }
-    
+
     console.log(`⚠️ Falling back to diff reconstruction...`);
     return await reconstructFromDiffFallback(diff, filePath);
 }
@@ -2642,7 +2645,7 @@ function convertFullContentToLineFormat(baseContent, targetContent) {
             modifiedLines: targetContent.split('\n').map((line, i) => ({ content: line, lineNum: i + 1, type: 'context' }))
         };
     }
-    
+
     // ⚡ PERFORMANCE: Quick check for identical content
     if (baseContent === targetContent) {
         console.log('⚡ Files identical - using fast path');
@@ -2652,25 +2655,25 @@ function convertFullContentToLineFormat(baseContent, targetContent) {
             modifiedLines: lines.map((line, i) => ({ content: line, lineNum: i + 1, type: 'context' }))
         };
     }
-    
+
     console.time('⚡ Diff processing');
     // Use diff to properly align lines for side-by-side view
     const changes = diff.diffLines(baseContent, targetContent);
     console.timeEnd('⚡ Diff processing');
-    
+
     const originalLines = [];
     const modifiedLines = [];
-    
+
     let baseLineNum = 1;
     let targetLineNum = 1;
-    
+
     for (const change of changes) {
         const lines = change.value.split('\n');
         // Remove empty last element if exists (from split)
         if (lines[lines.length - 1] === '') {
             lines.pop();
         }
-        
+
         if (change.added) {
             // Lines added in target (new code) - show empty on left, added on right
             for (const line of lines) {
@@ -2679,13 +2682,13 @@ function convertFullContentToLineFormat(baseContent, targetContent) {
                     lineNum: '',
                     type: 'empty'
                 });
-                
+
                 modifiedLines.push({
                     content: line,
                     lineNum: targetLineNum,
                     type: 'added'
                 });
-                
+
                 targetLineNum++;
             }
         } else if (change.removed) {
@@ -2696,13 +2699,13 @@ function convertFullContentToLineFormat(baseContent, targetContent) {
                     lineNum: baseLineNum,
                     type: 'removed'
                 });
-                
+
                 modifiedLines.push({
                     content: '',
                     lineNum: '',
                     type: 'empty'
                 });
-                
+
                 baseLineNum++;
             }
         } else {
@@ -2713,22 +2716,22 @@ function convertFullContentToLineFormat(baseContent, targetContent) {
                     lineNum: baseLineNum,
                     type: 'context'
                 });
-                
+
                 modifiedLines.push({
                     content: line,
                     lineNum: targetLineNum,
                     type: 'context'
                 });
-                
+
                 baseLineNum++;
                 targetLineNum++;
             }
         }
     }
-    
+
     console.log(`✅ ENHANCED SIDE-BY-SIDE: ${originalLines.length} original lines, ${modifiedLines.length} modified lines`);
     console.log(`📊 Added: ${modifiedLines.filter(l => l.type === 'added').length}, Removed: ${originalLines.filter(l => l.type === 'removed').length}`);
-    
+
     return { originalLines, modifiedLines };
 }
 
@@ -2737,7 +2740,7 @@ function convertFullContentToLineFormat(baseContent, targetContent) {
  */
 async function reconstructFromDiffFallback(diff, filePath) {
     console.log('🔄 Using fallback diff reconstruction for:', filePath);
-    
+
     // Use the existing reconstruction logic
     const { originalLines, modifiedLines } = reconstructFromGitDiff(diff, filePath);
 

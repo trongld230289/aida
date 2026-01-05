@@ -42,7 +42,7 @@ const {
     getBusinessDocumentFolders
 } = __webpack_require__(/*! ./scripts/review-common */ "./scripts/review-common.js");
 
-const { analyzeFileDependency } = __webpack_require__(/*! ./scripts/dependency */ "./scripts/dependency.js");
+const { analyzeFileDependency, activateDependencyWatcherIfCacheExists } = __webpack_require__(/*! ./scripts/dependency */ "./scripts/dependency.js");
 
 
 // Session tracking for "Enter twice" functionality and change scores
@@ -158,12 +158,15 @@ async function setupAzureDevOpsSettings() {
  */
 function activate(context) {
     // console.log('Reload 4');
-    console.log('🤖 AIDA v1.1.0 - AI Development Assistant');
+    console.log('🤖 AIDA v1.1.2 - AI Development Assistant');
     console.log('🚀 AIDA extension is now active!');
-    
+
     // Store extension path globally
     global.extensionPath = context.extensionPath;
-    
+
+    // Auto-activate dependency watcher if cache exists
+    activateDependencyWatcherIfCacheExists(context);
+
     // Register Virtual Content Provider for in-memory files (aida-memory scheme)
     try {
         const { virtualContentProvider } = __webpack_require__(/*! ./scripts/virtual-content-provider */ "./scripts/virtual-content-provider.js");
@@ -174,7 +177,7 @@ function activate(context) {
     } catch (error) {
         console.error('❌ Failed to register virtual content provider:', error);
     }
-    
+
     // Make business docs state accessible globally
     global.businessDocsState = businessDocsState;
 
@@ -232,21 +235,21 @@ function activate(context) {
 
     let confirmReviewDocs = vscode.commands.registerCommand('aida.confirmReviewDocs', async (filePath, chatCommand = 'review-changes', keepSelectedDocs = false) => {
         // Simple logic - set Quick Review mode (unified for both changes and file review)
-        if(!keepSelectedDocs) {
+        if (!keepSelectedDocs) {
             global.selectedBusinessDocs = [];
         }
-        
+
         console.log(`🚀 Quick Review button clicked - set global.selectedBusinessDocs = [] (command: ${chatCommand})`);
         console.log('🔍 DEBUG: filePath received =', filePath);
 
         // Check if user is currently in AIDA Sidebar Chat or Copilot Chat
         const activeView = vscode.window.activeTextEditor?.document.uri.scheme;
         console.log('🔍 Active view scheme:', activeView);
-        
+
         // Try to detect if AIDA sidebar is visible/active
         const aidaSidebarActive = copilotSidebarChat?.webviewView?.visible;
         console.log('📱 AIDA Sidebar active:', aidaSidebarActive);
-        
+
         if (aidaSidebarActive && copilotSidebarChat) {
             // User is in AIDA chatbot - send message directly to AIDA
             console.log('🤖 Redirecting to AIDA Chatbot');
@@ -297,10 +300,10 @@ function activate(context) {
             // Check if AIDA chat should be used
             const config = vscode.workspace.getConfiguration('aida');
             const useAIDAChatbot = config.get('useAIDAChatbot', false);
-            
+
             console.log('🔍 useAIDAChatbot flag:', useAIDAChatbot);
             console.log('🔍 GitHub Copilot extension active:', vscode.extensions.getExtension('GitHub.copilot')?.isActive);
-            
+
             if (useAIDAChatbot) {
                 console.log('➡️ Using AIDA chatbot (useAIDAChatbot=true)');
                 // Use AIDA Copilot-style chat
@@ -337,7 +340,7 @@ function activate(context) {
             if (!uri && vscode.window.activeTextEditor) {
                 uri = vscode.window.activeTextEditor.document.uri;
             }
-            
+
             if (uri) {
                 await analyzeFileDependency(uri);
             } else {
@@ -356,10 +359,10 @@ function activate(context) {
             // Check if AIDA chat should be used
             const config = vscode.workspace.getConfiguration('aida');
             const useAIDAChatbot = config.get('useAIDAChatbot', false);
-            
+
             console.log('🔍 useAIDAChatbot flag:', useAIDAChatbot);
             console.log('🔍 GitHub Copilot extension active:', vscode.extensions.getExtension('GitHub.copilot')?.isActive);
-            
+
             if (useAIDAChatbot) {
                 console.log('➡️ Using AIDA chatbot (useAIDAChatbot=true)');
                 // Use AIDA Copilot-style chat
@@ -395,7 +398,7 @@ function activate(context) {
             // Check if AIDA chat should be used
             const config = vscode.workspace.getConfiguration('aida');
             const useAIDAChatbot = config.get('useAIDAChatbot', false);
-            
+
             if (useAIDAChatbot) {
                 // Use AIDA Copilot-style chat
                 await vscode.commands.executeCommand('aida.reviewAllChangesContext', uri);
@@ -420,10 +423,10 @@ function activate(context) {
                 vscode.window.showErrorMessage('AIDA Sidebar Chat is not initialized');
                 return;
             }
-            
+
             // Show the sidebar
             copilotSidebarChat.show();
-            
+
             // Send review file message
             if (uri && uri.fsPath) {
                 const workspaceFolder = vscode.workspace.getWorkspaceFolder(uri);
@@ -448,10 +451,10 @@ function activate(context) {
                 vscode.window.showErrorMessage('AIDA Sidebar Chat is not initialized');
                 return;
             }
-            
+
             // Show the sidebar
             copilotSidebarChat.show();
-            
+
             // Send review changes message
             if (uri && uri.fsPath) {
                 const workspaceFolder = vscode.workspace.getWorkspaceFolder(uri);
@@ -476,10 +479,10 @@ function activate(context) {
                 vscode.window.showErrorMessage('AIDA Sidebar Chat is not initialized');
                 return;
             }
-            
+
             // Show the sidebar
             copilotSidebarChat.show();
-            
+
             // Send review all changes message
             await copilotSidebarChat.sendMessage('@review-all-changes');
         } catch (error) {
@@ -489,18 +492,18 @@ function activate(context) {
     });
 
     console.log('🔄 About to initialize review modules...');
-    
+
     // Always register chat participants for both AIDA and GitHub Copilot compatibility
     const config = vscode.workspace.getConfiguration('aida');
     const useAIDAChatbot = config.get('useAIDAChatbot', false);
     const shouldRegisterParticipants = true; // Always register for GitHub Copilot compatibility
-    
+
     console.log('🔍 Always register AIDA chat participants for GitHub Copilot compatibility');
     console.log('🔍 useAIDAChatbot flag:', useAIDAChatbot);
     console.log('🔍 GitHub Copilot active:', vscode.extensions.getExtension('GitHub.copilot')?.isActive);
-    
+
     let reviewChangesParticipant, reviewFileParticipant, reviewAllChangesParticipant, dependencyParticipant;
-    
+
     if (shouldRegisterParticipants) {
         // Always initialize review modules for both AIDA and GitHub Copilot compatibility
         const reviewChanges = __webpack_require__(/*! ./scripts/review-changes */ "./scripts/review-changes.js");
@@ -517,7 +520,7 @@ function activate(context) {
             const dependency = __webpack_require__(/*! ./scripts/dependency */ "./scripts/dependency.js");
             const dependencyResult = dependency.initializeDependencyGraph(context);
             dependencyParticipant = dependencyResult.dependencyParticipant;
-            
+
             // Register cache commands if available
             if (dependencyResult && typeof dependencyResult.registerCacheCommands === 'function') {
                 dependencyResult.registerCacheCommands(context);
@@ -525,13 +528,13 @@ function activate(context) {
             } else {
                 console.log('⚠️ Cache commands not available, using basic dependency analysis');
             }
-            
+
             console.log('✅ Dependency graph analysis participant registered');
         } catch (error) {
             console.error('❌ Failed to initialize dependency graph analysis:', error.message);
             console.log('⚠️ Continuing without dependency analysis...');
         }
-        
+
         console.log('✅ Chat participants registered for both AIDA and GitHub Copilot compatibility');
     } else {
         console.log('⚠️ Chat participants NOT registered (this should never happen)');
@@ -594,21 +597,21 @@ function activate(context) {
             // Add message handler for file switching
             panel.webview.onDidReceiveMessage(async (message) => {
                 console.log('� Received message from webview:', message);
-                
+
                 if (message.type === 'openFileInMonaco') {
                     try {
                         const filePath = message.filePath;
                         console.log('�🔄 Loading new file for Monaco:', filePath);
-                        
+
                         // Find file in cache using the same PR context as current diffData
                         const cache = global.prDiffCache;
                         let newDiffData = null;
-                        
+
                         if (cache) {
                             // Determine PR prefix based on current diffData's provider
                             const { provider, prId } = diffData;
                             let prPrefix;
-                            
+
                             if (provider === 'github') {
                                 prPrefix = `github_${prId}_`;
                             } else if (provider === 'gitlab') {
@@ -617,9 +620,9 @@ function activate(context) {
                                 // Azure DevOps
                                 prPrefix = `azure_${prId}_`;
                             }
-                            
+
                             console.log(`🔄 Looking for file in ${provider} PR ${prId} with prefix: ${prPrefix}`);
-                            
+
                             const cacheKeys = Object.keys(cache);
                             for (const key of cacheKeys) {
                                 if (key.startsWith(prPrefix) && cache[key].path === filePath) {
@@ -628,7 +631,7 @@ function activate(context) {
                                 }
                             }
                         }
-                        
+
                         if (newDiffData) {
                             // Update panel title and content
                             panel.title = `Diff: ${path.basename(filePath)}`;
@@ -638,7 +641,7 @@ function activate(context) {
                             console.error('❌ File not found in cache:', filePath);
                             vscode.window.showErrorMessage(`File not found: ${filePath}`);
                         }
-                        
+
                     } catch (error) {
                         console.error('❌ Error loading file:', error);
                         vscode.window.showErrorMessage(`Failed to load file: ${error.message}`);
@@ -672,11 +675,11 @@ function activate(context) {
     const showDailyReportCommand = vscode.commands.registerCommand('aida.showDailyReport', async (reportPath, htmlContent) => {
         try {
             console.log('📊 Opening daily report webview...');
-            
+
             // Import the daily report module and create webview
             const dailyReport = __webpack_require__(/*! ./scripts/daily-report */ "./scripts/daily-report.js");
             dailyReport.createDailyReportWebview(reportPath, htmlContent);
-            
+
         } catch (error) {
             console.error('❌ Error opening daily report webview:', error);
             vscode.window.showErrorMessage(`Failed to open daily report: ${error.message}`);
@@ -687,7 +690,7 @@ function activate(context) {
     const showDailyReportTemplateCommand = vscode.commands.registerCommand('aida.showDailyReportTemplate', async () => {
         try {
             console.log('📋 Showing daily report template...');
-            
+
             const panel = vscode.window.createWebviewPanel(
                 'dailyReportTemplate',
                 '📋 Daily Report Template',
@@ -708,7 +711,7 @@ function activate(context) {
                     <li>📝 Technical notes</li>
                 </ul>
             `;
-            
+
         } catch (error) {
             console.error('❌ Error showing daily report template:', error);
             vscode.window.showErrorMessage(`Failed to show template: ${error.message}`);
@@ -719,10 +722,10 @@ function activate(context) {
     const showEnhancedReviewOptionsCommand = vscode.commands.registerCommand('aida.showEnhancedReviewOptions', async (filePath, chatCommand = 'review-changes') => {
         try {
             console.log(`📚 Showing enhanced review options for: ${filePath}, command: ${chatCommand}`);
-            
+
             // Show QuickPick first to select business documents
             await showEnhancedReviewOptionsInChat(filePath, chatCommand);
-            
+
         } catch (error) {
             console.error('❌ Error showing enhanced review options:', error);
             vscode.window.showErrorMessage(`Failed to show enhanced options: ${error.message}`);
@@ -733,22 +736,22 @@ function activate(context) {
     async function showEnhancedReviewOptionsInChat(filePath, chatCommand = 'review-changes') {
         console.log(`🔍 DEBUG: showEnhancedReviewOptionsInChat called with filePath = ${filePath}, chatCommand = ${chatCommand}`);
         console.log(`🔍 DEBUG: typeof filePath = ${typeof filePath}, filePath exists = ${filePath ? 'yes' : 'no'}`);
-        
+
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-        
+
         if (!workspaceFolder) {
             vscode.window.showErrorMessage('❌ No workspace found for business documents');
             return;
         }
-        
+
         // Get business document folders
         const businessDocs = await getBusinessDocumentFolders(workspaceFolder);
-        
+
         if (businessDocs.length === 0) {
             vscode.window.showInformationMessage('⚠️ No business-docs folders found for enhanced review.');
             return; // Exit without showing any UI
         }
-        
+
         // Generate description for each folder using the enhanced getFiles method
         function generateDescription(folder) {
             try {
@@ -756,14 +759,14 @@ function activate(context) {
                 if (files.length === 0) {
                     return `: 📋 (no documents)`;
                 }
-                
+
                 // Extract titles from first few files for preview
                 const previewFiles = files.slice(0, 3);
                 const titles = previewFiles.map(file => {
                     const fileName = file.name.replace('.md', '').replace(/-/g, ' ');
                     return fileName.charAt(0).toUpperCase() + fileName.slice(1);
                 });
-                
+
                 const titlesList = titles.join(', ');
                 const moreText = files.length > 3 ? ` (+${files.length - 3} more)` : '';
                 return `: 📋 ${titlesList}${moreText}`;
@@ -772,11 +775,11 @@ function activate(context) {
                 return `📋 ${folder.displayName}`;
             }
         }
-        
+
         // Customize UI based on chat command
         const reviewDisplayName = chatCommand === 'review-file' ? 'file review' : 'review';
         const titleText = chatCommand === 'review-file' ? '📚 Enhanced File Review Options' : '📚 Enhanced Review Options';
-        
+
         // Show selection UI via quick pick
         const items = [
             ...businessDocs.map(folder => ({
@@ -787,18 +790,18 @@ function activate(context) {
                 categoryDisplayName: folder.displayName
             }))
         ];
-        
+
         const selected = await vscode.window.showQuickPick(items, {
             placeHolder: `📚 Select business docs for enhanced review, or select none for quick review of ${path.basename(filePath)}`,
             title: titleText,
             canPickMany: true,
             ignoreFocusOut: false
         });
-        
+
         if (!selected) {
             return; // User cancelled (pressed Escape)
         }
-        
+
         // Allow empty selection - means Quick Review without business docs
         let selectedCategories = [];
         if (selected.length > 0) {
@@ -822,15 +825,15 @@ function activate(context) {
         // Check if user is currently in AIDA Sidebar Chat or Copilot Chat
         const aidaSidebarActive = copilotSidebarChat?.webviewView?.visible;
         console.log('📱 AIDA Sidebar active:', aidaSidebarActive);
-        
+
         // Start enhanced review with original filePath using chat command
         console.log('🔍 DEBUG: About to submit chat with filePath =', filePath);
         console.log('🔍 DEBUG: typeof filePath =', typeof filePath, 'length =', filePath?.length);
-        
+
         const chatText = `@${chatCommand} ${filePath}`;
         console.log(`🔍 DEBUG: ${chatCommand} chat text =`, chatText);
         console.log(`🔍 DEBUG: Final chatText length =`, chatText.length);
-        
+
         if (aidaSidebarActive && copilotSidebarChat) {
             // User is in AIDA chatbot - send message directly to AIDA
             console.log('🤖 Redirecting Enhanced Review to AIDA Chatbot');
@@ -898,7 +901,7 @@ async function ensureAidaTemplatesForReview(context) {
         }
 
         const workspaceAidaPath = path.join(workspaceFolder.uri.fsPath, 'AIDA');
-        
+
         // Check if AIDA folder exists
         if (!fs.existsSync(workspaceAidaPath)) {
             console.log('🆕 AIDA folder not found - creating complete template structure...');
@@ -908,7 +911,7 @@ async function ensureAidaTemplatesForReview(context) {
         } else {
             console.log('✅ AIDA folder exists - no action needed for review commands');
         }
-        
+
     } catch (error) {
         console.error('Error ensuring AIDA templates for review:', error);
     }
@@ -930,7 +933,7 @@ async function handleSyncTemplates(context) {
 
         const extensionTemplatesPath = path.join(context.extensionPath, 'templates');
         const workspaceAidaPath = path.join(workspaceFolder.uri.fsPath, 'AIDA', 'templates');
-        
+
         if (!fs.existsSync(workspaceAidaPath)) {
             console.log('🆕 AIDA not found - creating complete template structure via sync...');
             await createAidaTemplateStructure(extensionTemplatesPath, workspaceAidaPath);
@@ -938,7 +941,7 @@ async function handleSyncTemplates(context) {
             console.log('🔄 AIDA exists - syncing new language templates...');
             await syncNewLanguageTemplates(extensionTemplatesPath, workspaceAidaPath);
         }
-        
+
     } catch (error) {
         console.error('Error handling sync templates:', error);
     }
@@ -963,15 +966,15 @@ async function ensureTemplatesExistLazy(context) {
  */
 async function createAidaTemplateStructure(sourceTemplatePath, targetAidaPath) {
     const fs = (__webpack_require__(/*! fs */ "fs").promises);
-    
+
     try {
         // Create AIDA directory structure
         await fs.mkdir(targetAidaPath, { recursive: true });
-        
+
         // Copy all language templates
         const reviewCodePath = path.join(sourceTemplatePath, 'review-code');
         const targetReviewCodePath = path.join(targetAidaPath, 'review-code');
-        
+
         if ((__webpack_require__(/*! fs */ "fs").existsSync)(reviewCodePath)) {
             await copyDirectory(reviewCodePath, targetReviewCodePath);
             console.log('✅ AIDA templates created with all available languages');
@@ -988,29 +991,29 @@ async function createAidaTemplateStructure(sourceTemplatePath, targetAidaPath) {
  */
 async function syncNewLanguageTemplates(sourceTemplatePath, targetAidaPath) {
     const fs = (__webpack_require__(/*! fs */ "fs").promises);
-    
+
     try {
         const sourceLanguagesPath = path.join(sourceTemplatePath, 'review-code', 'languages');
         const targetLanguagesPath = path.join(targetAidaPath, 'review-code', 'languages');
-        
+
         if ((__webpack_require__(/*! fs */ "fs").existsSync)(sourceLanguagesPath)) {
             const sourceLanguages = await fs.readdir(sourceLanguagesPath);
-            const targetLanguages = (__webpack_require__(/*! fs */ "fs").existsSync)(targetLanguagesPath) 
-                ? await fs.readdir(targetLanguagesPath) 
+            const targetLanguages = (__webpack_require__(/*! fs */ "fs").existsSync)(targetLanguagesPath)
+                ? await fs.readdir(targetLanguagesPath)
                 : [];
-            
+
             // Find new languages to sync
             const newLanguages = sourceLanguages.filter(lang => !targetLanguages.includes(lang));
-            
+
             if (newLanguages.length > 0) {
                 console.log(`🔄 Syncing ${newLanguages.length} new language(s): ${newLanguages.join(', ')}`);
-                
+
                 for (const newLang of newLanguages) {
                     const sourceLangPath = path.join(sourceLanguagesPath, newLang);
                     const targetLangPath = path.join(targetLanguagesPath, newLang);
                     await copyDirectory(sourceLangPath, targetLangPath);
                 }
-                
+
                 console.log('✅ New language templates synced to AIDA');
             }
         }
@@ -1026,15 +1029,15 @@ async function syncNewLanguageTemplates(sourceTemplatePath, targetAidaPath) {
  */
 async function copyDirectory(source, target) {
     const fs = (__webpack_require__(/*! fs */ "fs").promises);
-    
+
     try {
         await fs.mkdir(target, { recursive: true });
         const entries = await fs.readdir(source, { withFileTypes: true });
-        
+
         for (const entry of entries) {
             const sourcePath = path.join(source, entry.name);
             const targetPath = path.join(target, entry.name);
-            
+
             if (entry.isDirectory()) {
                 await copyDirectory(sourcePath, targetPath);
             } else {
@@ -1091,7 +1094,7 @@ function getMonacoLanguage(fileExtension) {
         '.dart': 'dart',
         '.vue': 'vue'
     };
-    
+
     return languageMap[fileExtension.toLowerCase()] || 'plaintext';
 }
 
@@ -1104,19 +1107,19 @@ function getMonacoLanguage(fileExtension) {
  */
 async function getMonacoWebviewContent(diffData, panel, context) {
     const { path: filePath, changeType, additions, deletions, diff } = diffData;
-    
+
     console.log('🚀 Monaco webview content generation started for:', filePath);
 
     // Get all files in PR for sidebar
     let allFiles = [];
     let currentFileIndex = 0;
     const cache = global.prDiffCache;
-    
+
     if (cache) {
         // Determine PR prefix based on provider to filter correct files
         const { provider, prId } = diffData;
         let prPrefix;
-        
+
         if (provider === 'github') {
             prPrefix = `github_${prId}_`;
         } else if (provider === 'gitlab') {
@@ -1125,17 +1128,17 @@ async function getMonacoWebviewContent(diffData, panel, context) {
             // Azure DevOps
             prPrefix = `azure_${prId}_`;
         }
-        
+
         console.log(`📁 Filtering cache for ${provider} PR ${prId} with prefix: ${prPrefix}`);
-        
-        const cacheKeys = Object.keys(cache).filter(key => 
+
+        const cacheKeys = Object.keys(cache).filter(key =>
             key.startsWith(prPrefix) && cache[key].path
         );
         allFiles = cacheKeys.map((key, index) => {
             const file = cache[key];
             const isCurrentFile = file.path === filePath;
             if (isCurrentFile) currentFileIndex = index;
-            
+
             return {
                 path: file.path,
                 name: file.path.split('/').pop(),
@@ -1145,22 +1148,22 @@ async function getMonacoWebviewContent(diffData, panel, context) {
                 active: isCurrentFile
             };
         });
-        
+
         // Sort files alphabetically by path (A-Z)
         allFiles.sort((a, b) => a.path.localeCompare(b.path));
-        
+
         // Recalculate currentFileIndex after sorting
         currentFileIndex = allFiles.findIndex(file => file.active);
-        
+
         console.log('📁 Found', allFiles.length, 'files in PR, sorted A-Z, current file index:', currentFileIndex);
-        
+
         // Background preloading of next few files (async, non-blocking)
         if (allFiles.length > 1) {
             setTimeout(async () => {
                 console.log('🔄 Starting background preload of other files...');
                 let preloadCount = 0;
                 const maxPreload = Math.min(3, allFiles.length - 1); // Preload max 3 files
-                
+
                 for (const file of allFiles) {
                     if (file.path !== filePath && preloadCount < maxPreload) {
                         const contentCacheKey = `content_${file.path}`;
@@ -1172,13 +1175,13 @@ async function getMonacoWebviewContent(diffData, panel, context) {
                                     if (key.startsWith('pr') && cache[key].path === file.path) {
                                         console.log('📋 Preloading:', file.path);
                                         const { originalLines, modifiedLines } = await parseFullDiffContentEnhanced(cache[key].diff, file.path);
-                                        
+
                                         cache[contentCacheKey] = {
                                             originalContent: originalLines.map(line => line.content).join('\n'),
                                             modifiedContent: modifiedLines.map(line => line.content).join('\n'),
                                             timestamp: Date.now()
                                         };
-                                        
+
                                         preloadCount++;
                                         console.log('💾 Preloaded:', file.path);
                                         break;
@@ -1197,7 +1200,7 @@ async function getMonacoWebviewContent(diffData, panel, context) {
 
     // Generate file URL for Azure DevOps/GitHub (PR context)
     let fileUrl = null;
-    
+
     if (cache && cache.organization && cache.project && cache.repository) {
         // Get PR ID from any cached diff data
         let prId = null;
@@ -1208,7 +1211,7 @@ async function getMonacoWebviewContent(diffData, panel, context) {
                 break;
             }
         }
-        
+
         if (prId) {
             // Azure DevOps PR file URL format
             fileUrl = `https://dev.azure.com/${cache.organization}/${cache.project}/_git/${cache.repository}/pullrequest/${prId}?_a=files&path=${encodeURIComponent(filePath)}`;
@@ -1228,13 +1231,13 @@ async function getMonacoWebviewContent(diffData, panel, context) {
     const monacoUri = panel.webview.asWebviewUri(
         vscode.Uri.file(path.join(context.extensionPath, 'node_modules', 'monaco-editor', 'min', 'vs'))
     );
-    
+
     console.log('📁 Monaco URI:', monacoUri.toString());
 
     // Lazy load: Only parse current file content, cache others for later
     let originalContent = '';
     let modifiedContent = '';
-    
+
     // Check if content is already cached
     const contentCacheKey = `content_${filePath}`;
     if (global.prDiffCache && global.prDiffCache[contentCacheKey]) {
@@ -1244,7 +1247,7 @@ async function getMonacoWebviewContent(diffData, panel, context) {
         modifiedContent = cached.modifiedContent;
     } else {
         console.log('🔄 Fetching FULL file content for:', filePath);
-        
+
         // PRIORITY 1: Check if full content already stored in diffData (from Azure DevOps API)
         if (diffData.fullBaseContent !== undefined && diffData.fullSourceContent !== undefined) {
             console.log('✅ Using pre-fetched full content from diffData');
@@ -1259,17 +1262,17 @@ async function getMonacoWebviewContent(diffData, panel, context) {
                 const reviewPrPath = path.join(context.extensionPath, 'scripts', 'review-pr.js');
                 const reviewPrModule = __webpack_require__("./. sync recursive")(reviewPrPath);
                 const getFileContent = reviewPrModule.getFileContent;
-                
+
                 if (typeof getFileContent === 'function') {
                     // Fetch both versions in parallel
                     const [baseContent, sourceContent] = await Promise.all([
                         getFileContent(diffData.organization, diffData.project, diffData.repository, filePath, diffData.targetCommit, diffData.accessToken),
                         getFileContent(diffData.organization, diffData.project, diffData.repository, filePath, diffData.sourceCommit, diffData.accessToken)
                     ]);
-                    
+
                     originalContent = baseContent || '';
                     modifiedContent = sourceContent || '';
-                    
+
                     console.log(`✅ Full content fetched: Original=${originalContent.length} chars, Modified=${modifiedContent.length} chars`);
                 } else {
                     console.log('⚠️ getFileContent not available, falling back to diff parsing');
@@ -1289,14 +1292,14 @@ async function getMonacoWebviewContent(diffData, panel, context) {
         else {
             console.log('⚠️ Not Azure DevOps or missing required info, using diff parsing');
             const { originalLines, modifiedLines } = await parseFullDiffContentEnhanced(diff, filePath);
-            
+
             console.log('📊 Original lines:', originalLines.length, 'Modified lines:', modifiedLines.length);
-            
+
             // Reconstruct full file content
             originalContent = originalLines.map(line => line.content).join('\n');
             modifiedContent = modifiedLines.map(line => line.content).join('\n');
         }
-        
+
         // Cache the parsed content for future use
         if (global.prDiffCache) {
             global.prDiffCache[contentCacheKey] = {
@@ -1305,16 +1308,16 @@ async function getMonacoWebviewContent(diffData, panel, context) {
                 timestamp: Date.now()
             };
         }
-        
+
         console.log('� Cached parsed content for:', filePath);
     }
-    
+
     console.log('📝 Content lengths - Original:', originalContent.length, 'Modified:', modifiedContent.length);
-    
+
     // Detect file language from extension
     const fileExtension = path.extname(filePath);
     const language = getMonacoLanguage(fileExtension);
-    
+
     console.log('🔤 Detected language:', language, 'for extension:', fileExtension);
 
     // Generate file list HTML for sidebar
@@ -1828,10 +1831,10 @@ async function getMonacoWebviewContent(diffData, panel, context) {
             <div class="file-info">
                 <div class="file-path">
                     🚀 Monaco Diff View: 
-                    ${fileUrl ? 
-                        `<a href="${fileUrl}" target="_blank" class="file-path-link" title="Open this file in PR on Azure DevOps">${escapeHtml(filePath)}</a>` : 
-                        escapeHtml(filePath)
-                    }
+                    ${fileUrl ?
+            `<a href="${fileUrl}" target="_blank" class="file-path-link" title="Open this file in PR on Azure DevOps">${escapeHtml(filePath)}</a>` :
+            escapeHtml(filePath)
+        }
                 </div>
                 <div class="file-stats">
                     <span class="stats-badge badge-type">${escapeHtml(changeType)}</span>
@@ -2437,10 +2440,10 @@ async function getMonacoWebviewContent(diffData, panel, context) {
  */
 async function parseFullDiffContentEnhanced(diff, filePath) {
     console.log('🔍 parseFullDiffContentEnhanced - FULL FILE CONTENT mode for:', filePath);
-    
+
     // Check if we have Azure DevOps cache data for full file content retrieval
     const cache = global.prDiffCache;
-    
+
     console.log('📊 prDiffCache exists:', !!cache);
     if (cache) {
         console.log('📊 Cache keys (first 10):', Object.keys(cache).filter(k => !k.startsWith('content_')).slice(0, 10));
@@ -2458,21 +2461,21 @@ async function parseFullDiffContentEnhanced(diff, filePath) {
             targetCommit: cache.targetCommit?.substring(0, 7)
         });
     }
-    
+
     if (cache && cache.accessToken && cache.sourceCommit && cache.targetCommit) {
         console.log('✅ Azure DevOps cache available - fetching FULL FILE CONTENT');
         return await getFullFileContentFromAzureDevOps(filePath, diff);
     } else {
         console.log('⚠️ No Azure DevOps cache - falling back to diff reconstruction');
         console.log('🔍 Attempting DIRECT Azure DevOps detection from diff content...');
-        
+
         // Try to detect Azure DevOps info from diff and fetch full content anyway
         const azureInfo = detectAzureDevOpsFromDiff(diff);
         if (azureInfo && azureInfo.organization) {
             console.log('🎯 Detected Azure DevOps info from diff:', azureInfo);
             return await getFullContentWithDetectedInfo(filePath, diff, azureInfo);
         }
-        
+
         return await reconstructFromDiffFallback(diff, filePath);
     }
 }
@@ -2484,7 +2487,7 @@ function detectAzureDevOpsFromDiff(diff) {
     // Look for Azure DevOps patterns in diff
     const orgMatch = diff.match(/dev\.azure\.com\/([^\/]+)/);
     const projectMatch = diff.match(/\/_git\/([^\/]+)/);
-    
+
     if (orgMatch && projectMatch) {
         return {
             organization: orgMatch[1],
@@ -2492,16 +2495,16 @@ function detectAzureDevOpsFromDiff(diff) {
             repository: projectMatch[1] // Assume same as project for now
         };
     }
-    
+
     // Check if this looks like Azure DevOps based on diff format
     if (diff.includes('BusinessWebUS') || diff.includes('Shippo')) {
         return {
             organization: 'BusinessWebUS',
-            project: 'Shippo', 
+            project: 'Shippo',
             repository: 'Shippo-Web'
         };
     }
-    
+
     return null;
 }
 
@@ -2510,32 +2513,32 @@ function detectAzureDevOpsFromDiff(diff) {
  */
 async function getFullContentWithDetectedInfo(filePath, diff, azureInfo) {
     console.log('🔄 Attempting to fetch full content with detected info...');
-    
+
     // Try to get access token from vscode settings or prompt user
     const config = vscode.workspace.getConfiguration('aida');
     const accessToken = config.get('azureDevOps.personalAccessToken');
-    
+
     if (!accessToken) {
         console.log('❌ No Azure DevOps token available in settings');
         return await reconstructFromDiffFallback(diff, filePath);
     }
-    
+
     // Extract commit info from diff if possible
     const commits = extractCommitsFromDiff(diff);
     if (!commits.sourceCommit || !commits.targetCommit) {
         console.log('❌ Could not extract commit info from diff');
         return await reconstructFromDiffFallback(diff, filePath);
     }
-    
+
     console.log('✅ Detected commits:', commits);
-    
+
     try {
         // Import and use getFileContent if available
         const reviewPrPath = path.join(__dirname, 'scripts', 'review-pr.js');
         if (fs.existsSync(reviewPrPath)) {
             const reviewPrModule = __webpack_require__("./. sync recursive")(reviewPrPath);
             const getFileContent = reviewPrModule.getFileContent;
-            
+
             if (typeof getFileContent === 'function') {
                 // 🔧 FIX: Commit terminology - need to swap for correct Monaco display
                 // commits.sourceCommit = NEW code = Monaco "modified" (RIGHT)
@@ -2544,20 +2547,20 @@ async function getFullContentWithDetectedInfo(filePath, diff, azureInfo) {
                     getFileContent(azureInfo.organization, azureInfo.project, azureInfo.repository, filePath, commits.targetCommit, accessToken), // OLD = original = LEFT
                     getFileContent(azureInfo.organization, azureInfo.project, azureInfo.repository, filePath, commits.sourceCommit, accessToken)  // NEW = modified = RIGHT
                 ]);
-                
+
                 if (targetContent || sourceContent) {
                     console.log(`✅ SUCCESS: Got full content - Original (OLD): ${targetContent ? targetContent.length : 0}, Modified (NEW): ${sourceContent ? sourceContent.length : 0}`);
-                    
+
                     // Convert to format using the enhanced logic
                     return convertFullContentToLineFormat(targetContent || '', sourceContent || '');
                 }
             }
         }
-        
+
     } catch (error) {
         console.log('❌ Error fetching with detected info:', error.message);
     }
-    
+
     return await reconstructFromDiffFallback(diff, filePath);
 }
 
@@ -2573,7 +2576,7 @@ function extractCommitsFromDiff(diff) {
             targetCommit: indexMatch[2]
         };
     }
-    
+
     // Look for other patterns
     const commitMatches = diff.match(/[a-f0-9]{40}/g);
     if (commitMatches && commitMatches.length >= 2) {
@@ -2582,7 +2585,7 @@ function extractCommitsFromDiff(diff) {
             targetCommit: commitMatches[1]
         };
     }
-    
+
     return {};
 }
 
@@ -2591,7 +2594,7 @@ function extractCommitsFromDiff(diff) {
  */
 async function getFullFileContentFromAzureDevOps(filePath, diff) {
     const cache = global.prDiffCache;
-    
+
     try {
         console.log(`🔄 Fetching FULL content for ${filePath} from both commits`);
         console.log(`📊 Cache data:`, {
@@ -2602,18 +2605,18 @@ async function getFullFileContentFromAzureDevOps(filePath, diff) {
             targetCommit: cache.targetCommit?.substring(0, 7),
             hasAccessToken: !!cache.accessToken
         });
-        
+
         // Import getFileContent function from review-pr.js if available
         const reviewPrPath = path.join(__dirname, 'scripts', 'review-pr.js');
         if (fs.existsSync(reviewPrPath)) {
             const reviewPrModule = __webpack_require__("./. sync recursive")(reviewPrPath);
             const getFileContent = reviewPrModule.getFileContent;
-            
+
             if (typeof getFileContent === 'function') {
                 console.log(`🚀 Calling getFileContent for both commits...`);
                 console.log(`   LEFT (Original/Base): ${cache.targetCommit?.substring(0, 7)}`);
                 console.log(`   RIGHT (Modified/Feature): ${cache.sourceCommit?.substring(0, 7)}`);
-                
+
                 // 🔧 FIX: Azure DevOps PR terminology vs Monaco terminology
                 // sourceCommit = NEW code (feature branch) = Monaco "modified" (RIGHT)
                 // targetCommit = OLD code (base branch) = Monaco "original" (LEFT)
@@ -2621,17 +2624,17 @@ async function getFullFileContentFromAzureDevOps(filePath, diff) {
                     getFileContent(cache.organization, cache.project, cache.repository, filePath, cache.targetCommit, cache.accessToken), // OLD = original = LEFT
                     getFileContent(cache.organization, cache.project, cache.repository, filePath, cache.sourceCommit, cache.accessToken)  // NEW = modified = RIGHT
                 ]);
-                
+
                 console.log(`📊 API Response:`, {
                     targetContentLength: targetContent ? targetContent.length : 'NULL',
                     sourceContentLength: sourceContent ? sourceContent.length : 'NULL',
                     targetContentFirstLines: targetContent ? targetContent.split('\n').slice(0, 3).join('\n') : 'NULL',
                     sourceContentFirstLines: sourceContent ? sourceContent.split('\n').slice(0, 3).join('\n') : 'NULL'
                 });
-                
+
                 if (targetContent || sourceContent) {
                     console.log(`✅ SUCCESS: Got full content - Original (OLD): ${targetContent ? targetContent.length : 0}, Modified (NEW): ${sourceContent ? sourceContent.length : 0}`);
-                    
+
                     return convertFullContentToLineFormat(targetContent || '', sourceContent || '');
                 } else {
                     console.log(`⚠️ Both API calls returned NULL - file might not exist in one or both commits`);
@@ -2642,12 +2645,12 @@ async function getFullFileContentFromAzureDevOps(filePath, diff) {
         } else {
             console.log(`❌ review-pr.js not found at:`, reviewPrPath);
         }
-        
+
     } catch (error) {
         console.log('❌ Error fetching from Azure DevOps API:', error.message);
         console.log('❌ Stack trace:', error.stack);
     }
-    
+
     console.log(`⚠️ Falling back to diff reconstruction...`);
     return await reconstructFromDiffFallback(diff, filePath);
 }
@@ -2669,7 +2672,7 @@ function convertFullContentToLineFormat(baseContent, targetContent) {
             modifiedLines: targetContent.split('\n').map((line, i) => ({ content: line, lineNum: i + 1, type: 'context' }))
         };
     }
-    
+
     // ⚡ PERFORMANCE: Quick check for identical content
     if (baseContent === targetContent) {
         console.log('⚡ Files identical - using fast path');
@@ -2679,25 +2682,25 @@ function convertFullContentToLineFormat(baseContent, targetContent) {
             modifiedLines: lines.map((line, i) => ({ content: line, lineNum: i + 1, type: 'context' }))
         };
     }
-    
+
     console.time('⚡ Diff processing');
     // Use diff to properly align lines for side-by-side view
     const changes = diff.diffLines(baseContent, targetContent);
     console.timeEnd('⚡ Diff processing');
-    
+
     const originalLines = [];
     const modifiedLines = [];
-    
+
     let baseLineNum = 1;
     let targetLineNum = 1;
-    
+
     for (const change of changes) {
         const lines = change.value.split('\n');
         // Remove empty last element if exists (from split)
         if (lines[lines.length - 1] === '') {
             lines.pop();
         }
-        
+
         if (change.added) {
             // Lines added in target (new code) - show empty on left, added on right
             for (const line of lines) {
@@ -2706,13 +2709,13 @@ function convertFullContentToLineFormat(baseContent, targetContent) {
                     lineNum: '',
                     type: 'empty'
                 });
-                
+
                 modifiedLines.push({
                     content: line,
                     lineNum: targetLineNum,
                     type: 'added'
                 });
-                
+
                 targetLineNum++;
             }
         } else if (change.removed) {
@@ -2723,13 +2726,13 @@ function convertFullContentToLineFormat(baseContent, targetContent) {
                     lineNum: baseLineNum,
                     type: 'removed'
                 });
-                
+
                 modifiedLines.push({
                     content: '',
                     lineNum: '',
                     type: 'empty'
                 });
-                
+
                 baseLineNum++;
             }
         } else {
@@ -2740,22 +2743,22 @@ function convertFullContentToLineFormat(baseContent, targetContent) {
                     lineNum: baseLineNum,
                     type: 'context'
                 });
-                
+
                 modifiedLines.push({
                     content: line,
                     lineNum: targetLineNum,
                     type: 'context'
                 });
-                
+
                 baseLineNum++;
                 targetLineNum++;
             }
         }
     }
-    
+
     console.log(`✅ ENHANCED SIDE-BY-SIDE: ${originalLines.length} original lines, ${modifiedLines.length} modified lines`);
     console.log(`📊 Added: ${modifiedLines.filter(l => l.type === 'added').length}, Removed: ${originalLines.filter(l => l.type === 'removed').length}`);
-    
+
     return { originalLines, modifiedLines };
 }
 
@@ -2764,7 +2767,7 @@ function convertFullContentToLineFormat(baseContent, targetContent) {
  */
 async function reconstructFromDiffFallback(diff, filePath) {
     console.log('🔄 Using fallback diff reconstruction for:', filePath);
-    
+
     // Use the existing reconstruction logic
     const { originalLines, modifiedLines } = reconstructFromGitDiff(diff, filePath);
 
@@ -7048,6 +7051,290 @@ exports.KMeans = __webpack_require__(/*! ./clusterer/kmeans */ "./node_modules/a
 
 /***/ }),
 
+/***/ "./node_modules/balanced-match/index.js":
+/*!**********************************************!*\
+  !*** ./node_modules/balanced-match/index.js ***!
+  \**********************************************/
+/***/ ((module) => {
+
+"use strict";
+
+module.exports = balanced;
+function balanced(a, b, str) {
+  if (a instanceof RegExp) a = maybeMatch(a, str);
+  if (b instanceof RegExp) b = maybeMatch(b, str);
+
+  var r = range(a, b, str);
+
+  return r && {
+    start: r[0],
+    end: r[1],
+    pre: str.slice(0, r[0]),
+    body: str.slice(r[0] + a.length, r[1]),
+    post: str.slice(r[1] + b.length)
+  };
+}
+
+function maybeMatch(reg, str) {
+  var m = str.match(reg);
+  return m ? m[0] : null;
+}
+
+balanced.range = range;
+function range(a, b, str) {
+  var begs, beg, left, right, result;
+  var ai = str.indexOf(a);
+  var bi = str.indexOf(b, ai + 1);
+  var i = ai;
+
+  if (ai >= 0 && bi > 0) {
+    if(a===b) {
+      return [ai, bi];
+    }
+    begs = [];
+    left = str.length;
+
+    while (i >= 0 && !result) {
+      if (i == ai) {
+        begs.push(i);
+        ai = str.indexOf(a, i + 1);
+      } else if (begs.length == 1) {
+        result = [ begs.pop(), bi ];
+      } else {
+        beg = begs.pop();
+        if (beg < left) {
+          left = beg;
+          right = bi;
+        }
+
+        bi = str.indexOf(b, i + 1);
+      }
+
+      i = ai < bi && ai >= 0 ? ai : bi;
+    }
+
+    if (begs.length) {
+      result = [ left, right ];
+    }
+  }
+
+  return result;
+}
+
+
+/***/ }),
+
+/***/ "./node_modules/brace-expansion/index.js":
+/*!***********************************************!*\
+  !*** ./node_modules/brace-expansion/index.js ***!
+  \***********************************************/
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+var concatMap = __webpack_require__(/*! concat-map */ "./node_modules/concat-map/index.js");
+var balanced = __webpack_require__(/*! balanced-match */ "./node_modules/balanced-match/index.js");
+
+module.exports = expandTop;
+
+var escSlash = '\0SLASH'+Math.random()+'\0';
+var escOpen = '\0OPEN'+Math.random()+'\0';
+var escClose = '\0CLOSE'+Math.random()+'\0';
+var escComma = '\0COMMA'+Math.random()+'\0';
+var escPeriod = '\0PERIOD'+Math.random()+'\0';
+
+function numeric(str) {
+  return parseInt(str, 10) == str
+    ? parseInt(str, 10)
+    : str.charCodeAt(0);
+}
+
+function escapeBraces(str) {
+  return str.split('\\\\').join(escSlash)
+            .split('\\{').join(escOpen)
+            .split('\\}').join(escClose)
+            .split('\\,').join(escComma)
+            .split('\\.').join(escPeriod);
+}
+
+function unescapeBraces(str) {
+  return str.split(escSlash).join('\\')
+            .split(escOpen).join('{')
+            .split(escClose).join('}')
+            .split(escComma).join(',')
+            .split(escPeriod).join('.');
+}
+
+
+// Basically just str.split(","), but handling cases
+// where we have nested braced sections, which should be
+// treated as individual members, like {a,{b,c},d}
+function parseCommaParts(str) {
+  if (!str)
+    return [''];
+
+  var parts = [];
+  var m = balanced('{', '}', str);
+
+  if (!m)
+    return str.split(',');
+
+  var pre = m.pre;
+  var body = m.body;
+  var post = m.post;
+  var p = pre.split(',');
+
+  p[p.length-1] += '{' + body + '}';
+  var postParts = parseCommaParts(post);
+  if (post.length) {
+    p[p.length-1] += postParts.shift();
+    p.push.apply(p, postParts);
+  }
+
+  parts.push.apply(parts, p);
+
+  return parts;
+}
+
+function expandTop(str) {
+  if (!str)
+    return [];
+
+  // I don't know why Bash 4.3 does this, but it does.
+  // Anything starting with {} will have the first two bytes preserved
+  // but *only* at the top level, so {},a}b will not expand to anything,
+  // but a{},b}c will be expanded to [a}c,abc].
+  // One could argue that this is a bug in Bash, but since the goal of
+  // this module is to match Bash's rules, we escape a leading {}
+  if (str.substr(0, 2) === '{}') {
+    str = '\\{\\}' + str.substr(2);
+  }
+
+  return expand(escapeBraces(str), true).map(unescapeBraces);
+}
+
+function identity(e) {
+  return e;
+}
+
+function embrace(str) {
+  return '{' + str + '}';
+}
+function isPadded(el) {
+  return /^-?0\d/.test(el);
+}
+
+function lte(i, y) {
+  return i <= y;
+}
+function gte(i, y) {
+  return i >= y;
+}
+
+function expand(str, isTop) {
+  var expansions = [];
+
+  var m = balanced('{', '}', str);
+  if (!m || /\$$/.test(m.pre)) return [str];
+
+  var isNumericSequence = /^-?\d+\.\.-?\d+(?:\.\.-?\d+)?$/.test(m.body);
+  var isAlphaSequence = /^[a-zA-Z]\.\.[a-zA-Z](?:\.\.-?\d+)?$/.test(m.body);
+  var isSequence = isNumericSequence || isAlphaSequence;
+  var isOptions = m.body.indexOf(',') >= 0;
+  if (!isSequence && !isOptions) {
+    // {a},b}
+    if (m.post.match(/,(?!,).*\}/)) {
+      str = m.pre + '{' + m.body + escClose + m.post;
+      return expand(str);
+    }
+    return [str];
+  }
+
+  var n;
+  if (isSequence) {
+    n = m.body.split(/\.\./);
+  } else {
+    n = parseCommaParts(m.body);
+    if (n.length === 1) {
+      // x{{a,b}}y ==> x{a}y x{b}y
+      n = expand(n[0], false).map(embrace);
+      if (n.length === 1) {
+        var post = m.post.length
+          ? expand(m.post, false)
+          : [''];
+        return post.map(function(p) {
+          return m.pre + n[0] + p;
+        });
+      }
+    }
+  }
+
+  // at this point, n is the parts, and we know it's not a comma set
+  // with a single entry.
+
+  // no need to expand pre, since it is guaranteed to be free of brace-sets
+  var pre = m.pre;
+  var post = m.post.length
+    ? expand(m.post, false)
+    : [''];
+
+  var N;
+
+  if (isSequence) {
+    var x = numeric(n[0]);
+    var y = numeric(n[1]);
+    var width = Math.max(n[0].length, n[1].length)
+    var incr = n.length == 3
+      ? Math.abs(numeric(n[2]))
+      : 1;
+    var test = lte;
+    var reverse = y < x;
+    if (reverse) {
+      incr *= -1;
+      test = gte;
+    }
+    var pad = n.some(isPadded);
+
+    N = [];
+
+    for (var i = x; test(i, y); i += incr) {
+      var c;
+      if (isAlphaSequence) {
+        c = String.fromCharCode(i);
+        if (c === '\\')
+          c = '';
+      } else {
+        c = String(i);
+        if (pad) {
+          var need = width - c.length;
+          if (need > 0) {
+            var z = new Array(need + 1).join('0');
+            if (i < 0)
+              c = '-' + z + c.slice(1);
+            else
+              c = z + c;
+          }
+        }
+      }
+      N.push(c);
+    }
+  } else {
+    N = concatMap(n, function(el) { return expand(el, false) });
+  }
+
+  for (var j = 0; j < N.length; j++) {
+    for (var k = 0; k < post.length; k++) {
+      var expansion = pre + N[j] + post[k];
+      if (!isTop || isSequence || expansion)
+        expansions.push(expansion);
+    }
+  }
+
+  return expansions;
+}
+
+
+
+/***/ }),
+
 /***/ "./node_modules/collapse-white-space/index.js":
 /*!****************************************************!*\
   !*** ./node_modules/collapse-white-space/index.js ***!
@@ -7145,6 +7432,29 @@ function trimFactory(replace) {
       : replace(value)
   }
 }
+
+
+/***/ }),
+
+/***/ "./node_modules/concat-map/index.js":
+/*!******************************************!*\
+  !*** ./node_modules/concat-map/index.js ***!
+  \******************************************/
+/***/ ((module) => {
+
+module.exports = function (xs, fn) {
+    var res = [];
+    for (var i = 0; i < xs.length; i++) {
+        var x = fn(xs[i], i);
+        if (isArray(x)) res.push.apply(res, x);
+        else res.push(x);
+    }
+    return res;
+};
+
+var isArray = Array.isArray || function (xs) {
+    return Object.prototype.toString.call(xs) === '[object Array]';
+};
 
 
 /***/ }),
@@ -12252,6 +12562,963 @@ class LRUCache {
 }
 exports.LRUCache = LRUCache;
 //# sourceMappingURL=index.js.map
+
+/***/ }),
+
+/***/ "./node_modules/minimatch/minimatch.js":
+/*!*********************************************!*\
+  !*** ./node_modules/minimatch/minimatch.js ***!
+  \*********************************************/
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+module.exports = minimatch
+minimatch.Minimatch = Minimatch
+
+var path = (function () { try { return __webpack_require__(/*! path */ "path") } catch (e) {}}()) || {
+  sep: '/'
+}
+minimatch.sep = path.sep
+
+var GLOBSTAR = minimatch.GLOBSTAR = Minimatch.GLOBSTAR = {}
+var expand = __webpack_require__(/*! brace-expansion */ "./node_modules/brace-expansion/index.js")
+
+var plTypes = {
+  '!': { open: '(?:(?!(?:', close: '))[^/]*?)'},
+  '?': { open: '(?:', close: ')?' },
+  '+': { open: '(?:', close: ')+' },
+  '*': { open: '(?:', close: ')*' },
+  '@': { open: '(?:', close: ')' }
+}
+
+// any single thing other than /
+// don't need to escape / when using new RegExp()
+var qmark = '[^/]'
+
+// * => any number of characters
+var star = qmark + '*?'
+
+// ** when dots are allowed.  Anything goes, except .. and .
+// not (^ or / followed by one or two dots followed by $ or /),
+// followed by anything, any number of times.
+var twoStarDot = '(?:(?!(?:\\\/|^)(?:\\.{1,2})($|\\\/)).)*?'
+
+// not a ^ or / followed by a dot,
+// followed by anything, any number of times.
+var twoStarNoDot = '(?:(?!(?:\\\/|^)\\.).)*?'
+
+// characters that need to be escaped in RegExp.
+var reSpecials = charSet('().*{}+?[]^$\\!')
+
+// "abc" -> { a:true, b:true, c:true }
+function charSet (s) {
+  return s.split('').reduce(function (set, c) {
+    set[c] = true
+    return set
+  }, {})
+}
+
+// normalizes slashes.
+var slashSplit = /\/+/
+
+minimatch.filter = filter
+function filter (pattern, options) {
+  options = options || {}
+  return function (p, i, list) {
+    return minimatch(p, pattern, options)
+  }
+}
+
+function ext (a, b) {
+  b = b || {}
+  var t = {}
+  Object.keys(a).forEach(function (k) {
+    t[k] = a[k]
+  })
+  Object.keys(b).forEach(function (k) {
+    t[k] = b[k]
+  })
+  return t
+}
+
+minimatch.defaults = function (def) {
+  if (!def || typeof def !== 'object' || !Object.keys(def).length) {
+    return minimatch
+  }
+
+  var orig = minimatch
+
+  var m = function minimatch (p, pattern, options) {
+    return orig(p, pattern, ext(def, options))
+  }
+
+  m.Minimatch = function Minimatch (pattern, options) {
+    return new orig.Minimatch(pattern, ext(def, options))
+  }
+  m.Minimatch.defaults = function defaults (options) {
+    return orig.defaults(ext(def, options)).Minimatch
+  }
+
+  m.filter = function filter (pattern, options) {
+    return orig.filter(pattern, ext(def, options))
+  }
+
+  m.defaults = function defaults (options) {
+    return orig.defaults(ext(def, options))
+  }
+
+  m.makeRe = function makeRe (pattern, options) {
+    return orig.makeRe(pattern, ext(def, options))
+  }
+
+  m.braceExpand = function braceExpand (pattern, options) {
+    return orig.braceExpand(pattern, ext(def, options))
+  }
+
+  m.match = function (list, pattern, options) {
+    return orig.match(list, pattern, ext(def, options))
+  }
+
+  return m
+}
+
+Minimatch.defaults = function (def) {
+  return minimatch.defaults(def).Minimatch
+}
+
+function minimatch (p, pattern, options) {
+  assertValidPattern(pattern)
+
+  if (!options) options = {}
+
+  // shortcut: comments match nothing.
+  if (!options.nocomment && pattern.charAt(0) === '#') {
+    return false
+  }
+
+  return new Minimatch(pattern, options).match(p)
+}
+
+function Minimatch (pattern, options) {
+  if (!(this instanceof Minimatch)) {
+    return new Minimatch(pattern, options)
+  }
+
+  assertValidPattern(pattern)
+
+  if (!options) options = {}
+
+  pattern = pattern.trim()
+
+  // windows support: need to use /, not \
+  if (!options.allowWindowsEscape && path.sep !== '/') {
+    pattern = pattern.split(path.sep).join('/')
+  }
+
+  this.options = options
+  this.set = []
+  this.pattern = pattern
+  this.regexp = null
+  this.negate = false
+  this.comment = false
+  this.empty = false
+  this.partial = !!options.partial
+
+  // make the set of regexps etc.
+  this.make()
+}
+
+Minimatch.prototype.debug = function () {}
+
+Minimatch.prototype.make = make
+function make () {
+  var pattern = this.pattern
+  var options = this.options
+
+  // empty patterns and comments match nothing.
+  if (!options.nocomment && pattern.charAt(0) === '#') {
+    this.comment = true
+    return
+  }
+  if (!pattern) {
+    this.empty = true
+    return
+  }
+
+  // step 1: figure out negation, etc.
+  this.parseNegate()
+
+  // step 2: expand braces
+  var set = this.globSet = this.braceExpand()
+
+  if (options.debug) this.debug = function debug() { console.error.apply(console, arguments) }
+
+  this.debug(this.pattern, set)
+
+  // step 3: now we have a set, so turn each one into a series of path-portion
+  // matching patterns.
+  // These will be regexps, except in the case of "**", which is
+  // set to the GLOBSTAR object for globstar behavior,
+  // and will not contain any / characters
+  set = this.globParts = set.map(function (s) {
+    return s.split(slashSplit)
+  })
+
+  this.debug(this.pattern, set)
+
+  // glob --> regexps
+  set = set.map(function (s, si, set) {
+    return s.map(this.parse, this)
+  }, this)
+
+  this.debug(this.pattern, set)
+
+  // filter out everything that didn't compile properly.
+  set = set.filter(function (s) {
+    return s.indexOf(false) === -1
+  })
+
+  this.debug(this.pattern, set)
+
+  this.set = set
+}
+
+Minimatch.prototype.parseNegate = parseNegate
+function parseNegate () {
+  var pattern = this.pattern
+  var negate = false
+  var options = this.options
+  var negateOffset = 0
+
+  if (options.nonegate) return
+
+  for (var i = 0, l = pattern.length
+    ; i < l && pattern.charAt(i) === '!'
+    ; i++) {
+    negate = !negate
+    negateOffset++
+  }
+
+  if (negateOffset) this.pattern = pattern.substr(negateOffset)
+  this.negate = negate
+}
+
+// Brace expansion:
+// a{b,c}d -> abd acd
+// a{b,}c -> abc ac
+// a{0..3}d -> a0d a1d a2d a3d
+// a{b,c{d,e}f}g -> abg acdfg acefg
+// a{b,c}d{e,f}g -> abdeg acdeg abdeg abdfg
+//
+// Invalid sets are not expanded.
+// a{2..}b -> a{2..}b
+// a{b}c -> a{b}c
+minimatch.braceExpand = function (pattern, options) {
+  return braceExpand(pattern, options)
+}
+
+Minimatch.prototype.braceExpand = braceExpand
+
+function braceExpand (pattern, options) {
+  if (!options) {
+    if (this instanceof Minimatch) {
+      options = this.options
+    } else {
+      options = {}
+    }
+  }
+
+  pattern = typeof pattern === 'undefined'
+    ? this.pattern : pattern
+
+  assertValidPattern(pattern)
+
+  // Thanks to Yeting Li <https://github.com/yetingli> for
+  // improving this regexp to avoid a ReDOS vulnerability.
+  if (options.nobrace || !/\{(?:(?!\{).)*\}/.test(pattern)) {
+    // shortcut. no need to expand.
+    return [pattern]
+  }
+
+  return expand(pattern)
+}
+
+var MAX_PATTERN_LENGTH = 1024 * 64
+var assertValidPattern = function (pattern) {
+  if (typeof pattern !== 'string') {
+    throw new TypeError('invalid pattern')
+  }
+
+  if (pattern.length > MAX_PATTERN_LENGTH) {
+    throw new TypeError('pattern is too long')
+  }
+}
+
+// parse a component of the expanded set.
+// At this point, no pattern may contain "/" in it
+// so we're going to return a 2d array, where each entry is the full
+// pattern, split on '/', and then turned into a regular expression.
+// A regexp is made at the end which joins each array with an
+// escaped /, and another full one which joins each regexp with |.
+//
+// Following the lead of Bash 4.1, note that "**" only has special meaning
+// when it is the *only* thing in a path portion.  Otherwise, any series
+// of * is equivalent to a single *.  Globstar behavior is enabled by
+// default, and can be disabled by setting options.noglobstar.
+Minimatch.prototype.parse = parse
+var SUBPARSE = {}
+function parse (pattern, isSub) {
+  assertValidPattern(pattern)
+
+  var options = this.options
+
+  // shortcuts
+  if (pattern === '**') {
+    if (!options.noglobstar)
+      return GLOBSTAR
+    else
+      pattern = '*'
+  }
+  if (pattern === '') return ''
+
+  var re = ''
+  var hasMagic = !!options.nocase
+  var escaping = false
+  // ? => one single character
+  var patternListStack = []
+  var negativeLists = []
+  var stateChar
+  var inClass = false
+  var reClassStart = -1
+  var classStart = -1
+  // . and .. never match anything that doesn't start with .,
+  // even when options.dot is set.
+  var patternStart = pattern.charAt(0) === '.' ? '' // anything
+  // not (start or / followed by . or .. followed by / or end)
+  : options.dot ? '(?!(?:^|\\\/)\\.{1,2}(?:$|\\\/))'
+  : '(?!\\.)'
+  var self = this
+
+  function clearStateChar () {
+    if (stateChar) {
+      // we had some state-tracking character
+      // that wasn't consumed by this pass.
+      switch (stateChar) {
+        case '*':
+          re += star
+          hasMagic = true
+        break
+        case '?':
+          re += qmark
+          hasMagic = true
+        break
+        default:
+          re += '\\' + stateChar
+        break
+      }
+      self.debug('clearStateChar %j %j', stateChar, re)
+      stateChar = false
+    }
+  }
+
+  for (var i = 0, len = pattern.length, c
+    ; (i < len) && (c = pattern.charAt(i))
+    ; i++) {
+    this.debug('%s\t%s %s %j', pattern, i, re, c)
+
+    // skip over any that are escaped.
+    if (escaping && reSpecials[c]) {
+      re += '\\' + c
+      escaping = false
+      continue
+    }
+
+    switch (c) {
+      /* istanbul ignore next */
+      case '/': {
+        // completely not allowed, even escaped.
+        // Should already be path-split by now.
+        return false
+      }
+
+      case '\\':
+        clearStateChar()
+        escaping = true
+      continue
+
+      // the various stateChar values
+      // for the "extglob" stuff.
+      case '?':
+      case '*':
+      case '+':
+      case '@':
+      case '!':
+        this.debug('%s\t%s %s %j <-- stateChar', pattern, i, re, c)
+
+        // all of those are literals inside a class, except that
+        // the glob [!a] means [^a] in regexp
+        if (inClass) {
+          this.debug('  in class')
+          if (c === '!' && i === classStart + 1) c = '^'
+          re += c
+          continue
+        }
+
+        // if we already have a stateChar, then it means
+        // that there was something like ** or +? in there.
+        // Handle the stateChar, then proceed with this one.
+        self.debug('call clearStateChar %j', stateChar)
+        clearStateChar()
+        stateChar = c
+        // if extglob is disabled, then +(asdf|foo) isn't a thing.
+        // just clear the statechar *now*, rather than even diving into
+        // the patternList stuff.
+        if (options.noext) clearStateChar()
+      continue
+
+      case '(':
+        if (inClass) {
+          re += '('
+          continue
+        }
+
+        if (!stateChar) {
+          re += '\\('
+          continue
+        }
+
+        patternListStack.push({
+          type: stateChar,
+          start: i - 1,
+          reStart: re.length,
+          open: plTypes[stateChar].open,
+          close: plTypes[stateChar].close
+        })
+        // negation is (?:(?!js)[^/]*)
+        re += stateChar === '!' ? '(?:(?!(?:' : '(?:'
+        this.debug('plType %j %j', stateChar, re)
+        stateChar = false
+      continue
+
+      case ')':
+        if (inClass || !patternListStack.length) {
+          re += '\\)'
+          continue
+        }
+
+        clearStateChar()
+        hasMagic = true
+        var pl = patternListStack.pop()
+        // negation is (?:(?!js)[^/]*)
+        // The others are (?:<pattern>)<type>
+        re += pl.close
+        if (pl.type === '!') {
+          negativeLists.push(pl)
+        }
+        pl.reEnd = re.length
+      continue
+
+      case '|':
+        if (inClass || !patternListStack.length || escaping) {
+          re += '\\|'
+          escaping = false
+          continue
+        }
+
+        clearStateChar()
+        re += '|'
+      continue
+
+      // these are mostly the same in regexp and glob
+      case '[':
+        // swallow any state-tracking char before the [
+        clearStateChar()
+
+        if (inClass) {
+          re += '\\' + c
+          continue
+        }
+
+        inClass = true
+        classStart = i
+        reClassStart = re.length
+        re += c
+      continue
+
+      case ']':
+        //  a right bracket shall lose its special
+        //  meaning and represent itself in
+        //  a bracket expression if it occurs
+        //  first in the list.  -- POSIX.2 2.8.3.2
+        if (i === classStart + 1 || !inClass) {
+          re += '\\' + c
+          escaping = false
+          continue
+        }
+
+        // handle the case where we left a class open.
+        // "[z-a]" is valid, equivalent to "\[z-a\]"
+        // split where the last [ was, make sure we don't have
+        // an invalid re. if so, re-walk the contents of the
+        // would-be class to re-translate any characters that
+        // were passed through as-is
+        // TODO: It would probably be faster to determine this
+        // without a try/catch and a new RegExp, but it's tricky
+        // to do safely.  For now, this is safe and works.
+        var cs = pattern.substring(classStart + 1, i)
+        try {
+          RegExp('[' + cs + ']')
+        } catch (er) {
+          // not a valid class!
+          var sp = this.parse(cs, SUBPARSE)
+          re = re.substr(0, reClassStart) + '\\[' + sp[0] + '\\]'
+          hasMagic = hasMagic || sp[1]
+          inClass = false
+          continue
+        }
+
+        // finish up the class.
+        hasMagic = true
+        inClass = false
+        re += c
+      continue
+
+      default:
+        // swallow any state char that wasn't consumed
+        clearStateChar()
+
+        if (escaping) {
+          // no need
+          escaping = false
+        } else if (reSpecials[c]
+          && !(c === '^' && inClass)) {
+          re += '\\'
+        }
+
+        re += c
+
+    } // switch
+  } // for
+
+  // handle the case where we left a class open.
+  // "[abc" is valid, equivalent to "\[abc"
+  if (inClass) {
+    // split where the last [ was, and escape it
+    // this is a huge pita.  We now have to re-walk
+    // the contents of the would-be class to re-translate
+    // any characters that were passed through as-is
+    cs = pattern.substr(classStart + 1)
+    sp = this.parse(cs, SUBPARSE)
+    re = re.substr(0, reClassStart) + '\\[' + sp[0]
+    hasMagic = hasMagic || sp[1]
+  }
+
+  // handle the case where we had a +( thing at the *end*
+  // of the pattern.
+  // each pattern list stack adds 3 chars, and we need to go through
+  // and escape any | chars that were passed through as-is for the regexp.
+  // Go through and escape them, taking care not to double-escape any
+  // | chars that were already escaped.
+  for (pl = patternListStack.pop(); pl; pl = patternListStack.pop()) {
+    var tail = re.slice(pl.reStart + pl.open.length)
+    this.debug('setting tail', re, pl)
+    // maybe some even number of \, then maybe 1 \, followed by a |
+    tail = tail.replace(/((?:\\{2}){0,64})(\\?)\|/g, function (_, $1, $2) {
+      if (!$2) {
+        // the | isn't already escaped, so escape it.
+        $2 = '\\'
+      }
+
+      // need to escape all those slashes *again*, without escaping the
+      // one that we need for escaping the | character.  As it works out,
+      // escaping an even number of slashes can be done by simply repeating
+      // it exactly after itself.  That's why this trick works.
+      //
+      // I am sorry that you have to see this.
+      return $1 + $1 + $2 + '|'
+    })
+
+    this.debug('tail=%j\n   %s', tail, tail, pl, re)
+    var t = pl.type === '*' ? star
+      : pl.type === '?' ? qmark
+      : '\\' + pl.type
+
+    hasMagic = true
+    re = re.slice(0, pl.reStart) + t + '\\(' + tail
+  }
+
+  // handle trailing things that only matter at the very end.
+  clearStateChar()
+  if (escaping) {
+    // trailing \\
+    re += '\\\\'
+  }
+
+  // only need to apply the nodot start if the re starts with
+  // something that could conceivably capture a dot
+  var addPatternStart = false
+  switch (re.charAt(0)) {
+    case '[': case '.': case '(': addPatternStart = true
+  }
+
+  // Hack to work around lack of negative lookbehind in JS
+  // A pattern like: *.!(x).!(y|z) needs to ensure that a name
+  // like 'a.xyz.yz' doesn't match.  So, the first negative
+  // lookahead, has to look ALL the way ahead, to the end of
+  // the pattern.
+  for (var n = negativeLists.length - 1; n > -1; n--) {
+    var nl = negativeLists[n]
+
+    var nlBefore = re.slice(0, nl.reStart)
+    var nlFirst = re.slice(nl.reStart, nl.reEnd - 8)
+    var nlLast = re.slice(nl.reEnd - 8, nl.reEnd)
+    var nlAfter = re.slice(nl.reEnd)
+
+    nlLast += nlAfter
+
+    // Handle nested stuff like *(*.js|!(*.json)), where open parens
+    // mean that we should *not* include the ) in the bit that is considered
+    // "after" the negated section.
+    var openParensBefore = nlBefore.split('(').length - 1
+    var cleanAfter = nlAfter
+    for (i = 0; i < openParensBefore; i++) {
+      cleanAfter = cleanAfter.replace(/\)[+*?]?/, '')
+    }
+    nlAfter = cleanAfter
+
+    var dollar = ''
+    if (nlAfter === '' && isSub !== SUBPARSE) {
+      dollar = '$'
+    }
+    var newRe = nlBefore + nlFirst + nlAfter + dollar + nlLast
+    re = newRe
+  }
+
+  // if the re is not "" at this point, then we need to make sure
+  // it doesn't match against an empty path part.
+  // Otherwise a/* will match a/, which it should not.
+  if (re !== '' && hasMagic) {
+    re = '(?=.)' + re
+  }
+
+  if (addPatternStart) {
+    re = patternStart + re
+  }
+
+  // parsing just a piece of a larger pattern.
+  if (isSub === SUBPARSE) {
+    return [re, hasMagic]
+  }
+
+  // skip the regexp for non-magical patterns
+  // unescape anything in it, though, so that it'll be
+  // an exact match against a file etc.
+  if (!hasMagic) {
+    return globUnescape(pattern)
+  }
+
+  var flags = options.nocase ? 'i' : ''
+  try {
+    var regExp = new RegExp('^' + re + '$', flags)
+  } catch (er) /* istanbul ignore next - should be impossible */ {
+    // If it was an invalid regular expression, then it can't match
+    // anything.  This trick looks for a character after the end of
+    // the string, which is of course impossible, except in multi-line
+    // mode, but it's not a /m regex.
+    return new RegExp('$.')
+  }
+
+  regExp._glob = pattern
+  regExp._src = re
+
+  return regExp
+}
+
+minimatch.makeRe = function (pattern, options) {
+  return new Minimatch(pattern, options || {}).makeRe()
+}
+
+Minimatch.prototype.makeRe = makeRe
+function makeRe () {
+  if (this.regexp || this.regexp === false) return this.regexp
+
+  // at this point, this.set is a 2d array of partial
+  // pattern strings, or "**".
+  //
+  // It's better to use .match().  This function shouldn't
+  // be used, really, but it's pretty convenient sometimes,
+  // when you just want to work with a regex.
+  var set = this.set
+
+  if (!set.length) {
+    this.regexp = false
+    return this.regexp
+  }
+  var options = this.options
+
+  var twoStar = options.noglobstar ? star
+    : options.dot ? twoStarDot
+    : twoStarNoDot
+  var flags = options.nocase ? 'i' : ''
+
+  var re = set.map(function (pattern) {
+    return pattern.map(function (p) {
+      return (p === GLOBSTAR) ? twoStar
+      : (typeof p === 'string') ? regExpEscape(p)
+      : p._src
+    }).join('\\\/')
+  }).join('|')
+
+  // must match entire pattern
+  // ending in a * or ** will make it less strict.
+  re = '^(?:' + re + ')$'
+
+  // can match anything, as long as it's not this.
+  if (this.negate) re = '^(?!' + re + ').*$'
+
+  try {
+    this.regexp = new RegExp(re, flags)
+  } catch (ex) /* istanbul ignore next - should be impossible */ {
+    this.regexp = false
+  }
+  return this.regexp
+}
+
+minimatch.match = function (list, pattern, options) {
+  options = options || {}
+  var mm = new Minimatch(pattern, options)
+  list = list.filter(function (f) {
+    return mm.match(f)
+  })
+  if (mm.options.nonull && !list.length) {
+    list.push(pattern)
+  }
+  return list
+}
+
+Minimatch.prototype.match = function match (f, partial) {
+  if (typeof partial === 'undefined') partial = this.partial
+  this.debug('match', f, this.pattern)
+  // short-circuit in the case of busted things.
+  // comments, etc.
+  if (this.comment) return false
+  if (this.empty) return f === ''
+
+  if (f === '/' && partial) return true
+
+  var options = this.options
+
+  // windows: need to use /, not \
+  if (path.sep !== '/') {
+    f = f.split(path.sep).join('/')
+  }
+
+  // treat the test path as a set of pathparts.
+  f = f.split(slashSplit)
+  this.debug(this.pattern, 'split', f)
+
+  // just ONE of the pattern sets in this.set needs to match
+  // in order for it to be valid.  If negating, then just one
+  // match means that we have failed.
+  // Either way, return on the first hit.
+
+  var set = this.set
+  this.debug(this.pattern, 'set', set)
+
+  // Find the basename of the path by looking for the last non-empty segment
+  var filename
+  var i
+  for (i = f.length - 1; i >= 0; i--) {
+    filename = f[i]
+    if (filename) break
+  }
+
+  for (i = 0; i < set.length; i++) {
+    var pattern = set[i]
+    var file = f
+    if (options.matchBase && pattern.length === 1) {
+      file = [filename]
+    }
+    var hit = this.matchOne(file, pattern, partial)
+    if (hit) {
+      if (options.flipNegate) return true
+      return !this.negate
+    }
+  }
+
+  // didn't get any hits.  this is success if it's a negative
+  // pattern, failure otherwise.
+  if (options.flipNegate) return false
+  return this.negate
+}
+
+// set partial to true to test if, for example,
+// "/a/b" matches the start of "/*/b/*/d"
+// Partial means, if you run out of file before you run
+// out of pattern, then that's fine, as long as all
+// the parts match.
+Minimatch.prototype.matchOne = function (file, pattern, partial) {
+  var options = this.options
+
+  this.debug('matchOne',
+    { 'this': this, file: file, pattern: pattern })
+
+  this.debug('matchOne', file.length, pattern.length)
+
+  for (var fi = 0,
+      pi = 0,
+      fl = file.length,
+      pl = pattern.length
+      ; (fi < fl) && (pi < pl)
+      ; fi++, pi++) {
+    this.debug('matchOne loop')
+    var p = pattern[pi]
+    var f = file[fi]
+
+    this.debug(pattern, p, f)
+
+    // should be impossible.
+    // some invalid regexp stuff in the set.
+    /* istanbul ignore if */
+    if (p === false) return false
+
+    if (p === GLOBSTAR) {
+      this.debug('GLOBSTAR', [pattern, p, f])
+
+      // "**"
+      // a/**/b/**/c would match the following:
+      // a/b/x/y/z/c
+      // a/x/y/z/b/c
+      // a/b/x/b/x/c
+      // a/b/c
+      // To do this, take the rest of the pattern after
+      // the **, and see if it would match the file remainder.
+      // If so, return success.
+      // If not, the ** "swallows" a segment, and try again.
+      // This is recursively awful.
+      //
+      // a/**/b/**/c matching a/b/x/y/z/c
+      // - a matches a
+      // - doublestar
+      //   - matchOne(b/x/y/z/c, b/**/c)
+      //     - b matches b
+      //     - doublestar
+      //       - matchOne(x/y/z/c, c) -> no
+      //       - matchOne(y/z/c, c) -> no
+      //       - matchOne(z/c, c) -> no
+      //       - matchOne(c, c) yes, hit
+      var fr = fi
+      var pr = pi + 1
+      if (pr === pl) {
+        this.debug('** at the end')
+        // a ** at the end will just swallow the rest.
+        // We have found a match.
+        // however, it will not swallow /.x, unless
+        // options.dot is set.
+        // . and .. are *never* matched by **, for explosively
+        // exponential reasons.
+        for (; fi < fl; fi++) {
+          if (file[fi] === '.' || file[fi] === '..' ||
+            (!options.dot && file[fi].charAt(0) === '.')) return false
+        }
+        return true
+      }
+
+      // ok, let's see if we can swallow whatever we can.
+      while (fr < fl) {
+        var swallowee = file[fr]
+
+        this.debug('\nglobstar while', file, fr, pattern, pr, swallowee)
+
+        // XXX remove this slice.  Just pass the start index.
+        if (this.matchOne(file.slice(fr), pattern.slice(pr), partial)) {
+          this.debug('globstar found match!', fr, fl, swallowee)
+          // found a match.
+          return true
+        } else {
+          // can't swallow "." or ".." ever.
+          // can only swallow ".foo" when explicitly asked.
+          if (swallowee === '.' || swallowee === '..' ||
+            (!options.dot && swallowee.charAt(0) === '.')) {
+            this.debug('dot detected!', file, fr, pattern, pr)
+            break
+          }
+
+          // ** swallows a segment, and continue.
+          this.debug('globstar swallow a segment, and continue')
+          fr++
+        }
+      }
+
+      // no match was found.
+      // However, in partial mode, we can't say this is necessarily over.
+      // If there's more *pattern* left, then
+      /* istanbul ignore if */
+      if (partial) {
+        // ran out of file
+        this.debug('\n>>> no match, partial?', file, fr, pattern, pr)
+        if (fr === fl) return true
+      }
+      return false
+    }
+
+    // something other than **
+    // non-magic patterns just have to match exactly
+    // patterns with magic have been turned into regexps.
+    var hit
+    if (typeof p === 'string') {
+      hit = f === p
+      this.debug('string match', p, f, hit)
+    } else {
+      hit = f.match(p)
+      this.debug('pattern match', p, f, hit)
+    }
+
+    if (!hit) return false
+  }
+
+  // Note: ending in / means that we'll get a final ""
+  // at the end of the pattern.  This can only match a
+  // corresponding "" at the end of the file.
+  // If the file ends in /, then it can only match a
+  // a pattern that ends in /, unless the pattern just
+  // doesn't have any more for it. But, a/b/ should *not*
+  // match "a/b/*", even though "" matches against the
+  // [^/]*? pattern, except in partial mode, where it might
+  // simply not be reached yet.
+  // However, a/b/ should still satisfy a/*
+
+  // now either we fell off the end of the pattern, or we're done.
+  if (fi === fl && pi === pl) {
+    // ran out of pattern and filename at the same time.
+    // an exact hit!
+    return true
+  } else if (fi === fl) {
+    // ran out of file, but still had pattern left.
+    // this is ok if we're doing the match as part of
+    // a glob fs traversal.
+    return partial
+  } else /* istanbul ignore else */ if (pi === pl) {
+    // ran out of pattern, still have file left.
+    // this is only acceptable if we're on the very last
+    // empty segment of a file with a trailing slash.
+    // a/* should match a/b/
+    return (fi === fl - 1) && (file[fi] === '')
+  }
+
+  // should be unreachable.
+  /* istanbul ignore next */
+  throw new Error('wtf?')
+}
+
+// replace stuff like \* with *
+function globUnescape (s) {
+  return s.replace(/\\(.)/g, '$1')
+}
+
+function regExpEscape (s) {
+  return s.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')
+}
+
 
 /***/ }),
 
@@ -49757,6 +51024,109 @@ module.exports = /*#__PURE__*/JSON.parse('{"name":"wordnet-db","version":"3.1.14
 
 /***/ }),
 
+/***/ "./scripts/capability-check.js":
+/*!*************************************!*\
+  !*** ./scripts/capability-check.js ***!
+  \*************************************/
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+const vscode = __webpack_require__(/*! vscode */ "vscode");
+const { SUPPORTED_LANGUAGES } = __webpack_require__(/*! ./language-support-config */ "./scripts/language-support-config.js");
+
+/**
+ * Detect languages used in the workspace based on file patterns.
+ * @param {string} workspaceRoot
+ * @returns {Promise<string[]>} - List of detected language keys.
+ */
+async function detectProjectLanguages(workspaceRoot) {
+    const detectedLanguages = new Set();
+    
+    for (const [key, config] of Object.entries(SUPPORTED_LANGUAGES)) {
+        // Skip if already detected
+        if (detectedLanguages.has(key)) continue;
+
+        // Check file patterns
+        if (config.filePatterns) {
+            for (const pattern of config.filePatterns) {
+                // Use findFiles to check for existence of files matching the pattern
+                // Limit to 1 result for performance
+                const files = await vscode.workspace.findFiles(new vscode.RelativePattern(workspaceRoot, pattern), '**/node_modules/**', 1);
+                if (files.length > 0) {
+                    detectedLanguages.add(key);
+                    break;
+                }
+            }
+        }
+    }
+    
+    return Array.from(detectedLanguages);
+}
+
+/**
+ * Check if there is any installed extension that supports the given language ID.
+ * @param {string} languageId 
+ * @returns {boolean}
+ */
+function hasLanguageCapability(languageId) {
+    return vscode.extensions.all.some(ext => {
+        const languages = ext.packageJSON.contributes?.languages;
+        if (Array.isArray(languages)) {
+            return languages.some(lang => lang.id === languageId);
+        }
+        return false;
+    });
+}
+
+/**
+ * Check environment capabilities and return missing requirements.
+ * @param {string} workspaceRoot 
+ * @returns {Promise<object[]>} - Array of missing language support info.
+ */
+async function checkEnvironmentCapabilities(workspaceRoot) {
+    const detectedLanguages = await detectProjectLanguages(workspaceRoot);
+    const missingCapabilities = [];
+
+    for (const langKey of detectedLanguages) {
+        const config = SUPPORTED_LANGUAGES[langKey];
+        
+        // If language requires extension support
+        if (config.requiresExtension) {
+            // Dynamic Capability Check
+            // We use the key as the language ID to check (e.g. 'python', 'go', 'csharp', 'vue')
+            // This allows any extension that contributes this language ID to satisfy the requirement.
+            let isSupported = hasLanguageCapability(langKey);
+
+            // Fallback: Check if the specific required extension is installed by ID
+            // This is necessary for extensions like Angular that don't contribute a new language ID (e.g. 'angular')
+            // but instead enhance existing languages (HTML, TypeScript).
+            if (!isSupported && config.requiredExtensions) {
+                isSupported = config.requiredExtensions.some(reqExt => {
+                    return !!vscode.extensions.getExtension(reqExt.id);
+                });
+            }
+            
+            if (!isSupported) {
+                // Fallback: Check if we have specific recommendations to show
+                missingCapabilities.push({
+                    language: config.name,
+                    key: langKey,
+                    message: config.message,
+                    recommendedExtensions: config.requiredExtensions
+                });
+            }
+        }
+    }
+
+    return missingCapabilities;
+}
+
+module.exports = {
+    checkEnvironmentCapabilities
+};
+
+
+/***/ }),
+
 /***/ "./scripts/chatbot/chatbot-algorithm.js":
 /*!**********************************************!*\
   !*** ./scripts/chatbot/chatbot-algorithm.js ***!
@@ -58312,14 +59682,70 @@ const fs = __webpack_require__(/*! fs */ "fs");
 const { VSCodeApiDependencyAnalyzer } = __webpack_require__(/*! ./dependency-graph/vscode-api-analyzer */ "./scripts/dependency-graph/vscode-api-analyzer.js");
 const { aidaLogging } = __webpack_require__(/*! ./settings */ "./scripts/settings.js");
 
-const CACHE_VERSION = '1.0';
+const CACHE_VERSION = '1.1';
 
 class DependencyGraphService {
     constructor(workspaceRoot) {
         this.workspaceRoot = workspaceRoot;
-        this.vscodeAnalyzer = new VSCodeApiDependencyAnalyzer();
+        this.vscodeAnalyzer = new VSCodeApiDependencyAnalyzer(workspaceRoot);
         this.fullGraph = null;
         this.cacheFilePath = path.join(workspaceRoot, '.vscode', 'dependency-cache.json');
+
+        // 🔥 NEW: Listen for incremental updates
+        this.vscodeAnalyzer.onGraphUpdate = () => {
+            this.handleGraphUpdate();
+        };
+    }
+
+    isGraphReady() {
+        return this.vscodeAnalyzer && this.vscodeAnalyzer.isReady;
+    }
+
+    /**
+     * Handle graph updates with debounce
+     */
+    handleGraphUpdate() {
+        if (this.saveTimeout) clearTimeout(this.saveTimeout);
+        this.saveTimeout = setTimeout(() => {
+            aidaLogging('💾 Graph updated, saving cache...');
+            this.fullGraph = this.vscodeAnalyzer.buildGraphResult();
+            this.saveCache();
+        }, 2000); // Wait 2 seconds after last change
+    }
+
+    /**
+     * Check if cache exists
+     */
+    hasCache() {
+        return fs.existsSync(this.cacheFilePath);
+    }
+
+    /**
+     * Save graph to disk
+     */
+    saveCache() {
+        if (!this.fullGraph) return;
+
+        try {
+            const cacheDir = path.dirname(this.cacheFilePath);
+            if (!fs.existsSync(cacheDir)) {
+                fs.mkdirSync(cacheDir, { recursive: true });
+            }
+
+            // Generate report to ensure compatibility with dependency.js
+            const report = this.vscodeAnalyzer.generateReport(this.fullGraph);
+
+            fs.writeFileSync(this.cacheFilePath, JSON.stringify({
+                version: CACHE_VERSION,
+                timestamp: Date.now(),
+                graph: this.fullGraph,
+                report: report // 🔥 Save report
+            }, null, 2));
+
+            aidaLogging(`✅ Saved graph cache: ${this.fullGraph.nodes.length} nodes`);
+        } catch (error) {
+            aidaLogging(`⚠️ Cache write error: ${error.message}`);
+        }
     }
 
     /**
@@ -58337,6 +59763,10 @@ class DependencyGraphService {
                 const cacheData = JSON.parse(fs.readFileSync(this.cacheFilePath, 'utf8'));
                 if (cacheData.version === CACHE_VERSION && cacheData.graph) {
                     this.fullGraph = cacheData.graph;
+
+                    // 🔥 NEW: Restore analyzer state from cache so Watcher works
+                    this.vscodeAnalyzer.loadFromCache(this.fullGraph);
+
                     aidaLogging(`✅ Loaded graph from cache: ${this.fullGraph.nodes.length} nodes, ${this.fullGraph.edges.length} edges`);
                     return this.fullGraph;
                 }
@@ -58350,24 +59780,28 @@ class DependencyGraphService {
         this.fullGraph = await this.buildFullGraph();
 
         // Save cache
-        try {
-            const cacheDir = path.dirname(this.cacheFilePath);
-            if (!fs.existsSync(cacheDir)) {
-                fs.mkdirSync(cacheDir, { recursive: true });
-            }
-
-            fs.writeFileSync(this.cacheFilePath, JSON.stringify({
-                version: CACHE_VERSION,
-                timestamp: Date.now(),
-                graph: this.fullGraph
-            }, null, 2));
-
-            aidaLogging(`✅ Saved graph cache: ${this.fullGraph.nodes.length} nodes`);
-        } catch (error) {
-            aidaLogging(`⚠️ Cache write error: ${error.message}`);
-        }
+        this.saveCache();
 
         return this.fullGraph;
+    }
+
+    /**
+     * Update a single file in the graph
+     */
+    async updateFile(uri) {
+        if (this.vscodeAnalyzer) {
+            await this.vscodeAnalyzer.processFile(uri);
+        }
+    }
+
+    /**
+     * Remove a file from the graph
+     */
+    removeFile(uri) {
+        if (this.vscodeAnalyzer) {
+            // Not implemented in analyzer yet, but good to have the hook
+            // this.vscodeAnalyzer.removeFile(uri);
+        }
     }
 
     /**
@@ -58375,7 +59809,7 @@ class DependencyGraphService {
      */
     async buildFullGraph() {
         aidaLogging('📊 Analyzing workspace dependencies...');
-        
+
         try {
             const graph = await this.vscodeAnalyzer.analyze();
             aidaLogging(`✅ Built graph: ${graph.nodes.length} nodes, ${graph.edges.length} edges`);
@@ -58385,7 +59819,7 @@ class DependencyGraphService {
             throw error;
         }
     }
-    
+
     /**
      * Get the language configuration from the analyzer
      */
@@ -59132,16 +60566,384 @@ module.exports = { BarrelResolver };
 
 /***/ }),
 
+/***/ "./scripts/dependency-graph/dependency-utils.js":
+/*!******************************************************!*\
+  !*** ./scripts/dependency-graph/dependency-utils.js ***!
+  \******************************************************/
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+const path = __webpack_require__(/*! path */ "path");
+const fs = __webpack_require__(/*! fs */ "fs");
+
+/**
+ * Shared utilities for dependency analysis
+ */
+class DependencyUtils {
+    /**
+     * Check for sibling files with specific extensions
+     * Useful for "Convention over Configuration" (e.g. Angular Component parts)
+     * @param {string} filePath - Absolute path of the source file
+     * @param {string[]} targetExtensions - Extensions to look for (e.g. ['.html', '.css'])
+     * @returns {string[]} - Array of absolute paths of found siblings
+     */
+    static findSiblingFiles(filePath, targetExtensions) {
+        const siblings = [];
+        const dir = path.dirname(filePath);
+        // Handle double extensions like .component.ts correctly if needed, 
+        // but usually path.extname gets the last one (.ts).
+        // If we have 'app.component.ts', basename without ext is 'app.component'.
+        // We look for 'app.component.html'.
+        const ext = path.extname(filePath);
+        const baseName = path.basename(filePath, ext); 
+
+        for (const targetExt of targetExtensions) {
+            const siblingPath = path.join(dir, baseName + targetExt);
+            // Avoid self-reference and check existence
+            if (siblingPath !== filePath && fs.existsSync(siblingPath)) {
+                siblings.push(siblingPath);
+            }
+        }
+        return siblings;
+    }
+
+    /**
+     * Try to resolve a relative import manually to avoid LSP overhead
+     * @param {string} sourceDir - Directory of the source file
+     * @param {string} importPath - The relative import path (e.g. './utils')
+     * @returns {string|null} - Absolute path if found, null otherwise
+     */
+    static resolveRelativeImport(sourceDir, importPath) {
+        const extensions = ['.ts', '.js', '.tsx', '.jsx', '.d.ts', '/index.ts', '/index.js'];
+        
+        for (const ext of ['', ...extensions]) {
+            try {
+                const candidate = path.resolve(sourceDir, importPath + ext);
+                if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+                    return candidate;
+                }
+            } catch (e) {}
+        }
+        return null;
+    }
+
+    /**
+     * Infer file type (component, service, etc.) from filename
+     * @param {string} fileName 
+     * @returns {string}
+     */
+    static inferFileType(fileName) {
+        const name = fileName.toLowerCase();
+        
+        if (name.includes('.service.')) return 'service';
+        if (name.includes('.component.')) return 'component';
+        if (name.includes('.directive.')) return 'directive';
+        if (name.includes('.pipe.')) return 'pipe';
+        if (name.includes('.guard.')) return 'guard';
+        if (name.includes('.resolver.')) return 'resolver';
+        if (name.includes('.interceptor.')) return 'interceptor';
+        if (name.includes('.module.')) return 'module';
+        if (name.includes('controller')) return 'controller';
+        if (name.includes('model')) return 'model';
+        if (name.includes('interface')) return 'interface';
+        if (name.includes('enum')) return 'enum';
+        if (name.includes('constant')) return 'constant';
+        if (name.includes('config')) return 'config';
+        if (name.includes('util')) return 'utility';
+        
+        return 'file';
+    }
+
+    /**
+     * Get programming language from file extension
+     * @param {string} fileName 
+     * @returns {string}
+     */
+    static getLanguageFromExtension(fileName) {
+        const ext = path.extname(fileName).toLowerCase();
+        const languageMap = {
+            '.ts': 'typescript',
+            '.tsx': 'typescript',
+            '.js': 'javascript',
+            '.jsx': 'javascript',
+            '.vue': 'vue',
+            '.cs': 'csharp',
+            '.java': 'java',
+            '.py': 'python',
+            '.html': 'html',
+            '.css': 'css',
+            '.scss': 'scss'
+        };
+        
+        return languageMap[ext] || 'unknown';
+    }
+
+    /**
+     * Check if a path is an external dependency (node_modules, etc.)
+     * @param {string} filePath 
+     * @returns {boolean}
+     */
+    static isExternalDependency(filePath) {
+        const pathLower = filePath.toLowerCase();
+        return (
+            pathLower.includes('node_modules') ||
+            pathLower.includes('omnisharp-metadata') ||
+            pathLower.includes('.nuget') ||
+            pathLower.includes('microsoft.netcore') ||
+            pathLower.includes('system.') ||
+            pathLower.includes('bin/debug') ||
+            pathLower.includes('bin/release') ||
+            pathLower.includes('obj/')
+        );
+    }
+
+    /**
+     * Get relative path from workspace root with forward slashes
+     * @param {string} workspaceRoot 
+     * @param {string} absolutePath 
+     * @returns {string}
+     */
+    static getRelativePath(workspaceRoot, absolutePath) {
+        return path.relative(workspaceRoot, absolutePath).replace(/\\/g, '/');
+    }
+}
+
+module.exports = { DependencyUtils };
+
+
+/***/ }),
+
+/***/ "./scripts/dependency-graph/graph-model.js":
+/*!*************************************************!*\
+  !*** ./scripts/dependency-graph/graph-model.js ***!
+  \*************************************************/
+/***/ ((module) => {
+
+/**
+ * Dependency Graph Data Model
+ * Pure data structure to hold nodes and edges
+ */
+class DependencyGraphModel {
+    constructor() {
+        // Map<SourcePath, Set<TargetPath>>
+        this.adjacencyList = new Map();
+        // Map<FilePath, NodeMetadata>
+        this.nodeMetadata = new Map();
+    }
+
+    clear() {
+        this.adjacencyList.clear();
+        this.nodeMetadata.clear();
+    }
+
+    /**
+     * Add or update a dependency link
+     * @param {string} source - Relative path of source file
+     * @param {string} target - Relative path of target file
+     */
+    addDependency(source, target) {
+        if (!this.adjacencyList.has(source)) {
+            this.adjacencyList.set(source, new Set());
+        }
+        this.adjacencyList.get(source).add(target);
+    }
+
+    /**
+     * Remove all dependencies originating from a source file
+     * Used when re-analyzing a file
+     * @param {string} source - Relative path of source file
+     */
+    clearDependencies(source) {
+        if (this.adjacencyList.has(source)) {
+            this.adjacencyList.get(source).clear();
+        }
+    }
+
+    /**
+     * Remove a file completely from the graph (both as source and target)
+     * @param {string} file - Relative path of file to remove
+     */
+    removeNode(file) {
+        // Remove as source
+        this.adjacencyList.delete(file);
+        this.nodeMetadata.delete(file);
+
+        // Remove as target (expensive operation, but necessary for consistency)
+        // In a large graph, we might want to maintain a reverse index (dependents map)
+        for (const [source, targets] of this.adjacencyList) {
+            if (targets.has(file)) {
+                targets.delete(file);
+            }
+        }
+    }
+
+    /**
+     * Get all dependencies of a file
+     * @param {string} file 
+     * @returns {Set<string>}
+     */
+    getDependencies(file) {
+        return this.adjacencyList.get(file) || new Set();
+    }
+
+    /**
+     * Get all dependents (files that import this file)
+     * @param {string} file 
+     * @returns {Set<string>}
+     */
+    getDependents(file) {
+        const dependents = new Set();
+        for (const [source, targets] of this.adjacencyList) {
+            if (targets.has(file)) {
+                dependents.add(source);
+            }
+        }
+        return dependents;
+    }
+
+    /**
+     * Export to format used by UI
+     */
+    serialize(workspaceRoot) {
+        // Implementation similar to buildGraphResult in original analyzer
+        // ... (Logic to be moved here later)
+        return {
+            nodes: [], // Placeholder
+            edges: []
+        };
+    }
+}
+
+module.exports = { DependencyGraphModel };
+
+
+/***/ }),
+
+/***/ "./scripts/dependency-graph/graph-watcher.js":
+/*!***************************************************!*\
+  !*** ./scripts/dependency-graph/graph-watcher.js ***!
+  \***************************************************/
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+const vscode = __webpack_require__(/*! vscode */ "vscode");
+const { aidaLogging } = __webpack_require__(/*! ../settings */ "./scripts/settings.js");
+
+/**
+ * @file graph-watcher.js
+ * @description Manages file system watching for the Dependency Graph.
+ * 
+ * Functionality:
+ * 1. Uses `vscode.FileSystemWatcher` to detect file changes (Create, Update, Delete).
+ * 2. Supports external changes (e.g., git pull, external editors).
+ * 3. Triggers incremental graph updates via `dependencyService`.
+ * 4. Filters out ignored directories (.git, node_modules, etc.).
+ * 
+ * Lifecycle:
+ * - startWatching(): Activates watcher when graph is ready.
+ * - stopWatching(): Disposes watcher to free resources.
+ */
+class GraphWatcher {
+    /**
+     * @param {Object} dependencyService - The service that manages the graph
+     */
+    constructor(dependencyService) {
+        this.dependencyService = dependencyService;
+        this.disposables = [];
+        this.isWatching = false;
+    }
+
+    /**
+     * Start listening to file changes
+     */
+    startWatching() {
+        if (this.isWatching) return;
+        
+        this.isWatching = true;
+        aidaLogging('👀 Dependency Graph Watcher started (FileSystemWatcher)');
+
+        // 🔥 NEW: Use FileSystemWatcher to catch external changes (git pull, etc.)
+        // Watch all files in workspace
+        const watcher = vscode.workspace.createFileSystemWatcher('**/*');
+        this.disposables.push(watcher);
+
+        // 1. File Created
+        watcher.onDidCreate(async (uri) => {
+            if (this.shouldIgnore(uri)) return;
+            if (this.dependencyService.isGraphReady()) {
+                aidaLogging(`✨ File created (FS): ${uri.fsPath}`);
+                await this.dependencyService.updateFile(uri);
+            }
+        });
+
+        // 2. File Changed
+        watcher.onDidChange(async (uri) => {
+            if (this.shouldIgnore(uri)) return;
+            
+            // Always log to confirm watcher is alive
+            aidaLogging(`📝 File changed event received: ${uri.fsPath}`);
+
+            if (this.dependencyService.isGraphReady()) {
+                aidaLogging(`   ✅ Graph ready, updating file...`);
+                await this.dependencyService.updateFile(uri);
+            } else {
+                aidaLogging(`   ⚠️ Graph NOT ready, skipping update.`);
+            }
+        });
+
+        // 3. File Deleted
+        watcher.onDidDelete(async (uri) => {
+            if (this.shouldIgnore(uri)) return;
+            if (this.dependencyService.isGraphReady()) {
+                aidaLogging(`🗑️ File deleted (FS): ${uri.fsPath}`);
+                this.dependencyService.removeFile(uri);
+            }
+        });
+    }
+
+    /**
+     * Check if file should be ignored (e.g. .git, node_modules)
+     */
+    shouldIgnore(uri) {
+        const pathStr = uri.fsPath;
+        return pathStr.includes('.git') || 
+               pathStr.includes('node_modules') || 
+               pathStr.includes('.vscode') ||
+               pathStr.includes('dist') ||
+               pathStr.includes('out') ||
+               pathStr.includes('coverage');
+    }
+
+    /**
+     * Stop listening
+     */
+    stopWatching() {
+        this.disposables.forEach(d => d.dispose());
+        this.disposables = [];
+        this.isWatching = false;
+        aidaLogging('zzz Dependency Graph Watcher stopped');
+    }
+    
+    dispose() {
+        this.stopWatching();
+    }
+}
+
+module.exports = { GraphWatcher };
+
+
+/***/ }),
+
 /***/ "./scripts/dependency-graph/language-rules.js":
 /*!****************************************************!*\
   !*** ./scripts/dependency-graph/language-rules.js ***!
   \****************************************************/
-/***/ ((module) => {
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
 /**
  * Language Configuration Rules for Dependency Analysis
  * Defines regex patterns and rules for different programming languages
  */
+const { languageIgnores } = __webpack_require__(/*! ../ignore-rules */ "./scripts/ignore-rules.js");
+
 const languageConfig = {
     typescript: {
         extensions: ['.ts', '.tsx', '.js', '.jsx'],
@@ -59183,12 +60985,8 @@ const languageConfig = {
             '**/dist/**',
             '**/build/**',
             '**/coverage/**',
-            '**/*.spec.ts',
-            '**/*.spec.js',
-            '**/*.test.ts',
-            '**/*.test.js',
             '**/*.min.js',
-            '**/*.d.ts'
+            ...languageIgnores.typescript
         ]
     },
     python: {
@@ -59218,15 +61016,9 @@ const languageConfig = {
         standardLibraries: ['os', 'sys', 'json', 'urllib', 'datetime', 'collections',
                            'itertools', 'functools', 'typing', 're', 'math', 'random'],
         excludePatterns: [
-            '**/__pycache__/**',
-            '**/venv/**',
-            '**/env/**',
-            '**/.venv/**',
             '**/dist/**',
             '**/build/**',
-            '**/*.pyc',
-            '**/test_*.py',
-            '**/*_test.py'
+            ...languageIgnores.python
         ]
     },
     csharp: {
@@ -59258,14 +61050,7 @@ const languageConfig = {
                            'List', 'Dictionary', 'HttpClient', 'JsonSerializer', 'DateTime',
                            'Guid', 'Exception', 'StringBuilder', 'Console', 'Math'],
         excludePatterns: [
-            '**/bin/**',
-            '**/obj/**',
-            '**/packages/**',
-            '**/.vs/**',
-            '**/Debug/**',
-            '**/Release/**',
-            '**/*.AssemblyInfo.cs',
-            '**/*.Designer.cs'
+            ...languageIgnores.csharp
         ]
     },
     java: {
@@ -60105,9 +61890,13 @@ module.exports = { SymbolAnalyzer };
 
 const vscode = __webpack_require__(/*! vscode */ "vscode");
 const path = __webpack_require__(/*! path */ "path");
+const fs = __webpack_require__(/*! fs */ "fs");
 const { BarrelResolver } = __webpack_require__(/*! ./barrel-resolver */ "./scripts/dependency-graph/barrel-resolver.js");
 const { aidaLogging } = __webpack_require__(/*! ../settings */ "./scripts/settings.js");
 const { languageConfig } = __webpack_require__(/*! ./language-rules */ "./scripts/dependency-graph/language-rules.js");
+const { DependencyGraphModel } = __webpack_require__(/*! ./graph-model */ "./scripts/dependency-graph/graph-model.js");
+const { GraphWatcher } = __webpack_require__(/*! ./graph-watcher */ "./scripts/dependency-graph/graph-watcher.js");
+const { DependencyUtils } = __webpack_require__(/*! ./dependency-utils */ "./scripts/dependency-graph/dependency-utils.js");
 
 /**
  * Enhanced Dependency Analyzer using VS Code Language Server APIs
@@ -60116,18 +61905,24 @@ const { languageConfig } = __webpack_require__(/*! ./language-rules */ "./script
 class VSCodeApiDependencyAnalyzer {
     constructor(workspaceRoot) {
         this.workspaceRoot = workspaceRoot;
-        // Graph: SourcePath -> Set<TargetPaths>
-        this.graph = new Map();
+
+        // 🔥 NEW: Use Graph Model instead of raw Map
+        this.model = new DependencyGraphModel();
+
+        // 🔥 NEW: Watcher for incremental updates
+        this.watcher = new GraphWatcher(this);
+        this.isReady = false;
+
         // 🔥 NEW: Barrel resolver for advanced barrel file handling
         this.barrelResolver = new BarrelResolver();
-        
+
         // Configuration-driven language support
         this.languageConfig = languageConfig;
-        
+
         // Build extension to language mapping for fast lookup
         this.extensionMap = this.buildExtensionMap();
     }
-    
+
     /**
      * Build extension to language mapping
      * @returns {Map} - Extension to language map
@@ -60141,34 +61936,65 @@ class VSCodeApiDependencyAnalyzer {
     }
 
     /**
+     * Load graph from cache data
+     * @param {Object} graphData - The serialized graph data (nodes, edges)
+     */
+    loadFromCache(graphData) {
+        try {
+            this.model.clear();
+
+            // Reconstruct adjacency list from edges
+            if (graphData.edges) {
+                for (const edge of graphData.edges) {
+                    this.model.addDependency(edge.source, edge.target);
+                }
+            }
+
+            // Mark as ready and start watching
+            this.isReady = true;
+            this.watcher.startWatching();
+
+            aidaLogging('✅ Graph model restored from cache');
+        } catch (error) {
+            console.error('❌ Failed to load graph from cache:', error);
+            this.isReady = false;
+        }
+    }
+
+    /**
      * Main entry point - scan workspace for dependencies
      * @returns {Object} - Complete dependency graph
      */
     async analyze() {
         try {
             aidaLogging('🔍 Starting Symbol Crawling analysis...');
-            
+
             // Reset graph
-            this.graph.clear();
-            
+            this.model.clear();
+            this.isReady = false;
+
             // Step 1: Find all source files
             const sourceFiles = await this.findSourceFiles();
             aidaLogging(`📁 Found ${sourceFiles.length} source files`);
-            
+
             // Step 2: Process each file with throttling
             for (let i = 0; i < sourceFiles.length; i++) {
                 const fileUri = sourceFiles[i];
                 aidaLogging(`📝 Processing ${i + 1}/${sourceFiles.length}: ${path.basename(fileUri.fsPath)}`);
-                
+
                 await this.processFile(fileUri);
-                
+
                 // Throttle to prevent freezing Extension Host
                 await this.sleep(5);
             }
-            
+
+            // Mark graph as ready and start watching
+            this.isReady = true;
+            this.watcher.startWatching();
+
             // Step 3: Convert to nodes/edges format
             return this.buildGraphResult();
-            
+
         } catch (error) {
             console.error('❌ Symbol crawling failed:', error);
             throw new Error(`Symbol crawling analysis failed: ${error.message}`);
@@ -60185,28 +62011,20 @@ class VSCodeApiDependencyAnalyzer {
             Object.values(this.languageConfig)
                 .flatMap(config => config.extensions.map(ext => `**/*${ext}`))
         )];
-        
+
         // Collect all exclude patterns from language configs + common excludes
-        const commonExcludes = [
-            '**/.vscode/**',
-            '**/.git/**',
-            '**/.vs/**',
-            '**/.*/**',           // Any folder starting with dot
-            '**/test/**',         // Generic test folders
-            '**/tests/**',
-            '**/environments/**', // 🔥 Exclude environments
-            '**/scripts/**'       // 🔥 Exclude scripts folder
-        ];
-        
+        const { commonIgnores } = __webpack_require__(/*! ../ignore-rules */ "./scripts/ignore-rules.js");
+        const commonExcludes = commonIgnores;
+
         const languageExcludes = [...new Set(
             Object.values(this.languageConfig)
                 .flatMap(config => config.excludePatterns || [])
         )];
-        
+
         const excludePatterns = [...commonExcludes, ...languageExcludes];
-        
+
         const allFiles = [];
-        
+
         for (const pattern of patterns) {
             try {
                 const files = await vscode.workspace.findFiles(
@@ -60218,7 +62036,7 @@ class VSCodeApiDependencyAnalyzer {
                 console.warn(`⚠️ Error finding files with pattern ${pattern}:`, error.message);
             }
         }
-        
+
         // Remove duplicates and filter workspace files
         const uniqueFiles = Array.from(new Set(allFiles.map(uri => uri.toString())))
             .map(uriString => vscode.Uri.parse(uriString))
@@ -60230,7 +62048,7 @@ class VSCodeApiDependencyAnalyzer {
                 // We compare normalized paths to be safe
                 return path.normalize(fileDir) !== path.normalize(this.workspaceRoot);
             });
-            
+
         return uniqueFiles;
     }
 
@@ -60239,30 +62057,62 @@ class VSCodeApiDependencyAnalyzer {
      * @param {vscode.Uri} fileUri - File to process
      */
     async processFile(fileUri) {
+        // 🔥 Safety Check: Explicitly ignore node_modules and output directories
+        // This prevents accidental scanning if glob patterns fail
+        if (fileUri.fsPath.includes('node_modules') ||
+            fileUri.fsPath.includes('out-tsc') ||
+            fileUri.fsPath.includes('coverage')) {
+            return;
+        }
+
         try {
             const document = await vscode.workspace.openTextDocument(fileUri);
             const text = document.getText();
             const extension = path.extname(fileUri.fsPath).toLowerCase();
-            
+
             // Initialize source file in graph
             const sourceFile = this.getRelativePath(fileUri.fsPath);
-            if (!this.graph.has(sourceFile)) {
-                this.graph.set(sourceFile, new Set());
+            // Ensure node exists in model
+            if (!this.model.adjacencyList.has(sourceFile)) {
+                this.model.adjacencyList.set(sourceFile, new Set());
             }
-            
+
             // Auto-detect language from extension
             const language = this.extensionMap.get(extension);
             if (!language) {
-                console.warn(`⚠️ Unsupported file extension: ${extension}`);
+                // console.warn(`⚠️ Unsupported file extension: ${extension}`);
                 return;
             }
-            
+
             // Process file with language-specific configuration
             const config = this.languageConfig[language];
             await this.processWithConfig(document, text, sourceFile, config, language);
-            
+
+            // 🔥 NEW: Asset Fallback (Sibling Convention)
+            // If it's a TS/JS file, check for sibling HTML/CSS
+            if (language === 'typescript' || language === 'javascript') {
+                await this.processSiblingAssets(fileUri, sourceFile);
+            }
+
         } catch (error) {
             console.warn(`⚠️ Error processing file ${fileUri.fsPath}:`, error.message);
+        }
+    }
+
+    /**
+     * Check for sibling asset files (HTML/CSS) and add them as dependencies
+     * @param {vscode.Uri} fileUri 
+     * @param {string} sourceFile 
+     */
+    async processSiblingAssets(fileUri, sourceFile) {
+        const extensions = ['.html', '.css', '.scss', '.less', '.sass'];
+
+        // Use shared utility
+        const siblings = DependencyUtils.findSiblingFiles(fileUri.fsPath, extensions);
+
+        for (const siblingPath of siblings) {
+            const targetFile = this.getRelativePath(siblingPath);
+            this.model.addDependency(sourceFile, targetFile);
         }
     }
 
@@ -60277,16 +62127,16 @@ class VSCodeApiDependencyAnalyzer {
     async processWithConfig(document, text, sourceFile, config, language) {
         try {
             const processedSymbols = new Set();
-            
+
             // 1. Try VS Code Link Provider (High Accuracy for Imports)
             try {
                 const links = await vscode.commands.executeCommand('vscode.executeLinkProvider', document.uri);
                 if (links && links.length > 0) {
                     for (const link of links) {
                         if (!link.target) continue;
-                        
+
                         const targetPath = link.target.fsPath;
-                        
+
                         // Filter out external dependencies & self-references
                         if (this.isExternalDependency(targetPath) || targetPath === document.uri.fsPath) {
                             continue;
@@ -60295,7 +62145,7 @@ class VSCodeApiDependencyAnalyzer {
                         // Add to graph if it's in workspace
                         if (targetPath.startsWith(this.workspaceRoot)) {
                             const targetFile = this.getRelativePath(targetPath);
-                            this.graph.get(sourceFile).add(targetFile);
+                            this.model.addDependency(sourceFile, targetFile);
                         }
                     }
                 }
@@ -60311,14 +62161,14 @@ class VSCodeApiDependencyAnalyzer {
                     // Filter for Module/Namespace/Package symbols which usually represent imports
                     // SymbolKind: Module=2, Namespace=3, Package=4
                     const importSymbols = symbols.filter(s => s.kind === 2 || s.kind === 3 || s.kind === 4);
-                    
+
                     for (const symbol of importSymbols) {
                         // Use the symbol location to resolve definition
                         const position = symbol.selectionRange ? symbol.selectionRange.start : symbol.location.range.start;
                         const targetFile = await this.resolveDefinition(document, position);
-                        
+
                         if (targetFile) {
-                            this.graph.get(sourceFile).add(targetFile);
+                            this.model.addDependency(sourceFile, targetFile);
                             aidaLogging(`🔗 ${sourceFile} -> ${targetFile} (symbol-provider)`);
                         }
                     }
@@ -60332,36 +62182,36 @@ class VSCodeApiDependencyAnalyzer {
                 let match;
                 // Reset regex lastIndex for reuse
                 pattern.lastIndex = 0;
-                
+
                 while ((match = pattern.exec(text)) !== null) {
                     // We no longer filter by isExternalImport here
                     // We let the LSP resolve it and check the final path
-                    
+
                     await this.resolveAndAddDependency(document, text, match, sourceFile, 'import');
                     await this.sleep(5);
                 }
             }
-            
+
             // 3. Process class/type references (Symbol Crawling)
             if (config.classPattern) {
                 let match;
                 config.classPattern.lastIndex = 0;
-                
+
                 while ((match = config.classPattern.exec(text)) !== null) {
                     const symbol = match[1];
-                    
+
                     // Skip already processed symbols
                     // We no longer filter by standardLibraries here
                     if (processedSymbols.has(symbol)) {
                         continue;
                     }
                     processedSymbols.add(symbol);
-                    
+
                     await this.resolveAndAddDependency(document, text, match, sourceFile, `class: ${symbol}`);
                     await this.sleep(5);
                 }
             }
-            
+
         } catch (error) {
             console.warn(`⚠️ Error processing ${language} file:`, error.message);
         }
@@ -60377,6 +62227,19 @@ class VSCodeApiDependencyAnalyzer {
      */
     async resolveAndAddDependency(document, text, match, sourceFile, type) {
         try {
+            // 🔥 OPTIMIZATION: Try manual resolution for relative imports first
+            // This avoids expensive LSP calls for simple cases like import ... from './utils'
+            if (type === 'import' && match[1] && match[1].startsWith('.')) {
+                const dir = path.dirname(document.uri.fsPath);
+                const candidate = DependencyUtils.resolveRelativeImport(dir, match[1]);
+
+                if (candidate) {
+                    const targetFile = this.getRelativePath(candidate);
+                    this.model.addDependency(sourceFile, targetFile);
+                    return; // Skip LSP
+                }
+            }
+
             // Calculate position for LSP resolution
             // FIX: Point to the captured group (the path/symbol) instead of the start of the match
             // This ensures VS Code API receives the correct context
@@ -60391,11 +62254,11 @@ class VSCodeApiDependencyAnalyzer {
             const line = text.substring(0, absoluteIndex).split('\n').length - 1;
             const character = absoluteIndex - text.lastIndexOf('\n', absoluteIndex) - 1;
             const position = new vscode.Position(line, character);
-            
+
             // Use VS Code LSP to resolve actual file
             const targetFile = await this.resolveDefinition(document, position);
             if (targetFile) {
-                this.graph.get(sourceFile).add(targetFile);
+                this.model.addDependency(sourceFile, targetFile);
                 aidaLogging(`🔗 ${sourceFile} -> ${targetFile} (${type})`);
             }
         } catch (error) {
@@ -60425,11 +62288,11 @@ class VSCodeApiDependencyAnalyzer {
                 console.warn(`⚠️ LSP error for ${document.fileName}:${position.line} - ${lspError.message}`);
                 return null;
             });
-            
+
             if (!definitions || definitions.length === 0) {
                 return null;
             }
-            
+
             // Handle both Location and LocationLink formats
             for (const definition of definitions) {
                 let targetUri;
@@ -60442,14 +62305,14 @@ class VSCodeApiDependencyAnalyzer {
                 } else {
                     continue;
                 }
-                
+
                 const targetPath = targetUri.fsPath;
-                
+
                 // Filter out external dependencies
                 if (this.isExternalDependency(targetPath) || targetPath === document.uri.fsPath) {
                     continue;
                 }
-                
+
                 // Return first valid workspace file
                 if (targetPath.startsWith(this.workspaceRoot)) {
                     // Check if it's a barrel file (index.ts/js)
@@ -60460,7 +62323,7 @@ class VSCodeApiDependencyAnalyzer {
                         // Since we don't have the symbol name easily here, we accept the barrel file as a dependency.
                         // The consumer -> barrel link is valid.
                         // Ideally, we should also link barrel -> implementation, which happens when we scan the barrel file itself.
-                        
+
                         // However, if the user wants "Consumer -> Implementation" direct link, we would need to parse the barrel.
                         // For now, let's return the barrel file. The graph will be Consumer -> Barrel -> Implementation.
                         // This is technically correct for a dependency graph.
@@ -60470,9 +62333,9 @@ class VSCodeApiDependencyAnalyzer {
                     return this.getRelativePath(targetPath);
                 }
             }
-            
+
             return null;
-            
+
         } catch (error) {
             // Language server might not be available
             return null;
@@ -60483,24 +62346,14 @@ class VSCodeApiDependencyAnalyzer {
      * Check if a path is external dependency (should be filtered)
      */
     isExternalDependency(filePath) {
-        const pathLower = filePath.toLowerCase();
-        return (
-            pathLower.includes('node_modules') ||
-            pathLower.includes('omnisharp-metadata') ||
-            pathLower.includes('.nuget') ||
-            pathLower.includes('microsoft.netcore') ||
-            pathLower.includes('system.') ||
-            pathLower.includes('bin/debug') ||
-            pathLower.includes('bin/release') ||
-            pathLower.includes('obj/')
-        );
+        return DependencyUtils.isExternalDependency(filePath);
     }
 
     /**
      * Get relative path from workspace root
      */
     getRelativePath(absolutePath) {
-        return path.relative(this.workspaceRoot, absolutePath).replace(/\\/g, '/');
+        return DependencyUtils.getRelativePath(this.workspaceRoot, absolutePath);
     }
 
     /**
@@ -60511,24 +62364,66 @@ class VSCodeApiDependencyAnalyzer {
     }
 
     /**
+     * Check if graph is ready for incremental updates
+     */
+    isGraphReady() {
+        return this.isReady;
+    }
+
+    /**
+     * Update a single file in the graph (Incremental Update)
+     * @param {vscode.Uri} fileUri 
+     */
+    async updateFile(fileUri) {
+        const sourceFile = this.getRelativePath(fileUri.fsPath);
+
+        // 1. Clear existing dependencies for this file
+        this.model.clearDependencies(sourceFile);
+
+        // 2. Re-analyze the file
+        aidaLogging(`🔄 Updating graph for: ${sourceFile}`);
+        await this.processFile(fileUri);
+
+        // 3. Notify listeners
+        if (this.onGraphUpdate) {
+            this.onGraphUpdate();
+        }
+    }
+
+    /**
+     * Remove a file from the graph
+     * @param {vscode.Uri} fileUri 
+     */
+    removeFile(fileUri) {
+        const sourceFile = this.getRelativePath(fileUri.fsPath);
+        this.model.removeNode(sourceFile);
+        aidaLogging(`🗑️ Removed from graph: ${sourceFile}`);
+
+        // Notify listeners
+        if (this.onGraphUpdate) {
+            this.onGraphUpdate();
+        }
+    }
+
+    /**
      * Convert internal graph to nodes/edges format
      */
     buildGraphResult() {
         const nodes = [];
         const edges = [];
-        
+
         // Create nodes for all files that have dependencies or are dependencies
         const allFileIds = new Set();
-        for (const [sourceFile, dependencies] of this.graph) {
+        for (const [sourceFile, dependencies] of this.model.adjacencyList) {
             allFileIds.add(sourceFile);
             dependencies.forEach(dep => allFileIds.add(dep));
         }
-        
+
         // Create nodes for all referenced files
         for (const fileId of allFileIds) {
             const fullPath = path.join(this.workspaceRoot, fileId);
             const fileName = path.basename(fullPath);
-            
+
             const node = {
                 id: fileId,
                 fileName,
@@ -60536,18 +62431,18 @@ class VSCodeApiDependencyAnalyzer {
                 relativePath: fileId,
                 language: this.getLanguageFromExtension(fileName),
                 type: this.inferFileType(fileName),
-                dependencies: Array.from(this.graph.get(fileId) || []),
+                dependencies: Array.from(this.model.getDependencies(fileId)),
                 dependents: []
             };
-            
+
             nodes.push(node);
         }
-        
+
         // Create edges and update dependents
         let edgeId = 0;
         const nodeIdSet = new Set(nodes.map(n => n.id));
-        
-        for (const [sourceFile, dependencies] of this.graph) {
+
+        for (const [sourceFile, dependencies] of this.model.adjacencyList) {
             for (const targetFile of dependencies) {
                 // Only create edge if both source and target nodes exist
                 if (nodeIdSet.has(sourceFile) && nodeIdSet.has(targetFile)) {
@@ -60560,9 +62455,9 @@ class VSCodeApiDependencyAnalyzer {
                         strength: 'medium',
                         discoveredBy: 'symbol-crawling'
                     };
-                    
+
                     edges.push(edge);
-                    
+
                     // Update dependents
                     const targetNode = nodes.find(n => n.id === targetFile);
                     if (targetNode && !targetNode.dependents.includes(sourceFile)) {
@@ -60571,7 +62466,7 @@ class VSCodeApiDependencyAnalyzer {
                 }
             }
         }
-        
+
         return {
             nodes,
             edges,
@@ -60588,44 +62483,14 @@ class VSCodeApiDependencyAnalyzer {
      * Get programming language from file extension
      */
     getLanguageFromExtension(fileName) {
-        const ext = path.extname(fileName).toLowerCase();
-        const languageMap = {
-            '.ts': 'typescript',
-            '.tsx': 'typescript',
-            '.js': 'javascript',
-            '.jsx': 'javascript',
-            '.vue': 'vue',
-            '.cs': 'csharp',
-            '.java': 'java',
-            '.py': 'python'
-        };
-        
-        return languageMap[ext] || 'unknown';
+        return DependencyUtils.getLanguageFromExtension(fileName);
     }
 
     /**
      * Infer file type (component, service, etc.)
      */
     inferFileType(fileName) {
-        const name = fileName.toLowerCase();
-        
-        if (name.includes('.service.')) return 'service';
-        if (name.includes('.component.')) return 'component';
-        if (name.includes('.directive.')) return 'directive';
-        if (name.includes('.pipe.')) return 'pipe';
-        if (name.includes('.guard.')) return 'guard';
-        if (name.includes('.resolver.')) return 'resolver';
-        if (name.includes('.interceptor.')) return 'interceptor';
-        if (name.includes('.module.')) return 'module';
-        if (name.includes('controller')) return 'controller';
-        if (name.includes('model')) return 'model';
-        if (name.includes('interface')) return 'interface';
-        if (name.includes('enum')) return 'enum';
-        if (name.includes('constant')) return 'constant';
-        if (name.includes('config')) return 'config';
-        if (name.includes('util')) return 'utility';
-        
-        return 'file';
+        return DependencyUtils.inferFileType(fileName);
     }
 
     /**
@@ -60635,28 +62500,28 @@ class VSCodeApiDependencyAnalyzer {
         // Calculate basic metrics
         const totalFiles = graph.nodes.length;
         const totalDependencies = graph.edges.length;
-        
+
         // Calculate file type distribution
         const typeDistribution = {};
         graph.nodes.forEach(node => {
             typeDistribution[node.type] = (typeDistribution[node.type] || 0) + 1;
         });
-        
+
         // Calculate language distribution  
         const languageDistribution = {};
         graph.nodes.forEach(node => {
             languageDistribution[node.language] = (languageDistribution[node.language] || 0) + 1;
         });
-        
+
         // Find most connected files
         const connectionCounts = {};
         graph.edges.forEach(edge => {
             connectionCounts[edge.source] = (connectionCounts[edge.source] || 0) + 1;
             connectionCounts[edge.target] = (connectionCounts[edge.target] || 0) + 1;
         });
-        
+
         const mostConnected = Object.entries(connectionCounts)
-            .sort(([,a], [,b]) => b - a)
+            .sort(([, a], [, b]) => b - a)
             .slice(0, 10)
             .map(([file, count]) => ({
                 file: file,
@@ -60666,7 +62531,7 @@ class VSCodeApiDependencyAnalyzer {
 
         // Detect potential circular dependencies
         const circularDeps = this.detectCircularDependencies(graph);
-        
+
         return {
             summary: {
                 totalFiles,
@@ -60692,7 +62557,7 @@ class VSCodeApiDependencyAnalyzer {
         const visited = new Set();
         const recursionStack = new Set();
         const cycles = [];
-        
+
         const dfs = (nodeId, path = []) => {
             if (recursionStack.has(nodeId)) {
                 // Found a cycle
@@ -60701,30 +62566,30 @@ class VSCodeApiDependencyAnalyzer {
                 cycles.push(cycle);
                 return;
             }
-            
+
             if (visited.has(nodeId)) return;
-            
+
             visited.add(nodeId);
             recursionStack.add(nodeId);
             path.push(nodeId);
-            
+
             // Find outgoing edges
             const outgoingEdges = graph.edges.filter(edge => edge.source === nodeId);
             for (const edge of outgoingEdges) {
                 dfs(edge.target, [...path]);
             }
-            
+
             recursionStack.delete(nodeId);
             path.pop();
         };
-        
+
         // Start DFS from each unvisited node
         for (const node of graph.nodes) {
             if (!visited.has(node.relativePath)) {
                 dfs(node.relativePath, []);
             }
         }
-        
+
         return cycles;
     }
 
@@ -60733,11 +62598,11 @@ class VSCodeApiDependencyAnalyzer {
      */
     generateRecommendations(graph, mostConnected, circularDeps) {
         const recommendations = [];
-        
+
         // High coupling recommendations
         const highCouplingThreshold = 10;
         const highCouplingFiles = mostConnected.filter(item => item.connections > highCouplingThreshold);
-        
+
         if (highCouplingFiles.length > 0) {
             recommendations.push({
                 type: 'high-coupling',
@@ -60748,7 +62613,7 @@ class VSCodeApiDependencyAnalyzer {
                 action: 'Consider breaking down large components or services into smaller, more focused units.'
             });
         }
-        
+
         // Circular dependency recommendations
         if (circularDeps.length > 0) {
             recommendations.push({
@@ -60760,11 +62625,11 @@ class VSCodeApiDependencyAnalyzer {
                 action: 'Break circular dependencies by introducing interfaces, moving shared code to utilities, or restructuring the dependency flow.'
             });
         }
-        
+
         // Service vs Component balance
         const services = graph.nodes.filter(n => n.type === 'service').length;
         const components = graph.nodes.filter(n => n.type === 'component').length;
-        
+
         if (components > 0 && services === 0) {
             recommendations.push({
                 type: 'architecture',
@@ -60774,7 +62639,7 @@ class VSCodeApiDependencyAnalyzer {
                 action: 'Create services to handle business logic, data access, and shared functionality.'
             });
         }
-        
+
         return recommendations;
     }
 
@@ -60844,11 +62709,92 @@ const { SymbolAnalyzer } = __webpack_require__(/*! ./dependency-graph/symbol-ana
 const { PRFileFetcher } = __webpack_require__(/*! ./pr-file-fetcher */ "./scripts/pr-file-fetcher.js");
 const { PRDependencyAnalyzer } = __webpack_require__(/*! ./pr-dependency-analyzer */ "./scripts/pr-dependency-analyzer.js");
 const { FileDependencyAnalyzer } = __webpack_require__(/*! ./file-dependency-analyzer */ "./scripts/file-dependency-analyzer.js");
+const { DependencyGraphService } = __webpack_require__(/*! ./dependency-graph-service */ "./scripts/dependency-graph-service.js");
+
+// Import Capability Check
+const { checkEnvironmentCapabilities } = __webpack_require__(/*! ./capability-check */ "./scripts/capability-check.js");
 
 // Cache management
-const CACHE_VERSION = '1.0';
+const CACHE_VERSION = '1.1';
 let cacheFilePath = null;
 let extensionContext = null;
+let skipCapabilityCheck = false;
+let globalGraphService = null;
+
+/**
+ * Auto-activate dependency watcher if cache exists
+ * @param {vscode.ExtensionContext} context
+ */
+async function activateDependencyWatcherIfCacheExists(context) {
+    try {
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath;
+        if (!workspaceRoot) return;
+
+        const cachePath = path.join(workspaceRoot, '.vscode', 'dependency-cache.json');
+
+        if (fs.existsSync(cachePath)) {
+            aidaLogging('🚀 Found dependency cache, auto-activating watcher...');
+
+            if (!globalGraphService) {
+                globalGraphService = new DependencyGraphService(workspaceRoot);
+            }
+
+            // This will load cache and start watcher
+            await globalGraphService.ensureFullGraph();
+            aidaLogging('✅ Dependency watcher activated from cache');
+        }
+    } catch (error) {
+        console.error('❌ Failed to auto-activate dependency watcher:', error);
+    }
+}
+
+/**
+ * Check environment capabilities and report issues to stream
+ * @returns {Promise<boolean>} - Returns true if analysis should be aborted (missing capabilities)
+ */
+async function handleEnvironmentCheck(stream, workspaceRoot) {
+    // If skip flag is set, reset it and proceed without check
+    if (skipCapabilityCheck) {
+        skipCapabilityCheck = false;
+        return false;
+    }
+
+    const missingCapabilities = await checkEnvironmentCapabilities(workspaceRoot);
+
+    if (missingCapabilities.length > 0) {
+        stream.markdown('### ⚠️ Environment Check Required\n\n');
+        stream.markdown('Dependency analysis relies on the **Language Server Protocol (LSP)** to accurately resolve symbols and imports. Please install the following extensions to enable this capability:\n\n');
+
+        for (const missing of missingCapabilities) {
+            for (const ext of missing.recommendedExtensions) {
+                stream.markdown(`> ### 📦 ${ext.name}\n`);
+                stream.markdown(`> ${missing.message}\n\n`);
+
+                stream.button({
+                    command: 'workbench.extensions.installExtension',
+                    title: `Install ${ext.name}`,
+                    arguments: [ext.id]
+                });
+
+                stream.markdown('\n\n');
+            }
+        }
+
+        stream.markdown('---\n\n');
+
+        stream.markdown('**Or proceed with limited accuracy:**\n\n');
+        stream.button({
+            command: 'aida.analyzeDependencies',
+            title: '⚠️ Continue Anyway',
+            arguments: [workspaceRoot, true]
+        });
+        stream.markdown('\n\n');
+
+        return true; // Abort
+    }
+
+    return false; // Continue
+}
 
 /**
  * Initialize dependency graph functionality
@@ -60870,56 +62816,62 @@ function initializeDependencyGraph(context) {
 
             // Set cache file path
             cacheFilePath = path.join(workspaceRoot, '.vscode', 'dependency-cache.json');
-            
+
             const userMessage = request.prompt.trim();
-            
+
             // ✅ NEW: Check if message contains PR URL
             if (isPRUrl(userMessage)) {
                 await handlePRDependencyAnalysis(userMessage, stream, token, workspaceRoot);
                 return;
             }
-            
+
             // Check if user explicitly requested re-analysis
             const isReAnalyzeRequest = userMessage.toLowerCase().includes('re-analyze') || userMessage.toLowerCase().includes('reanalyze');
-            
+
             // Check for existing cache
             const cacheExists = await checkCacheExists();
-            
+
             if (cacheExists && !isReAnalyzeRequest) {
                 // Show cache options
                 stream.markdown(`## 🔍 Dependency Analysis Options\n\n`);
                 stream.markdown(`📁 **Found existing cache** from previous analysis\n\n`);
                 stream.markdown(`**Choose your option:**\n\n`);
-                
+
                 stream.button({
                     command: 'aida.loadDependencyCache',
                     title: '⚡ Load from Cache (Fast)',
                     arguments: [workspaceRoot]
                 });
-                
+
                 stream.markdown('   ');
-                
+
                 stream.button({
-                    command: 'aida.analyzeDependencies', 
+                    command: 'aida.analyzeDependencies',
                     title: '🔄 Re-analyze (Slow but Fresh)',
                     arguments: [workspaceRoot]
                 });
-                
+
                 stream.markdown('\n\n✨ **Note:** Dependency scanning uses **VS Code Language Server APIs** - **No AI Tokens consumed!** 🆓');
-                
+
             } else {
                 // No cache or explicit re-analyze request - analyze directly in background
-                const message = isReAnalyzeRequest 
+
+                // Check environment capabilities
+                if (await handleEnvironmentCheck(stream, workspaceRoot)) {
+                    return;
+                }
+
+                const message = isReAnalyzeRequest
                     ? '🔄 **Re-analyzing dependencies...** - This will take some time\n\n'
                     : '🔍 **No cache found** - Starting fresh analysis...\n\n';
                 stream.markdown(message);
                 stream.markdown('✅ **Analysis started in background** - You can continue working!\n\n');
                 stream.markdown('💡 The dependency graph will open automatically when complete.\n\n');
-                
+
                 // Run in background without blocking chat
                 performDependencyAnalysisInBackground(workspaceRoot);
             }
-            
+
         } catch (error) {
             console.error('❌ Dependency analysis error:', error);
             console.error('❌ Stack trace:', error.stack);
@@ -60931,7 +62883,7 @@ function initializeDependencyGraph(context) {
     dependencyParticipant.iconPath = vscode.Uri.file(
         path.join(context.extensionPath, 'icons', 'dependency-icon.svg')
     );
-    
+
     // Remove followup provider that might be causing help responses
     // dependencyParticipant.followupProvider = null;
 
@@ -60951,7 +62903,7 @@ function initializeDependencyGraph(context) {
 async function aiDependencyAnalysis(message, stream, token, context) {
     try {
         stream.markdown('# 🔍 AIDA Dependency Analysis\n\n');
-        
+
         const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath;
         if (!workspaceRoot) {
             stream.markdown('❌ **Error:** No workspace folder found. Please open a project folder.\n\n');
@@ -60960,49 +62912,63 @@ async function aiDependencyAnalysis(message, stream, token, context) {
 
         // Set cache file path
         cacheFilePath = path.join(workspaceRoot, '.vscode', 'dependency-cache.json');
-        
+
+        const userMessage = message.trim();
+
+        // ✅ NEW: Check if message contains PR URL (Support for AIDA Chatbot)
+        if (isPRUrl(userMessage)) {
+            await handlePRDependencyAnalysis(userMessage, stream, token, workspaceRoot);
+            return;
+        }
+
         // Check if user explicitly requested re-analysis
-        const userMessage = message.toLowerCase();
-        const isReAnalyzeRequest = userMessage.includes('re-analyze') || userMessage.includes('reanalyze');
-        
+        const lowerMessage = userMessage.toLowerCase();
+        const isReAnalyzeRequest = lowerMessage.includes('re-analyze') || lowerMessage.includes('reanalyze');
+
         // Check for existing cache
         const cacheExists = await checkCacheExists();
-        
+
         if (cacheExists && !isReAnalyzeRequest) {
             // Show cache options (same as Copilot)
             stream.markdown(`## 🔍 Dependency Analysis Options\n\n`);
             stream.markdown(`📁 **Found existing cache** from previous analysis\n\n`);
             stream.markdown(`**Choose your option:**\n\n`);
-            
+
             stream.button({
                 command: 'aida.loadDependencyCache',
                 title: '⚡ Load from Cache (Fast)',
                 arguments: [workspaceRoot]
             });
-            
+
             stream.markdown('   ');
-            
+
             stream.button({
-                command: 'aida.analyzeDependencies', 
+                command: 'aida.analyzeDependencies',
                 title: '🔄 Re-analyze (Slow but Fresh)',
                 arguments: [workspaceRoot]
             });
-            
+
             stream.markdown('\n\n✨ **Note:** Dependency scanning uses **VS Code Language Server APIs** - **No AI Tokens consumed!** 🆓');
-            
+
         } else {
             // No cache or explicit re-analyze request
-            const message = isReAnalyzeRequest 
+
+            // Check environment capabilities
+            if (await handleEnvironmentCheck(stream, workspaceRoot)) {
+                return;
+            }
+
+            const message = isReAnalyzeRequest
                 ? '🔄 **Re-analyzing dependencies...** - This will take some time\n\n'
                 : '🔍 **No cache found** - Starting fresh analysis...\n\n';
             stream.markdown(message);
             stream.markdown('✅ **Analysis started in background** - You can continue working!\n\n');
             stream.markdown('💡 The dependency graph will open automatically when complete.\n\n');
-            
+
             // Run in background without blocking chat
             performDependencyAnalysisInBackground(workspaceRoot);
         }
-        
+
     } catch (error) {
         console.error('❌ aiDependencyAnalysis error:', error);
         stream.markdown(`❌ **Error:** ${error.message}\n\n`);
@@ -61031,8 +62997,11 @@ function registerCacheCommands(context) {
     });
 
     // Command to re-analyze
-    const analyzeCommand = vscode.commands.registerCommand('aida.analyzeDependencies', async (workspaceRoot) => {
+    const analyzeCommand = vscode.commands.registerCommand('aida.analyzeDependencies', async (workspaceRoot, force = false) => {
         try {
+            if (force) {
+                skipCapabilityCheck = true;
+            }
             // Trigger chat participant with re-analyze command
             await vscode.commands.executeCommand('workbench.action.chat.open', {
                 query: '@dependency re-analyze'
@@ -61052,11 +63021,11 @@ function registerCacheCommands(context) {
 async function checkCacheExists() {
     try {
         if (!cacheFilePath) return false;
-        
+
         const cacheStats = await fs.promises.stat(cacheFilePath);
         const cacheAge = Date.now() - cacheStats.mtime.getTime();
         const maxAge = 24 * 60 * 60 * 1000; // 24 hours
-        
+
         return cacheAge < maxAge;
     } catch (error) {
         return false;
@@ -61069,11 +63038,11 @@ async function checkCacheExists() {
 async function saveToCache(graph, report, analysisType) {
     try {
         if (!cacheFilePath) return;
-        
+
         // Ensure .vscode directory exists
         const vscodeDir = path.dirname(cacheFilePath);
         await fs.promises.mkdir(vscodeDir, { recursive: true });
-        
+
         const cacheData = {
             version: CACHE_VERSION,
             timestamp: new Date().toISOString(),
@@ -61081,7 +63050,7 @@ async function saveToCache(graph, report, analysisType) {
             graph,
             report
         };
-        
+
         await fs.promises.writeFile(cacheFilePath, JSON.stringify(cacheData, null, 2));
         console.log('💾 Dependency analysis cached successfully');
     } catch (error) {
@@ -61095,14 +63064,20 @@ async function saveToCache(graph, report, analysisType) {
 async function loadFromCache() {
     try {
         if (!cacheFilePath) return null;
-        
+
         const cacheData = JSON.parse(await fs.promises.readFile(cacheFilePath, 'utf8'));
-        
+
         if (cacheData.version !== CACHE_VERSION) {
             console.log('🔄 Cache version mismatch, will regenerate');
             return null;
         }
-        
+
+        // Validate cache structure
+        if (!cacheData.graph || !cacheData.report || !cacheData.report.summary) {
+            console.log('⚠️ Invalid cache data structure, will regenerate');
+            return null;
+        }
+
         console.log('💾 Loaded dependency analysis from cache');
         return cacheData;
     } catch (error) {
@@ -61123,33 +63098,33 @@ function performDependencyAnalysisInBackground(workspaceRoot) {
     }, async (progress) => {
         try {
             progress.report({ increment: 0, message: "You can continue working - this runs in background..." });
-            
+
             // Use VS Code API analyzer
             const analyzer = new VSCodeApiDependencyAnalyzer(workspaceRoot);
             const analysisType = 'VS Code API (Symbol Crawling)';
-            
+
             progress.report({ increment: 20, message: "Scanning files and building dependency tree..." });
             const graph = await analyzer.analyze();
-            
+
             progress.report({ increment: 60, message: "Calculating metrics and generating report..." });
             const report = analyzer.generateReport(graph);
-            
+
             // Validate graph data
             if (!graph || !graph.nodes || !Array.isArray(graph.nodes)) {
                 throw new Error('Invalid graph data: missing or invalid nodes array');
             }
             if (!graph.edges || !Array.isArray(graph.edges)) {
-                throw new Error('Invalid graph data: missing or invalid edges array');  
+                throw new Error('Invalid graph data: missing or invalid edges array');
             }
-            
+
             console.log(`🔍 Graph validation: ${graph.nodes.length} nodes, ${graph.edges.length} edges`);
-            
+
             progress.report({ increment: 85, message: "Saving cache..." });
             await saveToCache(graph, report, analysisType);
-            
+
             progress.report({ increment: 95, message: "Opening visualization..." });
             await createWebviewFromData(graph, report, analysisType);
-            
+
             // Show completion notification
             vscode.window.showInformationMessage(
                 `✅ Dependency analysis complete! Found ${graph.nodes.length} files with ${graph.edges.length} dependencies.`,
@@ -61160,7 +63135,7 @@ function performDependencyAnalysisInBackground(workspaceRoot) {
                     vscode.commands.executeCommand('workbench.view.extension.aida-dependency-view');
                 }
             });
-            
+
         } catch (error) {
             console.error('❌ Background analysis error:', error);
             console.error('❌ Stack trace:', error.stack);
@@ -61192,17 +63167,17 @@ async function createWebviewFromData(graph, report, analysisType) {
             retainContextWhenHidden: true
         }
     );
-    
+
     // Generate webview content
     console.log(`📊 Creating webview with data:`, {
         nodeCount: graph.nodes.length,
         edgeCount: graph.edges.length,
         analysisType
     });
-    
+
     const webviewHtml = generateFilteredGraphWebviewHtml(graph, report.summary, 'all');
     panel.webview.html = webviewHtml;
-    
+
     // Handle messages from webview
     panel.webview.onDidReceiveMessage(async (message) => {
         if (message.command === 'buildSelectedNodeObject') {
@@ -61214,7 +63189,7 @@ async function createWebviewFromData(graph, report, analysisType) {
             await openImpactAnalysisWebview(message.nodeId, graph);
         }
     });
-    
+
     console.log(`✅ Webview created with ${graph.nodes.length} nodes, ${graph.edges.length} edges`);
 }
 
@@ -61240,9 +63215,9 @@ async function buildSelectedNodeObject(nodeId, graph, panel) {
         // Helper function to load assets for a node
         const loadNodeAssets = async (node) => {
             const result = { main: node.id };
-            
+
             const fileName = node.fileName || path.basename(node.id);
-            
+
             // Get absolute path
             let absolutePath = node.id;
             if (!path.isAbsolute(node.id) && workspaceRoot) {
@@ -61261,7 +63236,7 @@ async function buildSelectedNodeObject(nodeId, graph, panel) {
             // 🔥 REFACTORED: Use AssetLoaderStrategy pattern instead of hardcoded if/else
             const { AssetLoaderFactory } = __webpack_require__(/*! ./dependency-graph/asset-loader-factory */ "./scripts/dependency-graph/asset-loader-factory.js");
             const assetLoader = AssetLoaderFactory.getLoader(fileName);
-            
+
             if (assetLoader) {
                 const assets = await assetLoader.loadAssets(absolutePath, fileContent, workspaceRoot);
                 Object.assign(result, assets);
@@ -61385,9 +63360,9 @@ async function analyzeImpactWithAI(data, originalPanel) {
     try {
         // Import review-common for executeAIReview and getUnifiedModel
         const { executeAIReview, getUnifiedModel } = __webpack_require__(/*! ./review-common */ "./scripts/review-common.js");
-        
+
         let prompt = '';
-        
+
         if (data.isPRAnalysis) {
             // PR Analysis Prompt
             prompt = `You are an expert code reviewer and architect.
@@ -61395,12 +63370,12 @@ Analyze the impact of this Pull Request based on the dependency graph data.
 
 PR Context:
 ${JSON.stringify({
-    summary: data.prSummary,
-    changes: data.changes,
-    impact: data.impact,
-    // Limit symbol map to avoid token limits if necessary
-    symbolMap: data.symbolMap
-}, null, 2)}
+                summary: data.prSummary,
+                changes: data.changes,
+                impact: data.impact,
+                // Limit symbol map to avoid token limits if necessary
+                symbolMap: data.symbolMap
+            }, null, 2)}
 
 Please provide a comprehensive report covering:
 1. Summary of Changes: What is being changed at a high level?
@@ -61431,19 +63406,19 @@ Keep the language simple and focus on USER IMPACT.`;
 
 **This file uses these components/modules (${data.dependencies.length} dependencies):**
 ${data.dependencies.map(dep => {
-    let parts = [`- ${dep.main}`];
-    if (dep.html) parts.push(`(has UI template: ${dep.html})`);
-    if (dep.css) parts.push(`(has styles: ${dep.css})`);
-    return parts.join(' ');
-}).join('\n')}
+                let parts = [`- ${dep.main}`];
+                if (dep.html) parts.push(`(has UI template: ${dep.html})`);
+                if (dep.css) parts.push(`(has styles: ${dep.css})`);
+                return parts.join(' ');
+            }).join('\n')}
 
 **These components/modules depend on this file (${data.dependents.length} dependents):**
 ${data.dependents.map(dep => {
-    let parts = [`- ${dep.main}`];
-    if (dep.html) parts.push(`(has UI template: ${dep.html})`);
-    if (dep.css) parts.push(`(has styles: ${dep.css})`);
-    return parts.join(' ');
-}).join('\n')}
+                let parts = [`- ${dep.main}`];
+                if (dep.html) parts.push(`(has UI template: ${dep.html})`);
+                if (dep.css) parts.push(`(has styles: ${dep.css})`);
+                return parts.join(' ');
+            }).join('\n')}
 
 IMPORTANT INSTRUCTION:
 If the list of dependents is EMPTY (0 dependents), it means this file is NOT used by any other file in the scanned codebase.
@@ -61493,7 +63468,7 @@ Keep the language simple and focus on USER IMPACT, not technical details.`;
 
         if (success) {
             console.log('✅ AI Response received, length:', aiResponse.length);
-            
+
             // Clean up the response - remove markdown decorations that we added
             let cleanResponse = aiResponse
                 .replace(/^[\s\S]*?---\s*/, '') // Remove everything up to and including the first separator
@@ -61505,7 +63480,7 @@ Keep the language simple and focus on USER IMPACT, not technical details.`;
 
             // Update panel with result
             analysisPanel.webview.html = getHtml(formatMarkdown(cleanResponse));
-            
+
         } else {
             throw new Error('AI analysis failed');
         }
@@ -61562,7 +63537,7 @@ async function openImpactAnalysisWebview(nodeId, graph = null) {
                 const analyzer = new SymbolAnalyzer();
                 // Pass graph to analyzer for consistent dependency/dependent resolution
                 const data = await analyzer.analyzeFile(absolutePath, graph);
-                
+
                 if (data) {
                     panel.webview.postMessage({
                         command: 'loadData',
@@ -61660,14 +63635,14 @@ async function loadAngularAssets(absolutePath, fileContent, workspaceRoot) {
     try {
         const uri = vscode.Uri.file(absolutePath);
         const links = await vscode.commands.executeCommand('vscode.executeLinkProvider', uri);
-        
+
         if (links && links.length > 0) {
             for (const link of links) {
                 if (!link.target) continue;
-                
+
                 const targetPath = link.target.fsPath;
                 const ext = path.extname(targetPath).toLowerCase();
-                
+
                 if (ext === '.html') {
                     result.html = path.relative(workspaceRoot, targetPath);
                 } else if (['.css', '.scss', '.sass', '.less'].includes(ext)) {
@@ -61720,14 +63695,14 @@ async function loadReactAssets(absolutePath, fileContent, workspaceRoot) {
     try {
         const uri = vscode.Uri.file(absolutePath);
         const links = await vscode.commands.executeCommand('vscode.executeLinkProvider', uri);
-        
+
         if (links && links.length > 0) {
             for (const link of links) {
                 if (!link.target) continue;
-                
+
                 const targetPath = link.target.fsPath;
                 const ext = path.extname(targetPath).toLowerCase();
-                
+
                 if (['.css', '.scss', '.sass', '.less'].includes(ext)) {
                     result.css = path.relative(workspaceRoot, targetPath);
                     break; // Take first CSS file found
@@ -61744,7 +63719,7 @@ async function loadReactAssets(absolutePath, fileContent, workspaceRoot) {
         // import styles from './Component.module.css'
         // import './styles.scss'
         const cssImports = fileContent.matchAll(/import\s+(?:['"`]([^'"`]+\.(?:css|scss|sass|less))['"`]|.*?from\s+['"`]([^'"`]+\.(?:css|scss|sass|less))['"`])/gi);
-        
+
         for (const match of cssImports) {
             const cssFile = match[1] || match[2];
             if (cssFile) {
@@ -61824,7 +63799,7 @@ async function loadCSharpAssets(absolutePath, fileContent, workspaceRoot) {
 
     // Check for associated .cshtml or .razor files (same name convention)
     const baseName = path.basename(absolutePath, '.cs');
-    
+
     // Check for Razor views (e.g., HomeController.cs -> Home folder)
     if (baseName.endsWith('Controller')) {
         const viewName = baseName.replace('Controller', '');
@@ -61914,9 +63889,9 @@ function getNodeDisplayName(node, angularEntities) {
         return { name: angularEntities.interfaces[0], type: 'interface' };
     }
     // Fallback to filename
-    return { 
-        name: node.fileName || 'unknown', 
-        type: 'file' 
+    return {
+        name: node.fileName || 'unknown',
+        type: 'file'
     };
 }
 
@@ -61939,34 +63914,34 @@ async function handlePRDependencyAnalysis(prUrl, stream, token, workspaceRoot) {
     try {
         stream.markdown('## 🔍 PR Dependency Analysis\n\n');
         stream.markdown(`📌 **Analyzing PR:** ${prUrl}\n\n`);
-        
+
         // Step 1: Parse PR URL
         const fetcher = new PRFileFetcher();
         const prInfo = fetcher.parsePRUrl(prUrl);
-        
+
         // Step 2: Fetch PR files
         stream.markdown('⏳ Fetching PR file changes...\n\n');
-        
+
         let prFiles;
         try {
             prFiles = await fetcher.fetchFiles(prInfo);
         } catch (error) {
             stream.markdown(`❌ **Error fetching PR files:** ${error.message}\n\n`);
-            
+
             if (error.message.includes('token')) {
                 stream.markdown('💡 **Setup Required:**\n\n');
                 stream.markdown(`- Configure your ${prInfo.repoType.toUpperCase()} token in settings\n`);
                 stream.markdown('- Check AIDA documentation for token setup instructions\n\n');
             }
-            
+
             return;
         }
-        
+
         if (!prFiles || prFiles.length === 0) {
             stream.markdown('❌ No files found in PR\n\n');
             return;
         }
-        
+
         // 🧪 TEST: Filter to specific files for debugging
         // prFiles = prFiles.filter(f => 
         //     f.path.includes('constants.ts')
@@ -61978,87 +63953,87 @@ async function handlePRDependencyAnalysis(prUrl, stream, token, workspaceRoot) {
         //      ||
         //     f.path.includes('maintain-equipment-list.component.ts')
         // );
-        
+
         if (prFiles.length === 0) {
             stream.markdown('⚠️ No test files found in PR\n\n');
             return;
         }
-        
+
         stream.markdown(`✅ Found **${prFiles.length} files** in PR:\n\n`);
-        
+
         // Show file summary
         const added = prFiles.filter(f => f.status === 'add').length;
         const modified = prFiles.filter(f => f.status === 'edit').length;
         const deleted = prFiles.filter(f => f.status === 'delete').length;
         const renamed = prFiles.filter(f => f.status === 'rename').length;
-        
+
         stream.markdown(`🟢 Added: ${added}\n`);
         stream.markdown(`🟡 Modified: ${modified}\n`);
         stream.markdown(`🔴 Deleted: ${deleted}\n`);
         if (renamed > 0) stream.markdown(`🔵 Renamed: ${renamed}\n`);
         stream.markdown('\n');
-        
+
         // Step 3: Analyze dependencies for PR files
         stream.markdown('🔗 Analyzing dependencies and dependents...\n\n');
-        
+
         const analyzer = new PRDependencyAnalyzer(workspaceRoot);
         let graph;
-        
+
         try {
             graph = await analyzer.analyzePRFiles(prFiles);
         } catch (error) {
             stream.markdown(`❌ **Analysis Error:** ${error.message}\n\n`);
-            
+
             if (error.message.includes('cache') || error.message.includes('graph')) {
                 stream.markdown('💡 **Tip:** Run `@dependency` first to build the workspace dependency cache\n\n');
             }
-            
+
             return;
         }
-        
+
         // Step 4: Show extracted symbols with impact analysis
         if (!isProd) {
             stream.markdown('✨ **Symbol Extraction Results:**\n\n');
-            
+
             const prNodesWithSymbols = graph.nodes.filter(n => n.isPRFile);
-            
+
             if (prNodesWithSymbols.length === 0) {
                 stream.markdown('ℹ️ No PR files found\n\n');
             }
-            
+
             let totalSymbols = 0;
             const symbolToDependentsMap = graph.symbolToDependentsMap || new Map();
-            
+
             for (const prNode of prNodesWithSymbols) {
                 stream.markdown(`📄 **File:** ${prNode.prPath}\n\n`);
-                
+
                 if (!prNode.changedSymbols || prNode.changedSymbols.length === 0) {
                     stream.markdown('  ℹ️ No symbols extracted\n\n');
                     continue;
                 }
-                
+
                 stream.markdown(`🔤 **Symbols (${prNode.changedSymbols.length}):**\n\n`);
-                
+
                 for (const symbol of prNode.changedSymbols) {
                     // Handle both string and object formats
                     const symbolName = typeof symbol === 'string' ? symbol : symbol.fullName;
                     const symbolType = typeof symbol === 'object' ? symbol.type : 'unknown';
-                    
+
                     stream.markdown(`  - \`${symbolName}\` _(${symbolType})_`);
-                    
+
                     // Show impacted files for this symbol
                     const impactedFiles = symbolToDependentsMap.get(symbolName) || [];
                     if (impactedFiles.length > 0) {
                         stream.markdown(` → **${impactedFiles.length} files**`);
                     }
-                    
+
                     stream.markdown('\n');
                     totalSymbols++;
                 }
-                
+
                 stream.markdown('\n');
             }
-            
+
             // Step 5: Show Impact Analysis Summary
             stream.markdown('\n---\n\n');
             stream.markdown('📊 **Impact Analysis Summary:**\n\n');
@@ -62066,20 +64041,20 @@ async function handlePRDependencyAnalysis(prUrl, stream, token, workspaceRoot) {
             stream.markdown(`- **Total Files Analyzed:** ${graph.nodes.length}\n`);
             stream.markdown(`- **Impacted Files:** ${graph.nodes.filter(n => n.nodeType === 'dependent').length}\n`);
             stream.markdown(`- **Dependencies:** ${graph.nodes.filter(n => n.nodeType === 'dependency').length}\n\n`);
-            
+
             // Show top impacted symbols
             if (symbolToDependentsMap.size > 0) {
                 stream.markdown('🔥 **Top Impacted Symbols:**\n\n');
-                
+
                 const sortedSymbols = Array.from(symbolToDependentsMap.entries())
                     .sort((a, b) => b[1].length - a[1].length)
                     .slice(0, 5);
-                
+
                 for (const [symbolName, dependents] of sortedSymbols) {
-                    const impactLevel = dependents.length > 5 ? '🔴 HIGH' : 
-                                    dependents.length > 2 ? '🟡 MEDIUM' : '🟢 LOW';
+                    const impactLevel = dependents.length > 5 ? '🔴 HIGH' :
+                        dependents.length > 2 ? '🟡 MEDIUM' : '🟢 LOW';
                     stream.markdown(`  ${impactLevel} \`${symbolName}\` → **${dependents.length} files**\n`);
-                    
+
                     // Show first 3 impacted files
                     const preview = dependents.slice(0, 3);
                     for (const file of preview) {
@@ -62095,15 +64070,15 @@ async function handlePRDependencyAnalysis(prUrl, stream, token, workspaceRoot) {
                 stream.markdown('✅ **No external files impacted** (low risk change)\n\n');
             }
         }
-        
+
         // Step 6: Display graph
         stream.markdown('\n🎨 Opening graph viewer...\n\n');
-        
+
         const summary = graph.prSummary;
         await createPRGraphWebview(graph, prInfo, summary);
-        
+
         stream.markdown('✅ **Graph viewer opened!** Check the new tab for visual analysis.\n\n');
-        
+
     } catch (error) {
         console.error('❌ PR dependency analysis error:', error);
         stream.markdown(`❌ **Unexpected Error:** ${error.message}\n\n`);
@@ -62167,11 +64142,11 @@ async function createPRGraphWebview(graph, prInfo, summary) {
                 retainContextWhenHidden: true
             }
         );
-        
+
         // Generate HTML with PR-enhanced graph
         const html = generatePRGraphWebviewHtml(graph, summary, prInfo);
         panel.webview.html = html;
-        
+
         // Handle messages from webview
         panel.webview.onDidReceiveMessage(
             async message => {
@@ -62180,7 +64155,7 @@ async function createPRGraphWebview(graph, prInfo, summary) {
             undefined,
             extensionContext.subscriptions
         );
-        
+
     } catch (error) {
         console.error('❌ Error creating PR graph webview:', error);
         vscode.window.showErrorMessage(`Failed to create graph viewer: ${error.message}`);
@@ -62192,34 +64167,34 @@ async function createPRGraphWebview(graph, prInfo, summary) {
  */
 function generatePRGraphWebviewHtml(graph, summary, prInfo) {
     const extensionPath = extensionContext ? extensionContext.extensionPath : __dirname;
-    
+
     // Read HTML template
     const htmlTemplatePath = path.join(extensionPath, 'scripts', 'dependency-graph', 'graph-view.html');
     let htmlTemplate = fs.readFileSync(htmlTemplatePath, 'utf8');
-    
+
     // Read TypeScript script
     const scriptPath = path.join(extensionPath, 'scripts', 'dependency-graph', 'graph-view.ts');
     let scriptContent = fs.readFileSync(scriptPath, 'utf8');
-    
+
     // 🔥 Filter graph to show only impacted nodes in PR mode
     const symbolToDependentsMap = graph.symbolToDependentsMap;
     let filteredNodes = graph.nodes;
     let filteredEdges = graph.edges;
     let impactedPaths = new Set(); // ✅ Moved outside for access in map()
-    
+
     console.log(`📊 Original graph: ${graph.nodes.length} nodes, ${graph.edges.length} edges`);
     console.log(`📊 symbolToDependentsMap type:`, symbolToDependentsMap?.constructor?.name, 'size:', symbolToDependentsMap?.size);
-    
+
     // Check if symbolToDependentsMap exists and has data (could be Map or Object)
     const hasImpactData = symbolToDependentsMap && (
         (symbolToDependentsMap instanceof Map && symbolToDependentsMap.size > 0) ||
         (typeof symbolToDependentsMap === 'object' && Object.keys(symbolToDependentsMap).length > 0)
     );
-    
+
     if (hasImpactData) {
         // Collect all impacted file paths
         // impactedPaths is already defined
-        
+
         // Handle both Map and Object formats
         if (symbolToDependentsMap instanceof Map) {
             for (const [symbol, files] of symbolToDependentsMap) {
@@ -62232,15 +64207,15 @@ function generatePRGraphWebviewHtml(graph, summary, prInfo) {
                 files.forEach(f => impactedPaths.add(f));
             }
         }
-        
+
         console.log(`🎯 Total impacted files from symbols: ${impactedPaths.size}`);
         console.log(`🎯 Impacted paths:`, Array.from(impactedPaths));
-        
+
         // Keep: PR files + dependencies + actually impacted dependents
         const keepNodeIds = new Set();
         filteredNodes = graph.nodes.filter(node => {
             console.log(`   Checking node: ${node.id}, type: ${node.nodeType}, isPR: ${node.isPRFile}`);
-            
+
             // Always keep PR files
             if (node.isPRFile) {
                 keepNodeIds.add(node.id);
@@ -62282,14 +64257,14 @@ function generatePRGraphWebviewHtml(graph, summary, prInfo) {
             console.log(`      ❌ Filter out (other type)`);
             return false;
         });
-        
+
         // Filter edges to only include connections between kept nodes
         filteredEdges = graph.edges.filter(edge => {
             const sourceId = edge.source.id || edge.source;
             const targetId = edge.target.id || edge.target;
             return keepNodeIds.has(sourceId) && keepNodeIds.has(targetId);
         });
-        
+
         console.log(`🎯 Filtered graph: ${filteredNodes.length} nodes (from ${graph.nodes.length}), ${filteredEdges.length} edges (from ${graph.edges.length})`);
     } else {
         console.log(`⚠️ No impact data available, filtering to show ONLY PR files`);
@@ -62298,13 +64273,13 @@ function generatePRGraphWebviewHtml(graph, summary, prInfo) {
         filteredNodes = graph.nodes.filter(node => node.isPRFile);
         filteredEdges = []; // No edges if no impacts
     }
-    
+
     // Prepare PR-enhanced graph data
     const graphDataJson = JSON.stringify({
         nodes: filteredNodes.map(node => {
             const angularEntities = node.metadata?.angularEntities || {};
             const primaryEntity = getNodeDisplayName(node, angularEntities);
-            
+
             return {
                 id: node.id,
                 fileName: node.fileName || 'unknown',
@@ -62337,24 +64312,24 @@ function generatePRGraphWebviewHtml(graph, summary, prInfo) {
             summary: summary
         },
         // Add symbol impact mapping for accurate dependent filtering
-        symbolToDependentsMap: graph.symbolToDependentsMap ? 
+        symbolToDependentsMap: graph.symbolToDependentsMap ?
             Object.fromEntries(graph.symbolToDependentsMap) : null
     });
-    
+
     const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath || '';
     const searchTerm = `PR #${prInfo.prId}`;
-    
+
     // Replace placeholders
     htmlTemplate = htmlTemplate.replace('{{SEARCH_TERM}}', searchTerm);
     htmlTemplate = htmlTemplate.replace('{{NODE_COUNT}}', filteredNodes.length);
-    
+
     scriptContent = scriptContent.replace('__GRAPH_DATA__', graphDataJson);
     scriptContent = scriptContent.replace('__SEARCH_TERM__', JSON.stringify(searchTerm));
     scriptContent = scriptContent.replace('__WORKSPACE_ROOT__', JSON.stringify(workspaceRoot));
-    
+
     // Inject script into HTML
     htmlTemplate = htmlTemplate.replace('/*__GRAPH_SCRIPT__*/', scriptContent);
-    
+
     return htmlTemplate;
 }
 
@@ -62366,26 +64341,26 @@ function generatePRGraphWebviewHtml(graph, summary, prInfo) {
 function generateFilteredGraphWebviewHtml(graph, summary, searchTerm) {
     // Get extension path from context
     const extensionPath = extensionContext ? extensionContext.extensionPath : __dirname;
-    
+
     // Read HTML template
     const htmlTemplatePath = path.join(extensionPath, 'scripts', 'dependency-graph', 'graph-view.html');
     let htmlTemplate = fs.readFileSync(htmlTemplatePath, 'utf8');
-    
+
     // Read TypeScript script
     const scriptPath = path.join(extensionPath, 'scripts', 'dependency-graph', 'graph-view.ts');
     let scriptContent = fs.readFileSync(scriptPath, 'utf8');
-    
+
     // Replace placeholders in HTML
     htmlTemplate = htmlTemplate.replace('{{SEARCH_TERM}}', searchTerm);
     htmlTemplate = htmlTemplate.replace('{{NODE_COUNT}}', graph.nodes.length);
-    
+
     // Prepare graph data with Angular entity info
     const graphDataJson = JSON.stringify({
         nodes: graph.nodes.map(node => {
             // Extract Angular entities for display
             const angularEntities = node.metadata?.angularEntities || {};
             const primaryEntity = getNodeDisplayName(node, angularEntities);
-            
+
             return {
                 id: node.id,
                 fileName: node.fileName || 'unknown',
@@ -62404,18 +64379,18 @@ function generateFilteredGraphWebviewHtml(graph, summary, searchTerm) {
         }),
         edges: graph.edges
     });
-    
+
     // Get workspace root for file reading in AI analysis
     const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath || '';
-    
+
     // Replace script placeholders
     scriptContent = scriptContent.replace('__GRAPH_DATA__', graphDataJson);
     scriptContent = scriptContent.replace('__SEARCH_TERM__', JSON.stringify(searchTerm));
     scriptContent = scriptContent.replace('__WORKSPACE_ROOT__', JSON.stringify(workspaceRoot));
-    
+
     // Inject script into HTML
     htmlTemplate = htmlTemplate.replace('/*__GRAPH_SCRIPT__*/', scriptContent);
-    
+
     return htmlTemplate;
 }
 
@@ -62430,28 +64405,28 @@ async function analyzeFileDependency(uri) {
 
     const filePath = uri.fsPath;
     const workspaceFolder = vscode.workspace.getWorkspaceFolder(uri);
-    
+
     if (!workspaceFolder) {
         vscode.window.showErrorMessage('File must be part of a workspace');
         return;
     }
 
     const workspaceRoot = workspaceFolder.uri.fsPath;
-    
+
     vscode.window.withProgress({
         location: vscode.ProgressLocation.Notification,
         title: "Analyzing File Dependencies",
         cancellable: false
     }, async (progress) => {
         progress.report({ message: "Building dependency graph..." });
-        
+
         try {
             const analyzer = new FileDependencyAnalyzer(workspaceRoot);
             const graph = await analyzer.analyzeFile(filePath);
-            
+
             progress.report({ message: "Generating visualization..." });
             await createFileGraphWebview(graph, filePath);
-            
+
         } catch (error) {
             console.error('Error analyzing file dependency:', error);
             vscode.window.showErrorMessage(`Analysis failed: ${error.message}`);
@@ -62474,10 +64449,10 @@ async function createFileGraphWebview(graph, filePath) {
                 retainContextWhenHidden: true
             }
         );
-        
+
         const html = generateFileGraphWebviewHtml(graph, fileName);
         panel.webview.html = html;
-        
+
         // Handle messages from webview
         panel.webview.onDidReceiveMessage(
             async message => {
@@ -62490,7 +64465,7 @@ async function createFileGraphWebview(graph, filePath) {
             undefined,
             extensionContext.subscriptions
         );
-        
+
     } catch (error) {
         console.error('❌ Error creating file graph webview:', error);
         vscode.window.showErrorMessage(`Failed to create graph viewer: ${error.message}`);
@@ -62499,15 +64474,15 @@ async function createFileGraphWebview(graph, filePath) {
 
 function generateFileGraphWebviewHtml(graph, fileName) {
     const extensionPath = extensionContext ? extensionContext.extensionPath : __dirname;
-    
+
     // Read HTML template
     const htmlTemplatePath = path.join(extensionPath, 'scripts', 'dependency-graph', 'graph-view.html');
     let htmlTemplate = fs.readFileSync(htmlTemplatePath, 'utf8');
-    
+
     // Read TypeScript script
     const scriptPath = path.join(extensionPath, 'scripts', 'dependency-graph', 'graph-view.ts');
     let scriptContent = fs.readFileSync(scriptPath, 'utf8');
-    
+
     // Prepare data for the view
     const graphData = {
         nodes: graph.nodes,
@@ -62516,18 +64491,18 @@ function generateFileGraphWebviewHtml(graph, fileName) {
         mode: 'file', // Tell the view it's single file mode
         targetFile: fileName
     };
-    
+
     const graphDataJson = JSON.stringify(graphData);
-    
+
     // Inject data
     scriptContent = scriptContent.replace('__GRAPH_DATA__', graphDataJson);
     // Inject empty search term and workspace root
     scriptContent = scriptContent.replace('__SEARCH_TERM__', '""');
     scriptContent = scriptContent.replace('__WORKSPACE_ROOT__', '""');
-    
+
     // Inject script into HTML
     htmlTemplate = htmlTemplate.replace('/*__GRAPH_SCRIPT__*/', scriptContent);
-    
+
     return htmlTemplate;
 }
 
@@ -62535,7 +64510,8 @@ function generateFileGraphWebviewHtml(graph, fileName) {
 module.exports = {
     initializeDependencyGraph,
     aiDependencyAnalysis,
-    analyzeFileDependency
+    analyzeFileDependency,
+    activateDependencyWatcherIfCacheExists
 };
 
 /***/ }),
@@ -62550,6 +64526,7 @@ const vscode = __webpack_require__(/*! vscode */ "vscode");
 const path = __webpack_require__(/*! path */ "path");
 const { DependencyGraphService } = __webpack_require__(/*! ./dependency-graph-service */ "./scripts/dependency-graph-service.js");
 const { VSCodeApiDependencyAnalyzer } = __webpack_require__(/*! ./dependency-graph/vscode-api-analyzer */ "./scripts/dependency-graph/vscode-api-analyzer.js");
+const { DependencyUtils } = __webpack_require__(/*! ./dependency-graph/dependency-utils */ "./scripts/dependency-graph/dependency-utils.js");
 const { aidaLogging } = __webpack_require__(/*! ./settings */ "./scripts/settings.js");
 
 class FileDependencyAnalyzer {
@@ -62581,7 +64558,7 @@ class FileDependencyAnalyzer {
         const nodes = new Map();
         const edges = [];
         
-        const relativePath = path.relative(this.workspaceRoot, filePath).replace(/\\/g, '/');
+        const relativePath = DependencyUtils.getRelativePath(this.workspaceRoot, filePath);
         const fileName = path.basename(filePath);
         
         // 1. Create Target Node
@@ -62592,7 +64569,7 @@ class FileDependencyAnalyzer {
             fileName: fileName,
             displayName: fileName,
             type: 'file',
-            entityType: this.inferEntityType(fileName),
+            entityType: DependencyUtils.inferFileType(fileName),
             nodeType: 'target',
             fsPath: filePath
         };
@@ -62603,10 +64580,10 @@ class FileDependencyAnalyzer {
         const analyzer = new VSCodeApiDependencyAnalyzer(this.workspaceRoot);
         const fileUri = vscode.Uri.file(filePath);
         
-        // This populates analyzer.graph with outgoing edges
+        // This populates analyzer.model.adjacencyList with outgoing edges
         await analyzer.processFile(fileUri);
         
-        const outgoingDeps = analyzer.graph.get(relativePath);
+        const outgoingDeps = analyzer.model.adjacencyList.get(relativePath);
         if (outgoingDeps) {
             for (const depPath of outgoingDeps) {
                 // Add dependency node
@@ -62619,7 +64596,7 @@ class FileDependencyAnalyzer {
                         fileName: depFileName,
                         displayName: depFileName,
                         type: 'file',
-                        entityType: this.inferEntityType(depFileName),
+                        entityType: DependencyUtils.inferFileType(depFileName),
                         nodeType: 'dependency'
                     });
                 }
@@ -62650,7 +64627,7 @@ class FileDependencyAnalyzer {
                     fileName: depFileName,
                     displayName: depFileName,
                     type: 'file',
-                    entityType: this.inferEntityType(depFileName),
+                    entityType: DependencyUtils.inferFileType(depFileName),
                     nodeType: 'dependent'
                 });
             } else {
@@ -62681,22 +64658,6 @@ class FileDependencyAnalyzer {
                 dependents: dependents.size
             }
         };
-    }
-
-    /**
-     * Infer entity type from file name
-     * @param {string} fileName 
-     */
-    inferEntityType(fileName) {
-        const name = fileName.toLowerCase();
-        if (name.includes('.service.')) return 'service';
-        if (name.includes('.component.')) return 'component';
-        if (name.includes('.module.')) return 'module';
-        if (name.includes('.model.')) return 'model';
-        if (name.includes('.guard.')) return 'guard';
-        if (name.includes('.directive.')) return 'directive';
-        if (name.includes('.pipe.')) return 'pipe';
-        return 'file';
     }
 
     /**
@@ -62752,10 +64713,43 @@ class FileDependencyAnalyzer {
                     if (refPath === fileUri.fsPath) continue;
                     
                     // Ignore external/node_modules
-                    if (refPath.includes('node_modules')) continue;
+                    if (DependencyUtils.isExternalDependency(refPath)) continue;
                     
-                    const relativePath = path.relative(this.workspaceRoot, refPath).replace(/\\/g, '/');
+                    const relativePath = DependencyUtils.getRelativePath(this.workspaceRoot, refPath);
                     dependents.add(relativePath);
+                }
+            }
+            
+            // 🔥 NEW: Asset Fallback Strategy
+            // If no dependents found via LSP, and it's an asset file (html, css, scss...), try Text Search
+            if (dependents.size === 0) {
+                const ext = path.extname(fileUri.fsPath).toLowerCase();
+                const assetExtensions = ['.html', '.css', '.scss', '.less', '.sass', '.json', '.xml', '.svg', '.png', '.jpg'];
+                
+                if (assetExtensions.includes(ext)) {
+                    aidaLogging(`   ⚠️ No LSP dependents found for asset file. Trying Sibling Convention...`);
+                    const fileName = path.basename(fileUri.fsPath);
+                    
+                    // Strategy: Check "Sibling" TS file (Convention over Configuration)
+                    // e.g. 'abc.component.html' -> check 'abc.component.ts'
+                    if (fileName.includes('.component.') || fileName.includes('.service.')) {
+                        // Use shared utility
+                        const siblings = DependencyUtils.findSiblingFiles(fileUri.fsPath, ['.ts']);
+                        
+                        for (const tsPath of siblings) {
+                            try {
+                                const doc = await vscode.workspace.openTextDocument(tsPath);
+                                const text = doc.getText();
+                                if (text.includes(fileName)) {
+                                    const relativePath = path.relative(this.workspaceRoot, tsPath).replace(/\\/g, '/');
+                                    dependents.add(relativePath);
+                                    aidaLogging(`   ✅ Found dependent via Sibling Convention: ${relativePath}`);
+                                }
+                            } catch (e) {
+                                // Sibling ts file might not exist or error reading
+                            }
+                        }
+                    }
                 }
             }
             
@@ -62768,6 +64762,125 @@ class FileDependencyAnalyzer {
 }
 
 module.exports = { FileDependencyAnalyzer };
+
+
+/***/ }),
+
+/***/ "./scripts/ignore-rules.js":
+/*!*********************************!*\
+  !*** ./scripts/ignore-rules.js ***!
+  \*********************************/
+/***/ ((module) => {
+
+/**
+ * Common ignore rules for AIDA extension
+ * Shared between PR Review and Dependency Analysis
+ */
+
+const commonIgnores = [
+    '**/.vscode/**',
+    '**/.git/**',
+    '**/.vs/**',
+    '**/node_modules/**',
+    '**/dist/**',
+    '**/build/**',
+    '**/out-tsc/**',
+    '**/coverage/**',
+    '**/test/**',
+    '**/tests/**',
+    '**/environments/**',
+    '**/scripts/**',
+    '**/*.map',
+    '**/*.lock',
+    '**/*.log'
+];
+
+const languageIgnores = {
+    csharp: [
+        '**/bin/**',
+        '**/obj/**',
+        '**/packages/**',
+        '**/.vs/**',
+        '**/Debug/**',
+        '**/Release/**',
+        '**/*.AssemblyInfo.cs',
+        '**/*.Designer.cs',
+        '**/Migrations/*.Designer.cs' // Specific for Migration Designer
+    ],
+    typescript: [
+        '**/*.spec.ts',
+        '**/*.test.ts',
+        '**/*.d.ts'
+    ],
+    python: [
+        '**/__pycache__/**',
+        '**/venv/**',
+        '**/env/**',
+        '**/.venv/**',
+        '**/*.pyc'
+    ],
+    java: [
+        '**/*Test.java',
+        '**/Test*.java',
+        '**/*.spec.java'
+    ]
+};
+
+const extensionIgnores = [
+    '.json', '.xml', '.yaml', '.yml',
+    '.md', '.txt', '.lock', '.map',
+    '.config', '.ini', '.env',
+    '.css', '.scss', '.sass', '.less',
+    '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico'
+];
+
+/**
+ * Check if a file path matches any of the ignore patterns
+ * @param {string} filePath - The file path to check
+ * @param {string[]} patterns - List of glob patterns
+ * @returns {boolean} - True if matched
+ */
+function isIgnored(filePath, patterns) {
+    if (!filePath || !patterns) return false;
+
+    // Normalize path separators
+    const normalizedPath = filePath.replace(/\\/g, '/');
+
+    return patterns.some(pattern => {
+        // Handle **/*.ext
+        if (pattern.startsWith('**/*') && pattern.lastIndexOf('/') === 3) {
+            const ext = pattern.substring(4); // .ext
+            return normalizedPath.endsWith(ext);
+        }
+
+        // Handle **/folder/**
+        if (pattern.startsWith('**/') && pattern.endsWith('/**')) {
+            const folder = pattern.substring(3, pattern.length - 3);
+            return normalizedPath.includes(`/${folder}/`);
+        }
+
+        // Handle **/folder/*.ext
+        if (pattern.startsWith('**/') && pattern.includes('/*. ')) {
+            // Simple check for folder presence and extension
+            // This is a bit loose but works for common cases
+            const parts = pattern.split('/');
+            const folder = parts[1];
+            const ext = parts[2].substring(1);
+            return normalizedPath.includes(`/${folder}/`) && normalizedPath.endsWith(ext);
+        }
+
+        // Fallback to simple includes for other cases
+        const simplePattern = pattern.replace(/\*\*/g, '').replace(/\*/g, '');
+        return normalizedPath.includes(simplePattern);
+    });
+}
+
+module.exports = {
+    commonIgnores,
+    languageIgnores,
+    extensionIgnores,
+    isIgnored
+};
 
 
 /***/ }),
@@ -63659,6 +65772,148 @@ async function detectFromPRFiles(prFiles) {
 
 /***/ }),
 
+/***/ "./scripts/language-support-config.js":
+/*!********************************************!*\
+  !*** ./scripts/language-support-config.js ***!
+  \********************************************/
+/***/ ((module) => {
+
+/**
+ * Centralized Language Support Configuration
+ * Single source of truth for all AIDA supported languages
+ * Used by: Review Templates, Dependency Graph, Environment Checker
+ */
+
+const SUPPORTED_LANGUAGES = {
+    typescript: {
+        name: 'TypeScript',
+        templateFolder: 'typescript',
+        filePatterns: ['**/*.ts', '**/*.tsx', 'tsconfig.json'],
+        // TypeScript has built-in LSP in VS Code
+        requiresExtension: false
+    },
+    javascript: {
+        name: 'JavaScript',
+        templateFolder: 'javascript',
+        filePatterns: ['**/*.js', '**/*.jsx', 'package.json'],
+        // JavaScript has built-in LSP in VS Code
+        requiresExtension: false
+    },
+    nodejs: {
+        name: 'Node.js',
+        templateFolder: 'nodejs',
+        filePatterns: ['**/server.js', '**/app.js', 'package.json'],
+        // Node.js uses JavaScript LSP
+        requiresExtension: false
+    },
+    react: {
+        name: 'React',
+        templateFolder: 'react',
+        filePatterns: ['**/*.jsx', '**/*.tsx'],
+        // React uses JavaScript/TypeScript LSP
+        requiresExtension: false
+    },
+    angular: {
+        name: 'Angular',
+        templateFolder: 'angular',
+        filePatterns: ['**/angular.json', '**/*.component.ts'],
+        // Angular requires Language Service for template parsing
+        requiresExtension: true,
+        requiredExtensions: [
+            { id: 'angular.ng-template', name: 'Angular Language Service' }
+        ],
+        message: 'Angular project detected. Please install the "Angular Language Service" extension for accurate template dependency analysis.'
+    },
+    vue: {
+        name: 'Vue',
+        templateFolder: 'vue',
+        filePatterns: ['**/*.vue'],
+        // Vue requires Volar for template and script analysis
+        requiresExtension: true,
+        requiredExtensions: [
+            { id: 'Vue.volar', name: 'Vue - Official (Volar)' }
+        ],
+        message: 'Vue project detected. Please install the "Vue - Official (Volar)" extension for accurate dependency analysis.'
+    },
+    python: {
+        name: 'Python',
+        templateFolder: 'python',
+        filePatterns: ['**/*.py', 'requirements.txt', 'Pipfile'],
+        requiresExtension: true,
+        requiredExtensions: [
+            { id: 'ms-python.python', name: 'Python' }
+        ],
+        message: 'Python project detected. Please install the "Python" extension for accurate dependency analysis.'
+    },
+    csharp: {
+        name: 'C#',
+        templateFolder: 'csharp',
+        filePatterns: ['**/*.cs', '**/*.csproj', '**/*.sln'],
+        requiresExtension: true,
+        requiredExtensions: [
+            { id: 'ms-dotnettools.csdevkit', name: 'C# Dev Kit' },
+            { id: 'ms-dotnettools.csharp', name: 'C# (Base)' }
+        ],
+        message: 'C# project detected. For accurate dependency scanning, please install the "C# Dev Kit" or "C#" extension.'
+    },
+    go: {
+        name: 'Go',
+        templateFolder: 'go',
+        filePatterns: ['**/*.go', 'go.mod', 'go.sum'],
+        requiresExtension: true,
+        requiredExtensions: [
+            { id: 'golang.go', name: 'Go' }
+        ],
+        message: 'Go project detected. Please install the "Go" extension for accurate dependency analysis.'
+    }
+};
+
+/**
+ * Get list of all supported language keys
+ * @returns {string[]} Array of language keys
+ */
+function getSupportedLanguageKeys() {
+    return Object.keys(SUPPORTED_LANGUAGES);
+}
+
+/**
+ * Get languages that require VS Code extensions
+ * @returns {object[]} Array of language configs requiring extensions
+ */
+function getLanguagesRequiringExtensions() {
+    return Object.entries(SUPPORTED_LANGUAGES)
+        .filter(([key, config]) => config.requiresExtension)
+        .map(([key, config]) => ({ key, ...config }));
+}
+
+/**
+ * Get language config by key
+ * @param {string} key - Language key
+ * @returns {object|null} Language config or null
+ */
+function getLanguageConfig(key) {
+    return SUPPORTED_LANGUAGES[key] || null;
+}
+
+/**
+ * Get all template folder names
+ * @returns {string[]} Array of template folder names
+ */
+function getTemplateFolderNames() {
+    return Object.values(SUPPORTED_LANGUAGES).map(config => config.templateFolder);
+}
+
+module.exports = {
+    SUPPORTED_LANGUAGES,
+    getSupportedLanguageKeys,
+    getLanguagesRequiringExtensions,
+    getLanguageConfig,
+    getTemplateFolderNames
+};
+
+
+/***/ }),
+
 /***/ "./scripts/pr-dependency-analyzer.js":
 /*!*******************************************!*\
   !*** ./scripts/pr-dependency-analyzer.js ***!
@@ -63676,7 +65931,7 @@ const { DependencyGraphService } = __webpack_require__(/*! ./dependency-graph-se
 const { aidaLogging } = __webpack_require__(/*! ./settings */ "./scripts/settings.js");
 
 // Cache management
-const CACHE_VERSION = '1.0';
+const CACHE_VERSION = '1.1';
 
 /**
  * PR Dependency Analyzer
@@ -63706,23 +65961,21 @@ class PRDependencyAnalyzer {
      */
     async analyzePRFiles(prFiles) {
         // 🔥 Filter out unnecessary files from analysis
+        const { commonIgnores, extensionIgnores } = __webpack_require__(/*! ./ignore-rules */ "./scripts/ignore-rules.js");
+        const minimatch = __webpack_require__(/*! minimatch */ "./node_modules/minimatch/minimatch.js");
+
         const filteredPRFiles = prFiles.filter(file => {
             const ext = path.extname(file.path).toLowerCase();
-            const ignoredExtensions = [
-                // '.css', '.scss', '.sass', '.less', // 🔥 Allow styles to appear in PR list
-                '.json', '.xml', '.yaml', '.yml', 
-                '.md', '.txt', '.lock', '.map', 
-                '.config', '.ini', '.env'
-            ];
-            
-            // 🔥 Also ignore environment files and scripts
-            if (file.path.includes('environments/') || file.path.includes('scripts/')) {
-                aidaLogging(`🚫 Ignoring env/script file: ${file.path}`);
+
+            // Check against common ignores using minimatch
+            const isIgnored = commonIgnores.some(pattern => minimatch(file.path, pattern, { dot: true }));
+            if (isIgnored) {
+                aidaLogging(`🚫 Ignoring file (common rule): ${file.path}`);
                 return false;
             }
-            
-            if (ignoredExtensions.includes(ext)) {
-                aidaLogging(`🚫 Ignoring file: ${file.path}`);
+
+            if (extensionIgnores.includes(ext)) {
+                aidaLogging(`🚫 Ignoring file (extension): ${file.path}`);
                 return false;
             }
             return true;
@@ -63730,10 +65983,31 @@ class PRDependencyAnalyzer {
 
         aidaLogging(`🔍 Analyzing ${filteredPRFiles.length} PR files (filtered from ${prFiles.length})...`);
 
-        // Step 1: Load or build full graph (with cache)
+        // Step 1: Check if cache exists (PR analysis requires cache for accuracy)
+        if (!this.graphService.hasCache() && !this.graphService.fullGraph) {
+            throw new Error('Dependency cache is missing. PR analysis requires a pre-built dependency graph for accuracy.');
+        }
+
+        // Step 2: Load full graph
         await this.graphService.ensureFullGraph();
 
-        // Step 2: Find PR file nodes in full graph
+        // 🔥 FORCE UPDATE for new files
+        // The cache might be stale and missing the new files.
+        // We force the analyzer to process them now so they appear in the graph.
+        for (const file of filteredPRFiles) {
+            if (file.status === 'added' || file.status === 'add') {
+                const fullPath = path.join(this.workspaceRoot, file.path);
+                const fileUri = vscode.Uri.file(fullPath);
+                aidaLogging(`🔄 Force updating graph for new file: ${file.path}`);
+                try {
+                    await this.vscodeAnalyzer.processFile(fileUri);
+                } catch (e) {
+                    aidaLogging(`⚠️ Failed to force update file ${file.path}: ${e.message}`);
+                }
+            }
+        }
+
+        // Step 3: Find PR file nodes in full graph
         const prNodes = this.findPRNodes(filteredPRFiles);
         aidaLogging(`✅ Matched ${prNodes.length} PR files to graph nodes`);
 
@@ -63747,10 +66021,10 @@ class PRDependencyAnalyzer {
                 aidaLogging(`\n🔍 Extracting symbols from: ${node.prPath}`);
                 aidaLogging(`   Patch length: ${node.prPatch?.length || 0} chars`);
                 aidaLogging(`   Patch preview: ${node.prPatch?.substring(0, 200)}...`);
-                
+
                 // 🔥 Use async extraction with VS Code API
                 const changedSymbols = await this.extractChangedSymbols(node.prPatch, node.relativePath);
-                
+
                 if (changedSymbols.length === 0) {
                     aidaLogging(`⚠️ No changed symbols extracted for: ${node.prPath}`);
                     // Don't fallback - if extraction fails, log clearly
@@ -63760,13 +66034,13 @@ class PRDependencyAnalyzer {
                     aidaLogging(`   Symbols: ${changedSymbols.map(s => s.fullName).join(', ')}`);
                     nodeChangedSymbols.set(node.id, changedSymbols);
                 }
-                
+
                 // Store in node for Deep Impact
                 node.changedSymbols = changedSymbols;
             } else if (node.prStatus === 'rename' && node.prPatch) {
                 // Renamed + modified file: extract changed symbols if patch exists
                 const changedSymbols = await this.extractChangedSymbols(node.prPatch, node.relativePath);
-                
+
                 if (changedSymbols.length > 0) {
                     aidaLogging(`✅ Extracted ${changedSymbols.length} changed symbols from renamed file: ${node.prPath}`);
                     aidaLogging(`   Symbols: ${changedSymbols.map(s => s.fullName).join(', ')}`);
@@ -63787,10 +66061,10 @@ class PRDependencyAnalyzer {
         // Step 4: Scan dependencies/dependents for each PR node
         // 🔥 REFACTOR: Simplified logic - we only need to find dependents based on symbol usage
         // The graph construction will happen in buildFilteredGraph based on edges found here
-        
+
         const relevantNodeIds = new Set(prNodes.map(n => n.id));
         let filteredDependents = 0;
-        
+
         // Track which files use which specific symbols
         const symbolToDependentsMap = new Map(); // symbol → [dependent file paths]
 
@@ -63799,30 +66073,35 @@ class PRDependencyAnalyzer {
                 aidaLogging(`🚫 Skipping dependency/dependent scan for deleted file: ${node.prPath}`);
                 continue;
             }
-            
+
             // Get direct dependents
             const allDependents = this.getDependents(node.id);
-            
+
             aidaLogging(`\n🔍 Analyzing file: ${node.prPath}`);
             aidaLogging(`   Node ID: ${node.id}`);
             aidaLogging(`   Node relative path: ${node.relativePath}`);
             aidaLogging(`   Changed symbols: [${node.changedSymbols?.map(s => s.fullName).join(', ') || 'none'}]`);
             aidaLogging(`   Dependents found in graph: ${allDependents.length}`);
-            
+
             if ((node.prStatus === 'edit' || node.prStatus === 'rename') && node.changedSymbols && node.changedSymbols.length > 0) {
-                // 🔥 NEW: If no direct dependents, check if this is a barrel export source
+                // ---------------------------------------------------------
+                // STRATEGY 1: Barrel / Deep Reference Analysis (VS Code API)
+                // ---------------------------------------------------------
+                // Only check for barrel usage if NO direct dependents are found.
+                // This avoids noise when we already have a clear dependency chain.
+
                 if (allDependents.length === 0) {
-                    aidaLogging(`🔍 No direct dependents → Checking for barrel export usage`);
-                    
+                    aidaLogging(`🔍 No direct dependents found → Checking for barrel export usage (Deep Impact)`);
+
                     const fullPRFilePath = path.join(this.workspaceRoot, node.relativePath);
                     const symbolFileUri = vscode.Uri.file(fullPRFilePath);
-                    
+
                     // Try to find users through barrel exports
                     for (const symbol of node.changedSymbols) {
                         const symbolPosition = new vscode.Position(symbol.lineNumber, symbol.column);
-                        
+
                         aidaLogging(`         🔍 Finding users of: ${symbol.fullName} via barrel chain`);
-                        
+
                         try {
                             const result = await this.resolveBarrelReferences(
                                 symbolFileUri,
@@ -63831,58 +66110,58 @@ class PRDependencyAnalyzer {
                                 new Set(),
                                 0
                             );
-                            
+
                             if (result.references.length > 0) {
                                 aidaLogging(`            📍 Found ${result.references.length} references through barrel`);
-                                
+
                                 // Extract unique file paths (excluding definition and barrel files)
                                 const userFiles = new Set();
                                 for (const ref of result.references) {
                                     const refPath = ref.uri.fsPath;
                                     const isDefinition = path.normalize(refPath) === path.normalize(fullPRFilePath);
                                     const isBarrel = await this.isBarrelExport(ref);
-                                    
+
                                     aidaLogging(`               🔍 Checking ref: ${path.basename(refPath)} (def=${isDefinition}, barrel=${isBarrel})`);
-                                    
+
                                     if (!isDefinition && !isBarrel) {
                                         const relativePath = path.relative(this.workspaceRoot, refPath).replace(/\\/g, '/');
                                         userFiles.add(relativePath);
                                     }
                                 }
-                                
+
                                 aidaLogging(`            ✅ Found ${userFiles.size} actual user files`);
-                                
+
                                 // 🔥 NEW: If no users found via references, try wildcard search through barrel
                                 if (userFiles.size === 0 && result.barrelChain && result.barrelChain.length > 0) {
                                     aidaLogging(`            🔍 No users via references → Trying wildcard search through barrel`);
-                                    
+
                                     // Find barrel file in chain
                                     for (const barrelInfo of result.barrelChain) {
                                         if (barrelInfo.isWildcard) {
                                             aidaLogging(`               📦 Found wildcard barrel: ${path.basename(barrelInfo.location.uri.fsPath)}`);
-                                            
+
                                             const wildcardRefs = await this.findImportsOfBarrelFile(
                                                 barrelInfo.location.uri,
                                                 symbol.fullName
                                             );
-                                            
+
                                             aidaLogging(`               ✅ Wildcard search found ${wildcardRefs.length} usages`);
-                                            
+
                                             for (const ref of wildcardRefs) {
                                                 const refPath = ref.uri.fsPath;
                                                 const isDefinition = path.normalize(refPath) === path.normalize(fullPRFilePath);
-                                                
+
                                                 if (!isDefinition) {
                                                     const relativePath = path.relative(this.workspaceRoot, refPath).replace(/\\/g, '/');
                                                     userFiles.add(relativePath);
                                                 }
                                             }
-                                            
+
                                             break; // Only use first wildcard barrel
                                         }
                                     }
                                 }
-                                
+
                                 // Add these files to dependents
                                 for (const userFilePath of userFiles) {
                                     // Find or create node for this file
@@ -63897,17 +66176,17 @@ class PRDependencyAnalyzer {
                                         };
                                         this.fullGraph.nodes.push(userNode);
                                     }
-                                    
+
                                     relevantNodeIds.add(userNode.id);
                                     filteredDependents++;
-                                    
+
                                     // Track symbols
                                     const symbolFullName = symbol.fullName;
                                     if (!symbolToDependentsMap.has(symbolFullName)) {
                                         symbolToDependentsMap.set(symbolFullName, []);
                                     }
                                     symbolToDependentsMap.get(symbolFullName).push(userFilePath);
-                                    
+
                                     // Add children if any
                                     if (symbol.children && symbol.children.length > 0) {
                                         symbol.children.forEach(childName => {
@@ -63917,45 +66196,45 @@ class PRDependencyAnalyzer {
                                             symbolToDependentsMap.get(childName).push(userFilePath);
                                         });
                                     }
-                                    
+
                                     aidaLogging(`            ✅ Added: ${userFilePath}`);
                                 }
                             } else {
                                 aidaLogging(`            ⚠️ No references found via VS Code API → Trying wildcard search`);
-                                
+
                                 // 🔥 NEW: Fallback to wildcard search if no references at all
                                 // Find barrel file that re-exports this symbol
                                 const prDir = path.dirname(fullPRFilePath);
-                                
+
                                 // 🔥 FIX: Use configuration for barrel files
                                 const possibleBarrelFiles = this.getBarrelFiles(fullPRFilePath);
-                                
+
                                 for (const barrelName of possibleBarrelFiles) {
                                     const barrelPath = path.join(prDir, barrelName);
-                                    
+
                                     if (fs.existsSync(barrelPath)) {
                                         aidaLogging(`               📦 Found barrel: ${path.basename(barrelPath)}`);
-                                        
+
                                         const barrelUri = vscode.Uri.file(barrelPath);
                                         const wildcardRefs = await this.findImportsOfBarrelFile(
                                             barrelUri,
                                             symbol.fullName
                                         );
-                                        
+
                                         if (wildcardRefs.length > 0) {
                                             aidaLogging(`               ✅ Wildcard search found ${wildcardRefs.length} usages`);
-                                            
+
                                             const userFiles = new Set();
                                             for (const ref of wildcardRefs) {
                                                 const refPath = ref.uri.fsPath;
                                                 const isDefinition = path.normalize(refPath) === path.normalize(fullPRFilePath);
-                                                
+
                                                 if (!isDefinition) {
                                                     const relativePath = path.relative(this.workspaceRoot, refPath).replace(/\\/g, '/');
                                                     userFiles.add(relativePath);
                                                 }
                                             }
-                                            
+
                                             // Add these files
                                             for (const userFilePath of userFiles) {
                                                 let userNode = this.fullGraph.nodes.find(n => n.relativePath === userFilePath);
@@ -63968,16 +66247,16 @@ class PRDependencyAnalyzer {
                                                     };
                                                     this.fullGraph.nodes.push(userNode);
                                                 }
-                                                
+
                                                 relevantNodeIds.add(userNode.id);
                                                 filteredDependents++;
-                                                
+
                                                 const symbolFullName = symbol.fullName;
                                                 if (!symbolToDependentsMap.has(symbolFullName)) {
                                                     symbolToDependentsMap.set(symbolFullName, []);
                                                 }
                                                 symbolToDependentsMap.get(symbolFullName).push(userFilePath);
-                                                
+
                                                 if (symbol.children && symbol.children.length > 0) {
                                                     symbol.children.forEach(childName => {
                                                         if (!symbolToDependentsMap.has(childName)) {
@@ -63986,10 +66265,10 @@ class PRDependencyAnalyzer {
                                                         symbolToDependentsMap.get(childName).push(userFilePath);
                                                     });
                                                 }
-                                                
+
                                                 aidaLogging(`            ✅ Added via fallback: ${userFilePath}`);
                                             }
-                                            
+
                                             // Stop after finding the first valid barrel with usages
                                             break;
                                         }
@@ -64000,10 +66279,15 @@ class PRDependencyAnalyzer {
                             console.error(`            ❌ Error finding barrel references: ${error.message}`);
                         }
                     }
-                } else {
+                }
+
+                // ---------------------------------------------------------
+                // STRATEGY 2: Static Graph Analysis (Direct Dependents)
+                // ---------------------------------------------------------
+                if (allDependents.length > 0) {
                     // Has direct dependents - filter them normally
                     aidaLogging(`🔎 Filtering ${allDependents.length} dependents for ${node.prStatus} file: ${node.prPath}`);
-                    
+
                     for (const depId of allDependents) {
                         const depNode = this.fullGraph.nodes.find(n => n.id === depId);
                         if (!depNode) continue;
@@ -64018,7 +66302,7 @@ class PRDependencyAnalyzer {
                         if (usedSymbols.length > 0) {
                             relevantNodeIds.add(depId);
                             filteredDependents++;
-                            
+
                             // Track which symbols are used by this dependent
                             usedSymbols.forEach(symbolFullName => {
                                 if (!symbolToDependentsMap.has(symbolFullName)) {
@@ -64026,7 +66310,7 @@ class PRDependencyAnalyzer {
                                 }
                                 symbolToDependentsMap.get(symbolFullName).push(depNode.relativePath);
                             });
-                            
+
                             aidaLogging(`   ✅ Dependent uses symbols [${usedSymbols.join(', ')}]: ${depNode.relativePath}`);
                         } else {
                             aidaLogging(`   ⏭️ Skipping dependent (no symbol usage): ${depNode.relativePath}`);
@@ -64063,7 +66347,7 @@ class PRDependencyAnalyzer {
             totalAdditions: prFiles.reduce((sum, f) => sum + f.additions, 0),
             totalDeletions: prFiles.reduce((sum, f) => sum + f.deletions, 0)
         };
-        
+
         // Attach symbol-to-dependents mapping for detailed output
         filteredGraph.symbolToDependentsMap = symbolToDependentsMap;
 
@@ -64087,22 +66371,22 @@ class PRDependencyAnalyzer {
             const node = this.fullGraph.nodes.find(n => {
                 const nodeRelPath = (n.relativePath || '').replace(/\\/g, '/');
                 const nodeFileName = path.basename(nodeRelPath);
-                
+
                 // Try exact match first
                 if (nodeRelPath === normalizedPath) {
                     return true;
                 }
-                
+
                 // Try end-of-path match (for cases where PR path is relative)
                 if (nodeRelPath.endsWith(normalizedPath)) {
                     return true;
                 }
-                
+
                 // Try filename match as last resort
                 if (nodeFileName === fileName) {
                     return true;
                 }
-                
+
                 return false;
             });
 
@@ -64120,7 +66404,7 @@ class PRDependencyAnalyzer {
                     prPath: prFile.path,
                     prPatch: prFile.patch || null // Add patch data for symbol extraction
                 });
-                
+
                 aidaLogging(`✅ Matched PR file: ${prFile.path} → ${node.relativePath} (${prFile.status})`);
             } else {
                 // Handle files not present in cached graph (new or deleted)
@@ -64145,7 +66429,7 @@ class PRDependencyAnalyzer {
 
         // Determine category based on extension
         let category = 'file';
-        
+
         // 🔥 FIX: Configuration-driven category detection
         if (this.vscodeAnalyzer && this.vscodeAnalyzer.languageConfig) {
             for (const [lang, config] of Object.entries(this.vscodeAnalyzer.languageConfig)) {
@@ -64230,16 +66514,16 @@ class PRDependencyAnalyzer {
      */
     shouldIgnoreNode(filePath) {
         if (!filePath) return false;
-        
+
         // Get language config from VSCode Analyzer
         const languageConfig = this.vscodeAnalyzer.languageConfig;
         const ext = path.extname(filePath).toLowerCase();
-        
+
         // Find matching language
-        const language = Object.values(languageConfig).find(config => 
+        const language = Object.values(languageConfig).find(config =>
             config.extensions.includes(ext)
         );
-        
+
         if (language && language.ignorePatterns) {
             return language.ignorePatterns.some(pattern => {
                 // Simple glob to regex conversion
@@ -64248,12 +66532,12 @@ class PRDependencyAnalyzer {
                     .replace(/\./g, '\\.')
                     .replace(/\*\*\//g, '.*')
                     .replace(/\*/g, '[^/]*');
-                
+
                 // Handle leading **/
                 if (!regexStr.startsWith('.*')) {
                     regexStr = '.*' + regexStr; // Ensure we match anywhere if it was **/
                 }
-                
+
                 const regex = new RegExp(regexStr + '$');
                 return regex.test(filePath);
             });
@@ -64277,7 +66561,7 @@ class PRDependencyAnalyzer {
         // Source can be anything (PR file or External file).
         // Target MUST be a PR file.
         const edges = [];
-        
+
         // 2a. Scan Full Graph Edges
         this.fullGraph.edges.forEach(e => {
             // Skip if touching deleted files
@@ -64308,10 +66592,10 @@ class PRDependencyAnalyzer {
                 // However, to be precise, we should have tracked the relationship.
                 // FALLBACK: If we found a dependent but no edge exists in full graph, 
                 // we check if we can infer the connection or if it was added by barrel logic.
-                
+
                 // Check if we already added an edge for this node
                 const isConnected = edges.some(e => e.source === nodeId);
-                
+
                 if (!isConnected) {
                     // This node was deemed relevant but has no edge in full graph pointing to a PR file.
                     // This likely means it was found via Barrel/Wildcard search.
@@ -64319,12 +66603,12 @@ class PRDependencyAnalyzer {
                     // Since we don't have that mapping here easily without re-scanning, 
                     // we will try to find a connection in the full graph again (maybe missed?)
                     // OR we assume it connects to the PR file that triggered its inclusion.
-                    
+
                     // RE-SCAN: Check which PR file's symbol analysis added this node
                     // This is a bit expensive but accurate.
                     // Actually, we can just look at the 'symbolToDependentsMap' if we had access to it here,
                     // but we don't.
-                    
+
                     // SIMPLIFICATION: If we can't find a static edge, we skip it for now to avoid false positives,
                     // UNLESS we explicitly passed the dynamic edges (which we didn't).
                     // Wait! The previous logic iterated over prNodes to find barrel usages.
@@ -64332,28 +66616,28 @@ class PRDependencyAnalyzer {
                 }
             }
         }
-        
+
         // 🔥 RE-INTEGRATE BARREL LOGIC (Cleaner)
         // We need to add edges for dependents found via barrel resolution that aren't in the static graph
         for (const prNode of prNodes) {
             if (prNode.prStatus === 'delete') continue;
-            
+
             // We need to know which dependents this PR node is responsible for.
             // Since we don't have that map passed in, we have to rely on the fact that
             // if a node is in relevantNodeIds and NOT in PR, it's a dependent.
             // But we don't know WHICH PR node it depends on without the map.
-            
+
             // FIX: We will trust the 'edges' array we built from Full Graph for standard deps.
             // For barrel deps, we need to rely on the fact that 'relevantNodeIds' contains them.
             // If a relevant node has NO edge to any PR node, it's an orphan dependent.
             // We should probably have passed the 'symbolToDependentsMap' or similar.
-            
+
             // FOR NOW: We will stick to the Full Graph edges + strict filtering.
             // If barrel resolution added nodes to 'relevantNodeIds', but didn't create an edge in 'fullGraph',
             // they will be missing edges.
             // However, 'relevantNodeIds' was populated by 'getDependents' (which uses full graph) 
             // AND 'resolveBarrelReferences' (which finds new files).
-            
+
             // Let's try to recover the barrel edges by checking if any relevant node 
             // is NOT connected yet.
         }
@@ -64369,14 +66653,14 @@ class PRDependencyAnalyzer {
         // Helper to add node
         const addNode = (id, sourceNode = null) => {
             if (addedNodeIds.has(id)) return;
-            
+
             let nodeToAdd = sourceNode;
-            
+
             if (!nodeToAdd) {
                 // Try finding in full graph
                 nodeToAdd = this.fullGraph.nodes.find(n => n.id === id);
             }
-            
+
             if (!nodeToAdd) {
                 // Create placeholder if not found (e.g. new file or dynamic barrel file)
                 nodeToAdd = {
@@ -64392,7 +66676,7 @@ class PRDependencyAnalyzer {
                 const prNode = prNodes.find(pn => pn.id === id);
                 nodeToAdd = { ...nodeToAdd, ...prNode };
                 nodeToAdd.nodeType = 'pr-file';
-                
+
                 if (nodeChangedSymbols.has(id)) {
                     nodeToAdd.changedSymbols = nodeChangedSymbols.get(id);
                 }
@@ -64448,7 +66732,7 @@ class PRDependencyAnalyzer {
     calculateRiskLevel(graph) {
         const prNodes = graph.nodes.filter(n => n.isPRFile);
         const dependents = graph.nodes.filter(n => n.nodeType === 'dependent');
-        
+
         const totalChanges = prNodes.reduce((sum, n) => sum + (n.prChanges?.total || 0), 0);
         const dependentCount = dependents.length;
 
@@ -64482,12 +66766,12 @@ class PRDependencyAnalyzer {
             recommendations.push('Large PR - Consider breaking into smaller changes');
         }
 
-        const coreFiles = prNodes.filter(n => 
-            n.relativePath.includes('core') || 
+        const coreFiles = prNodes.filter(n =>
+            n.relativePath.includes('core') ||
             n.relativePath.includes('shared') ||
             n.relativePath.includes('common')
         );
-        
+
         if (coreFiles.length > 0) {
             recommendations.push('Core module changes detected - Extra scrutiny recommended');
         }
@@ -64505,16 +66789,16 @@ class PRDependencyAnalyzer {
      */
     async extractChangedSymbols(patch, prFilePath) {
         aidaLogging(`   🔍 Extracting symbols using Hybrid approach (Regex + VS Code API)...`);
-        
+
         // 1. Run Regex extraction (using the existing method)
         const regexSymbols = await this.extractChangedSymbolsRegex(patch, prFilePath);
-        
+
         // 2. Run VS Code API extraction
         const vscodeSymbols = await this.extractChangedSymbolsVscode(patch, prFilePath);
-        
+
         // 3. Merge and Deduplicate
         const mergedMap = new Map();
-        
+
         // Helper to add symbol if valid
         const addSymbol = (sym, source) => {
             // Filter out symbols that match the filename (likely module wrappers)
@@ -64523,7 +66807,7 @@ class PRDependencyAnalyzer {
                 aidaLogging(`   🚫 Ignoring symbol '${sym.name}' (matches filename) from ${source}`);
                 return;
             }
-            
+
             if (!mergedMap.has(sym.fullName)) {
                 mergedMap.set(sym.fullName, sym);
             } else {
@@ -64534,10 +66818,10 @@ class PRDependencyAnalyzer {
                 }
             }
         };
-        
+
         regexSymbols.forEach(s => addSymbol(s, 'Regex'));
         vscodeSymbols.forEach(s => addSymbol(s, 'VSCode'));
-        
+
         const finalSymbols = Array.from(mergedMap.values());
         aidaLogging(`   ✅ Hybrid extraction found ${finalSymbols.length} unique symbols`);
         return finalSymbols;
@@ -64554,12 +66838,12 @@ class PRDependencyAnalyzer {
         }
 
         aidaLogging(`   📄 Extracting symbols from patch content (VS Code API)...`);
-        
+
         // 1. Extract "New Code" from patch (lines starting with +)
         const lines = patch.split('\n');
         let newCodeContent = '';
         let hasContent = false;
-        
+
         for (const line of lines) {
             if (line.startsWith('+++') || line.startsWith('---') || line.startsWith('@@')) {
                 continue;
@@ -64568,9 +66852,9 @@ class PRDependencyAnalyzer {
                 const cleanLine = line.substring(1);
                 newCodeContent += cleanLine + '\n';
                 hasContent = true;
-            } 
+            }
         }
-        
+
         if (!hasContent || !newCodeContent.trim()) {
             return [];
         }
@@ -64579,41 +66863,41 @@ class PRDependencyAnalyzer {
         try {
             // 🔥 IMPROVED: Use virtual content provider to avoid opening "Untitled" tabs
             const { virtualContentProvider } = __webpack_require__(/*! ./virtual-content-provider */ "./scripts/virtual-content-provider.js");
-            
+
             // Store content in memory and get URI (scheme: aida-memory)
             const virtualUri = virtualContentProvider.setFileContent(prFilePath, newCodeContent);
-            
+
             // Open the virtual document (read-only, no tab opened)
             const doc = await vscode.workspace.openTextDocument(virtualUri);
-            
+
             // 3. Execute Symbol Provider
             const symbols = await vscode.commands.executeCommand(
                 'vscode.executeDocumentSymbolProvider',
                 doc.uri
             );
-            
+
             // Clean up memory
             virtualContentProvider.clearFileContent(prFilePath);
-            
+
             if (!symbols || symbols.length === 0) {
                 return [];
             }
-            
+
             // 4. Process Symbols
             const extractedSymbols = [];
-            
+
             const processSymbol = (symbol, parentName = null) => {
                 // 🔥 FIX: Dynamic symbol type mapping
                 let typeStr = vscode.SymbolKind[symbol.kind] ? vscode.SymbolKind[symbol.kind].toLowerCase() : 'unknown';
-                
+
                 // Handle special cases
                 if (typeStr === 'enummember') typeStr = 'enum-member';
                 if (typeStr === 'typeparameter') typeStr = 'type-param';
-                
+
                 // 🔥 FIX: Configuration-driven significance check
                 let isSignificant = false;
                 const patterns = this.getLanguagePatterns(prFilePath);
-                
+
                 if (patterns) {
                     // Check if type is configured in patterns
                     if (patterns[typeStr]) {
@@ -64644,21 +66928,21 @@ class PRDependencyAnalyzer {
                         name: symbol.name,
                         fullName: parentName ? `${parentName}.${symbol.name}` : symbol.name,
                         type: typeStr,
-                        lineNumber: 0, 
+                        lineNumber: 0,
                         column: 0,
                         filePath: prFilePath,
                         isRoot: !parentName,
                         kind: symbol.kind
                     });
                 }
-                
+
                 if (symbol.children && symbol.children.length > 0) {
                     symbol.children.forEach(child => processSymbol(child, symbol.name));
                 }
             };
-            
+
             symbols.forEach(s => processSymbol(s));
-            
+
             // Deduplicate
             const uniqueSymbols = [];
             const seenNames = new Set();
@@ -64668,9 +66952,9 @@ class PRDependencyAnalyzer {
                     uniqueSymbols.push(sym);
                 }
             }
-            
+
             return uniqueSymbols;
-            
+
         } catch (error) {
             console.error(`   ❌ Error in VS Code symbol extraction: ${error.message}`);
             return [];
@@ -64687,15 +66971,15 @@ class PRDependencyAnalyzer {
         }
 
         aidaLogging(`   📄 Extracting from patch (${patch.length} chars)...`);
-        
+
         const allSymbols = [];
         const lines = patch.split('\n');
         const contextStack = [];
         let currentLineNumber = 0;
-        
+
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i];
-            
+
             if (line.startsWith('@@')) {
                 const match = line.match(/@@ -\d+,?\d* \+(\d+),?\d* @@/);
                 if (match) {
@@ -64703,20 +66987,20 @@ class PRDependencyAnalyzer {
                 }
                 continue;
             }
-            
+
             if (line.startsWith('+') && !line.startsWith('+++')) {
                 const codeLine = line.substring(1);
                 const trimmed = codeLine.trim();
-                
+
                 // Detect object start
                 const objectStartMatch = trimmed.match(/^([a-zA-Z_$][a-zA-Z0-9_$]*)\s*:\s*\{/);
                 if (objectStartMatch) {
                     const objectName = objectStartMatch[1];
                     const column = codeLine.indexOf(objectName);
                     contextStack.push(objectName);
-                    
-                    allSymbols.push({ 
-                        name: objectName, 
+
+                    allSymbols.push({
+                        name: objectName,
                         fullName: objectName,
                         type: 'object',
                         lineNumber: currentLineNumber,
@@ -64727,7 +67011,7 @@ class PRDependencyAnalyzer {
                     currentLineNumber++;
                     continue;
                 }
-                
+
                 if (trimmed === '},' || trimmed === '}') {
                     if (contextStack.length > 0) {
                         contextStack.pop();
@@ -64735,7 +67019,7 @@ class PRDependencyAnalyzer {
                     currentLineNumber++;
                     continue;
                 }
-                
+
                 const extracted = this.extractSymbolsFromLine(codeLine, contextStack, currentLineNumber, prFilePath);
                 allSymbols.push(...extracted);
                 currentLineNumber++;
@@ -64745,14 +67029,14 @@ class PRDependencyAnalyzer {
                 currentLineNumber++;
             }
         }
-        
+
         // 🔥 KEY FIX: Group by root object
         const rootSymbolMap = new Map();
-        
+
         for (const sym of allSymbols) {
             let rootName;
             let rootSymbol;
-            
+
             if (sym.type === 'object' && sym.isRoot) {
                 // This is a root object
                 rootName = sym.name;
@@ -64760,12 +67044,12 @@ class PRDependencyAnalyzer {
             } else if (sym.parentName) {
                 // This is a nested property - find its root
                 rootName = sym.parentName;
-                
+
                 // Find the root object definition
-                rootSymbol = allSymbols.find(s => 
+                rootSymbol = allSymbols.find(s =>
                     s.name === rootName && s.isRoot
                 );
-                
+
                 if (!rootSymbol) {
                     // Create virtual root if not found
                     rootSymbol = {
@@ -64784,23 +67068,23 @@ class PRDependencyAnalyzer {
                 rootName = sym.name;
                 rootSymbol = sym;
             }
-            
+
             if (!rootSymbolMap.has(rootName)) {
                 rootSymbolMap.set(rootName, {
                     ...rootSymbol,
                     children: []
                 });
             }
-            
+
             // Track child properties
             if (sym.parentName && sym.parentName === rootName) {
                 rootSymbolMap.get(rootName).children.push(sym.fullName);
             }
         }
-        
+
         // Convert to array
         const uniqueRootSymbols = Array.from(rootSymbolMap.values());
-        
+
         aidaLogging(`   ✅ Found ${uniqueRootSymbols.length} root symbols:`);
         uniqueRootSymbols.forEach(s => {
             if (s.children && s.children.length > 0) {
@@ -64812,7 +67096,7 @@ class PRDependencyAnalyzer {
                 aidaLogging(`      - ${s.fullName}`);
             }
         });
-        
+
         return uniqueRootSymbols;
     }
 
@@ -64826,27 +67110,27 @@ class PRDependencyAnalyzer {
     extractSymbolsFromLine(line, contextStack = [], lineNumber = 0, filePath = '') {
         const symbols = [];
         const trimmedLine = line.trim();
-        
+
         if (!trimmedLine || trimmedLine.length === 0) return symbols;
 
         // 🔥 FIX: Use configuration-driven patterns
         const patterns = this.getLanguagePatterns(filePath);
-        
+
         if (patterns) {
             for (const [type, regex] of Object.entries(patterns)) {
                 if (type === 'objectStart' || type === 'blockEnd') continue;
-                
+
                 try {
                     const pattern = regex instanceof RegExp ? regex : new RegExp(regex);
                     const match = trimmedLine.match(pattern);
-                    
+
                     if (match) {
                         const name = match[1];
                         const column = line.indexOf(name);
-                        
+
                         if (type === 'property' && contextStack.length > 0) {
                             const nestedPath = [...contextStack, name].join('.');
-                            symbols.push({ 
+                            symbols.push({
                                 name: name,
                                 fullName: nestedPath,
                                 type: 'property',
@@ -64856,7 +67140,7 @@ class PRDependencyAnalyzer {
                                 filePath: filePath
                             });
                         } else {
-                            symbols.push({ 
+                            symbols.push({
                                 name: name,
                                 fullName: name,
                                 type: type,
@@ -64866,22 +67150,22 @@ class PRDependencyAnalyzer {
                             });
                         }
                     }
-                } catch (e) {}
+                } catch (e) { }
             }
             return symbols;
         }
-        
+
         // Fallback to hardcoded JS/TS regexes
         // Property within object: propertyName: value
         const propertyMatch = trimmedLine.match(/^([a-zA-Z_$][a-zA-Z0-9_$]*)\s*:\s*/);
         if (propertyMatch) {
             const propertyName = propertyMatch[1];
             const column = line.indexOf(propertyName);
-            
+
             if (contextStack.length > 0) {
                 // Nested property: parentObject.propertyName
                 const nestedPath = [...contextStack, propertyName].join('.');
-                symbols.push({ 
+                symbols.push({
                     name: propertyName,
                     fullName: nestedPath,
                     type: 'property',
@@ -64892,7 +67176,7 @@ class PRDependencyAnalyzer {
                 });
             } else {
                 // Top-level property
-                symbols.push({ 
+                symbols.push({
                     name: propertyName,
                     fullName: propertyName,
                     type: 'property',
@@ -64902,13 +67186,13 @@ class PRDependencyAnalyzer {
                 });
             }
         }
-        
+
         // Function declarations: function name() {}
         const functionMatch = trimmedLine.match(/function\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(/);
         if (functionMatch) {
             const funcName = functionMatch[1];
             const column = line.indexOf(funcName);
-            symbols.push({ 
+            symbols.push({
                 name: funcName,
                 fullName: funcName,
                 type: 'function',
@@ -64917,13 +67201,13 @@ class PRDependencyAnalyzer {
                 filePath: filePath
             });
         }
-        
+
         // Const declarations: const NAME = ...
         const constMatch = trimmedLine.match(/const\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=/);
         if (constMatch) {
             const constName = constMatch[1];
             const column = line.indexOf(constName);
-            symbols.push({ 
+            symbols.push({
                 name: constName,
                 fullName: constName,
                 type: 'const',
@@ -64932,13 +67216,13 @@ class PRDependencyAnalyzer {
                 filePath: filePath
             });
         }
-        
+
         // Class declarations: class ClassName {}
         const classMatch = trimmedLine.match(/class\s+([a-zA-Z_$][a-zA-Z0-9_$]*)/);
         if (classMatch) {
             const className = classMatch[1];
             const column = line.indexOf(className);
-            symbols.push({ 
+            symbols.push({
                 name: className,
                 fullName: className,
                 type: 'class',
@@ -64947,13 +67231,13 @@ class PRDependencyAnalyzer {
                 filePath: filePath
             });
         }
-        
+
         // Interface declarations: interface InterfaceName {}
         const interfaceMatch = trimmedLine.match(/interface\s+([a-zA-Z_$][a-zA-Z0-9_$]*)/);
         if (interfaceMatch) {
             const interfaceName = interfaceMatch[1];
             const column = line.indexOf(interfaceName);
-            symbols.push({ 
+            symbols.push({
                 name: interfaceName,
                 fullName: interfaceName,
                 type: 'interface',
@@ -64962,7 +67246,7 @@ class PRDependencyAnalyzer {
                 filePath: filePath
             });
         }
-        
+
         return symbols;
     }
 
@@ -64973,7 +67257,7 @@ class PRDependencyAnalyzer {
         const changedLines = [];
         const lines = patch.split('\n');
         let currentLineNumber = 0;
-        
+
         for (const line of lines) {
             // Parse @@ -a,b +c,d @@ headers
             const hunkHeader = line.match(/^@@ -\d+,?\d* \+(\d+),?\d* @@/);
@@ -64981,7 +67265,7 @@ class PRDependencyAnalyzer {
                 currentLineNumber = parseInt(hunkHeader[1], 10);
                 continue;
             }
-            
+
             // Track added/modified lines
             if (line.startsWith('+') && !line.startsWith('+++')) {
                 changedLines.push(currentLineNumber);
@@ -64990,7 +67274,7 @@ class PRDependencyAnalyzer {
                 currentLineNumber++;
             }
         }
-        
+
         return changedLines;
     }
 
@@ -65000,7 +67284,7 @@ class PRDependencyAnalyzer {
      */
     async getUsedSymbols(dependentPath, prFilePath, changedSymbols) {
         const usedSymbols = [];
-        
+
         if (!changedSymbols || changedSymbols.length === 0) {
             return usedSymbols;
         }
@@ -65008,10 +67292,10 @@ class PRDependencyAnalyzer {
         try {
             aidaLogging(`      🔍 Checking dependent: ${dependentPath}`);
             aidaLogging(`         Root symbols to check: [${changedSymbols.map(s => s.fullName).join(', ')}]`);
-            
+
             const fullDependentPath = path.join(this.workspaceRoot, dependentPath);
             const fullPRFilePath = path.join(this.workspaceRoot, prFilePath);
-            
+
             if (!fs.existsSync(fullDependentPath)) {
                 aidaLogging(`         ❌ File not found: ${fullDependentPath}`);
                 return usedSymbols;
@@ -65022,9 +67306,9 @@ class PRDependencyAnalyzer {
             // Check each root symbol
             for (const symbol of changedSymbols) {
                 const symbolPosition = new vscode.Position(symbol.lineNumber, symbol.column);
-                
+
                 aidaLogging(`         🔍 Searching: ${symbol.fullName}`);
-                
+
                 try {
                     const result = await this.resolveBarrelReferences(
                         symbolFileUri,
@@ -65033,16 +67317,16 @@ class PRDependencyAnalyzer {
                         new Set(),
                         0
                     );
-                    
+
                     const allReferences = result.references;
-                    
+
                     if (allReferences.length === 0) {
                         aidaLogging(`            ⏭️ No references found`);
                         continue;
                     }
-                    
+
                     aidaLogging(`            📍 Found ${allReferences.length} total references`);
-                    
+
                     // Filter to this dependent file only
                     const referencesInDependent = allReferences.filter(ref => {
                         const refPath = ref.uri.fsPath;
@@ -65050,7 +67334,7 @@ class PRDependencyAnalyzer {
                         const isNotDefinition = ref.range.start.line !== symbol.lineNumber;
                         return isSameFile && isNotDefinition;
                     });
-                    
+
                     if (referencesInDependent.length > 0) {
                         // Filter out barrel exports
                         const realRefs = [];
@@ -65060,27 +67344,27 @@ class PRDependencyAnalyzer {
                                 realRefs.push(ref);
                             }
                         }
-                        
+
                         if (realRefs.length > 0) {
                             usedSymbols.push(symbol.fullName);
-                            
+
                             // Also add all child properties
                             if (symbol.children && symbol.children.length > 0) {
                                 usedSymbols.push(...symbol.children);
                             }
-                            
+
                             aidaLogging(`            ✅ Found ${realRefs.length} real usages`);
                             if (symbol.children && symbol.children.length > 0) {
                                 aidaLogging(`            ✅ Including ${symbol.children.length} child properties`);
                             }
                         }
                     }
-                    
+
                 } catch (error) {
                     console.error(`            ❌ Reference error: ${error.message}`);
                 }
             }
-            
+
             if (usedSymbols.length > 0) {
                 aidaLogging(`         ✅ Total confirmed: ${usedSymbols.length} symbols`);
             } else {
@@ -65100,10 +67384,10 @@ class PRDependencyAnalyzer {
     async resolveBarrelReferences(symbolUri, symbolPosition, symbolName, visitedBarrels, currentLevel = 0) {
         // 🔥 Delegate to BarrelResolver
         return await this.barrelResolver.resolveBarrelReferences(
-            symbolUri, 
-            symbolPosition, 
-            symbolName, 
-            visitedBarrels, 
+            symbolUri,
+            symbolPosition,
+            symbolName,
+            visitedBarrels,
             currentLevel
         );
     }
@@ -65159,9 +67443,9 @@ class PRDependencyAnalyzer {
     buildImportPatterns(importerPath, barrelDir, barrelRelativeToWorkspace, pathAliases) {
         // 🔥 Delegate to BarrelResolver
         return this.barrelResolver.buildImportPatterns(
-            importerPath, 
-            barrelDir, 
-            barrelRelativeToWorkspace, 
+            importerPath,
+            barrelDir,
+            barrelRelativeToWorkspace,
             pathAliases
         );
     }
@@ -65171,7 +67455,7 @@ class PRDependencyAnalyzer {
      */
     getLanguagePatterns(filePath) {
         const ext = path.extname(filePath).toLowerCase();
-        
+
         if (this.vscodeAnalyzer && this.vscodeAnalyzer.languageConfig) {
             for (const [lang, config] of Object.entries(this.vscodeAnalyzer.languageConfig)) {
                 if (config.extensions && config.extensions.includes(ext)) {
@@ -65187,7 +67471,7 @@ class PRDependencyAnalyzer {
      */
     getBarrelFiles(filePath) {
         const ext = path.extname(filePath).toLowerCase();
-        
+
         if (this.vscodeAnalyzer && this.vscodeAnalyzer.languageConfig) {
             for (const [lang, config] of Object.entries(this.vscodeAnalyzer.languageConfig)) {
                 if (config.extensions && config.extensions.includes(ext)) {
@@ -71605,8 +73889,22 @@ try {
  * @returns {Array} Filtered array of reviewable files
  */
 function filterReviewableFiles(fileChanges, provider = 'Unknown') {
+    const { commonIgnores, languageIgnores, isIgnored } = __webpack_require__(/*! ./ignore-rules */ "./scripts/ignore-rules.js");
+    
     const reviewableFiles = fileChanges.filter(file => {
         const filePath = file.path || file.filename || '';
+        
+        // Check common ignores
+        if (isIgnored(filePath, commonIgnores)) {
+            aidaLogging(`🚫 [FILTERED] ${provider} Common ignore: ${filePath}`);
+            return false;
+        }
+
+        // Check C# specific ignores
+        if (isIgnored(filePath, languageIgnores.csharp)) {
+            aidaLogging(`🚫 [FILTERED] ${provider} C# ignore: ${filePath}`);
+            return false;
+        }
         
         // Filter out Migration Designer files (auto-generated, no review value)
         const isMigrationDesigner = filePath.includes('/Migrations/') && filePath.endsWith('.Designer.cs');

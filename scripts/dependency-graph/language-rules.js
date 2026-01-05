@@ -2,6 +2,8 @@
  * Language Configuration Rules for Dependency Analysis
  * Defines regex patterns and rules for different programming languages
  */
+const { languageIgnores } = require('../ignore-rules');
+
 const languageConfig = {
     typescript: {
         extensions: ['.ts', '.tsx', '.js', '.jsx'],
@@ -43,12 +45,8 @@ const languageConfig = {
             '**/dist/**',
             '**/build/**',
             '**/coverage/**',
-            '**/*.spec.ts',
-            '**/*.spec.js',
-            '**/*.test.ts',
-            '**/*.test.js',
             '**/*.min.js',
-            '**/*.d.ts'
+            ...languageIgnores.typescript
         ]
     },
     python: {
@@ -78,15 +76,9 @@ const languageConfig = {
         standardLibraries: ['os', 'sys', 'json', 'urllib', 'datetime', 'collections',
                            'itertools', 'functools', 'typing', 're', 'math', 'random'],
         excludePatterns: [
-            '**/__pycache__/**',
-            '**/venv/**',
-            '**/env/**',
-            '**/.venv/**',
             '**/dist/**',
             '**/build/**',
-            '**/*.pyc',
-            '**/test_*.py',
-            '**/*_test.py'
+            ...languageIgnores.python
         ]
     },
     csharp: {
@@ -118,14 +110,7 @@ const languageConfig = {
                            'List', 'Dictionary', 'HttpClient', 'JsonSerializer', 'DateTime',
                            'Guid', 'Exception', 'StringBuilder', 'Console', 'Math'],
         excludePatterns: [
-            '**/bin/**',
-            '**/obj/**',
-            '**/packages/**',
-            '**/.vs/**',
-            '**/Debug/**',
-            '**/Release/**',
-            '**/*.AssemblyInfo.cs',
-            '**/*.Designer.cs'
+            ...languageIgnores.csharp
         ]
     },
     java: {
