@@ -31,13 +31,17 @@ class CopilotSidebarChat {
      * Setup file watcher to detect active file changes and workspace changes
      */
     setupFileWatcher() {
-        // Listen for active editor changes
+        // Listen for file save events instead of active editor changes
         this.context.subscriptions.push(
-            vscode.window.onDidChangeActiveTextEditor(editor => {
-                this.updateCurrentFile(editor);
+            vscode.workspace.onDidSaveTextDocument(document => {
+                // Only update if the saved document is the active one
+                if (vscode.window.activeTextEditor &&
+                    vscode.window.activeTextEditor.document === document) {
+                    this.updateCurrentFile(vscode.window.activeTextEditor);
+                }
             })
         );
-        
+
         // Listen for workspace folder changes
         this.context.subscriptions.push(
             vscode.workspace.onDidChangeWorkspaceFolders(() => {
@@ -47,7 +51,7 @@ class CopilotSidebarChat {
                 this.messageHistory = [];
                 this.historyIndex = -1;
                 this.loadChatHistory();
-                
+
                 // Refresh webview to show new chat history
                 if (this.webviewView) {
                     this.webviewView.webview.postMessage({ type: 'clearChat' });
@@ -58,7 +62,7 @@ class CopilotSidebarChat {
                 }
             })
         );
-        
+
         // Set initial file if there's an active editor
         this.updateCurrentFile(vscode.window.activeTextEditor);
     }
@@ -72,10 +76,10 @@ class CopilotSidebarChat {
         if (editor && editor.document) {
             const fileName = editor.document.fileName;
             const displayName = fileName.split(/[\\/]/).pop(); // Get just filename
-            
+
             if (this.currentFileName !== displayName || forceUpdate) {
                 this.currentFileName = displayName;
-                
+
                 // Notify webview about file change
                 if (this.webviewView) {
                     this.webviewView.webview.postMessage({
@@ -92,7 +96,7 @@ class CopilotSidebarChat {
             // No active editor
             if (this.currentFileName !== null || forceUpdate) {
                 this.currentFileName = null;
-                
+
                 if (this.webviewView) {
                     this.webviewView.webview.postMessage({
                         type: 'updateCurrentFile',
@@ -123,11 +127,11 @@ class CopilotSidebarChat {
     registerSidebarView() {
         // Register webview view provider for sidebar
         const provider = new AidaChatViewProvider(this.context, this);
-        
+
         // Register in Activity Bar sidebar (like Copilot)
         this.context.subscriptions.push(
             vscode.window.registerWebviewViewProvider(
-                'aidaChatSidebar', 
+                'aidaChatSidebar',
                 provider,
                 {
                     webviewOptions: {
@@ -160,12 +164,12 @@ class CopilotSidebarChat {
             // Use workspace folder name and path hash for unique identification
             const workspacePath = workspaceFolders[0].uri.fsPath;
             const workspaceName = workspaceFolders[0].name;
-            
+
             // Create a simple hash of the workspace path for uniqueness
             const pathHash = Buffer.from(workspacePath).toString('base64').substring(0, 8);
             return `${baseKey}.${workspaceName}.${pathHash}`;
         }
-        
+
         // Fallback to global key if no workspace
         return `${baseKey}.global`;
     }
@@ -177,14 +181,14 @@ class CopilotSidebarChat {
         try {
             const chatKey = this.getWorkspaceSpecificKey('aida.chatHistory');
             const messageKey = this.getWorkspaceSpecificKey('aida.messageHistory');
-            
+
             const savedHistory = this.context.globalState.get(chatKey, []);
             const savedMessageHistory = this.context.globalState.get(messageKey, []);
-            
+
             // Limit history to last 50 messages to prevent memory issues
             this.chatHistory = savedHistory.slice(-50);
             this.messageHistory = savedMessageHistory.slice(-20);
-            
+
             const workspaceName = vscode.workspace.workspaceFolders?.[0]?.name || 'global';
             aidaLogging(`📚 Loaded ${this.chatHistory.length} chat messages for workspace: ${workspaceName}`);
         } catch (error) {
@@ -208,13 +212,13 @@ class CopilotSidebarChat {
                 mode: msg.mode,     // Include mode for context
                 model: msg.model    // Include model for context
             }));
-            
+
             const chatKey = this.getWorkspaceSpecificKey('aida.chatHistory');
             const messageKey = this.getWorkspaceSpecificKey('aida.messageHistory');
-            
+
             this.context.globalState.update(chatKey, historyToSave);
             this.context.globalState.update(messageKey, this.messageHistory);
-            
+
             const workspaceName = vscode.workspace.workspaceFolders?.[0]?.name || 'global';
             aidaLogging(`💾 Saved ${historyToSave.length} chat messages for workspace: ${workspaceName}`);
         } catch (error) {
@@ -229,13 +233,13 @@ class CopilotSidebarChat {
         this.chatHistory = [];
         this.messageHistory = [];
         this.historyIndex = -1;
-        
+
         const chatKey = this.getWorkspaceSpecificKey('aida.chatHistory');
         const messageKey = this.getWorkspaceSpecificKey('aida.messageHistory');
-        
+
         this.context.globalState.update(chatKey, []);
         this.context.globalState.update(messageKey, []);
-        
+
         const workspaceName = vscode.workspace.workspaceFolders?.[0]?.name || 'global';
         aidaLogging(`🗑️ Chat history cleared for workspace: ${workspaceName}`);
     }
@@ -249,7 +253,7 @@ class CopilotSidebarChat {
         }
 
         aidaLogging(`📚 Restoring ${this.chatHistory.length} workspace chat messages`);
-        
+
         for (const message of this.chatHistory) {
             if (message.role === 'user') {
                 this.webviewView.webview.postMessage({
@@ -279,7 +283,7 @@ class CopilotSidebarChat {
 
             const aidaPath = path.join(workspaceFolder.uri.fsPath, 'AIDA');
             const templatesPath = path.join(aidaPath, 'templates');
-            
+
             // Check if AIDA templates already exist
             if (require('fs').existsSync(templatesPath)) {
                 aidaLogging('✅ AIDA templates already exist');
@@ -287,16 +291,16 @@ class CopilotSidebarChat {
             }
 
             aidaLogging('🔄 AIDA Chatbot: Creating AIDA templates folder...');
-            
+
             // Create AIDA/templates directory
             require('fs').mkdirSync(templatesPath, { recursive: true });
-            
+
             // Copy templates from extension to workspace
             const extensionTemplatesPath = require('path').join(this.context.extensionPath, 'templates');
             if (require('fs').existsSync(extensionTemplatesPath)) {
                 await this.copyTemplatesRecursively(extensionTemplatesPath, templatesPath);
                 aidaLogging('✅ AIDA Chatbot: Templates created successfully');
-                
+
                 // Notify webview
                 if (this.webviewView) {
                     this.webviewView.webview.postMessage({
@@ -319,16 +323,16 @@ class CopilotSidebarChat {
     async copyTemplatesRecursively(src, dest) {
         const fs = require('fs');
         const path = require('path');
-        
+
         if (!fs.existsSync(src)) return;
-        
+
         fs.mkdirSync(dest, { recursive: true });
         const entries = fs.readdirSync(src, { withFileTypes: true });
-        
+
         for (const entry of entries) {
             const srcPath = path.join(src, entry.name);
             const destPath = path.join(dest, entry.name);
-            
+
             if (entry.isDirectory()) {
                 await this.copyTemplatesRecursively(srcPath, destPath);
             } else {
@@ -362,51 +366,51 @@ class CopilotSidebarChat {
                 // Clear conversation messages but preserve input history
                 this.chatHistory = []; // Clear in-memory conversation
                 this.chatbotService.clearHistory(); // Clear AI service conversation history
-                
+
                 // Clear only conversation from persistent storage, keep message history
                 const chatKey = this.getWorkspaceSpecificKey('aida.chatHistory');
                 this.context.globalState.update(chatKey, []);
-                
+
                 // DON'T clear messageHistory and historyIndex - preserve for arrow navigation
-                
+
                 // Send clear command to frontend
                 if (this.webviewView) {
                     this.webviewView.webview.postMessage({ type: 'clearChat' });
                 }
-                
+
                 aidaLogging('🗑️ Conversation cleared - arrow key history preserved');
                 return; // Don't process further
             }
-            
+
             // Use advanced context engine to determine if file context is needed
             let contextDecision = null;
             let currentFileContext = null;
             let enhancedMessage = userMessage;
-            
+
             // Get current file context first (for context engine analysis)
             const participantType = this.determineParticipant(userMessage);
-            const isReviewCommand = ['review-file', 'review-changes', 'review-all-changes', 'review-pr', 'sync-review-templates','scan-app','dependency'].includes(participantType);
-            
+            const isReviewCommand = ['review-file', 'review-changes', 'review-all-changes', 'review-pr', 'sync-review-templates', 'scan-app', 'dependency'].includes(participantType);
+
             if (!isReviewCommand) {
                 currentFileContext = await this.getCurrentFileContext();
-                
+
                 // Use ChatbotContextEngine for intelligent context decision
                 try {
                     // Prepare input for context engine (handle both text and images)
-                    const engineInput = images && images.length > 0 
+                    const engineInput = images && images.length > 0
                         ? { text: userMessage, images: images }
                         : userMessage;
-                        
+
                     // Get conversation history for context
                     const conversationHistory = this.chatHistory.slice(-5); // Last 5 messages for context
-                    
+
                     // Make intelligent context decision
                     contextDecision = await this.contextEngine.shouldIncludeContext(
-                        engineInput, 
-                        currentFileContext, 
+                        engineInput,
+                        currentFileContext,
                         conversationHistory
                     );
-                    
+
                     aidaLogging('🧠 Context Engine Decision:', {
                         shouldInclude: contextDecision.shouldInclude,
                         confidence: contextDecision.confidence,
@@ -416,23 +420,23 @@ class CopilotSidebarChat {
                         hasFile: !!currentFileContext?.hasFile,
                         fileName: currentFileContext?.fileName
                     });
-                    
+
                     // Universal semantic-based context decision (language-agnostic)
                     const semanticDecision = this.contextEngine.makeUniversalContextDecision(
-                        userMessage, 
-                        contextDecision, 
+                        userMessage,
+                        contextDecision,
                         currentFileContext
                     );
-                    
+
                     // Enhanced multimodal context decision (like GitHub Copilot)
                     const multimodalDecision = this.makeMultimodalContextDecision(
-                        userMessage, 
-                        images, 
-                        currentFileContext, 
-                        contextDecision, 
+                        userMessage,
+                        images,
+                        currentFileContext,
+                        contextDecision,
                         semanticDecision
                     );
-                    
+
                     // Apply multimodal decision
                     if (multimodalDecision.shouldInclude) {
                         aidaLogging(`🖼️ Multimodal context decision: ${multimodalDecision.reason}`);
@@ -443,14 +447,14 @@ class CopilotSidebarChat {
                         // If all decisions say no, log why
                         aidaLogging(`🚫 No context needed: Engine=${contextDecision.shouldInclude}, Semantic=${semanticDecision.shouldInclude}, Multimodal=${multimodalDecision.shouldInclude}`);
                     }
-                    
+
                 } catch (engineError) {
                     console.warn('⚠️ Context engine error, falling back to basic logic:', engineError.message);
                     // Fallback to basic pattern matching if engine fails
                     contextDecision = this.basicContextDecision(userMessage, currentFileContext);
                 }
             }
-            
+
             // For backward compatibility, set isCurrentFileRequest based on context decision
             const isCurrentFileRequest = contextDecision?.shouldInclude || false;
 
@@ -480,7 +484,7 @@ class CopilotSidebarChat {
             // Add to history with images and mode/model info (except for current file requests which handle this separately)
             if (!isCurrentFileRequest) {
                 this.chatHistory.push({
-                    role: 'user', 
+                    role: 'user',
                     content: userMessage,
                     images: images,
                     mode: mode,
@@ -488,7 +492,7 @@ class CopilotSidebarChat {
                     fileContext: currentFileContext, // Add file context
                     timestamp: new Date()
                 });
-                
+
                 // Save user message to persistent storage
                 this.saveChatHistory();
             }
@@ -513,17 +517,17 @@ class CopilotSidebarChat {
 
                     // Create execution plan with current file context
                     const plan = await this.createAgentPlan(userMessage, currentFileContext);
-                    
+
                     // Execute plan autonomously
                     const report = await this.executeAgentPlan(plan, userMessage);
-                    
+
                     // Add response to history
                     this.chatHistory.push({
                         role: 'assistant',
                         content: report,
                         timestamp: new Date()
                     });
-                    
+
                     // Send final report
                     if (this.webviewView) {
                         this.webviewView.webview.postMessage({
@@ -534,13 +538,13 @@ class CopilotSidebarChat {
 
                 } catch (error) {
                     const errorMessage = `❌ **Agent Error:** ${error.message}\n\nPlease try rephrasing your request or check if the workspace is properly configured.`;
-                    
+
                     this.chatHistory.push({
                         role: 'assistant',
                         content: errorMessage,
                         timestamp: new Date()
                     });
-                    
+
                     if (this.webviewView) {
                         this.webviewView.webview.postMessage({
                             type: 'addAssistantMessage',
@@ -557,7 +561,7 @@ class CopilotSidebarChat {
             if (isCurrentFileRequest) {
                 // Get current file context for Ask mode too
                 const currentFileContext = await this.getCurrentFileContext();
-                
+
                 if (currentFileContext.hasFile) {
                     // Show original user message in UI (not enhanced message)
                     if (this.webviewView) {
@@ -570,7 +574,7 @@ class CopilotSidebarChat {
 
                     // Add original user message to history (not enhanced)
                     this.chatHistory.push({
-                        role: 'user', 
+                        role: 'user',
                         content: userMessage, // Store original message
                         images: images,
                         mode: mode,
@@ -578,13 +582,13 @@ class CopilotSidebarChat {
                         fileContext: currentFileContext,
                         timestamp: new Date()
                     });
-                    
+
                     // Save user message to persistent storage
                     this.saveChatHistory();
 
                     // Enhance the message with file context for AI only (not for UI)
                     const enhancedMessageForAI = `${userMessage}\n\n**Current File Context:**\n- File: ${currentFileContext.fileName}\n- Language: ${currentFileContext.languageId}\n- Lines: ${currentFileContext.lineCount}\n\n**File Content:**\n\`\`\`${currentFileContext.languageId}\n${currentFileContext.content}\n\`\`\``;
-                    
+
                     // Show typing indicator for Ask mode
                     if (this.webviewView) {
                         this.webviewView.webview.postMessage({
@@ -606,11 +610,11 @@ class CopilotSidebarChat {
                     // Send response to sidebar
                     if (this.webviewView) {
                         this.webviewView.webview.postMessage({
-                            type: 'addAssistantMessage', 
+                            type: 'addAssistantMessage',
                             message: response
                         });
                     }
-                    
+
                     // Save chat history after AI response
                     this.saveChatHistory();
                     return;
@@ -642,7 +646,7 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
                     // Send response to sidebar
                     if (this.webviewView) {
                         this.webviewView.webview.postMessage({
-                            type: 'addAssistantMessage', 
+                            type: 'addAssistantMessage',
                             message: noFileMessage
                         });
                     }
@@ -652,10 +656,10 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
 
             // Reset cancellation flag for new request
             this.isCanceled = false;
-            
+
             // Create new AbortController for this request
             this.currentAbortController = new AbortController();
-            
+
             // Set global abort signal for review functions
             setGlobalAbortSignal(this.currentAbortController.signal);
 
@@ -668,10 +672,10 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
 
             // Determine participant and get response with images (Ask mode)
             const participant = this.determineParticipant(userMessage);
-            
+
             // Get current file context for better responses (reuse from above)
             // const currentFileContext was already declared above
-            
+
             // Enhance message with current file context if available (like GitHub Copilot)
             // enhancedMessage should already be set by context engine above if context is needed
             if (currentFileContext && currentFileContext.hasFile) {
@@ -687,18 +691,18 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
             } else {
                 aidaLogging('📁 No file context available');
             }
-            
+
             // Create streaming callback for real-time updates
             let fullResponse = '';
             let isFirstChunk = true;
-            
+
             const streamCallback = (chunk) => {
                 // Check for cancellation
                 if (this.isCanceled) {
                     aidaLogging('🛑 Streaming canceled, stopping chunk processing');
                     return;
                 }
-                
+
                 if (isFirstChunk) {
                     // Hide typing indicator and start streaming message
                     if (this.webviewView) {
@@ -708,9 +712,9 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
                     }
                     isFirstChunk = false;
                 }
-                
+
                 fullResponse += chunk;
-                
+
                 // Send streaming chunk to webview
                 if (this.webviewView && !this.isCanceled) {
                     this.webviewView.webview.postMessage({
@@ -719,11 +723,11 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
                     });
                 }
             };
-            
+
             // Determine if streaming should be used
             const isReviewMode = ['review-file', 'review-changes', 'review-all-changes', 'review-pr', 'scan-app', 'sync-review-templates', 'dependency'].includes(participant);
             const shouldStream = participant === 'general' || isReviewMode;
-            
+
             let response;
             aidaLogging('🤖 Calling participant with enhanced message:', enhancedMessage.substring(0, 200) + '...');
             if (shouldStream) {
@@ -731,20 +735,20 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
             } else {
                 response = await this.callParticipant(participant, enhancedMessage, images);
             }
-            
+
             // Check for cancellation before completing
             if (this.isCanceled) {
                 aidaLogging('🛑 Operation was canceled, stopping processing');
                 return;
             }
-            
+
             // Complete streaming if it was used
             if (shouldStream && this.webviewView) {
                 this.webviewView.webview.postMessage({
                     type: 'endStreamingMessage'
                 });
             }
-            
+
             // Clean up abort controller
             this.currentAbortController = null;
             setGlobalAbortSignal(null);
@@ -755,14 +759,14 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
                 content: fullResponse || response,
                 timestamp: new Date()
             });
-            
+
             // Save chat history to persistent storage
             this.saveChatHistory();
 
             // Send response to sidebar (only if not streaming)
             if (!shouldStream && this.webviewView) {
                 this.webviewView.webview.postMessage({
-                    type: 'addAssistantMessage', 
+                    type: 'addAssistantMessage',
                     message: response
                 });
             }
@@ -783,15 +787,15 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
      */
     determineParticipant(message) {
         const lowerMessage = message.toLowerCase();
-        
+
         if (lowerMessage.includes('@review-file')) return 'review-file';
-        if (lowerMessage.includes('@review-changes')) return 'review-changes';  
+        if (lowerMessage.includes('@review-changes')) return 'review-changes';
         if (lowerMessage.includes('@review-all-changes')) return 'review-all-changes';
         if (lowerMessage.includes('@review-pr')) return 'review-pr';
         if (lowerMessage.includes('@sync-review-templates')) return 'sync-review-templates';
         if (lowerMessage.includes('@scan-app')) return 'scan-app';
         if (lowerMessage.includes('@dependency')) return 'dependency';
-        
+
         return 'general';
     }
 
@@ -814,7 +818,7 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
             const fileContent = document.getText();
             const languageId = document.languageId;
             const lineCount = document.lineCount;
-            
+
             // Get basic file analysis
             const analysis = this.analyzeFileContent(fileContent, languageId);
 
@@ -920,21 +924,21 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
                 try {
                     const document = await vscode.workspace.openTextDocument(path);
                     const editor = await vscode.window.showTextDocument(document);
-                    
+
                     const text = document.getText();
                     const index = text.indexOf(oldText);
                     if (index === -1) {
                         return { success: false, error: 'Text not found in file' };
                     }
-                    
+
                     const startPos = document.positionAt(index);
                     const endPos = document.positionAt(index + oldText.length);
                     const range = new vscode.Range(startPos, endPos);
-                    
+
                     await editor.edit(editBuilder => {
                         editBuilder.replace(range, newText);
                     });
-                    
+
                     return { success: true, message: `Edited file: ${path}` };
                 } catch (error) {
                     return { success: false, error: error.message };
@@ -966,13 +970,13 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
                 try {
                     const document = await vscode.workspace.openTextDocument(path);
                     const editor = await vscode.window.showTextDocument(document);
-                    
+
                     if (line > 1) {
                         const position = new vscode.Position(line - 1, 0);
                         editor.selection = new vscode.Selection(position, position);
                         editor.revealRange(new vscode.Range(position, position));
                     }
-                    
+
                     return { success: true, message: `Opened file: ${path}` };
                 } catch (error) {
                     return { success: false, error: error.message };
@@ -1006,11 +1010,11 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
      */
     async createAgentPlan(userRequest, currentFileContext = null) {
         const lowerRequest = userRequest.toLowerCase();
-        
+
         // Analyze workspace structure
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
         const projectType = await this.detectProjectType(workspaceFolder);
-        
+
         // Enhanced context with current file
         const context = {
             projectType,
@@ -1026,11 +1030,11 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
             context.currentFileContent = currentFileContext.content;
             context.currentFileAnalysis = currentFileContext.analysis;
         }
-        
+
         // Smart detection for current file operations (explicit or implicit)
         const isCurrentFileOperation = currentFileContext?.hasFile && (
             // Explicit current file references
-            lowerRequest.includes('this file') || 
+            lowerRequest.includes('this file') ||
             lowerRequest.includes('current file') ||
             lowerRequest.includes('refactor this') ||
             lowerRequest.includes('analyze this') ||
@@ -1046,7 +1050,7 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
             lowerRequest.includes('best practices') ||
             (lowerRequest.includes('add') && (lowerRequest.includes('type') || lowerRequest.includes('interface')))
         );
-        
+
         if (isCurrentFileOperation) {
             if (lowerRequest.includes('refactor') || lowerRequest.includes('improve') || lowerRequest.includes('modernize') || lowerRequest.includes('clean up')) {
                 return this.planRefactorCode(context);
@@ -1078,27 +1082,27 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
      */
     async detectProjectType(workspaceFolder) {
         if (!workspaceFolder) return 'unknown';
-        
+
         const tools = this.getAgentTools();
-        
+
         try {
             // Check for Angular
             const angularJson = await tools.readFile(workspaceFolder.uri.fsPath + '/angular.json');
             if (angularJson.success) return 'angular';
-        } catch (e) {}
-        
+        } catch (e) { }
+
         try {
             // Check for React
             const packageJson = await tools.readFile(workspaceFolder.uri.fsPath + '/package.json');
             if (packageJson.success && packageJson.content.includes('react')) return 'react';
-        } catch (e) {}
-        
+        } catch (e) { }
+
         try {
             // Check for Vue
             const packageJson = await tools.readFile(workspaceFolder.uri.fsPath + '/package.json');
             if (packageJson.success && packageJson.content.includes('vue')) return 'vue';
-        } catch (e) {}
-        
+        } catch (e) { }
+
         return 'javascript';
     }
 
@@ -1107,7 +1111,7 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
      */
     planCreateComponent(context) {
         const componentName = context.componentName || this.extractComponentName(context.userRequest);
-        
+
         if (context.projectType === 'angular') {
             return {
                 objective: `Create Angular component: ${componentName}`,
@@ -1140,7 +1144,7 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
                 context: { ...context, componentName }
             };
         }
-        
+
         // React/Vue/JS planning similar...
         return {
             objective: `Create ${context.projectType} component: ${componentName}`,
@@ -1338,23 +1342,23 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
      */
     async executeAgentPlan(plan, userRequest) {
         let report = `🤖 **Refactoring Complete!**\n\n`;
-        
+
         // Show initial planning
         this.updateProgress('🧠 Agent analyzing task and creating execution plan...');
         await this.delay(800);
-        
+
         const improvements = [];
         let allChangesApplied = true;
-        
+
         for (const step of plan.steps) {
             try {
                 // Show current step
                 this.updateProgress(`🔧 Step ${step.id}: ${step.description}...`);
                 await this.delay(500);
-                
+
                 // Execute step
                 const result = await this.executeAgentStep(step, plan.context);
-                
+
                 if (result.success) {
                     // Extract improvements from step results
                     if (step.action === 'apply_refactoring' && result.details.includes('✅')) {
@@ -1365,26 +1369,26 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
                     // Try recovery
                     this.updateProgress(`🔄 Step failed, attempting recovery...`);
                     const recovery = await this.attemptRecovery(step, result.error, plan.context);
-                    
+
                     if (!recovery.success) {
                         allChangesApplied = false;
                         break;
                     }
                 }
-                
+
                 await this.delay(300);
-                
+
             } catch (error) {
                 allChangesApplied = false;
                 break;
             }
         }
-        
+
         // Build Copilot-style report with diff
         if (allChangesApplied && improvements.length > 0) {
             const fileName = plan.context.currentFile?.fileName || 'current file';
             report += `I've successfully refactored your **${fileName}** file with the following improvements:\n\n`;
-            
+
             // Show diff-style changes
             report += `### � **Code Changes:**\n\n`;
             report += '```diff\n';
@@ -1407,34 +1411,34 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
             report += '+   }\n';
             report += '+ }\n';
             report += '```\n\n';
-            
+
             report += `### 🔧 **Key Improvements Applied:**\n\n`;
             report += `1. **Memory Leak Prevention:**\n`;
             report += `   - Added OnDestroy interface\n`;
             report += `   - Added ngOnDestroy() method to unsubscribe\n`;
             report += `   - Prevents memory leaks from unclosed subscriptions\n\n`;
-            
+
             report += `2. **Type Safety:**\n`;
             report += `   - Added explicit types and non-null assertions\n`;
             report += `   - Used strict typing with ! for properties\n`;
             report += `   - Improved method return types\n\n`;
-            
+
             report += `3. **Code Organization:**\n`;
             report += `   - Better constructor parameter formatting\n`;
             report += `   - Added readonly modifiers for dependencies\n`;
             report += `   - Improved method organization\n\n`;
-            
+
             report += `4. **Access Modifiers:**\n`;
             report += `   - Added public for lifecycle methods\n`;
             report += `   - Added private for internal properties\n`;
             report += `   - Used readonly for injected services\n\n`;
-            
+
             report += `### 🚀 **Benefits:**\n`;
             report += `- **No memory leaks** from unmanaged subscriptions\n`;
             report += `- **Better type safety** and IntelliSense support\n`;
             report += `- **Cleaner, more maintainable** code structure\n`;
             report += `- **Follows Angular best practices** and coding standards\n\n`;
-            
+
             report += `Your Angular component is now more robust, type-safe, and follows modern Angular development patterns! 🎉`;
         } else if (allChangesApplied && improvements.length === 0) {
             report = `✅ **Code Analysis Complete!**\n\n`;
@@ -1454,7 +1458,7 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
             report += `- Automatic improvements\n\n`;
             report += `Consider checking for any syntax errors or conflicts in the file.`;
         }
-        
+
         return report;
     }
 
@@ -1463,53 +1467,53 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
      */
     async executeAgentStep(step, context) {
         const tools = this.getAgentTools();
-        
+
         switch (step.action) {
             case 'analyze_structure':
                 return await this.analyzeProjectStructure(tools, context);
-                
+
             case 'create_component_files':
                 return await this.createComponentFiles(tools, context);
-                
+
             case 'update_module':
                 return await this.updateModuleImports(tools, context);
-                
+
             case 'generate_tests':
                 return await this.generateTestFiles(tools, context);
-                
+
             case 'analyze_code':
                 return await this.analyzeCodeStructure(tools, context);
-                
+
             case 'read_current_file':
                 return await this.readCurrentFile(tools, context);
-                
+
             case 'analyze_code_structure':
                 return await this.analyzeCurrentFileStructure(tools, context);
-                
+
             case 'check_best_practices':
                 return await this.checkBestPractices(tools, context);
-                
+
             case 'generate_recommendations':
                 return await this.generateRecommendations(tools, context);
-                
+
             case 'apply_refactoring':
                 return await this.applyRefactoring(tools, context);
-                
+
             case 'identify_improvements':
                 return await this.identifyImprovements(tools, context);
-                
+
             case 'verify_refactoring':
                 return await this.verifyRefactoring(tools, context);
-                
+
             case 'scan_errors':
                 return await this.scanForErrors(tools, context);
-                
+
             case 'apply_fixes':
                 return await this.applyErrorFixes(tools, context);
-                
+
             case 'execute_task':
                 return await this.executeGeneralTask(tools, context);
-                
+
             default:
                 return { success: false, error: `Unknown action: ${step.action}` };
         }
@@ -1521,36 +1525,36 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
     async createComponentFiles(tools, context) {
         const { componentName, projectType } = context;
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-        
+
         if (!workspaceFolder) {
             return { success: false, error: 'No workspace folder found' };
         }
-        
+
         const basePath = workspaceFolder.uri.fsPath;
         const componentPath = `${basePath}/src/app/components/${componentName.toLowerCase()}`;
-        
+
         try {
             // Create component directory
             await tools.createDirectory(componentPath);
-            
+
             if (projectType === 'angular') {
                 // Create Angular component files
                 const tsContent = this.generateAngularComponentTS(componentName);
                 const htmlContent = this.generateAngularComponentHTML(componentName);
                 const scssContent = this.generateAngularComponentSCSS(componentName);
-                
+
                 await tools.createFile(`${componentPath}/${componentName.toLowerCase()}.component.ts`, tsContent);
                 await tools.createFile(`${componentPath}/${componentName.toLowerCase()}.component.html`, htmlContent);
                 await tools.createFile(`${componentPath}/${componentName.toLowerCase()}.component.scss`, scssContent);
-                
-                return { 
-                    success: true, 
-                    details: `Created Angular component with 3 files in ${componentPath}` 
+
+                return {
+                    success: true,
+                    details: `Created Angular component with 3 files in ${componentPath}`
                 };
             }
-            
+
             return { success: true, details: `Created component directory: ${componentPath}` };
-            
+
         } catch (error) {
             return { success: false, error: error.message };
         }
@@ -1622,31 +1626,31 @@ export class ${componentName}Component {
     async updateModuleImports(tools, context) {
         const { componentName } = context;
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-        
+
         if (!workspaceFolder) {
             return { success: false, error: 'No workspace folder found' };
         }
-        
+
         try {
             const modulePath = `${workspaceFolder.uri.fsPath}/src/app/app.module.ts`;
             const moduleContent = await tools.readFile(modulePath);
-            
+
             if (!moduleContent.success) {
                 return { success: false, error: 'Could not read app.module.ts' };
             }
-            
+
             // Add import statement
             const importStatement = `import { ${componentName}Component } from './components/${componentName.toLowerCase()}/${componentName.toLowerCase()}.component';`;
-            
+
             // Add to declarations
             let updatedContent = moduleContent.content;
-            
+
             // Add import at top
             const importIndex = updatedContent.indexOf('import { NgModule }');
             if (importIndex !== -1) {
                 updatedContent = updatedContent.slice(0, importIndex) + importStatement + '\n' + updatedContent.slice(importIndex);
             }
-            
+
             // Add to declarations array
             const declarationsMatch = updatedContent.match(/declarations:\s*\[([\s\S]*?)\]/);
             if (declarationsMatch) {
@@ -1654,11 +1658,11 @@ export class ${componentName}Component {
                 const newDeclarations = declarations ? `${declarations},\n    ${componentName}Component` : `${componentName}Component`;
                 updatedContent = updatedContent.replace(/declarations:\s*\[([\s\S]*?)\]/, `declarations: [\n    ${newDeclarations}\n  ]`);
             }
-            
+
             await tools.editFile(modulePath, moduleContent.content, updatedContent);
-            
+
             return { success: true, details: `Updated app.module.ts with ${componentName}Component` };
-            
+
         } catch (error) {
             return { success: false, error: error.message };
         }
@@ -1669,17 +1673,17 @@ export class ${componentName}Component {
      */
     async analyzeProjectStructure(tools, context) {
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-        
+
         if (!workspaceFolder) {
             return { success: false, error: 'No workspace folder found' };
         }
-        
+
         try {
             const files = await tools.listFiles(workspaceFolder.uri.fsPath);
             if (files.success) {
-                return { 
-                    success: true, 
-                    details: `Analyzed project structure: ${files.files.length} items found` 
+                return {
+                    success: true,
+                    details: `Analyzed project structure: ${files.files.length} items found`
                 };
             }
             return { success: false, error: 'Could not read project structure' };
@@ -1715,12 +1719,12 @@ export class ${componentName}Component {
         if (error.includes('EEXIST')) {
             return { success: true, details: 'File already exists, continuing...' };
         }
-        
+
         if (error.includes('ENOENT')) {
             // Try creating parent directory
             return { success: false, error: 'Directory not found and could not create' };
         }
-        
+
         return { success: false, error: 'Recovery failed' };
     }
 
@@ -1731,25 +1735,25 @@ export class ${componentName}Component {
         // Basic verification - check if files were created
         const tools = this.getAgentTools();
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-        
+
         if (!workspaceFolder) {
             return { success: false, status: 'No workspace to verify' };
         }
-        
+
         try {
             if (plan.context.componentName) {
                 const componentPath = `${workspaceFolder.uri.fsPath}/src/app/components/${plan.context.componentName.toLowerCase()}`;
                 const componentFiles = await tools.listFiles(componentPath);
-                
+
                 if (componentFiles.success && componentFiles.files.length > 0) {
-                    return { 
-                        success: true, 
+                    return {
+                        success: true,
                         status: 'Component files created successfully',
                         details: `Found ${componentFiles.files.length} files in component directory`
                     };
                 }
             }
-            
+
             return { success: true, status: 'Task completed' };
         } catch (error) {
             return { success: false, status: 'Verification failed', details: error.message };
@@ -1762,26 +1766,26 @@ export class ${componentName}Component {
     async generateTestFiles(tools, context) {
         const { componentName, projectType } = context;
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-        
+
         if (!workspaceFolder) {
             return { success: false, error: 'No workspace folder found' };
         }
-        
+
         try {
             if (projectType === 'angular') {
                 const componentPath = `${workspaceFolder.uri.fsPath}/src/app/components/${componentName.toLowerCase()}`;
                 const testContent = this.generateAngularTestFile(componentName);
-                
+
                 await tools.createFile(`${componentPath}/${componentName.toLowerCase()}.component.spec.ts`, testContent);
-                
-                return { 
-                    success: true, 
-                    details: `Created Angular test file for ${componentName}Component` 
+
+                return {
+                    success: true,
+                    details: `Created Angular test file for ${componentName}Component`
                 };
             }
-            
+
             return { success: true, details: 'Test generation not implemented for this project type' };
-            
+
         } catch (error) {
             return { success: false, error: error.message };
         }
@@ -1832,12 +1836,12 @@ describe('${componentName}Component', () => {
         if (!context.currentFile?.hasFile) {
             return { success: false, error: 'No current file to analyze' };
         }
-        
+
         try {
             const currentFile = context.currentFile;
             const content = currentFile.content;
             const analysis = currentFile.analysis;
-            
+
             // Use AI for intelligent code analysis
             const analysisPrompt = `You are an expert code reviewer. Analyze this ${analysis.framework || 'TypeScript'} code and provide detailed insights.
 
@@ -1871,17 +1875,17 @@ Keep the analysis practical and actionable.`;
             await this.delay(1200);
 
             const aiResponse = await this.callAIForAnalysis(analysisPrompt);
-            
+
             if (aiResponse.success) {
-                return { 
-                    success: true, 
+                return {
+                    success: true,
                     details: `🤖 **AI Code Analysis for ${currentFile.fileName}**\n\n${aiResponse.content}`
                 };
             } else {
                 // Fallback to basic analysis
                 return await this.performBasicAnalysis(currentFile, analysis);
             }
-            
+
         } catch (error) {
             return { success: false, error: `AI analysis failed: ${error.message}` };
         }
@@ -1907,41 +1911,41 @@ Keep the analysis practical and actionable.`;
         const content = currentFile.content;
         const issues = [];
         const suggestions = [];
-        
+
         // Basic pattern matching for common issues
         if (analysis.framework === 'angular') {
             if (content.includes('ngOnInit') && !content.includes('OnInit')) {
                 issues.push('Missing OnInit interface implementation');
                 suggestions.push('Add OnInit interface for proper lifecycle management');
             }
-            
+
             if (content.includes('subscription') && !content.includes('ngOnDestroy')) {
                 issues.push('Potential memory leak from unmanaged subscriptions');
                 suggestions.push('Implement OnDestroy to cleanup subscriptions');
             }
         }
-        
+
         if (content.includes(': any')) {
             issues.push('Using generic "any" type reduces type safety');
             suggestions.push('Replace "any" with specific types for better code quality');
         }
-        
+
         let details = `📋 **Basic Analysis for ${currentFile.fileName}**\n\n`;
         details += `**File Info:**\n`;
         details += `- Framework: ${analysis.framework || 'Generic'}\n`;
         details += `- Type: ${analysis.componentType || 'Unknown'}\n`;
         details += `- Lines: ${currentFile.lineCount}\n\n`;
-        
+
         if (issues.length > 0) {
             details += `**Issues Found (${issues.length}):**\n`;
             details += issues.map(issue => `❌ ${issue}`).join('\n') + '\n\n';
-            
+
             details += `**Recommendations:**\n`;
             details += suggestions.map(suggestion => `💡 ${suggestion}`).join('\n');
         } else {
             details += '✅ **Code Quality:** Good structure, no major issues detected!';
         }
-        
+
         return { success: true, details };
     }
 
@@ -2008,10 +2012,10 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
 
             // Parse AI suggestions and apply ALL improvements at once
             const aiSuggestions = this.parseAISuggestions(aiResponse.content);
-            
+
             // Extract improved code directly from AI response if available
             const improvedCode = this.extractCodeFromAIResponse(aiResponse.content);
-            
+
             if (improvedCode && improvedCode.trim() !== originalContent.trim()) {
                 // AI provided complete improved code
                 refactoredContent = improvedCode;
@@ -2031,8 +2035,8 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
             if (refactoredContent !== originalContent && changes.length > 0) {
                 const editResult = await tools.editFile(currentFile.filePath, originalContent, refactoredContent);
                 if (editResult.success) {
-                    return { 
-                        success: true, 
+                    return {
+                        success: true,
                         details: 'Code refactored successfully using AI-powered analysis',
                         changes: changes,
                         showDiff: true,
@@ -2043,8 +2047,8 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
                     return { success: false, error: 'Failed to save changes: ' + editResult.error };
                 }
             } else {
-                return { 
-                    success: true, 
+                return {
+                    success: true,
                     details: '✅ **Code analysis complete:** Your code already follows excellent practices! No changes needed.',
                     changes: []
                 };
@@ -2061,11 +2065,11 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
     parseAISuggestions(aiResponse) {
         const suggestions = [];
         const lines = aiResponse.split('\n');
-        
+
         let currentCategory = '';
         for (const line of lines) {
             const trimmed = line.trim();
-            
+
             // Detect categories (numbered sections or **bold** text)
             if (trimmed.match(/^\d+\.\s*\*\*(.*?)\*\*/) || trimmed.match(/^\*\*(.*?)\*\*/)) {
                 const match = trimmed.match(/^\d+\.\s*\*\*(.*?)\*\*/) || trimmed.match(/^\*\*(.*?)\*\*/);
@@ -2085,7 +2089,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
                 }
             }
         }
-        
+
         // If no suggestions found, add default ones based on common patterns
         if (suggestions.length === 0) {
             suggestions.push(
@@ -2095,7 +2099,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
                     type: 'type-safety'
                 },
                 {
-                    category: 'Memory Management', 
+                    category: 'Memory Management',
                     description: 'Implement OnDestroy for subscription cleanup',
                     type: 'memory-management'
                 },
@@ -2106,7 +2110,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
                 }
             );
         }
-        
+
         return suggestions.slice(0, 6); // Limit to top 6 suggestions
     }
 
@@ -2115,7 +2119,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
      */
     categorizeSuggestion(description) {
         const lower = description.toLowerCase();
-        
+
         if (lower.includes('subscription') || lower.includes('memory') || lower.includes('leak') || lower.includes('unsubscrib')) {
             return 'memory-management';
         } else if (lower.includes('type') || lower.includes('interface') || lower.includes('typescript')) {
@@ -2129,7 +2133,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
         } else if (lower.includes('import') || lower.includes('export') || lower.includes('module')) {
             return 'imports';
         }
-        
+
         return 'general';
     }
 
@@ -2139,10 +2143,10 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
     applyBasicImprovement(content, suggestion) {
         let modified = content;
         let applied = false;
-        
+
         const type = suggestion.type;
         const description = suggestion.description.toLowerCase();
-        
+
         // Simple pattern-based improvements as fallback only
         if (type === 'memory-management' || description.includes('ondestroy')) {
             if (content.includes('subscribe') && !content.includes('OnDestroy')) {
@@ -2176,7 +2180,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
                 applied = true;
             }
         }
-        
+
         return { applied: applied, content: modified };
     }
 
@@ -2187,11 +2191,11 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
         const originalLines = original.split('\n');
         const refactoredLines = refactored.split('\n');
         let diff = '';
-        
+
         // Simple diff generation - show first few key changes
         const maxLines = 10;
         let changeCount = 0;
-        
+
         for (let i = 0; i < Math.min(originalLines.length, refactoredLines.length) && changeCount < maxLines; i++) {
             if (originalLines[i] !== refactoredLines[i]) {
                 diff += `- ${originalLines[i]}\n`;
@@ -2199,11 +2203,11 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
                 changeCount++;
             }
         }
-        
+
         if (changeCount === maxLines) {
             diff += '... (more changes)\n';
         }
-        
+
         return diff || 'Code structure improvements applied';
     }
 
@@ -2218,8 +2222,8 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
                 return { success: true, content: response };
             } else {
                 // Fallback to basic analysis without AI
-                return { 
-                    success: true, 
+                return {
+                    success: true,
                     content: `**Code Analysis Results:**
 
 1. **Code Quality**
@@ -2250,8 +2254,8 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
             }
         } catch (error) {
             console.warn('AI analysis unavailable, using fallback:', error.message);
-            return { 
-                success: true, 
+            return {
+                success: true,
                 content: 'Basic code analysis completed. Consider adding OnDestroy interface for subscription management and proper TypeScript typing.'
             };
         }
@@ -2265,24 +2269,24 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
             // Look for code blocks in the response
             const codeBlockRegex = /```(?:typescript|javascript|ts|js)?\s*\n([\s\S]*?)\n```/i;
             const match = response.match(codeBlockRegex);
-            
+
             if (match && match[1]) {
                 return match[1].trim();
             }
-            
+
             // If no code block found, try to extract code after common phrases
             const patterns = [
                 /(?:improved code|refactored code|here's the improved version):\s*\n([\s\S]*?)(?:\n\n|\n\*\*|$)/i,
                 /(?:here's the|the improved)[\s\S]*?:\s*\n([\s\S]*?)(?:\n\n|\n\*\*|$)/i
             ];
-            
+
             for (const pattern of patterns) {
                 const match = response.match(pattern);
                 if (match && match[1]) {
                     return match[1].trim();
                 }
             }
-            
+
             return null;
         } catch (error) {
             console.warn('Failed to extract code from AI response:', error);
@@ -2301,14 +2305,14 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
                 /(?:changes made|improvements|explanation):\s*\n([\s\S]*?)(?:\n\n|$)/i,
                 /\*\*(?:changes|improvements|explanation)\*\*:?\s*\n([\s\S]*?)(?:\n\n|$)/i
             ];
-            
+
             for (const pattern of explanationPatterns) {
                 const match = response.match(pattern);
                 if (match && match[1]) {
                     return match[1].trim();
                 }
             }
-            
+
             // Fallback: return part of the response
             return response.slice(0, 200) + '...';
         } catch (error) {
@@ -2334,7 +2338,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
                 if (importMatch) {
                     const newImport = importMatch[1] + ', OnInit }';
                     refactoredContent = refactoredContent.replace(importMatch[0], newImport + " from '@angular/core'");
-                    
+
                     const classMatch = refactoredContent.match(/(export\s+class\s+\w+)(\s*{)/);
                     if (classMatch) {
                         refactoredContent = refactoredContent.replace(classMatch[0], `${classMatch[1]} implements OnInit${classMatch[2]}`);
@@ -2347,9 +2351,9 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
         if (refactoredContent !== content && changes.length > 0) {
             const result = await tools.editFile(currentFile.filePath, content, refactoredContent);
             if (result.success) {
-                return { 
-                    success: true, 
-                    details: `Applied basic refactoring improvements:\n${changes.map(c => `- ${c}`).join('\n')}` 
+                return {
+                    success: true,
+                    details: `Applied basic refactoring improvements:\n${changes.map(c => `- ${c}`).join('\n')}`
                 };
             }
         }
@@ -2365,14 +2369,14 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
             // Use VS Code diagnostics to get errors
             const diagnostics = vscode.languages.getDiagnostics();
             let errorCount = 0;
-            
+
             diagnostics.forEach(([uri, diag]) => {
                 errorCount += diag.filter(d => d.severity === vscode.DiagnosticSeverity.Error).length;
             });
-            
-            return { 
-                success: true, 
-                details: `Found ${errorCount} errors in workspace` 
+
+            return {
+                success: true,
+                details: `Found ${errorCount} errors in workspace`
             };
         } catch (error) {
             return { success: false, error: error.message };
@@ -2392,7 +2396,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
      */
     async executeGeneralTask(tools, context) {
         const { task } = context;
-        
+
         try {
             // Simple task execution based on task description
             if (task.includes('create') && task.includes('file')) {
@@ -2408,7 +2412,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
                     }
                 }
             }
-            
+
             return { success: true, details: 'General task executed' };
         } catch (error) {
             return { success: false, error: error.message };
@@ -2422,11 +2426,11 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
         if (!context.currentFile?.hasFile) {
             return { success: false, error: 'No current file to read' };
         }
-        
+
         try {
-            return { 
-                success: true, 
-                details: `Read file: ${context.currentFile.fileName} (${context.currentFile.lineCount} lines)` 
+            return {
+                success: true,
+                details: `Read file: ${context.currentFile.fileName} (${context.currentFile.lineCount} lines)`
             };
         } catch (error) {
             return { success: false, error: error.message };
@@ -2440,11 +2444,11 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
         if (!context.currentFile?.hasFile) {
             return { success: false, error: 'No current file to analyze' };
         }
-        
+
         try {
             const analysis = context.currentFile.analysis;
             let details = `Analyzed ${context.currentFile.fileName}:\n`;
-            
+
             if (analysis.framework) {
                 details += `- Framework: ${analysis.framework}\n`;
             }
@@ -2460,7 +2464,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
             if (analysis.structure.methods?.length) {
                 details += `- Methods: ${analysis.structure.methods.length}\n`;
             }
-            
+
             return { success: true, details };
         } catch (error) {
             return { success: false, error: error.message };
@@ -2474,11 +2478,11 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
         if (!context.currentFile?.hasFile) {
             return { success: false, error: 'No current file to check' };
         }
-        
+
         try {
             const content = context.currentFile.content;
             const recommendations = [];
-            
+
             // Check for Angular best practices
             if (context.currentFile.analysis.framework === 'angular') {
                 if (!content.includes('OnInit') && content.includes('ngOnInit')) {
@@ -2491,18 +2495,18 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
                     recommendations.push('Avoid using "any" type, use specific types');
                 }
             }
-            
+
             // General TypeScript best practices
             if (context.currentFile.languageId === 'typescript') {
                 if (!content.includes('readonly') && content.includes('private')) {
                     recommendations.push('Consider using readonly for immutable properties');
                 }
             }
-            
-            const details = recommendations.length > 0 
+
+            const details = recommendations.length > 0
                 ? `Found ${recommendations.length} improvement suggestions:\n${recommendations.map(r => `- ${r}`).join('\n')}`
                 : 'Code follows best practices well!';
-                
+
             return { success: true, details };
         } catch (error) {
             return { success: false, error: error.message };
@@ -2516,20 +2520,20 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
         if (!context.currentFile?.hasFile) {
             return { success: false, error: 'No current file for recommendations' };
         }
-        
+
         try {
             const analysis = context.currentFile.analysis;
             const recommendations = [];
-            
+
             if (analysis.framework === 'angular' && analysis.componentType === 'component') {
                 recommendations.push('Consider adding input validation');
                 recommendations.push('Add proper error handling');
                 recommendations.push('Implement accessibility features');
                 recommendations.push('Add unit tests');
             }
-            
+
             const details = `Recommendations for ${context.currentFile.fileName}:\n${recommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}`;
-            
+
             return { success: true, details };
         } catch (error) {
             return { success: false, error: error.message };
@@ -2548,9 +2552,9 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
             const currentFile = context.currentFile;
             const content = currentFile.content;
             const analysis = currentFile.analysis;
-            
+
             const improvements = [];
-            
+
             // Smart analysis for improvements
             if (analysis.framework === 'angular') {
                 if (content.includes('ngOnInit') && !content.includes('OnInit')) {
@@ -2566,23 +2570,23 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
                     improvements.push('Add readonly modifier to immutable properties');
                 }
             }
-            
+
             // General TypeScript improvements
             if (currentFile.languageId === 'typescript') {
                 const methods = content.match(/(\w+)\s*\([^)]*\)\s*{/g) || [];
-                const methodsWithoutModifiers = methods.filter(m => 
+                const methodsWithoutModifiers = methods.filter(m =>
                     !m.includes('public') && !m.includes('private') && !m.includes('protected')
                 );
-                
+
                 if (methodsWithoutModifiers.length > 0) {
                     improvements.push('Add explicit access modifiers to methods');
                 }
             }
-            
-            const details = improvements.length > 0 
+
+            const details = improvements.length > 0
                 ? `Identified ${improvements.length} potential improvements:\n${improvements.map(imp => `- ${imp}`).join('\n')}`
                 : 'Code quality is already excellent!';
-                
+
             return { success: true, details };
         } catch (error) {
             return { success: false, error: error.message };
@@ -2601,22 +2605,22 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
             // Check VS Code diagnostics for any new errors
             const diagnostics = vscode.languages.getDiagnostics();
             let errorCount = 0;
-            
+
             diagnostics.forEach(([uri, diag]) => {
                 if (uri.fsPath === context.currentFile.filePath) {
                     errorCount += diag.filter(d => d.severity === vscode.DiagnosticSeverity.Error).length;
                 }
             });
-            
+
             if (errorCount === 0) {
-                return { 
-                    success: true, 
-                    details: 'Refactoring verified successfully - no errors detected!' 
+                return {
+                    success: true,
+                    details: 'Refactoring verified successfully - no errors detected!'
                 };
             } else {
-                return { 
-                    success: false, 
-                    error: `Refactoring introduced ${errorCount} errors - please review manually` 
+                return {
+                    success: false,
+                    error: `Refactoring introduced ${errorCount} errors - please review manually`
                 };
             }
         } catch (error) {
@@ -2631,7 +2635,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
         try {
             let result = '';
             const isStreaming = typeof streamCallback === 'function';
-            
+
             const mockStream = {
                 markdown: (text) => {
                     if (text) {
@@ -2708,10 +2712,10 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
                 case 'review-file':
                     try {
                         aidaLogging('📁 AIDA Chat: Calling review-file with streaming');
-                        
+
                         // Ensure AIDA templates exist before review (like Copilot does)
                         await this.ensureAidaTemplatesExist();
-                        
+
                         const reviewFileModule = require('../review-file.js');
                         await reviewFileModule.processReviewFile(messageWithoutParticipant, mockStream);
                         return result || '✅ **File Review Complete**\n\nCode analysis completed.';
@@ -2720,13 +2724,13 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
                         return '❌ **Error**: ' + error.message + '\n\nPlease check the console for details.';
                     }
 
-                case 'review-changes':  
+                case 'review-changes':
                     try {
                         aidaLogging('📝 AIDA Chat: Calling review-changes with streaming');
-                        
+
                         // Ensure AIDA templates exist before review (like Copilot does)
                         await this.ensureAidaTemplatesExist();
-                        
+
                         const reviewChangesModule = require('../review-changes.js');
                         await reviewChangesModule.processReviewChanges(messageWithoutParticipant, mockStream);
                         return result || '✅ **Changes Review Complete**\n\nGit changes analysis completed.';
@@ -2735,13 +2739,13 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
                         return '❌ **Error**: ' + error.message + '\n\nPlease check the console for details.';
                     }
 
-                case 'review-all-changes':  
+                case 'review-all-changes':
                     try {
                         aidaLogging('🔍 AIDA Chat: Calling review-all-changes with streaming');
-                        
+
                         // Ensure AIDA templates exist before review (like Copilot does)
                         await this.ensureAidaTemplatesExist();
-                        
+
                         const reviewAllChangesModule = require('../review-all-changes.js');
                         await reviewAllChangesModule.processReviewAllChanges(messageWithoutParticipant, mockStream);
                         return result || '✅ **All Changes Review Complete**\n\nWorkspace git changes analysis completed.';
@@ -2817,16 +2821,16 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
             if (images && images.length > 0) {
                 aidaLogging('🖼️ Processing with', images.length, 'image(s)');
             }
-            
+
             // Use AI chatbot service for intelligent conversation with images
             const response = await this.chatbotService.generateResponse(message, images, streamCallback);
-            
+
             aidaLogging('✅ Generated response length:', response.length);
             return response;
-            
+
         } catch (error) {
             console.error('❌ Error generating conversation response:', error);
-            
+
             // Fallback to simple response
             return this.getFallbackResponse(message);
         }
@@ -2837,7 +2841,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
      */
     getFallbackResponse(message) {
         const isVietnamese = /[àáảãạăắằẳẵặâấầẩẫậđèéẻẽẹêếềểễệìíỉĩịòóỏõọôốồổỗộơớờởỡợùúủũụưứừửữựỳýỷỹỵ]/.test(message);
-        
+
         if (isVietnamese) {
             return `# 🤖 AIDA Assistant
 
@@ -2890,7 +2894,7 @@ What interesting project are you working on? 🚀`;
             if (!this.templateLoader) {
                 this.templateLoader = new TemplateLoader(this.context.extensionPath);
             }
-            
+
             return await this.templateLoader.getSidebarTemplate();
         } catch (error) {
             console.error('Failed to load template:', error);
@@ -2925,19 +2929,19 @@ What interesting project are you working on? 🚀`;
     makeMultimodalContextDecision(userMessage, images, currentFileContext, contextDecision, semanticDecision) {
         const hasImages = images && images.length > 0;
         const hasCurrentFile = currentFileContext && currentFileContext.hasFile;
-        
+
         aidaLogging(`🔍 Hybrid analysis: ${images.length} image(s) + ${hasCurrentFile ? 'current file' : 'no file'}`);
-        
+
         // Step 1: Fast rule-based decision (primary)
         const ruleDecision = this.makeRuleBasedDecision(userMessage, images, currentFileContext);
-        
+
         // Step 2: Check if we need semantic analysis (secondary)
         if (this.needsSemanticAnalysis(ruleDecision, userMessage, hasImages, hasCurrentFile)) {
             aidaLogging(`🧠 Complex case detected - using semantic analysis`);
             const semanticDecision = this.contextEngine.shouldIncludeContext(userMessage, currentFileContext);
             return this.combineDecisions(ruleDecision, semanticDecision, userMessage, currentFileContext, images);
         }
-        
+
         aidaLogging(`⚡ Rule-based decision: ${ruleDecision.reason}`);
         return ruleDecision;
     }
@@ -2950,17 +2954,17 @@ What interesting project are you working on? 🚀`;
         const hasImages = images && images.length > 0;
         const hasCurrentFile = currentFileContext && currentFileContext.hasFile;
         const text = userMessage.toLowerCase();
-        
+
         // Rule 1: No images - use file context if available
         if (!hasImages) {
             return {
                 shouldInclude: hasCurrentFile,
                 reason: hasCurrentFile ? 'Rule: No images, include current file' : 'Rule: No images, no current file',
-                enhancedMessage: hasCurrentFile ? this.enhanceMessageWithContext(userMessage, currentFileContext, {shouldInclude: true}) : userMessage,
+                enhancedMessage: hasCurrentFile ? this.enhanceMessageWithContext(userMessage, currentFileContext, { shouldInclude: true }) : userMessage,
                 confidence: 0.9
             };
         }
-        
+
         // Rule 2: Only images, no current file
         if (hasImages && !hasCurrentFile) {
             return {
@@ -2970,13 +2974,13 @@ What interesting project are you working on? 🚀`;
                 confidence: 0.95
             };
         }
-        
+
         // Rule 3: Images + current file - check explicit file references
         if (hasImages && hasCurrentFile) {
-            const explicitFileRef = text.includes('current file') || text.includes('this file') || 
-                                   text.includes('open file') || text.includes('file này') ||
-                                   text.includes('tệp này') || text.includes('current code');
-            
+            const explicitFileRef = text.includes('current file') || text.includes('this file') ||
+                text.includes('open file') || text.includes('file này') ||
+                text.includes('tệp này') || text.includes('current code');
+
             if (explicitFileRef) {
                 return {
                     shouldInclude: true,
@@ -2985,7 +2989,7 @@ What interesting project are you working on? 🚀`;
                     confidence: 0.9
                 };
             }
-            
+
             // Default: Images priority, file as background
             return {
                 shouldInclude: true,
@@ -2994,7 +2998,7 @@ What interesting project are you working on? 🚀`;
                 confidence: 0.7 // Lower confidence - might need semantic analysis
             };
         }
-        
+
         // Fallback
         return {
             shouldInclude: false,
@@ -3013,27 +3017,27 @@ What interesting project are you working on? 🚀`;
         if (ruleDecision.confidence < 0.8) {
             return true;
         }
-        
+
         // Complex multimodal scenario
         if (hasImages && hasCurrentFile) {
             const text = userMessage.toLowerCase();
-            
+
             // Ambiguous references that need semantic analysis
             const ambiguousTerms = ['này', 'this', 'it', 'code', 'function', 'component', 'làm gì', 'how'];
             const hasAmbiguous = ambiguousTerms.some(term => text.includes(term));
-            
+
             if (hasAmbiguous && !text.includes('current file') && !text.includes('image')) {
                 return true;
             }
         }
-        
+
         // Cross-reference analysis needed
         const needsCrossRef = userMessage.length > 100 || // Complex question
-                             userMessage.includes('compare') || 
-                             userMessage.includes('difference') ||
-                             userMessage.includes('so sánh') ||
-                             userMessage.includes('khác nhau');
-        
+            userMessage.includes('compare') ||
+            userMessage.includes('difference') ||
+            userMessage.includes('so sánh') ||
+            userMessage.includes('khác nhau');
+
         return needsCrossRef;
     }
 
@@ -3042,7 +3046,7 @@ What interesting project are you working on? 🚀`;
      */
     combineDecisions(ruleDecision, semanticDecision, userMessage, currentFileContext, images) {
         const hasImages = images && images.length > 0;
-        
+
         // If semantic analysis strongly disagrees with rules
         if (Math.abs(semanticDecision.confidence - ruleDecision.confidence) > 0.3) {
             // Use higher confidence decision
@@ -3050,13 +3054,13 @@ What interesting project are you working on? 🚀`;
                 return {
                     shouldInclude: semanticDecision.shouldInclude,
                     reason: `Hybrid: Semantic override (confidence: ${semanticDecision.confidence.toFixed(2)}) - ${semanticDecision.reason}`,
-                    enhancedMessage: hasImages ? 
+                    enhancedMessage: hasImages ?
                         this.createMultimodalEnhancedMessage(userMessage, currentFileContext, images) :
                         this.enhanceMessageWithContext(userMessage, currentFileContext, semanticDecision)
                 };
             }
         }
-        
+
         // Combine insights from both
         return {
             shouldInclude: ruleDecision.shouldInclude,
@@ -3106,7 +3110,7 @@ ${currentFileContext.content.substring(0, 1000)}${currentFileContext.content.len
 
         // Create context-aware enhancement based on intent and confidence
         let enhancedMessage = userMessage;
-        
+
         if (contextDecision.confidence > 0.8) {
             // High confidence - include detailed context
             enhancedMessage = `${userMessage}
@@ -3141,47 +3145,47 @@ Summary: ${currentFileContext.summary}`;
      */
     basicContextDecision(userMessage, currentFileContext) {
         const text = userMessage.toLowerCase();
-        
+
         // Enhanced pattern matching with better Vietnamese support
-        const hasFileReference = text.includes('this file') || 
-                                text.includes('current file') ||
-                                text.includes('file này') ||
-                                text.includes('tệp này') ||
-                                text.includes('code này') ||
-                                text.includes('component này') ||
-                                text.includes('file nay') ||  // Without diacritics
-                                text.includes('code nay');
-                                
-        const hasCodeAction = text.includes('analyze') || 
-                             text.includes('review') || 
-                             text.includes('refactor') ||
-                             text.includes('explain') ||
-                             text.includes('làm gì') ||
-                             text.includes('lam gi') ||  // Without diacritics
-                             text.includes('chức năng') ||
-                             text.includes('chuc nang') || // Without diacritics
-                             text.includes('tìm gọn') ||
-                             text.includes('tim gon') || // Without diacritics
-                             text.includes('xem') ||
-                             text.includes('đọc') ||
-                             text.includes('doc') || // Without diacritics
-                             text.includes('kiểm tra') ||
-                             text.includes('kiem tra') || // Without diacritics
-                             text.includes('phân tích') ||
-                             text.includes('phan tich') || // Without diacritics
-                             text.includes('help') ||
-                             text.includes('giúp') ||
-                             text.includes('giup') || // Without diacritics
-                             text.includes('about') ||
-                             text.includes('về') ||  // About in Vietnamese
-                             text.includes('vậy') || // Question ending particle
-                             text.includes('thế'); // Alternative question particle
+        const hasFileReference = text.includes('this file') ||
+            text.includes('current file') ||
+            text.includes('file này') ||
+            text.includes('tệp này') ||
+            text.includes('code này') ||
+            text.includes('component này') ||
+            text.includes('file nay') ||  // Without diacritics
+            text.includes('code nay');
+
+        const hasCodeAction = text.includes('analyze') ||
+            text.includes('review') ||
+            text.includes('refactor') ||
+            text.includes('explain') ||
+            text.includes('làm gì') ||
+            text.includes('lam gi') ||  // Without diacritics
+            text.includes('chức năng') ||
+            text.includes('chuc nang') || // Without diacritics
+            text.includes('tìm gọn') ||
+            text.includes('tim gon') || // Without diacritics
+            text.includes('xem') ||
+            text.includes('đọc') ||
+            text.includes('doc') || // Without diacritics
+            text.includes('kiểm tra') ||
+            text.includes('kiem tra') || // Without diacritics
+            text.includes('phân tích') ||
+            text.includes('phan tich') || // Without diacritics
+            text.includes('help') ||
+            text.includes('giúp') ||
+            text.includes('giup') || // Without diacritics
+            text.includes('about') ||
+            text.includes('về') ||  // About in Vietnamese
+            text.includes('vậy') || // Question ending particle
+            text.includes('thế'); // Alternative question particle
 
         // More inclusive logic - if user mentions file operations AND has active file
         const shouldInclude = (hasFileReference || hasCodeAction) && currentFileContext?.hasFile;
-        
+
         aidaLogging(`🔍 Basic context decision: fileRef=${hasFileReference}, codeAction=${hasCodeAction}, hasFile=${!!currentFileContext?.hasFile}, result=${shouldInclude}`);
-        
+
         return {
             shouldInclude: shouldInclude,
             confidence: shouldInclude ? 0.7 : 0.3, // Higher confidence for fallback
@@ -3198,11 +3202,11 @@ class AidaChatViewProvider {
     constructor(context, chatInstance) {
         this.context = context;
         this.chatInstance = chatInstance;
-        
+
         // Listen for configuration changes to update model name
         this.setupConfigurationListener();
     }
-    
+
     /**
      * Setup listener for configuration changes
      */
@@ -3246,31 +3250,31 @@ class AidaChatViewProvider {
                 case 'sendMessage':
                     // Handle both text and image messages with mode and model
                     await this.chatInstance.processChatMessage(
-                        message.message, 
+                        message.message,
                         message.images,
                         message.mode || 'ask',
                         message.model || 'claude-sonnet-4.5'
                     );
                     break;
-                    
+
                 case 'clearChat':
                     this.chatInstance.clearChatHistory(); // Use our new method
                     this.chatInstance.chatbotService.clearHistory(); // Clear AI conversation history
                     webviewView.webview.postMessage({ type: 'clearChat' });
                     break;
-                    
+
                 case 'navigateHistory':
                     this.handleHistoryNavigation(message.direction, webviewView);
                     break;
-                    
+
                 case 'resetHistoryIndex':
                     this.chatInstance.historyIndex = -1;
                     break;
-                    
+
                 case 'openSettings':
                     vscode.commands.executeCommand('workbench.action.openSettings', 'aida');
                     break;
-                    
+
                 case 'closeChat':
                     // Hide the sidebar view
                     vscode.commands.executeCommand('workbench.action.closeSidebar');
@@ -3288,7 +3292,7 @@ class AidaChatViewProvider {
                         await vscode.commands.executeCommand(message.command, ...message.arguments);
                     }
                     break;
-                    
+
                 case 'updateTypingMessage':
                     // Agent progress updates - just pass through to webview
                     webviewView.webview.postMessage({
@@ -3296,35 +3300,35 @@ class AidaChatViewProvider {
                         message: message.message
                     });
                     break;
-                    
+
                 case 'getSyncInfo':
                     try {
                         const fs = require('fs');
                         const path = require('path');
-                        
+
                         let syncResult = '📁 **Extension templates:** `' + path.join(this.context.extensionPath, 'AIDA', 'templates') + '`\n\n';
-                        
+
                         if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
                             const workspaceAidaPath = path.join(vscode.workspace.workspaceFolders[0].uri.fsPath, 'AIDA', 'templates');
                             syncResult += '📁 **Workspace AIDA path:** `' + workspaceAidaPath + '`\n\n';
                             syncResult += '📋 **Checking for new languages...**\n\n';
-                            
+
                             // Check if workspace AIDA directory exists
                             try {
                                 const extTemplatesPath = path.join(this.context.extensionPath, 'AIDA', 'templates');
                                 if (fs.existsSync(extTemplatesPath)) {
-                                    const extLanguages = fs.readdirSync(extTemplatesPath).filter(item => 
+                                    const extLanguages = fs.readdirSync(extTemplatesPath).filter(item =>
                                         fs.statSync(path.join(extTemplatesPath, item)).isDirectory()
                                     );
-                                    
+
                                     syncResult += '✅ **All templates are up to date!**\n\n';
                                     syncResult += '## 📋 Available Templates:\n\n';
-                                    
+
                                     // Categorize languages based on actual available languages
                                     const webFrontend = ['angular', 'javascript', 'react', 'typescript', 'vue'];
                                     const backend = ['csharp', 'go', 'nodejs', 'python'];
                                     const other = []; // No other languages currently
-                                    
+
                                     if (extLanguages.some(lang => webFrontend.includes(lang))) {
                                         syncResult += '**🌐 Web & Frontend:**\n';
                                         extLanguages.filter(lang => webFrontend.includes(lang)).forEach(lang => {
@@ -3332,7 +3336,7 @@ class AidaChatViewProvider {
                                         });
                                         syncResult += '\n';
                                     }
-                                    
+
                                     if (extLanguages.some(lang => backend.includes(lang))) {
                                         syncResult += '**⚙️ Backend & Server:**\n';
                                         extLanguages.filter(lang => backend.includes(lang)).forEach(lang => {
@@ -3340,7 +3344,7 @@ class AidaChatViewProvider {
                                         });
                                         syncResult += '\n';
                                     }
-                                    
+
                                     if (extLanguages.some(lang => other.includes(lang))) {
                                         syncResult += '**🔧 Other Languages:**\n';
                                         extLanguages.filter(lang => other.includes(lang)).forEach(lang => {
@@ -3348,7 +3352,7 @@ class AidaChatViewProvider {
                                         });
                                         syncResult += '\n';
                                     }
-                                    
+
                                     syncResult += '**Total:** ' + extLanguages.length + ' language templates available\n\n';
                                     syncResult += '---\n\n💡 **Tip:** Use `@review-file`, `@review-changes`, or `@review-all-changes` to start reviewing with templates\n';
                                 } else {
@@ -3360,7 +3364,7 @@ class AidaChatViewProvider {
                         } else {
                             syncResult += '⚠️ **No workspace found**\n\nPlease open a workspace folder.\n';
                         }
-                        
+
                         webviewView.webview.postMessage({
                             type: 'syncInfo',
                             syncResult: syncResult
@@ -3380,17 +3384,17 @@ class AidaChatViewProvider {
                             if (message.command === 'aida.viewPrDiff') {
                                 const diffId = message.arguments[0];
                                 aidaLogging('📄 Opening Monaco diff for diffId:', diffId);
-                                
+
                                 // Extract file path from diffId (format: github_id_filepath)
                                 const pathPart = diffId.split('_').slice(2).join('_').replace(/_/g, '/');
                                 aidaLogging('� Extracted path:', pathPart);
-                                
+
                                 // Try to find the file in workspace
                                 const workspaceFolders = vscode.workspace.workspaceFolders;
                                 if (workspaceFolders && workspaceFolders.length > 0) {
                                     const filePath = vscode.Uri.joinPath(workspaceFolders[0].uri, pathPart);
                                     aidaLogging('🔍 Opening file:', filePath.toString());
-                                    
+
                                     // Open the file
                                     await vscode.commands.executeCommand('vscode.open', filePath);
                                     vscode.window.showInformationMessage(`Opened file: ${pathPart}`);
@@ -3409,7 +3413,7 @@ class AidaChatViewProvider {
                         console.error('❌ Invalid command or arguments:', message);
                     }
                     break;
-                    
+
                 case 'savePartialContent':
                     // Save partial streaming content when user cancels
                     if (message.content && message.content.trim()) {
@@ -3419,13 +3423,13 @@ class AidaChatViewProvider {
                             timestamp: new Date(message.timestamp),
                             partial: true // Mark as partial response
                         });
-                        
+
                         // Save to persistent storage
                         this.chatInstance.saveChatHistory();
                         aidaLogging('💾 Saved partial content to chat history');
                     }
                     break;
-                    
+
                 case 'frontendReady':
                     // Frontend is ready, send current file info
                     aidaLogging('📁 Frontend ready, updating current file...');
@@ -3452,19 +3456,19 @@ class AidaChatViewProvider {
     initializeWebviewState(webviewView) {
         try {
             aidaLogging('🔄 Initializing webview state...');
-            
+
             // Send current model name to frontend
             this.sendCurrentModelName(webviewView);
-            
+
             // Restore chat history
             this.restoreChatHistory(webviewView);
-            
+
             // Show current active file - Force update to ensure it's displayed
             if (this.chatInstance && typeof this.chatInstance.updateCurrentFile === 'function') {
                 // Force current file update by passing current active editor
                 const currentEditor = vscode.window.activeTextEditor;
                 aidaLogging('📁 Active editor during init:', currentEditor ? currentEditor.document.fileName : 'None');
-                
+
                 if (currentEditor) {
                     // Force update even if filename is same
                     this.chatInstance.updateCurrentFile(currentEditor, true);
@@ -3477,7 +3481,7 @@ class AidaChatViewProvider {
             } else {
                 console.warn('updateCurrentFile not available on chatInstance');
             }
-            
+
             aidaLogging('🔄 Webview state initialized');
         } catch (error) {
             console.error('Failed to initialize webview state:', error);
@@ -3491,9 +3495,9 @@ class AidaChatViewProvider {
         try {
             const config = vscode.workspace.getConfiguration('aida');
             const modelFromSettings = config.get('ai.model', 'Claude-4-Sonnet');
-            
+
             aidaLogging('🤖 Sending model name to frontend:', modelFromSettings);
-            
+
             webviewView.webview.postMessage({
                 type: 'updateModelName',
                 modelName: modelFromSettings
@@ -3512,7 +3516,7 @@ class AidaChatViewProvider {
         }
 
         aidaLogging(`📚 Restoring ${this.chatInstance.chatHistory.length} chat messages`);
-        
+
         for (const message of this.chatInstance.chatHistory) {
             if (message.role === 'user') {
                 webviewView.webview.postMessage({
@@ -3548,9 +3552,9 @@ class AidaChatViewProvider {
                 if (this.chatInstance.historyIndex >= messageHistory.length) {
                     // Reset to current input (clear field)
                     this.chatInstance.historyIndex = -1;
-                    webviewView.webview.postMessage({ 
-                        type: 'setInputValue', 
-                        value: '' 
+                    webviewView.webview.postMessage({
+                        type: 'setInputValue',
+                        value: ''
                     });
                     return;
                 }
@@ -3559,9 +3563,9 @@ class AidaChatViewProvider {
 
         // Send the message from history to webview
         if (this.chatInstance.historyIndex >= 0 && this.chatInstance.historyIndex < messageHistory.length) {
-            webviewView.webview.postMessage({ 
-                type: 'setInputValue', 
-                value: messageHistory[this.chatInstance.historyIndex] 
+            webviewView.webview.postMessage({
+                type: 'setInputValue',
+                value: messageHistory[this.chatInstance.historyIndex]
             });
         }
     }
@@ -3571,25 +3575,25 @@ class AidaChatViewProvider {
      */
     cancelStreaming() {
         aidaLogging('🛑 Canceling streaming operation...');
-        
+
         // Abort the actual AI HTTP request
         if (this.currentAbortController) {
             this.currentAbortController.abort();
             aidaLogging('🛑 HTTP request aborted');
         }
-        
+
         // Set a flag to indicate cancellation
         if (this.chatInstance) {
             this.chatInstance.isCanceled = true;
         }
-        
+
         // Send cancellation notification to webview
         if (this.webviewView) {
-            this.webviewView.webview.postMessage({ 
+            this.webviewView.webview.postMessage({
                 type: 'endStreamingMessage'
             });
         }
-        
+
         // Clean up
         this.currentAbortController = null;
         setGlobalAbortSignal(null); // Clear global signal
@@ -3623,7 +3627,7 @@ function initializeCopilotSidebarChat(context) {
         });
 
         aidaLogging('✅ AIDA Chatbot Sidebar initialized');
-        
+
         return {
             sidebarChat,
             provider,
