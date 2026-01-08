@@ -51178,7 +51178,7 @@ class ChatbotContextEngine {
             
             return decision;
         } catch (error) {
-            console.error('❌ Context detection error:', error);
+            aidaLogging('❌ Context detection error:', error);
             // Fallback to conservative approach
             return {
                 includeContent: !!editorContext.selectedText, // Include content only if text is selected
@@ -51242,7 +51242,7 @@ class ChatbotContextEngine {
             };
 
         } catch (error) {
-            console.warn('Context decision engine error:', error);
+            aidaLogging('Context decision engine error:', error);
             // Fallback to conservative approach
             return this.fallbackDecision(userInput, currentFileContext);
         }
@@ -52110,7 +52110,7 @@ class ChatbotContextEngine {
             };
             
         } catch (error) {
-            console.warn('Universal context decision error:', error);
+            aidaLogging('Universal context decision error:', error);
             // Safe fallback
             return {
                 shouldInclude: false,
@@ -52302,11 +52302,11 @@ class ChatbotContextEngine {
                         extractedTexts.push(text.trim());
                         aidaLogging('✅ Tesseract OCR extracted:', text.substring(0, 100) + '...');
                     } else {
-                        console.warn('⚠️ No text extracted from image');
+                        aidaLogging('⚠️ No text extracted from image');
                     }
                     
                 } catch (ocrError) {
-                    console.error('❌ OCR extraction failed for image:', ocrError.message);
+                    aidaLogging('❌ OCR extraction failed for image:', ocrError.message);
                     throw new Error(`OCR not supported: ${ocrError.message}`);
                 }
             }
@@ -52317,7 +52317,7 @@ class ChatbotContextEngine {
             return combinedText;
             
         } catch (error) {
-            console.error('❌ OCR processing failed:', error);
+            aidaLogging('❌ OCR processing failed:', error);
             // Return error message instead of empty string
             return `[OCR Error: ${error.message}]`;
         }
@@ -52356,7 +52356,7 @@ class ChatbotContextEngine {
             } else // removed by dead control flow
 {}
         } catch (error) {
-            console.error('❌ Tesseract OCR failed:', error.message);
+            aidaLogging('❌ Tesseract OCR failed:', error.message);
             throw new Error(`Tesseract OCR failed: ${error.message}`);
         }
     }
@@ -52490,7 +52490,7 @@ class AidaChatbotService {
             this.systemPrompt = await this.loadSystemPrompt();
             aidaLogging('✅ AIDA Chatbot initialized with system prompt');
         } catch (error) {
-            console.warn('⚠️ Failed to load system prompt, using default');
+            aidaLogging('⚠️ Failed to load system prompt, using default');
             this.systemPrompt = this.getDefaultSystemPrompt();
         }
     }
@@ -52619,7 +52619,7 @@ class AidaChatbotService {
             return aiResponse;
 
         } catch (error) {
-            console.error('❌ Error generating AI response:', error);
+            aidaLogging('❌ Error generating AI response:', error);
             // Fallback to rule-based response
             return this.generateFallbackResponse(userMessage, images);
         }
@@ -52695,7 +52695,7 @@ class AidaChatbotService {
             }
             
         } catch (error) {
-            console.error('❌ Shared callAI failed:', error);
+            aidaLogging('❌ Shared callAI failed:', error);
             
             // Fall back to smart responses
             aidaLogging('🔄 Falling back to smart responses');
@@ -52886,8 +52886,8 @@ try {
     const result = riskyOperation();
     aidaLogging('Success:', result);
 } catch (error) {
-    console.error('Error details:', error);
-    console.error('Stack trace:', error.stack);
+    aidaLogging('Error details:', error);
+    aidaLogging('Stack trace:', error.stack);
 }
 \`\`\`
 
@@ -53064,12 +53064,12 @@ What interesting project are you working on? 🚀`;
         // Validate mime type
         const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
         if (!allowedTypes.includes(mimeType)) {
-            console.warn('Unsupported image type:', mimeType, 'defaulting to image/png');
+            aidaLogging('Unsupported image type:', mimeType, 'defaulting to image/png');
             mimeType = 'image/png';
         }
         
         if (!base64Data) {
-            console.error('Failed to extract base64 data from image');
+            aidaLogging('Failed to extract base64 data from image');
             return null;
         }
         
@@ -53194,7 +53194,7 @@ Please try asking again with more details! 🙏`;
                                 streamCallback(content);
                             }
                         } catch (parseError) {
-                            console.warn('⚠️ Failed to parse streaming chunk:', parseError);
+                            aidaLogging('⚠️ Failed to parse streaming chunk:', parseError);
                         }
                     }
                 }
@@ -53207,7 +53207,7 @@ Please try asking again with more details! 🙏`;
             return fullContent;
             
         } catch (error) {
-            console.error('❌ Streaming response error:', error);
+            aidaLogging('❌ Streaming response error:', error);
             throw error;
         }
     }
@@ -53384,7 +53384,7 @@ class CopilotSidebarChat {
             await this.chatbotService.initialize();
             aidaLogging('✅ AIDA Chatbot Service initialized');
         } catch (error) {
-            console.error('❌ Failed to initialize chatbot service:', error);
+            aidaLogging('❌ Failed to initialize chatbot service:', error);
         }
     }
 
@@ -53459,7 +53459,7 @@ class CopilotSidebarChat {
             const workspaceName = vscode.workspace.workspaceFolders?.[0]?.name || 'global';
             aidaLogging(`📚 Loaded ${this.chatHistory.length} chat messages for workspace: ${workspaceName}`);
         } catch (error) {
-            console.error('Failed to load chat history:', error);
+            aidaLogging('Failed to load chat history:', error);
             this.chatHistory = [];
             this.messageHistory = [];
         }
@@ -53489,7 +53489,7 @@ class CopilotSidebarChat {
             const workspaceName = vscode.workspace.workspaceFolders?.[0]?.name || 'global';
             aidaLogging(`💾 Saved ${historyToSave.length} chat messages for workspace: ${workspaceName}`);
         } catch (error) {
-            console.error('Failed to save chat history:', error);
+            aidaLogging('Failed to save chat history:', error);
         }
     }
 
@@ -53716,7 +53716,7 @@ class CopilotSidebarChat {
                     }
 
                 } catch (engineError) {
-                    console.warn('⚠️ Context engine error, falling back to basic logic:', engineError.message);
+                    aidaLogging('⚠️ Context engine error, falling back to basic logic:', engineError.message);
                     // Fallback to basic pattern matching if engine fails
                     contextDecision = this.basicContextDecision(userMessage, currentFileContext);
                 }
@@ -54039,7 +54039,7 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
             }
 
         } catch (error) {
-            console.error('❌ Error processing sidebar message:', error);
+            aidaLogging('❌ Error processing sidebar message:', error);
             if (this.webviewView) {
                 this.webviewView.webview.postMessage({
                     type: 'showError',
@@ -55166,7 +55166,7 @@ Keep the analysis practical and actionable.`;
             const response = await this.chatbotService.sendMessage(prompt);
             return { success: true, content: response };
         } catch (error) {
-            console.warn('AI analysis service unavailable:', error.message);
+            aidaLogging('AI analysis service unavailable:', error.message);
             return { success: false, error: error.message };
         }
     }
@@ -55520,7 +55520,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
                 };
             }
         } catch (error) {
-            console.warn('AI analysis unavailable, using fallback:', error.message);
+            aidaLogging('AI analysis unavailable, using fallback:', error.message);
             return {
                 success: true,
                 content: 'Basic code analysis completed. Consider adding OnDestroy interface for subscription management and proper TypeScript typing.'
@@ -55556,7 +55556,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
 
             return null;
         } catch (error) {
-            console.warn('Failed to extract code from AI response:', error);
+            aidaLogging('Failed to extract code from AI response:', error);
             return null;
         }
     }
@@ -55987,7 +55987,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
                         await reviewFileModule.processReviewFile(messageWithoutParticipant, mockStream);
                         return result || '✅ **File Review Complete**\n\nCode analysis completed.';
                     } catch (error) {
-                        console.error('❌ AIDA Chat review-file error:', error);
+                        aidaLogging('❌ AIDA Chat review-file error:', error);
                         return '❌ **Error**: ' + error.message + '\n\nPlease check the console for details.';
                     }
 
@@ -56002,7 +56002,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
                         await reviewChangesModule.processReviewChanges(messageWithoutParticipant, mockStream);
                         return result || '✅ **Changes Review Complete**\n\nGit changes analysis completed.';
                     } catch (error) {
-                        console.error('❌ AIDA Chat review-changes error:', error);
+                        aidaLogging('❌ AIDA Chat review-changes error:', error);
                         return '❌ **Error**: ' + error.message + '\n\nPlease check the console for details.';
                     }
 
@@ -56017,7 +56017,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
                         await reviewAllChangesModule.processReviewAllChanges(messageWithoutParticipant, mockStream);
                         return result || '✅ **All Changes Review Complete**\n\nWorkspace git changes analysis completed.';
                     } catch (error) {
-                        console.error('❌ AIDA Chat review-all-changes error:', error);
+                        aidaLogging('❌ AIDA Chat review-all-changes error:', error);
                         return '❌ **Error**: ' + error.message + '\n\nPlease check the console for details.';
                     }
 
@@ -56032,7 +56032,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
                         await reviewPRModule.processReviewPr(messageWithoutParticipant, mockStream);
                         return result || '✅ **PR Review Complete**\n\nPull request analysis completed.';
                     } catch (error) {
-                        console.error('❌ AIDA Chat review-pr error:', error);
+                        aidaLogging('❌ AIDA Chat review-pr error:', error);
                         return '❌ **Error**: ' + error.message + '\n\nPlease check the console for details.';
                     }
 
@@ -56043,7 +56043,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
                         await syncModule.aiSyncReviewTemplates(messageWithoutParticipant, mockStream, null, this.context);
                         return result || '✅ **Template Sync Complete**\n\nTemplate synchronization completed.';
                     } catch (error) {
-                        console.error('❌ AIDA Chat sync-review-templates error:', error);
+                        aidaLogging('❌ AIDA Chat sync-review-templates error:', error);
                         return '❌ **Error**: ' + error.message + '\n\nPlease check the console for details.';
                     }
 
@@ -56054,7 +56054,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
                         await dependencyModule.aiDependencyAnalysis(messageWithoutParticipant, mockStream, null, this.context);
                         return result || '✅ **Dependency Analysis Complete**\n\nDependency analysis completed.';
                     } catch (error) {
-                        console.error('❌ AIDA Chat dependency error:', error);
+                        aidaLogging('❌ AIDA Chat dependency error:', error);
                         return '❌ **Error**: ' + error.message + '\n\nPlease check the console for details.';
                     }
 
@@ -56065,7 +56065,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
                         await scanModule.handleScanApp(messageWithoutParticipant, mockStream, null, this.context);
                         return result || '✅ **Scan Complete**\n\nCode scanning and duplicate detection completed.';
                     } catch (error) {
-                        console.error('❌ AIDA Chat scan-app error:', error);
+                        aidaLogging('❌ AIDA Chat scan-app error:', error);
                         return '❌ **Error**: ' + error.message + '\n\nPlease check the console for details.';
                     }
 
@@ -56074,7 +56074,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
             }
 
         } catch (error) {
-            console.error('❌ Error calling ' + participant + ' participant:', error);
+            aidaLogging('❌ Error calling ' + participant + ' participant:', error);
             return '❌ **Error**\n\nSorry, I encountered an error: ' + error.message;
         }
     }
@@ -56096,7 +56096,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
             return response;
 
         } catch (error) {
-            console.error('❌ Error generating conversation response:', error);
+            aidaLogging('❌ Error generating conversation response:', error);
 
             // Fallback to simple response
             return this.getFallbackResponse(message);
@@ -56164,7 +56164,7 @@ What interesting project are you working on? 🚀`;
 
             return await this.templateLoader.getSidebarTemplate();
         } catch (error) {
-            console.error('Failed to load template:', error);
+            aidaLogging('Failed to load template:', error);
             // Return basic fallback template
             return `<!DOCTYPE html>
 <html lang="en">
@@ -56466,6 +56466,21 @@ Summary: ${currentFileContext.summary}`;
  * WebView Provider for Sidebar (like GitHub Copilot)
  */
 class AidaChatViewProvider {
+    // Default model priority: Opus > Sonnet > Gemini
+    // Higher number = higher priority
+    static MODEL_PRIORITY_KEYWORDS = [
+        { keyword: 'opus', priority: 100 },
+        { keyword: 'sonnet', priority: 90 },
+        { keyword: 'gemini', priority: 80 },
+        { keyword: 'gpt-5', priority: 75 },
+        { keyword: 'gpt5', priority: 75 },
+        { keyword: 'gpt-4', priority: 70 },
+        { keyword: 'gpt4', priority: 70 },
+        { keyword: 'claude', priority: 85 },
+        { keyword: 'o4', priority: 72 },
+        { keyword: 'o3', priority: 68 },
+    ];
+
     constructor(context, chatInstance) {
         this.context = context;
         this.chatInstance = chatInstance;
@@ -56475,11 +56490,168 @@ class AidaChatViewProvider {
     }
 
     /**
+     * Get model priority score (higher = better)
+     * Priority: Opus > Sonnet > Gemini
+     */
+    getModelPriority(modelFamily) {
+        if (!modelFamily) return 0;
+        const key = modelFamily.toLowerCase().trim();
+
+        // Check keywords in order
+        for (const { keyword, priority } of AidaChatViewProvider.MODEL_PRIORITY_KEYWORDS) {
+            if (key.includes(keyword)) {
+                return priority;
+            }
+        }
+
+        return 50; // Default priority for unknown models
+    }
+
+    /**
+     * Get available models list
+     * If External API mode: returns single model from settings
+     * If Copilot mode: returns all available models sorted by priority
+     */
+    async getAvailableModels() {
+        const config = vscode.workspace.getConfiguration('aida');
+        const useExternalAI = config.get('useExternalAI', false);
+
+        if (useExternalAI) {
+            // External API mode - single model from settings
+            const modelName = config.get('ai.model', 'GPT-4');
+            return [{
+                id: 'external-api',
+                family: modelName,
+                name: modelName,
+                isExternal: true
+            }];
+        }
+
+        // Copilot mode - get all available models
+        try {
+            const models = await vscode.lm.selectChatModels();
+            if (!models || models.length === 0) {
+                aidaLogging('⚠️ No Copilot models available');
+                return [];
+            }
+
+            // Sort by priority (highest first)
+            const sortedModels = models.sort((a, b) => {
+                const priorityA = this.getModelPriority(a.family);
+                const priorityB = this.getModelPriority(b.family);
+                return priorityB - priorityA;
+            });
+
+            aidaLogging('🤖 Available models (sorted by priority):',
+                sortedModels.map(m => `${m.family} (${this.getModelPriority(m.family)})`).join(', '));
+
+            return sortedModels;
+        } catch (error) {
+            aidaLogging('Failed to get Copilot models:', error);
+            return [];
+        }
+    }
+
+    /**
+     * Get selected model from workspaceState, or default to highest priority
+     */
+    async getSelectedModel() {
+        const models = await this.getAvailableModels();
+        if (models.length === 0) return null;
+
+        // External API mode - always use the single model
+        if (models[0].isExternal) {
+            return models[0];
+        }
+
+        // Check workspaceState for saved selection
+        const savedModelId = this.context.workspaceState.get('aida.selectedModelId');
+        if (savedModelId) {
+            const savedModel = models.find(m => m.id === savedModelId);
+            if (savedModel) {
+                aidaLogging('🤖 Using saved model from workspaceState:', savedModel.family);
+                return savedModel;
+            }
+        }
+
+        // Default to highest priority model (first in sorted list)
+        aidaLogging('🤖 Using default highest priority model:', models[0].family);
+        return models[0];
+    }
+
+    /**
+     * Save selected model to workspaceState
+     */
+    async saveSelectedModel(model) {
+        await this.context.workspaceState.update('aida.selectedModelId', model.id);
+        aidaLogging('💾 Saved selected model to workspaceState:', model.family);
+    }
+
+    /**
+     * Show model picker (QuickPick like GitHub Copilot)
+     */
+    async showModelPicker() {
+        const models = await this.getAvailableModels();
+
+        if (models.length === 0) {
+            vscode.window.showWarningMessage('No AI models available. Please check your Copilot license or enable External API mode.');
+            return;
+        }
+
+        // External API mode - show info, can't change
+        if (models[0].isExternal) {
+            vscode.window.showInformationMessage(
+                `External API mode is enabled. Using model: ${models[0].family}. ` +
+                `Change in Settings → AIDA → AI Model.`
+            );
+            return;
+        }
+
+        const currentModel = await this.getSelectedModel();
+
+        // Create QuickPick items
+        const items = models.map(model => {
+            const priority = this.getModelPriority(model.family);
+            const isSelected = currentModel && model.id === currentModel.id;
+
+            // Add tier indicator based on priority
+            let tier = '';
+            if (priority >= 95) tier = '⭐⭐⭐ Premium';
+            else if (priority >= 85) tier = '⭐⭐ Pro';
+            else if (priority >= 75) tier = '⭐ Standard';
+            else tier = '○ Basic';
+
+            return {
+                label: `${isSelected ? '$(check) ' : ''}${model.family}`,
+                description: tier,
+                detail: `Model ID: ${model.id}`,
+                model: model
+            };
+        });
+
+        const selected = await vscode.window.showQuickPick(items, {
+            placeHolder: 'Select AI Model for AIDA',
+            title: 'AIDA - Choose AI Model',
+            matchOnDescription: true,
+            matchOnDetail: true
+        });
+
+        if (selected) {
+            await this.saveSelectedModel(selected.model);
+            // Update UI
+            if (this.chatInstance.webviewView) {
+                this.sendCurrentModelName(this.chatInstance.webviewView);
+            }
+            vscode.window.showInformationMessage(`AIDA now using: ${selected.model.family}`);
+        }
+    }
+
+    /**
      * Setup listener for configuration changes
      */
     setupConfigurationListener() {
         vscode.workspace.onDidChangeConfiguration((event) => {
-            if (event.affectsConfiguration('aida.ai.model')) {
+            if (event.affectsConfiguration('aida.ai.model') || event.affectsConfiguration('aida.useExternalAI')) {
                 aidaLogging('🤖 Model configuration changed, updating webview...');
                 if (this.chatInstance.webviewView) {
                     this.sendCurrentModelName(this.chatInstance.webviewView);
@@ -56505,7 +56677,7 @@ class AidaChatViewProvider {
                 this.initializeWebviewState(webviewView);
             }, 100);
         }).catch(error => {
-            console.error('Failed to load webview content, initializing anyway:', error);
+            aidaLogging('Failed to load webview content, initializing anyway:', error);
             setTimeout(() => {
                 this.initializeWebviewState(webviewView);
             }, 200);
@@ -56673,11 +56845,11 @@ class AidaChatViewProvider {
                             }
                             aidaLogging('✅ Command executed successfully');
                         } catch (error) {
-                            console.error('❌ Command execution failed:', error);
+                            aidaLogging('❌ Command execution failed:', error);
                             vscode.window.showErrorMessage(`Failed to open file: ${error.message}`);
                         }
                     } else {
-                        console.error('❌ Invalid command or arguments:', message);
+                        aidaLogging('❌ Invalid command or arguments:', message);
                     }
                     break;
 
@@ -56698,8 +56870,8 @@ class AidaChatViewProvider {
                     break;
 
                 case 'frontendReady':
-                    // Frontend is ready, send current file info
-                    aidaLogging('📁 Frontend ready, updating current file...');
+                    // Frontend is ready, send current file info and model name
+                    aidaLogging('📁 Frontend ready, updating current file and model...');
                     if (this.chatInstance && typeof this.chatInstance.updateCurrentFile === 'function') {
                         const currentEditor = vscode.window.activeTextEditor;
                         if (currentEditor) {
@@ -56709,6 +56881,31 @@ class AidaChatViewProvider {
                             this.chatInstance.updateCurrentFile(null, true);
                             aidaLogging('📁 No active editor, sent null to frontend');
                         }
+                    }
+                    // Also send model name when frontend is ready
+                    this.sendCurrentModelName(webviewView);
+                    break;
+
+                case 'openModelConfig':
+                    // Show model picker (QuickPick like GitHub Copilot)
+                    aidaLogging('🤖 Opening model picker...');
+                    this.showModelPicker();
+                    break;
+
+                case 'getModelList':
+                    // Send available models to frontend dropdown
+                    aidaLogging('🤖 Frontend requested model list');
+                    await this.sendModelListToFrontend(webviewView);
+                    break;
+
+                case 'selectModel':
+                    // Handle model selection from frontend dropdown
+                    aidaLogging('🤖 Model selected from dropdown:', message.modelFamily);
+                    const models = await this.getAvailableModels();
+                    const selectedModel = models.find(m => m.id === message.modelId);
+                    if (selectedModel) {
+                        await this.saveSelectedModel(selectedModel);
+                        this.sendCurrentModelName(webviewView);
                     }
                     break;
             }
@@ -56746,32 +56943,108 @@ class AidaChatViewProvider {
                     aidaLogging('📁 No active editor found during webview init');
                 }
             } else {
-                console.warn('updateCurrentFile not available on chatInstance');
+                aidaLogging('updateCurrentFile not available on chatInstance');
             }
 
             aidaLogging('🔄 Webview state initialized');
         } catch (error) {
-            console.error('Failed to initialize webview state:', error);
+            aidaLogging('Failed to initialize webview state:', error);
         }
     }
 
     /**
-     * Send current model name from settings to webview
+     * Send model list to frontend for dropdown
      */
-    sendCurrentModelName(webviewView) {
+    async sendModelListToFrontend(webviewView) {
         try {
-            const config = vscode.workspace.getConfiguration('aida');
-            const modelFromSettings = config.get('ai.model', 'Claude-4-Sonnet');
+            const models = await this.getAvailableModels();
+            const selectedModel = await this.getSelectedModel();
 
-            aidaLogging('🤖 Sending model name to frontend:', modelFromSettings);
+            // Format models for frontend
+            const formattedModels = models.map(m => ({
+                id: m.id,
+                family: m.family,
+                displayName: this.formatModelName(m.family),
+                isExternal: m.isExternal || false
+            }));
+
+            aidaLogging('🤖 Sending model list to frontend:', formattedModels.map(m => m.displayName).join(', '));
+
+            webviewView.webview.postMessage({
+                type: 'updateModelList',
+                models: formattedModels,
+                selectedModelId: selectedModel ? selectedModel.id : null,
+                selectedModelName: selectedModel ? this.formatModelName(selectedModel.family) : 'AIDA'
+            });
+        } catch (error) {
+            aidaLogging('Failed to send model list:', error);
+        }
+    }
+
+    /**
+     * Send current model name to webview (uses workspaceState selection)
+     */
+    async sendCurrentModelName(webviewView) {
+        try {
+            const selectedModel = await this.getSelectedModel();
+            let modelName = 'AIDA';
+
+            if (selectedModel) {
+                modelName = this.formatModelName(selectedModel.family);
+            }
+
+            aidaLogging('🤖 Sending model name to frontend:', modelName);
 
             webviewView.webview.postMessage({
                 type: 'updateModelName',
-                modelName: modelFromSettings
+                modelName: modelName
             });
         } catch (error) {
-            console.error('Failed to send model name:', error);
+            aidaLogging('Failed to send model name:', error);
+            webviewView.webview.postMessage({
+                type: 'updateModelName',
+                modelName: 'AIDA'
+            });
         }
+    }
+
+    /**
+     * Format model name for display
+     */
+    formatModelName(rawName) {
+        if (!rawName) return 'Unknown';
+
+        let name = rawName.toString();
+
+        // Handle common patterns
+        const patterns = [
+            { match: /claude.*opus.*4\.?5/i, replace: 'Claude Opus 4.5' },
+            { match: /claude.*opus.*4(?!\.)/i, replace: 'Claude Opus 4' },
+            { match: /claude.*sonnet.*4\.?5/i, replace: 'Claude Sonnet 4.5' },
+            { match: /claude.*sonnet.*4(?!\.)/i, replace: 'Claude Sonnet 4' },
+            { match: /claude.*sonnet.*3\.?7/i, replace: 'Claude Sonnet 3.7' },
+            { match: /claude.*sonnet.*3\.?5/i, replace: 'Claude Sonnet 3.5' },
+            { match: /gpt.*4\.?1/i, replace: 'GPT-4.1' },
+            { match: /gpt.*4o.*mini/i, replace: 'GPT-4o Mini' },
+            { match: /gpt.*4o/i, replace: 'GPT-4o' },
+            { match: /gpt.*5.*mini/i, replace: 'GPT-5 Mini' },
+            { match: /gpt.*5/i, replace: 'GPT-5' },
+            { match: /gemini.*2\.?5.*pro/i, replace: 'Gemini 2.5 Pro' },
+            { match: /gemini.*2\.?0.*flash/i, replace: 'Gemini 2.0 Flash' },
+            { match: /o4.*mini/i, replace: 'o4-mini' },
+            { match: /o3.*mini/i, replace: 'o3-mini' },
+        ];
+
+        for (const pattern of patterns) {
+            if (pattern.match.test(name)) {
+                return pattern.replace;
+            }
+        }
+
+        // If no pattern matches, capitalize words
+        return name.split(/[-_]/).map(word =>
+            word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+        ).join(' ');
     }
 
     /**
@@ -56874,7 +57147,7 @@ class AidaChatViewProvider {
             const htmlContent = await this.chatInstance.getCopilotSidebarHTML();
             webviewView.webview.html = htmlContent;
         } catch (error) {
-            console.error('Failed to load webview content:', error);
+            aidaLogging('Failed to load webview content:', error);
             webviewView.webview.html = '<h1>Error loading AIDA Chat</h1>';
         }
     }
@@ -56902,7 +57175,7 @@ function initializeCopilotSidebarChat(context) {
         };
 
     } catch (error) {
-        console.error('❌ Failed to initialize Chatbot Sidebar:', error);
+        aidaLogging('❌ Failed to initialize Chatbot Sidebar:', error);
         return null;
     }
 }
@@ -57069,7 +57342,7 @@ class ContextDetector {
       return result;
 
     } catch (error) {
-      console.warn('Context detection error:', error);
+      aidaLogging('Context detection error:', error);
       result.reasons.push(`Error during analysis: ${error.message}`);
       result.confidence = 10;
       this._trackRequest(result, startTime);
@@ -57453,7 +57726,7 @@ class ContextDetector {
         analysis.reasons = relevanceScore.reasons;
         
       } catch (error) {
-        console.warn(`Image analysis failed for image ${i}:`, error.message);
+        aidaLogging(`Image analysis failed for image ${i}:`, error.message);
         analysis.reasons.push(`Analysis failed: ${error.message}`);
       }
 
@@ -57523,7 +57796,7 @@ class ContextDetector {
         // File path - check if file exists
         const fs = __webpack_require__(/*! fs */ "fs");
         if (!fs.existsSync(imagePath)) {
-          console.warn('Image file not found:', imagePath);
+          aidaLogging('Image file not found:', imagePath);
           return this.extractTextFromFilename(image);
         }
       } else {
@@ -57559,7 +57832,7 @@ class ContextDetector {
       return cleanedText;
 
     } catch (error) {
-      console.warn('OCR extraction failed:', error.message);
+      aidaLogging('OCR extraction failed:', error.message);
       // Fallback to filename-based detection
       return this.extractTextFromFilename(image);
     }
@@ -57590,7 +57863,7 @@ class ContextDetector {
       
       return detectedTerms.join(' ');
     } catch (error) {
-      console.warn('Filename extraction failed:', error.message);
+      aidaLogging('Filename extraction failed:', error.message);
       return '';
     }
   }
@@ -57754,6 +58027,7 @@ module.exports = ContextDetector;
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
 const { franc } = __webpack_require__(/*! franc */ "./node_modules/franc/index.js");
+const { aidaLogging } = __webpack_require__(/*! ../settings */ "./scripts/settings.js");
 
 class LanguageProcessor {
   constructor() {
@@ -57768,7 +58042,7 @@ class LanguageProcessor {
       this.patterns.set('vi', __webpack_require__(/*! ./patterns/vi-patterns */ "./scripts/chatbot/patterns/vi-patterns.js"));
       this.patterns.set('universal', __webpack_require__(/*! ./patterns/universal-patterns */ "./scripts/chatbot/patterns/universal-patterns.js"));
     } catch (error) {
-      console.warn('Failed to load some pattern files:', error.message);
+      aidaLogging('Failed to load some pattern files:', error.message);
       // Fallback patterns
       this.patterns.set('universal', {
         CONTEXT_REQUIRED: [/\b(this|current)\s+(code|function)/i],
@@ -57781,15 +58055,15 @@ class LanguageProcessor {
 
   detectLanguage(text) {
     if (!text || typeof text !== 'string') return 'en';
-    
+
     try {
       // Use franc for accurate language detection
       const langCode = franc(text);
-      
+
       // Map franc codes to our codes
       const langMap = {
         'eng': 'en',
-        'vie': 'vi', 
+        'vie': 'vi',
         'cmn': 'zh',
         'jpn': 'ja',
         'fra': 'fr',
@@ -57800,22 +58074,22 @@ class LanguageProcessor {
         'rus': 'ru',
         'und': 'en' // undefined defaults to English
       };
-      
+
       const detectedLang = langMap[langCode] || 'en';
-      
+
       // Fallback for Vietnamese if franc doesn't detect it properly
       if (detectedLang === 'en') {
         const vietnameseChars = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i;
         const vietnameseWords = /\b(là|của|này|đó|và|có|không|được|cho|từ|với|về|trong|trên|dưới|giữa|sau|trước|khi|nếu|thì|mà|để|sẽ|đã|đang|code|function|hàm|sửa|tối|ưu|giải|thích|cái|đoạn|phần)\b/i;
-        
+
         if (vietnameseChars.test(text) || vietnameseWords.test(text)) {
           return 'vi';
         }
       }
-      
+
       return detectedLang;
     } catch (error) {
-      console.warn('Language detection error:', error.message);
+      aidaLogging('Language detection error:', error.message);
       // Fallback to simple detection
       const vietnameseChars = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i;
       return vietnameseChars.test(text) ? 'vi' : 'en';
@@ -57836,48 +58110,48 @@ class LanguageProcessor {
 
     const patterns = this.getPatterns(language);
     const universal = this.patterns.get('universal');
-    
+
     // Combine language-specific and universal patterns
     const contextRequiredPatterns = [
       ...(patterns.CONTEXT_REQUIRED || []),
       ...(universal ? universal.CONTEXT_REQUIRED || [] : [])
     ];
-    
+
     const noContextPatterns = [
       ...(patterns.NO_CONTEXT || []),
       ...(universal ? universal.NO_CONTEXT || [] : [])
     ];
-    
+
     // Check context required patterns first (higher priority)
     for (const pattern of contextRequiredPatterns) {
       try {
         if (pattern.test(text)) {
-          return { 
-            needsContext: true, 
+          return {
+            needsContext: true,
             matched: pattern.toString(),
             confidence: 90
           };
         }
       } catch (error) {
-        console.warn('Invalid regex pattern:', pattern, error.message);
+        aidaLogging('Invalid regex pattern:', pattern, error.message);
       }
     }
-    
+
     // Check no context patterns
     for (const pattern of noContextPatterns) {
       try {
         if (pattern.test(text)) {
-          return { 
-            needsContext: false, 
+          return {
+            needsContext: false,
             matched: pattern.toString(),
             confidence: 85
           };
         }
       } catch (error) {
-        console.warn('Invalid regex pattern:', pattern, error.message);
+        aidaLogging('Invalid regex pattern:', pattern, error.message);
       }
     }
-    
+
     return { needsContext: null, matched: null, confidence: 0 };
   }
 
@@ -57887,9 +58161,9 @@ class LanguageProcessor {
   hasContextualKeywords(text) {
     const universal = this.patterns.get('universal');
     if (!universal || !universal.CONTEXT_KEYWORDS) return false;
-    
+
     const textLower = text.toLowerCase();
-    return universal.CONTEXT_KEYWORDS.some(keyword => 
+    return universal.CONTEXT_KEYWORDS.some(keyword =>
       textLower.includes(keyword.toLowerCase())
     );
   }
@@ -57900,9 +58174,9 @@ class LanguageProcessor {
   hasGeneralKeywords(text) {
     const universal = this.patterns.get('universal');
     if (!universal || !universal.GENERAL_KEYWORDS) return false;
-    
+
     const textLower = text.toLowerCase();
-    return universal.GENERAL_KEYWORDS.some(keyword => 
+    return universal.GENERAL_KEYWORDS.some(keyword =>
       textLower.includes(keyword.toLowerCase())
     );
   }
@@ -57913,7 +58187,7 @@ class LanguageProcessor {
   getKeywordScores(text) {
     const contextKeywords = this.hasContextualKeywords(text);
     const generalKeywords = this.hasGeneralKeywords(text);
-    
+
     return {
       contextual: contextKeywords ? 1 : 0,
       general: generalKeywords ? 1 : 0
@@ -58041,7 +58315,7 @@ class MLClassifier {
       
       aidaLogging('✅ ML Classifier trained with', contextRequired.length + noContext.length, 'examples');
     } catch (error) {
-      console.warn('❌ Failed to train ML classifier:', error.message);
+      aidaLogging('❌ Failed to train ML classifier:', error.message);
       this.trained = false;
     }
   }
@@ -58065,7 +58339,7 @@ class MLClassifier {
         return this.fallbackClassify(text);
       }
     } catch (error) {
-      console.warn('ML classification error:', error.message);
+      aidaLogging('ML classification error:', error.message);
       return this.fallbackClassify(text);
     }
   }
@@ -58248,7 +58522,7 @@ class MLClassifier {
       
       return Math.max(...similarities);
     } catch (error) {
-      console.warn('String similarity error:', error.message);
+      aidaLogging('String similarity error:', error.message);
       // Fallback to Jaccard similarity
       const textWords = text.toLowerCase().split(/\s+/);
       let maxSimilarity = 0;
@@ -58525,7 +58799,7 @@ class TemplateLoader {
                 );
                 aidaLogging('📜 Inlined script content into template');
             } catch (scriptError) {
-                console.warn('⚠️ Could not load script file:', scriptError.message);
+                aidaLogging('⚠️ Could not load script file:', scriptError.message);
             }
             
             // Cache for future use
@@ -58533,7 +58807,7 @@ class TemplateLoader {
             
             return template;
         } catch (error) {
-            console.warn('Failed to load sidebar template:', error.message);
+            aidaLogging('Failed to load sidebar template:', error.message);
             return this.getFallbackTemplate();
         }
     }
@@ -58607,7 +58881,7 @@ class TemplateLoader {
             await this.getSidebarTemplate();
             aidaLogging('✅ Templates preloaded successfully');
         } catch (error) {
-            console.warn('⚠️ Failed to preload templates:', error.message);
+            aidaLogging('⚠️ Failed to preload templates:', error.message);
         }
     }
 }
@@ -58701,7 +58975,7 @@ function initializeDailyReport(context) {
             }
 
         } catch (error) {
-            console.error('❌ Daily Report participant error:', error);
+            aidaLogging('❌ Daily Report participant error:', error);
             stream.markdown('❌ **Error generating daily report**\n\n');
             stream.markdown(`**Details:** ${error.message}\n\n`);
             stream.markdown('Please try again or check the extension logs for more details.\n');
@@ -58969,7 +59243,7 @@ async function getCurrentIteration(config) {
             iteration: iterationsResponse.value[0]
         };
     } catch (error) {
-        console.error('❌ Error fetching current iteration:', error);
+        aidaLogging('❌ Error fetching current iteration:', error);
         return null;
     }
 }
@@ -59041,7 +59315,7 @@ async function getWorkItemsForIteration(config, iterationData) {
         
         return workItemsResponse.value || [];
     } catch (error) {
-        console.error('❌ Error fetching work items:', error);
+        aidaLogging('❌ Error fetching work items:', error);
         return [];
     }
 }
@@ -59199,7 +59473,7 @@ async function fetchAzureDevOpsData() {
         };
         
     } catch (error) {
-        console.error('❌ Error fetching Azure DevOps data:', error);
+        aidaLogging('❌ Error fetching Azure DevOps data:', error);
         return {
             success: false,
             error: error.message,
@@ -59625,7 +59899,7 @@ async function createDailyReport(options = {}) {
             fileSize: fs.statSync(outputPath).size
         };
     } catch (error) {
-        console.error('❌ Error generating daily report:', error);
+        aidaLogging('❌ Error generating daily report:', error);
         return {
             success: false,
             error: error.message
@@ -59662,11 +59936,11 @@ if (__webpack_require__.c[__webpack_require__.s] === module) {
             aidaLogging(`\n🎉 Success! Report saved to: ${result.outputPath}`);
             aidaLogging(`📊 File size: ${(result.fileSize / 1024).toFixed(2)} KB`);
         } else {
-            console.error(`\n❌ Failed: ${result.error}`);
+            aidaLogging(`\n❌ Failed: ${result.error}`);
             process.exit(1);
         }
     }).catch(error => {
-        console.error(`\n❌ Unexpected error: ${error.message}`);
+        aidaLogging(`\n❌ Unexpected error: ${error.message}`);
         process.exit(1);
     });
 }
@@ -59819,7 +60093,7 @@ class DependencyGraphService {
             aidaLogging(`✅ Built graph: ${graph.nodes.length} nodes, ${graph.edges.length} edges`);
             return graph;
         } catch (error) {
-            console.error('❌ Error building graph:', error);
+            aidaLogging('❌ Error building graph:', error);
             throw error;
         }
     }
@@ -60035,7 +60309,7 @@ class BarrelResolver {
         
         // Protection against infinite loops
         if (currentLevel > 10) {
-            console.warn('⚠️ Barrel chain depth exceeded 10 levels, stopping recursion');
+            aidaLogging('⚠️ Barrel chain depth exceeded 10 levels, stopping recursion');
             return { references: allReferences, barrelChain };
         }
         
@@ -60059,7 +60333,7 @@ class BarrelResolver {
                 try {
                     directReferences = await Promise.race([refPromise, timeout]);
                 } catch (timeoutError) {
-                    console.warn(`         ⚠️ Timeout finding references for ${symbolName}`);
+                    aidaLogging(`         ⚠️ Timeout finding references for ${symbolName}`);
                     return { references: allReferences, barrelChain };
                 }
                 
@@ -60157,7 +60431,7 @@ class BarrelResolver {
             return { references: allReferences, barrelChain };
             
         } catch (error) {
-            console.error(`         ❌ Barrel resolution error at level ${currentLevel}:`, error.message);
+            aidaLogging(`         ❌ Barrel resolution error at level ${currentLevel}:`, error.message);
             // 🔥 IMPROVED: Clear cache on error
             const cacheKey = `${symbolUri.fsPath}:${symbolPosition.line}:${symbolPosition.character}:v2`;
             this.referenceCache.delete(cacheKey);
@@ -60284,7 +60558,7 @@ class BarrelResolver {
             
             return null;
         } catch (error) {
-            console.error(`Error parsing barrel export:`, error.message);
+            aidaLogging(`Error parsing barrel export:`, error.message);
             return null;
         }
     }
@@ -60386,7 +60660,7 @@ class BarrelResolver {
             return imports;
             
         } catch (error) {
-            console.error(`Error finding imports of barrel:`, error.message);
+            aidaLogging(`Error finding imports of barrel:`, error.message);
             return imports;
         }
     }
@@ -61387,7 +61661,7 @@ class SymbolAnalyzer {
                 uri
             );
         } catch (e) {
-            console.error('Error getting symbols:', e);
+            aidaLogging('Error getting symbols:', e);
             return null;
         }
 
@@ -61464,7 +61738,7 @@ class SymbolAnalyzer {
                     sym.selectionRange.start // Position of the symbol name
                 );
             } catch (e) {
-                console.warn(`Could not get references for ${sym.name}`);
+                aidaLogging(`Could not get references for ${sym.name}`);
             }
 
             const symbolId = `sym_${sym.name}_${sym.range.start.line}`;
@@ -61699,7 +61973,7 @@ class SymbolAnalyzer {
             return Array.from(dependencies.values());
 
         } catch (error) {
-            console.error('Error finding dependencies:', error);
+            aidaLogging('Error finding dependencies:', error);
             return [];
         }
     }
@@ -61960,7 +62234,7 @@ class VSCodeApiDependencyAnalyzer {
 
             aidaLogging('✅ Graph model restored from cache');
         } catch (error) {
-            console.error('❌ Failed to load graph from cache:', error);
+            aidaLogging('❌ Failed to load graph from cache:', error);
             this.isReady = false;
         }
     }
@@ -62000,7 +62274,7 @@ class VSCodeApiDependencyAnalyzer {
             return this.buildGraphResult();
 
         } catch (error) {
-            console.error('❌ Symbol crawling failed:', error);
+            aidaLogging('❌ Symbol crawling failed:', error);
             throw new Error(`Symbol crawling analysis failed: ${error.message}`);
         }
     }
@@ -62037,7 +62311,7 @@ class VSCodeApiDependencyAnalyzer {
                 );
                 allFiles.push(...files);
             } catch (error) {
-                console.warn(`⚠️ Error finding files with pattern ${pattern}:`, error.message);
+                aidaLogging(`⚠️ Error finding files with pattern ${pattern}:`, error.message);
             }
         }
 
@@ -62084,7 +62358,7 @@ class VSCodeApiDependencyAnalyzer {
             // Auto-detect language from extension
             const language = this.extensionMap.get(extension);
             if (!language) {
-                // console.warn(`⚠️ Unsupported file extension: ${extension}`);
+                // aidaLogging(`⚠️ Unsupported file extension: ${extension}`);
                 return;
             }
 
@@ -62099,7 +62373,7 @@ class VSCodeApiDependencyAnalyzer {
             }
 
         } catch (error) {
-            console.warn(`⚠️ Error processing file ${fileUri.fsPath}:`, error.message);
+            aidaLogging(`⚠️ Error processing file ${fileUri.fsPath}:`, error.message);
         }
     }
 
@@ -62217,7 +62491,7 @@ class VSCodeApiDependencyAnalyzer {
             }
 
         } catch (error) {
-            console.warn(`⚠️ Error processing ${language} file:`, error.message);
+            aidaLogging(`⚠️ Error processing ${language} file:`, error.message);
         }
     }
 
@@ -62289,7 +62563,7 @@ class VSCodeApiDependencyAnalyzer {
             ).catch(lspError => {
                 // C# Language Server can throw "Sequence contains no matching element"
                 // Silently ignore LSP errors and continue analysis
-                console.warn(`⚠️ LSP error for ${document.fileName}:${position.line} - ${lspError.message}`);
+                aidaLogging(`⚠️ LSP error for ${document.fileName}:${position.line} - ${lspError.message}`);
                 return null;
             });
 
@@ -62748,7 +63022,7 @@ async function activateDependencyWatcherIfCacheExists(context) {
             aidaLogging('✅ Dependency watcher activated from cache');
         }
     } catch (error) {
-        console.error('❌ Failed to auto-activate dependency watcher:', error);
+        aidaLogging('❌ Failed to auto-activate dependency watcher:', error);
     }
 }
 
@@ -62877,8 +63151,8 @@ function initializeDependencyGraph(context) {
             }
 
         } catch (error) {
-            console.error('❌ Dependency analysis error:', error);
-            console.error('❌ Stack trace:', error.stack);
+            aidaLogging('❌ Dependency analysis error:', error);
+            aidaLogging('❌ Stack trace:', error.stack);
             stream.markdown(`❌ **Analysis Error**\n\n**Error:** ${error.message}\n\n**Debug Info:**\n- Workspace: \`${workspaceRoot || 'undefined'}\`\n- Please check console for details\n\n💡 **Fix:** Ensure the workspace folder is properly opened.`);
         }
     });
@@ -62974,7 +63248,7 @@ async function aiDependencyAnalysis(message, stream, token, context) {
         }
 
     } catch (error) {
-        console.error('❌ aiDependencyAnalysis error:', error);
+        aidaLogging('❌ aiDependencyAnalysis error:', error);
         stream.markdown(`❌ **Error:** ${error.message}\n\n`);
         stream.markdown('Please check the console for details.\n\n');
     }
@@ -62995,7 +63269,7 @@ function registerCacheCommands(context) {
                 vscode.window.showErrorMessage('❌ Failed to load cache data');
             }
         } catch (error) {
-            console.error('❌ Error loading cache:', error);
+            aidaLogging('❌ Error loading cache:', error);
             vscode.window.showErrorMessage(`❌ Cache load failed: ${error.message}`);
         }
     });
@@ -63011,7 +63285,7 @@ function registerCacheCommands(context) {
                 query: '@dependency re-analyze'
             });
         } catch (error) {
-            console.error('❌ Error triggering re-analysis:', error);
+            aidaLogging('❌ Error triggering re-analysis:', error);
             vscode.window.showErrorMessage(`❌ Failed to trigger re-analysis: ${error.message}`);
         }
     });
@@ -63056,9 +63330,9 @@ async function saveToCache(graph, report, analysisType) {
         };
 
         await fs.promises.writeFile(cacheFilePath, JSON.stringify(cacheData, null, 2));
-        console.log('💾 Dependency analysis cached successfully');
+        aidaLogging('💾 Dependency analysis cached successfully');
     } catch (error) {
-        console.warn('⚠️ Failed to save cache:', error.message);
+        aidaLogging('⚠️ Failed to save cache:', error.message);
     }
 }
 
@@ -63072,20 +63346,20 @@ async function loadFromCache() {
         const cacheData = JSON.parse(await fs.promises.readFile(cacheFilePath, 'utf8'));
 
         if (cacheData.version !== CACHE_VERSION) {
-            console.log('🔄 Cache version mismatch, will regenerate');
+            aidaLogging('🔄 Cache version mismatch, will regenerate');
             return null;
         }
 
         // Validate cache structure
         if (!cacheData.graph || !cacheData.report || !cacheData.report.summary) {
-            console.log('⚠️ Invalid cache data structure, will regenerate');
+            aidaLogging('⚠️ Invalid cache data structure, will regenerate');
             return null;
         }
 
-        console.log('💾 Loaded dependency analysis from cache');
+        aidaLogging('💾 Loaded dependency analysis from cache');
         return cacheData;
     } catch (error) {
-        console.warn('⚠️ Failed to load cache:', error.message);
+        aidaLogging('⚠️ Failed to load cache:', error.message);
         return null;
     }
 }
@@ -63121,7 +63395,7 @@ function performDependencyAnalysisInBackground(workspaceRoot) {
                 throw new Error('Invalid graph data: missing or invalid edges array');
             }
 
-            console.log(`🔍 Graph validation: ${graph.nodes.length} nodes, ${graph.edges.length} edges`);
+            aidaLogging(`🔍 Graph validation: ${graph.nodes.length} nodes, ${graph.edges.length} edges`);
 
             progress.report({ increment: 85, message: "Saving cache..." });
             await saveToCache(graph, report, analysisType);
@@ -63141,8 +63415,8 @@ function performDependencyAnalysisInBackground(workspaceRoot) {
             });
 
         } catch (error) {
-            console.error('❌ Background analysis error:', error);
-            console.error('❌ Stack trace:', error.stack);
+            aidaLogging('❌ Background analysis error:', error);
+            aidaLogging('❌ Stack trace:', error.stack);
             vscode.window.showErrorMessage(
                 `❌ Dependency analysis failed: ${error.message}`,
                 'View Details'
@@ -63155,6 +63429,77 @@ function performDependencyAnalysisInBackground(workspaceRoot) {
     });
 }
 
+/**
+ * Perform PR dependency analysis in background (non-blocking)
+ * @param {string} prUrl - The PR URL
+ * @param {object} prInfo - Parsed PR info (repo, owner, prNumber, repoType)
+ * @param {Array} prFiles - List of files changed in PR
+ * @param {string} workspaceRoot - Workspace root path
+ */
+function performPRAnalysisInBackground(prUrl, prInfo, prFiles, workspaceRoot) {
+    // Run analysis in background with status bar progress (lightweight, non-intrusive)
+    vscode.window.withProgress({
+        location: vscode.ProgressLocation.Window,
+        title: "🔍 Analyzing PR Dependencies",
+        cancellable: false
+    }, async (progress) => {
+        try {
+            progress.report({ increment: 0, message: "Starting PR analysis - you can continue working..." });
+
+            // Build file summary for notification
+            const added = prFiles.filter(f => f.status === 'add').length;
+            const modified = prFiles.filter(f => f.status === 'edit').length;
+            const deleted = prFiles.filter(f => f.status === 'delete').length;
+
+            progress.report({ increment: 30, message: `Analyzing ${prFiles.length} files...` });
+
+            // Analyze dependencies for PR files
+            const analyzer = new PRDependencyAnalyzer(workspaceRoot);
+            const graph = await analyzer.analyzePRFiles(prFiles);
+
+            progress.report({ increment: 70, message: "Generating graph visualization..." });
+
+            // Create and open PR graph webview
+            const summary = graph.prSummary;
+            await createPRGraphWebview(graph, prInfo, summary);
+
+            progress.report({ increment: 95, message: "Complete!" });
+
+            // Calculate impact stats
+            const impactedFiles = graph.nodes.filter(n => n.nodeType === 'dependent').length;
+            const dependencies = graph.nodes.filter(n => n.nodeType === 'dependency').length;
+
+            // Show completion notification
+            vscode.window.showInformationMessage(
+                `✅ PR Analysis complete! ${prFiles.length} PR files → ${impactedFiles} impacted, ${dependencies} dependencies`,
+                'View Graph'
+            ).then(selection => {
+                if (selection === 'View Graph') {
+                    // Focus the graph view
+                    vscode.commands.executeCommand('workbench.view.extension.aida-dependency-view');
+                }
+            });
+
+        } catch (error) {
+            aidaLogging('❌ Background PR analysis error:', error);
+            aidaLogging('❌ Stack trace:', error.stack);
+
+            let errorMessage = `❌ PR analysis failed: ${error.message}`;
+            if (error.message.includes('cache') || error.message.includes('graph')) {
+                errorMessage += ' - Run @dependency first to build workspace cache';
+            }
+
+            vscode.window.showErrorMessage(
+                errorMessage,
+                'View Details'
+            ).then(selection => {
+                if (selection === 'View Details') {
+                    vscode.window.showErrorMessage(`Error Details:\n${error.stack || error.message}`);
+                }
+            });
+        }
+    });
+}
 
 
 /**
@@ -63173,7 +63518,7 @@ async function createWebviewFromData(graph, report, analysisType) {
     );
 
     // Generate webview content
-    console.log(`📊 Creating webview with data:`, {
+    aidaLogging(`📊 Creating webview with data:`, {
         nodeCount: graph.nodes.length,
         edgeCount: graph.edges.length,
         analysisType
@@ -63194,7 +63539,7 @@ async function createWebviewFromData(graph, report, analysisType) {
         }
     });
 
-    console.log(`✅ Webview created with ${graph.nodes.length} nodes, ${graph.edges.length} edges`);
+    aidaLogging(`✅ Webview created with ${graph.nodes.length} nodes, ${graph.edges.length} edges`);
 }
 
 
@@ -63206,13 +63551,13 @@ async function buildSelectedNodeObject(nodeId, graph, panel) {
     try {
         const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath;
         if (!workspaceRoot) {
-            console.error('No workspace root found');
+            aidaLogging('No workspace root found');
             return;
         }
 
         const selectedNode = graph.nodes.find(n => n.id === nodeId);
         if (!selectedNode) {
-            console.error('Node not found:', nodeId);
+            aidaLogging('Node not found:', nodeId);
             return;
         }
 
@@ -63290,7 +63635,7 @@ async function buildSelectedNodeObject(nodeId, graph, panel) {
             dependents
         };
 
-        console.log('\n🎯 Selected Node Object:', JSON.stringify(selectedNodeObject, null, 2));
+        aidaLogging('\n🎯 Selected Node Object:', JSON.stringify(selectedNodeObject, null, 2));
 
         // Send to AI for analysis
         await analyzeImpactWithAI(selectedNodeObject, panel);
@@ -63298,7 +63643,7 @@ async function buildSelectedNodeObject(nodeId, graph, panel) {
         return selectedNodeObject;
 
     } catch (error) {
-        console.error('❌ Error building selected node object:', error);
+        aidaLogging('❌ Error building selected node object:', error);
         return null;
     }
 }
@@ -63449,8 +63794,8 @@ Sections to include:
 Keep the language simple and focus on USER IMPACT, not technical details.`;
         }
 
-        console.log('🤖 Sending to AI for analysis...');
-        console.log('📋 Prompt:', prompt);
+        aidaLogging('🤖 Sending to AI for analysis...');
+        aidaLogging('📋 Prompt:', prompt);
 
         // Create a stream object to collect AI response
         let aiResponse = '';
@@ -63460,7 +63805,7 @@ Keep the language simple and focus on USER IMPACT, not technical details.`;
                 aiResponse += text;
             },
             progress: (text) => {
-                console.log('Progress:', text);
+                aidaLogging('Progress:', text);
             }
         };
 
@@ -63471,7 +63816,7 @@ Keep the language simple and focus on USER IMPACT, not technical details.`;
         const success = await executeAIReview(prompt, model, mockStream, 'Impact Analysis', 0, null, null);
 
         if (success) {
-            console.log('✅ AI Response received, length:', aiResponse.length);
+            aidaLogging('✅ AI Response received, length:', aiResponse.length);
 
             // Clean up the response - remove markdown decorations that we added
             let cleanResponse = aiResponse
@@ -63490,7 +63835,7 @@ Keep the language simple and focus on USER IMPACT, not technical details.`;
         }
 
     } catch (error) {
-        console.error('❌ Error analyzing with AI:', error);
+        aidaLogging('❌ Error analyzing with AI:', error);
         analysisPanel.webview.html = getHtml(`<div style="color: #f48771;">❌ Error: ${error.message}</div>`);
     }
 }
@@ -63554,7 +63899,7 @@ async function openImpactAnalysisWebview(nodeId, graph = null) {
                     });
                 }
             } catch (error) {
-                console.error('Impact analysis error:', error);
+                aidaLogging('Impact analysis error:', error);
                 panel.webview.postMessage({
                     command: 'error',
                     error: error.message
@@ -63566,7 +63911,7 @@ async function openImpactAnalysisWebview(nodeId, graph = null) {
         await runAnalysis();
 
     } catch (error) {
-        console.error('Error opening impact analysis:', error);
+        aidaLogging('Error opening impact analysis:', error);
         vscode.window.showErrorMessage(`Failed to open impact analysis: ${error.message}`);
     }
 }
@@ -63977,114 +64322,16 @@ async function handlePRDependencyAnalysis(prUrl, stream, token, workspaceRoot) {
         if (renamed > 0) stream.markdown(`🔵 Renamed: ${renamed}\n`);
         stream.markdown('\n');
 
-        // Step 3: Analyze dependencies for PR files
-        stream.markdown('🔗 Analyzing dependencies and dependents...\n\n');
+        // Step 3: Start background analysis (non-blocking)
+        stream.markdown('✅ **Analysis started in background** - You can continue working!\n\n');
+        stream.markdown('💡 The dependency graph will open automatically when complete.\n\n');
+        stream.markdown('📊 Check the **status bar** at the bottom for progress updates.\n\n');
 
-        const analyzer = new PRDependencyAnalyzer(workspaceRoot);
-        let graph;
-
-        try {
-            graph = await analyzer.analyzePRFiles(prFiles);
-        } catch (error) {
-            stream.markdown(`❌ **Analysis Error:** ${error.message}\n\n`);
-
-            if (error.message.includes('cache') || error.message.includes('graph')) {
-                stream.markdown('💡 **Tip:** Run `@dependency` first to build the workspace dependency cache\n\n');
-            }
-
-            return;
-        }
-
-        // Step 4: Show extracted symbols with impact analysis
-        if (!isProd) {
-            stream.markdown('✨ **Symbol Extraction Results:**\n\n');
-
-            const prNodesWithSymbols = graph.nodes.filter(n => n.isPRFile);
-
-            if (prNodesWithSymbols.length === 0) {
-                stream.markdown('ℹ️ No PR files found\n\n');
-            }
-
-            let totalSymbols = 0;
-            const symbolToDependentsMap = graph.symbolToDependentsMap || new Map();
-
-            for (const prNode of prNodesWithSymbols) {
-                stream.markdown(`📄 **File:** ${prNode.prPath}\n\n`);
-
-                if (!prNode.changedSymbols || prNode.changedSymbols.length === 0) {
-                    stream.markdown('  ℹ️ No symbols extracted\n\n');
-                    continue;
-                }
-
-                stream.markdown(`🔤 **Symbols (${prNode.changedSymbols.length}):**\n\n`);
-
-                for (const symbol of prNode.changedSymbols) {
-                    // Handle both string and object formats
-                    const symbolName = typeof symbol === 'string' ? symbol : symbol.fullName;
-                    const symbolType = typeof symbol === 'object' ? symbol.type : 'unknown';
-
-                    stream.markdown(`  - \`${symbolName}\` _(${symbolType})_`);
-
-                    // Show impacted files for this symbol
-                    const impactedFiles = symbolToDependentsMap.get(symbolName) || [];
-                    if (impactedFiles.length > 0) {
-                        stream.markdown(` → **${impactedFiles.length} files**`);
-                    }
-
-                    stream.markdown('\n');
-                    totalSymbols++;
-                }
-
-                stream.markdown('\n');
-            }
-
-            // Step 5: Show Impact Analysis Summary
-            stream.markdown('\n---\n\n');
-            stream.markdown('📊 **Impact Analysis Summary:**\n\n');
-            stream.markdown(`- **Changed Symbols:** ${totalSymbols}\n`);
-            stream.markdown(`- **Total Files Analyzed:** ${graph.nodes.length}\n`);
-            stream.markdown(`- **Impacted Files:** ${graph.nodes.filter(n => n.nodeType === 'dependent').length}\n`);
-            stream.markdown(`- **Dependencies:** ${graph.nodes.filter(n => n.nodeType === 'dependency').length}\n\n`);
-
-            // Show top impacted symbols
-            if (symbolToDependentsMap.size > 0) {
-                stream.markdown('🔥 **Top Impacted Symbols:**\n\n');
-
-                const sortedSymbols = Array.from(symbolToDependentsMap.entries())
-                    .sort((a, b) => b[1].length - a[1].length)
-                    .slice(0, 5);
-
-                for (const [symbolName, dependents] of sortedSymbols) {
-                    const impactLevel = dependents.length > 5 ? '🔴 HIGH' :
-                        dependents.length > 2 ? '🟡 MEDIUM' : '🟢 LOW';
-                    stream.markdown(`  ${impactLevel} \`${symbolName}\` → **${dependents.length} files**\n`);
-
-                    // Show first 3 impacted files
-                    const preview = dependents.slice(0, 3);
-                    for (const file of preview) {
-                        const fileName = file.split('/').pop();
-                        stream.markdown(`    - ${fileName}\n`);
-                    }
-                    if (dependents.length > 3) {
-                        stream.markdown(`    - _...and ${dependents.length - 3} more_\n`);
-                    }
-                    stream.markdown('\n');
-                }
-            } else {
-                stream.markdown('✅ **No external files impacted** (low risk change)\n\n');
-            }
-        }
-
-        // Step 6: Display graph
-        stream.markdown('\n🎨 Opening graph viewer...\n\n');
-
-        const summary = graph.prSummary;
-        await createPRGraphWebview(graph, prInfo, summary);
-
-        stream.markdown('✅ **Graph viewer opened!** Check the new tab for visual analysis.\n\n');
+        // Run analysis in background without blocking chat
+        performPRAnalysisInBackground(prUrl, prInfo, prFiles, workspaceRoot);
 
     } catch (error) {
-        console.error('❌ PR dependency analysis error:', error);
+        aidaLogging('❌ PR dependency analysis error:', error);
         stream.markdown(`❌ **Unexpected Error:** ${error.message}\n\n`);
         stream.markdown('Please check the console for details.\n\n');
     }
@@ -64161,7 +64408,7 @@ async function createPRGraphWebview(graph, prInfo, summary) {
         );
 
     } catch (error) {
-        console.error('❌ Error creating PR graph webview:', error);
+        aidaLogging('❌ Error creating PR graph webview:', error);
         vscode.window.showErrorMessage(`Failed to create graph viewer: ${error.message}`);
     }
 }
@@ -64186,8 +64433,8 @@ function generatePRGraphWebviewHtml(graph, summary, prInfo) {
     let filteredEdges = graph.edges;
     let impactedPaths = new Set(); // ✅ Moved outside for access in map()
 
-    console.log(`📊 Original graph: ${graph.nodes.length} nodes, ${graph.edges.length} edges`);
-    console.log(`📊 symbolToDependentsMap type:`, symbolToDependentsMap?.constructor?.name, 'size:', symbolToDependentsMap?.size);
+    aidaLogging(`📊 Original graph: ${graph.nodes.length} nodes, ${graph.edges.length} edges`);
+    aidaLogging(`📊 symbolToDependentsMap type:`, symbolToDependentsMap?.constructor?.name, 'size:', symbolToDependentsMap?.size);
 
     // Check if symbolToDependentsMap exists and has data (could be Map or Object)
     const hasImpactData = symbolToDependentsMap && (
@@ -64202,63 +64449,63 @@ function generatePRGraphWebviewHtml(graph, summary, prInfo) {
         // Handle both Map and Object formats
         if (symbolToDependentsMap instanceof Map) {
             for (const [symbol, files] of symbolToDependentsMap) {
-                console.log(`   Symbol: ${symbol} → ${files.length} files`);
+                aidaLogging(`   Symbol: ${symbol} → ${files.length} files`);
                 files.forEach(f => impactedPaths.add(f));
             }
         } else {
             for (const [symbol, files] of Object.entries(symbolToDependentsMap)) {
-                console.log(`   Symbol: ${symbol} → ${files.length} files`);
+                aidaLogging(`   Symbol: ${symbol} → ${files.length} files`);
                 files.forEach(f => impactedPaths.add(f));
             }
         }
 
-        console.log(`🎯 Total impacted files from symbols: ${impactedPaths.size}`);
-        console.log(`🎯 Impacted paths:`, Array.from(impactedPaths));
+        aidaLogging(`🎯 Total impacted files from symbols: ${impactedPaths.size}`);
+        aidaLogging(`🎯 Impacted paths:`, Array.from(impactedPaths));
 
         // Keep: PR files + dependencies + actually impacted dependents
         const keepNodeIds = new Set();
         filteredNodes = graph.nodes.filter(node => {
-            console.log(`   Checking node: ${node.id}, type: ${node.nodeType}, isPR: ${node.isPRFile}`);
+            aidaLogging(`   Checking node: ${node.id}, type: ${node.nodeType}, isPR: ${node.isPRFile}`);
 
             // Always keep PR files
             if (node.isPRFile) {
                 keepNodeIds.add(node.id);
-                console.log(`      ✅ Keep (PR file)`);
+                aidaLogging(`      ✅ Keep (PR file)`);
                 return true;
             }
             // 🚫 HIDE dependencies in PR mode (user doesn't need to see what PR file imports)
             if (node.nodeType === 'dependency') {
-                console.log(`      ❌ Filter out (dependency - not needed in PR mode)`);
+                aidaLogging(`      ❌ Filter out (dependency - not needed in PR mode)`);
                 return false;
             }
             // Keep dependents that are actually impacted
             if (node.nodeType === 'dependent') {
                 const nodePath = node.relativePath || node.id;
                 const isImpacted = impactedPaths.has(nodePath);
-                console.log(`      Path: ${nodePath}, Impacted: ${isImpacted}`);
+                aidaLogging(`      Path: ${nodePath}, Impacted: ${isImpacted}`);
                 if (isImpacted) {
                     keepNodeIds.add(node.id);
-                    console.log(`      ✅ Keep (impacted dependent)`);
+                    aidaLogging(`      ✅ Keep (impacted dependent)`);
                     return true;
                 }
-                console.log(`      ❌ Filter out (non-impacted dependent)`);
+                aidaLogging(`      ❌ Filter out (non-impacted dependent)`);
                 return false;
             }
             // Handle "both" type (dependency + dependent)
             if (node.nodeType === 'both') {
                 const nodePath = node.relativePath || node.id;
                 const isImpacted = impactedPaths.has(nodePath);
-                console.log(`      Path: ${nodePath}, Impacted: ${isImpacted}`);
+                aidaLogging(`      Path: ${nodePath}, Impacted: ${isImpacted}`);
                 if (isImpacted) {
                     keepNodeIds.add(node.id);
-                    console.log(`      ✅ Keep (impacted both)`);
+                    aidaLogging(`      ✅ Keep (impacted both)`);
                     return true;
                 }
-                console.log(`      ❌ Filter out (non-impacted both)`);
+                aidaLogging(`      ❌ Filter out (non-impacted both)`);
                 return false;
             }
             // Filter out other types by default
-            console.log(`      ❌ Filter out (other type)`);
+            aidaLogging(`      ❌ Filter out (other type)`);
             return false;
         });
 
@@ -64269,9 +64516,9 @@ function generatePRGraphWebviewHtml(graph, summary, prInfo) {
             return keepNodeIds.has(sourceId) && keepNodeIds.has(targetId);
         });
 
-        console.log(`🎯 Filtered graph: ${filteredNodes.length} nodes (from ${graph.nodes.length}), ${filteredEdges.length} edges (from ${graph.edges.length})`);
+        aidaLogging(`🎯 Filtered graph: ${filteredNodes.length} nodes (from ${graph.nodes.length}), ${filteredEdges.length} edges (from ${graph.edges.length})`);
     } else {
-        console.log(`⚠️ No impact data available, filtering to show ONLY PR files`);
+        aidaLogging(`⚠️ No impact data available, filtering to show ONLY PR files`);
         // If no impact data, we still want to hide dependencies in PR mode
         // Only show the PR files themselves
         filteredNodes = graph.nodes.filter(node => node.isPRFile);
@@ -64432,7 +64679,7 @@ async function analyzeFileDependency(uri) {
             await createFileGraphWebview(graph, filePath);
 
         } catch (error) {
-            console.error('Error analyzing file dependency:', error);
+            aidaLogging('Error analyzing file dependency:', error);
             vscode.window.showErrorMessage(`Analysis failed: ${error.message}`);
         }
     });
@@ -64471,7 +64718,7 @@ async function createFileGraphWebview(graph, filePath) {
         );
 
     } catch (error) {
-        console.error('❌ Error creating file graph webview:', error);
+        aidaLogging('❌ Error creating file graph webview:', error);
         vscode.window.showErrorMessage(`Failed to create graph viewer: ${error.message}`);
     }
 }
@@ -65559,7 +65806,7 @@ async function autoDetectWorkspace(workspacePath, targetFilePath = null) {
         return detectionResult;
 
     } catch (error) {
-        console.error('Detection error:', error);
+        aidaLogging('Detection error:', error);
         return detectionResult;
     }
 }
@@ -65755,7 +66002,7 @@ async function detectFromPRFiles(prFiles) {
     };
 
   } catch (error) {
-    console.error('PR Detection Error:', error);
+    aidaLogging('PR Detection Error:', error);
     return {
       language: null,
       framework: null,
@@ -66280,7 +66527,7 @@ class PRDependencyAnalyzer {
                                 }
                             }
                         } catch (error) {
-                            console.error(`            ❌ Error finding barrel references: ${error.message}`);
+                            aidaLogging(`            ❌ Error finding barrel references: ${error.message}`);
                         }
                     }
                 }
@@ -66960,7 +67207,7 @@ class PRDependencyAnalyzer {
             return uniqueSymbols;
 
         } catch (error) {
-            console.error(`   ❌ Error in VS Code symbol extraction: ${error.message}`);
+            aidaLogging(`   ❌ Error in VS Code symbol extraction: ${error.message}`);
             return [];
         }
     }
@@ -67365,7 +67612,7 @@ class PRDependencyAnalyzer {
                     }
 
                 } catch (error) {
-                    console.error(`            ❌ Reference error: ${error.message}`);
+                    aidaLogging(`            ❌ Reference error: ${error.message}`);
                 }
             }
 
@@ -67377,7 +67624,7 @@ class PRDependencyAnalyzer {
 
             return usedSymbols;
         } catch (error) {
-            console.error(`      ❌ Analysis failed for ${dependentPath}:`, error.message);
+            aidaLogging(`      ❌ Analysis failed for ${dependentPath}:`, error.message);
             return [];
         }
     }
@@ -67742,7 +67989,7 @@ function initializeReviewAllChanges(context) {
         } catch (error) {
             stream.markdown(`❌ Error: ${error.message}\n\n`);
             stream.markdown('**Fallback:** Try running a git status check first, or use @review-changes for specific files.\n');
-            console.error('Review All Changes error:', error);
+            aidaLogging('Review All Changes error:', error);
         }
     });
 
@@ -68098,7 +68345,7 @@ async function aiReviewAllChanges(input, stream, selectedModel = null, context =
         stream.markdown('- Try `@review-file` for active file review\n');
         stream.markdown('- Check if VS Code has proper workspace access\n');
         stream.markdown('- Restart VS Code if issues persist\n');
-        console.error('AI Review All Changes error:', error);
+        aidaLogging('AI Review All Changes error:', error);
     }
 }
 
@@ -68602,7 +68849,7 @@ try {
     chatSessions = extensionModule.chatSessions;
     aidaLogging('✅ Successfully imported chatSessions from extension.js:', typeof chatSessions, chatSessions ? chatSessions.constructor.name : 'null');
 } catch (error) {
-    console.warn('⚠️ Could not import chatSessions from extension.js, creating fallback:', error.message);
+    aidaLogging('⚠️ Could not import chatSessions from extension.js, creating fallback:', error.message);
     chatSessions = new Map();
 }
 
@@ -68641,7 +68888,7 @@ function initializeReviewChanges(context) {
         } catch (error) {
             stream.markdown(`❌ Error: ${error.message}\n\n`);
             stream.markdown('**Fallback:** Try running a git status check first, or specify a file path to review.\n');
-            console.error('Review Changes error:', error);
+            aidaLogging('Review Changes error:', error);
         }
     });
 
@@ -68715,7 +68962,7 @@ async function processReviewChanges(targetInput, stream, context = null, request
         
     } catch (error) {
         stream.markdown(`❌ **Review processing failed:** ${error.message}\n\n`);
-        console.error('Process Review Changes error:', error);
+        aidaLogging('Process Review Changes error:', error);
     }
 }
 
@@ -68977,7 +69224,7 @@ async function aiReviewChanges(input, stream, selectedModel = null, context = nu
         stream.markdown('- Try `@review-file` for active file review\n');
         stream.markdown('- Check if VS Code has proper workspace access\n');
         stream.markdown('- Restart VS Code if issues persist\n');
-        console.error('AI Review Changes error:', error);
+        aidaLogging('AI Review Changes error:', error);
     } 
 }
 
@@ -69738,7 +69985,7 @@ async function getFallbackModel(currentModel, stream, attemptNumber = 1) {
         return fallbackModel;
 
     } catch (error) {
-        console.error('❌ Fallback model selection failed:', error);
+        aidaLogging('❌ Fallback model selection failed:', error);
         stream.markdown(`❌ **Fallback failed:** ${error.message}\n\n`);
         throw error;
     }
@@ -69805,11 +70052,11 @@ function mapSTUResponse(data) {
 
     // Special case: STU Platform sometimes returns empty content even with tokens
     if (!content && data.usage?.completion_tokens > 0) {
-        console.warn('⚠️ STU Platform returned tokens but empty content:');
-        console.warn(`   - Input tokens: ${data.usage.prompt_tokens}`);
-        console.warn(`   - Output tokens: ${data.usage.completion_tokens}`);
-        console.warn(`   - Total tokens: ${data.usage.total_tokens}`);
-        console.warn('   - Checking alternative content fields...');
+        aidaLogging('⚠️ STU Platform returned tokens but empty content:');
+        aidaLogging(`   - Input tokens: ${data.usage.prompt_tokens}`);
+        aidaLogging(`   - Output tokens: ${data.usage.completion_tokens}`);
+        aidaLogging(`   - Total tokens: ${data.usage.total_tokens}`);
+        aidaLogging('   - Checking alternative content fields...');
 
         // Try alternative fields
         const alternatives = ['content', 'answer', 'generated_text', 'completion', 'text'];
@@ -69829,7 +70076,7 @@ function mapSTUResponse(data) {
 
         // If still no content but we have tokens, try aggressive parsing
         if (!content) {
-            console.warn('⚠️ STU Platform: Trying aggressive content parsing...');
+            aidaLogging('⚠️ STU Platform: Trying aggressive content parsing...');
 
             // Enhanced content extraction for complex structures
             const smartContentExtraction = (obj, path = '', depth = 0) => {
@@ -69882,7 +70129,7 @@ function mapSTUResponse(data) {
 
             // Advanced recovery: Try to reconstruct content from partial data
             if (!content) {
-                console.warn('🔄 STU Platform: Attempting advanced content recovery...');
+                aidaLogging('🔄 STU Platform: Attempting advanced content recovery...');
 
                 // Try to find any text fragments
                 const fragments = [];
@@ -69926,8 +70173,8 @@ function mapSTUResponse(data) {
 
                 // If absolutely no content found, return error for fallback
                 if (!content) {
-                    console.error('❌ STU Platform: All content recovery attempts failed');
-                    console.error('🔧 Falling back to Copilot for this request');
+                    aidaLogging('❌ STU Platform: All content recovery attempts failed');
+                    aidaLogging('🔧 Falling back to Copilot for this request');
                     return { content: null, error: 'COMPLEX_PARSING_FAILED', inputTokens: data.usage?.prompt_tokens || 0, outputTokens: data.usage?.completion_tokens || 0 };
                 }
             }
@@ -70122,7 +70369,7 @@ async function executeAIReviewWithApiKey(userPrompt, stream, reviewType, attempt
                                     totalOutputTokens = parsed.usage.completion_tokens || 0;
                                 }
                             } catch (e) {
-                                console.warn('⚠️ Failed to parse streaming chunk:', data);
+                                aidaLogging('⚠️ Failed to parse streaming chunk:', data);
                             }
                         }
                     }
@@ -70130,7 +70377,7 @@ async function executeAIReviewWithApiKey(userPrompt, stream, reviewType, attempt
 
                 // Fallback to estimation if streaming didn't provide token usage
                 if (totalInputTokens === 0 && totalOutputTokens === 0) {
-                    console.warn('⚠️ STU Platform streaming: No token usage in response, falling back to estimation');
+                    aidaLogging('⚠️ STU Platform streaming: No token usage in response, falling back to estimation');
                     totalInputTokens = estimateTokenCount(userPrompt);
                     totalOutputTokens = estimateTokenCount(outputText);
                 }
@@ -70153,7 +70400,7 @@ async function executeAIReviewWithApiKey(userPrompt, stream, reviewType, attempt
 
             // Handle complex parsing failure - trigger fallback to Copilot
             if (mappedResponse.error === 'COMPLEX_PARSING_FAILED') {
-                console.warn(`⚠️ ${provider} failed on complex content parsing - triggering Copilot fallback`);
+                aidaLogging(`⚠️ ${provider} failed on complex content parsing - triggering Copilot fallback`);
                 // Only throw if we truly have no content
                 if (!mappedResponse.content || mappedResponse.content.trim().length === 0) {
                     throw new Error(`${provider} complex parsing failed - content too complex for current parser`);
@@ -70165,7 +70412,7 @@ async function executeAIReviewWithApiKey(userPrompt, stream, reviewType, attempt
             }
 
             if (!mappedResponse.content) {
-                console.warn(`⚠️ No content extracted from ${provider} response, but API call succeeded`);
+                aidaLogging(`⚠️ No content extracted from ${provider} response, but API call succeeded`);
                 // Don't throw error - API succeeded, just show a helpful message
                 const fallbackMessage = `⚠️ **${provider.toUpperCase()} API Response Issue**: The API call succeeded and returned ${mappedResponse.outputTokens} tokens, but content extraction failed. This suggests a response format compatibility issue rather than an API failure.\n\n**Possible solutions:**\n- Try a different model (e.g., switch from GPT-5 to GPT-4o)\n- Check API provider documentation for response format changes\n- Contact support if the issue persists\n\n**Debug info**: Provider: ${provider}, Output tokens: ${mappedResponse.outputTokens}`;
 
@@ -70199,7 +70446,7 @@ async function executeAIReviewWithApiKey(userPrompt, stream, reviewType, attempt
         return true;
 
     } catch (apiError) {
-        console.error(`❌ API Key mode failed (attempt ${attemptCount + 1}):`, apiError);
+        aidaLogging(`❌ API Key mode failed (attempt ${attemptCount + 1}):`, apiError);
 
         // Provide detailed error information
         let errorDetails = apiError.message;
@@ -70308,7 +70555,7 @@ function normalizeApiParameters(model, apiHost, options) {
 
             // Remove ALL potentially problematic parameters for GPT-5
             if (model.includes('gpt-5') || model.toLowerCase().includes('gpt-5')) {
-                console.warn('⚠️ GPT-5 on STU Platform - Using minimal parameter set');
+                aidaLogging('⚠️ GPT-5 on STU Platform - Using minimal parameter set');
 
                 // Keep only essential parameters
                 const essentialParams = {
@@ -70598,12 +70845,12 @@ function prepareImageForProvider(imageInput, provider = 'openai') {
     // Validate mime type
     const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (!allowedTypes.includes(mimeType)) {
-        console.warn('Unsupported image type:', mimeType, 'defaulting to image/png');
+        aidaLogging('Unsupported image type:', mimeType, 'defaulting to image/png');
         mimeType = 'image/png';
     }
 
     if (!base64Data) {
-        console.error('Failed to extract base64 data from image');
+        aidaLogging('Failed to extract base64 data from image');
         return null;
     }
 
@@ -70682,11 +70929,11 @@ async function executeAIReviewWithCopilot(userPrompt, model, stream, reviewType 
         const COPILOT_HARD_LIMIT = 32000;  // Likely failure point
 
         if (inputTokens > COPILOT_HARD_LIMIT) {
-            console.warn(`🚨 CRITICAL: Token count ${inputTokens} exceeds hard limit ${COPILOT_HARD_LIMIT}!`);
-            console.warn(`   ❌ This request will likely FAIL with "Message exceeds token limit"`);
+            aidaLogging(`🚨 CRITICAL: Token count ${inputTokens} exceeds hard limit ${COPILOT_HARD_LIMIT}!`);
+            aidaLogging(`   ❌ This request will likely FAIL with "Message exceeds token limit"`);
         } else if (inputTokens > COPILOT_SOFT_LIMIT) {
-            console.warn(`⚠️ WARNING: Token count ${inputTokens} approaching limit (${Math.round(inputTokens / COPILOT_HARD_LIMIT * 100)}% of ${COPILOT_HARD_LIMIT})`);
-            console.warn(`   🔥 Risk of "Message exceeds token limit" error`);
+            aidaLogging(`⚠️ WARNING: Token count ${inputTokens} approaching limit (${Math.round(inputTokens / COPILOT_HARD_LIMIT * 100)}% of ${COPILOT_HARD_LIMIT})`);
+            aidaLogging(`   🔥 Risk of "Message exceeds token limit" error`);
         } else {
             aidaLogging(`✅ Token count OK: ${inputTokens} / ${COPILOT_HARD_LIMIT} (${Math.round(inputTokens / COPILOT_HARD_LIMIT * 100)}%)`);
         }
@@ -70746,7 +70993,7 @@ async function executeAIReviewWithCopilot(userPrompt, model, stream, reviewType 
         return true; // Success
 
     } catch (modelError) {
-        console.error(`❌ Copilot model ${model?.family || 'unknown'} failed (attempt ${attemptCount + 1}):`, modelError);
+        aidaLogging(`❌ Copilot model ${model?.family || 'unknown'} failed (attempt ${attemptCount + 1}):`, modelError);
 
         // If we've reached max attempts, throw the error
         if (attemptCount >= maxAttempts - 1) {
@@ -70854,11 +71101,11 @@ function processTemplateWithPlaceholders(templateContent, templateDir) {
 
             return processedContent;
         } else {
-            console.warn(`⚠️ Base template not found at: ${basePath}, using original content`);
+            aidaLogging(`⚠️ Base template not found at: ${basePath}, using original content`);
             return templateContent;
         }
     } catch (error) {
-        console.error('❌ Error processing template placeholders:', error);
+        aidaLogging('❌ Error processing template placeholders:', error);
         return templateContent; // Return original content on error
     }
 }
@@ -70873,7 +71120,7 @@ function extractAngularChecks(baseContent) {
     const startIndex = lines.findIndex(line => line.includes('### 🚨 SECURITY VIOLATIONS:'));
 
     if (startIndex === -1) {
-        console.warn('⚠️ Could not find Angular critical checks start marker in base template');
+        aidaLogging('⚠️ Could not find Angular critical checks start marker in base template');
         return '<!-- Angular critical checks not found -->';
     }
 
@@ -70929,7 +71176,7 @@ function getReviewTemplate(templateName, context = null) {
         }
 
     } catch (error) {
-        console.error('❌ Template loading error:', error);
+        aidaLogging('❌ Template loading error:', error);
         throw new Error(`Failed to load template: ${error.message}`);
     }
 }
@@ -71038,7 +71285,7 @@ async function getUnifiedModel(stream, requestedModel = null, chatContext = null
         aidaLogging('📋 All available models:', models.map(m => `${m.family || m.id} (${m.vendor || 'Unknown'})`));
 
         if (models.length === 0) {
-            console.warn('⚠️ No Copilot models available - check GitHub Copilot installation and authentication');
+            aidaLogging('⚠️ No Copilot models available - check GitHub Copilot installation and authentication');
             // If API key is configured, suggest using it instead
             if (vscode.workspace.getConfiguration('aida').get('ai.apiKey')) {
                 aidaLogging('💡 Suggestion: Enable API key mode in settings: aida.useExternalAI = true');
@@ -71093,11 +71340,11 @@ async function getUnifiedModel(stream, requestedModel = null, chatContext = null
             }
         }
     } catch (error) {
-        console.error('❌ Error getting Copilot models:', error.message);
+        aidaLogging('❌ Error getting Copilot models:', error.message);
 
         // Check if this is a GitHub authentication error
         if (error.message.includes('GitHubLoginFailed') || error.message.includes('authentication')) {
-            console.warn('🔑 GitHub Copilot authentication failed. Consider using API key mode instead.');
+            aidaLogging('🔑 GitHub Copilot authentication failed. Consider using API key mode instead.');
 
             // If user has API key configured, suggest enabling API key mode
             const config = vscode.workspace.getConfiguration('aida');
@@ -71118,10 +71365,10 @@ async function getUnifiedModel(stream, requestedModel = null, chatContext = null
 
     // If no model is available, provide helpful guidance
     if (!finalModel) {
-        console.warn('⚠️ No AI models available. Options:');
-        console.warn('   1. Install and authenticate GitHub Copilot');
-        console.warn('   2. Configure API key mode in extension settings');
-        console.warn('   3. Check VS Code language model permissions');
+        aidaLogging('⚠️ No AI models available. Options:');
+        aidaLogging('   1. Install and authenticate GitHub Copilot');
+        aidaLogging('   2. Configure API key mode in extension settings');
+        aidaLogging('   3. Check VS Code language model permissions');
 
         // Show user-friendly error in stream if available
         if (stream) {
@@ -71195,7 +71442,7 @@ function displayDocumentReviewHeader(stream) {
                 docPath = doc.displayName || doc.relativePath || doc.name;
             } else {
                 // Invalid entry
-                console.warn('⚠️ Invalid business document entry:', doc);
+                aidaLogging('⚠️ Invalid business document entry:', doc);
                 stream.markdown(`${index + 1}. Invalid document entry (type: ${typeof doc})\n`);
                 return;
             }
@@ -71251,7 +71498,7 @@ async function getAvailableModels() {
             countTokens: model.countTokens ? 'supported' : 'not supported'
         }));
     } catch (error) {
-        console.error('Error fetching available models:', error);
+        aidaLogging('Error fetching available models:', error);
         return [];
     }
 }
@@ -71296,7 +71543,7 @@ async function showAvailableModels() {
         }
 
     } catch (error) {
-        console.error('Error showing available models:', error);
+        aidaLogging('Error showing available models:', error);
         vscode.window.showErrorMessage(`Error fetching models: ${error.message}`);
     }
 }
@@ -71401,7 +71648,7 @@ async function executeApiAnalysisCall(prompt, stream, analysisType = 'API Patter
         }
 
     } catch (error) {
-        console.error(`❌ ${analysisType} failed:`, error);
+        aidaLogging(`❌ ${analysisType} failed:`, error);
         stream.markdown(`❌ **${analysisType} failed:** ${error.message}\n\n`);
 
         // Try fallback if quota/model error
@@ -71666,7 +71913,7 @@ async function autoDetectLanguage(workspacePath, targetFilePath = null) {
         };
 
     } catch (error) {
-        console.error('❌ Error during language detection:', error);
+        aidaLogging('❌ Error during language detection:', error);
         return {
             ...detectionResult,
             type: 'fallback',
@@ -71756,7 +72003,7 @@ async function getReviewTemplateWithDetection(templateType, context = null, targ
         };
 
     } catch (error) {
-        console.error('❌ Template loading error:', error);
+        aidaLogging('❌ Template loading error:', error);
         throw new Error(`Failed to load template: ${error.message}`);
     }
 }
@@ -72119,7 +72366,7 @@ function resolveAidaBasePath(workspaceFolder) {
             };
         } else {
             // Auto-create AIDA structure if base path doesn't exist
-            console.warn(`⚠️ Configured AIDA path not found: ${templatesPath}`);
+            aidaLogging(`⚠️ Configured AIDA path not found: ${templatesPath}`);
             aidaLogging(`🔧 Attempting to create AIDA structure at: ${resolvedPath}`);
 
             try {
@@ -72158,8 +72405,8 @@ function resolveAidaBasePath(workspaceFolder) {
                 };
 
             } catch (error) {
-                console.error(`❌ Failed to create AIDA structure: ${error.message}`);
-                console.warn(`⚠️ Falling back to extension templates`);
+                aidaLogging(`❌ Failed to create AIDA structure: ${error.message}`);
+                aidaLogging(`⚠️ Falling back to extension templates`);
             }
         }
     }
@@ -72400,12 +72647,12 @@ function buildBusinessDocsContent(selectedBusinessDocs) {
 
                     aidaLogging(`📄 Loaded ${file.name}: ${fileContent.substring(0, 50)}...`);
                 } catch (fileError) {
-                    console.error(`❌ Error reading file ${file.path}:`, fileError.message);
+                    aidaLogging(`❌ Error reading file ${file.path}:`, fileError.message);
                 }
             });
 
         } catch (folderError) {
-            console.error(`❌ Error reading folder ${category.path}:`, folderError.message);
+            aidaLogging(`❌ Error reading folder ${category.path}:`, folderError.message);
         }
 
         docsContent += '---\n\n';
@@ -72528,7 +72775,7 @@ async function getBusinessDocumentFolders(workspaceFolder) {
                                     };
                                 });
                         } catch (error) {
-                            console.error(`❌ Error reading files in ${folderPath}:`, error);
+                            aidaLogging(`❌ Error reading files in ${folderPath}:`, error);
                             return [];
                         }
                     },
@@ -72541,7 +72788,7 @@ async function getBusinessDocumentFolders(workspaceFolder) {
         aidaLogging(`📚 Found ${subFolders.length} business document categories:`, subFolders.map(f => f.name));
         return subFolders;
     } catch (error) {
-        console.error('❌ Error scanning business documents:', error);
+        aidaLogging('❌ Error scanning business documents:', error);
         return [];
     }
 }
@@ -72801,7 +73048,7 @@ function getTokenForPR(prUrl) {
         return null;
 
     } catch (error) {
-        console.error('❌ Error getting token for PR:', error.message);
+        aidaLogging('❌ Error getting token for PR:', error.message);
         return null;
     }
 }
@@ -72912,7 +73159,7 @@ function showTokenConfigurationHelp(provider, organization, stream = null) {
 
     // Quick setup button
 
-    console.error(`❌ Missing token: ${providerName}/${organization}`);
+    aidaLogging(`❌ Missing token: ${providerName}/${organization}`);
     aidaLogging('🔧 Configuration help displayed to user');
 
     if (stream) {
@@ -73051,7 +73298,7 @@ function initializeReviewFile(context) {
         } catch (error) {
             stream.markdown(`❌ Error: ${error.message}\n\n`);
             stream.markdown('**Fallback:** Please open a file in the editor and try again.\n');
-            console.error('Review File error:', error);
+            aidaLogging('Review File error:', error);
         }
     });
 
@@ -73168,7 +73415,7 @@ async function aiReviewFile(input, stream, selectedModel = null, context = null,
         stream.markdown('- Check if the file exists and is accessible\n');
         stream.markdown('- Ensure VS Code has proper file access\n');
         stream.markdown('- Try opening the file in the editor first\n');
-        console.error('AI Review File error:', error);
+        aidaLogging('AI Review File error:', error);
     }
 }
 
@@ -73266,7 +73513,7 @@ async function handleActiveFileReview(stream, requestedModel = null, context = n
         stream.markdown('- Try refreshing the editor\n');
         stream.markdown('- Save the file and try again\n');
         stream.markdown('- Use `@review-changes` for git diff review instead\n');
-        console.error('Active file review error:', error);
+        aidaLogging('Active file review error:', error);
     }
 }
 
@@ -73729,7 +73976,7 @@ async function getPRReviewTemplate(templateType, prData) {
         };
 
     } catch (error) {
-        console.error('❌ PR template detection failed:', error);
+        aidaLogging('❌ PR template detection failed:', error);
         
         // Final fallback - use workspace detection
         aidaLogging('🔄 Falling back to workspace detection...');
@@ -73743,7 +73990,7 @@ try {
     // Use npm installed diff package
     Diff = __webpack_require__(/*! diff */ "./node_modules/diff/lib/index.js");
 } catch (error) {
-    console.warn('⚠️ diff package not available, using fallback diff functionality');
+    aidaLogging('⚠️ diff package not available, using fallback diff functionality');
     // Create a simple fallback for basic diff functionality
     Diff = {
         createPatch: (fileName, oldStr, newStr) => {
@@ -74000,7 +74247,7 @@ async function showAzureDevOpsDiffInWebview(prAnalysis, stream) {
     const accessToken = getTokenForPR(prUrl);
     
     if (!accessToken) {
-        console.warn(`⚠️ No token configured for Azure DevOps organization: ${data.organization}`);
+        aidaLogging(`⚠️ No token configured for Azure DevOps organization: ${data.organization}`);
     }
     
     // Store global Azure DevOps API info for parseFullDiffContentEnhanced
@@ -74457,7 +74704,7 @@ async function processPrReview(userMessage, repoType, prId, owner, repo, organiz
     } catch (error) {
         stream.markdown('❌ **Unexpected Error in PR Processing**\n\n');
         stream.markdown(`Details: ${error.message}\n\n`);
-        console.error('Process PR Review error:', error);
+        aidaLogging('Process PR Review error:', error);
     }
 }
 
@@ -74604,7 +74851,7 @@ async function analyzePullRequest(stream, prUrl, organization = null, project = 
 
         } catch (apiError) {
             // Return error instead of mock data
-            console.error('❌ Azure DevOps API failed:', apiError.message);
+            aidaLogging('❌ Azure DevOps API failed:', apiError.message);
             stream.markdown('❌ **Azure DevOps API Error**\n\n');
             stream.markdown(`Error: ${apiError.message}\n\n`);
             return { error: `Azure DevOps API failed: ${apiError.message}` };
@@ -74627,7 +74874,7 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
         const prResponse = await makeAzureDevOpsRequest(prUrl, token);
 
         if (!prResponse.success) {
-            console.error('Failed to get PR details:', prResponse.error);
+            aidaLogging('Failed to get PR details:', prResponse.error);
             throw new Error(`Failed to get PR details: ${prResponse.error}`);
         }
 
@@ -74922,7 +75169,7 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
             }
         };
     } catch (error) {
-        console.error('Error in getAzureDevOpsPR:', error);
+        aidaLogging('Error in getAzureDevOpsPR:', error);
         throw new Error(`Unable to fetch PR data: ${error.message}`);
     }
 }
@@ -75167,7 +75414,7 @@ async function analyzeGitHubPullRequest(stream, owner, repo, prId) {
         const prData = await getGitHubPR(owner, repo, prId, githubToken);
 
         if (!prData.success) {
-            console.error('Failed to get GitHub PR:', prData.error);
+            aidaLogging('Failed to get GitHub PR:', prData.error);
             stream.markdown('❌ **GitHub API Error**\n\n');
             stream.markdown(`Error: ${prData.error}\n\n`);
 
@@ -75177,7 +75424,7 @@ async function analyzeGitHubPullRequest(stream, owner, repo, prId) {
         return prData;
 
     } catch (error) {
-        console.error('Error in analyzeGitHubPullRequest:', error);
+        aidaLogging('Error in analyzeGitHubPullRequest:', error);
         return { error: `Analysis failed: ${error.message}` };
     }
 }
@@ -75198,7 +75445,7 @@ async function getGitHubPR(owner, repo, prId, token) {
         const prResponse = await makeGitHubRequest(prUrl, token);
 
         if (!prResponse.success) {
-            console.error('Failed to get PR details:', prResponse.error);
+            aidaLogging('Failed to get PR details:', prResponse.error);
             return { success: false, error: `Failed to get PR: ${prResponse.error}` };
         }
 
@@ -75210,7 +75457,7 @@ async function getGitHubPR(owner, repo, prId, token) {
         const filesResponse = await makeGitHubRequest(filesUrl, token);
 
         if (!filesResponse.success) {
-            console.error('Failed to get files:', filesResponse.error);
+            aidaLogging('Failed to get files:', filesResponse.error);
             return { success: false, error: `Failed to get files: ${filesResponse.error}` };
         }
 
@@ -75359,7 +75606,7 @@ async function getGitHubPR(owner, repo, prId, token) {
             }
         };
     } catch (error) {
-        console.error('Error in getGitHubPR:', error);
+        aidaLogging('Error in getGitHubPR:', error);
         return { success: false, error: `Unable to fetch PR: ${error.message}` };
     }
 }
@@ -75466,7 +75713,7 @@ async function analyzeGitLabMergeRequest(stream, gitlabHost, owner, repo, mrId) 
         const mrData = await getGitLabMR(gitlabHost, owner, repo, mrId, gitlabToken);
 
         if (!mrData.success) {
-            console.error('Failed to get GitLab MR:', mrData.error);
+            aidaLogging('Failed to get GitLab MR:', mrData.error);
             stream.markdown('❌ **GitLab API Error**\n\n');
             stream.markdown(`Error: ${mrData.error}\n\n`);
             return { error: mrData.error };
@@ -75482,7 +75729,7 @@ async function analyzeGitLabMergeRequest(stream, gitlabHost, owner, repo, mrId) 
         };
 
     } catch (error) {
-        console.error('Error in analyzeGitLabMergeRequest:', error);
+        aidaLogging('Error in analyzeGitLabMergeRequest:', error);
         return { error: `Analysis failed: ${error.message}` };
     }
 }
@@ -75507,7 +75754,7 @@ async function getGitLabMR(gitlabHost, owner, repo, mrId, token) {
         const mrResponse = await makeGitLabRequest(mrUrl, token);
 
         if (!mrResponse.success) {
-            console.error('Failed to get MR details:', mrResponse.error);
+            aidaLogging('Failed to get MR details:', mrResponse.error);
             return { success: false, error: `Failed to get MR: ${mrResponse.error}` };
         }
 
@@ -75519,7 +75766,7 @@ async function getGitLabMR(gitlabHost, owner, repo, mrId, token) {
         const changesResponse = await makeGitLabRequest(changesUrl, token);
 
         if (!changesResponse.success) {
-            console.error('Failed to get changes:', changesResponse.error);
+            aidaLogging('Failed to get changes:', changesResponse.error);
             return { success: false, error: `Failed to get changes: ${changesResponse.error}` };
         }
 
@@ -75688,7 +75935,7 @@ async function getGitLabMR(gitlabHost, owner, repo, mrId, token) {
             }
         };
     } catch (error) {
-        console.error('Error in getGitLabMR:', error);
+        aidaLogging('Error in getGitLabMR:', error);
         return { success: false, error: `Unable to fetch MR: ${error.message}` };
     }
 }
@@ -75936,7 +76183,7 @@ async function addQuickReviewOption(stream, prAnalysis, request, originalUrl = n
         await performQuickReviewWithAI(stream, data, request, diffContent, originalUrl);
 
     } catch (error) {
-        console.error('Error in quick review option:', error);
+        aidaLogging('Error in quick review option:', error);
         stream.markdown('⚠️ Quick review option temporarily unavailable.\n\n');
     }
 }
@@ -76217,7 +76464,7 @@ async function assessFileQuickly(file, fullDiff, templateContent = null) {
         return aiResponse;
 
     } catch (error) {
-        console.error(`❌ AI assessment failed for ${file.path}:`, error.message);
+        aidaLogging(`❌ AI assessment failed for ${file.path}:`, error.message);
         // Fallback to rule-based assessment
         return assessFileQuicklyFallback(file, fullDiff);
     }
@@ -76553,7 +76800,7 @@ if (!global.fetch) {
         global.fetch = fetch;
         aidaLogging('✅ node-fetch loaded successfully');
     } catch (error) {
-        console.warn('⚠️ node-fetch not available, using https module fallback');
+        aidaLogging('⚠️ node-fetch not available, using https module fallback');
         // You can add a custom fetch implementation here if needed
     }
 }
@@ -76582,7 +76829,7 @@ async function handleScanApp(message, stream, token, context) {
         }
         
     } catch (error) {
-        console.error('Smart Scanner error:', error);
+        aidaLogging('Smart Scanner error:', error);
         stream.markdown(`❌ **Error:** ${error.message}`);
         throw error;
     }
@@ -76631,7 +76878,7 @@ function initializeScanApp(context) {
         return { scanAppParticipant };
         
     } catch (error) {
-        console.error('❌ Failed to create scan-app participant:', error);
+        aidaLogging('❌ Failed to create scan-app participant:', error);
         throw error;
     }
 }
@@ -76764,7 +77011,7 @@ async function findApiFiles(workspacePath) {
                 }
             }
         } catch (error) {
-            console.error(`Error scanning directory ${dir}:`, error);
+            aidaLogging(`Error scanning directory ${dir}:`, error);
         }
     }
     
@@ -76897,7 +77144,7 @@ async function extractAllApiEndpoints(apiFiles, stream) {
             }
             
         } catch (error) {
-            console.error(`Error processing file ${file.path}:`, error);
+            aidaLogging(`Error processing file ${file.path}:`, error);
         }
     }
     
@@ -76984,7 +77231,7 @@ ${content}
             };
         }
     } catch (error) {
-        console.error('AI extraction failed:', error);
+        aidaLogging('AI extraction failed:', error);
     }
     
     // Fallback to rule-based
@@ -77012,7 +77259,7 @@ async function callAIForExtraction(prompt) {
             ? JSON.parse(mappedResponse.content) 
             : mappedResponse.content;
     } catch (parseError) {
-        console.warn('⚠️ Failed to parse AI response as JSON:', parseError);
+        aidaLogging('⚠️ Failed to parse AI response as JSON:', parseError);
         parsedResponse = { endpoints: [] };
     }
     
@@ -77557,7 +77804,7 @@ async function callOpenAIForSmartAnalysis(endpoints, analysisType) {
     const model = config.get('ai.model') || 'gpt-4o';
     
     if (!apiKey) {
-        console.warn('⚠️ AI API key not configured - using static analysis only');
+        aidaLogging('⚠️ AI API key not configured - using static analysis only');
         return null;
     }
     
@@ -77675,8 +77922,8 @@ ${JSON.stringify(endpoints, null, 2)}
         };
         
     } catch (error) {
-        console.error('❌ AI API call failed:', error);
-        console.error(`📡 API Host: ${apiHost}, Model: ${model}`);
+        aidaLogging('❌ AI API call failed:', error);
+        aidaLogging(`📡 API Host: ${apiHost}, Model: ${model}`);
         return null;
     }
 }

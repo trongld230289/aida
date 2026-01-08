@@ -189,7 +189,7 @@ async function getPRReviewTemplate(templateType, prData) {
         };
 
     } catch (error) {
-        console.error('❌ PR template detection failed:', error);
+        aidaLogging('❌ PR template detection failed:', error);
         
         // Final fallback - use workspace detection
         aidaLogging('🔄 Falling back to workspace detection...');
@@ -203,7 +203,7 @@ try {
     // Use npm installed diff package
     Diff = require('diff');
 } catch (error) {
-    console.warn('⚠️ diff package not available, using fallback diff functionality');
+    aidaLogging('⚠️ diff package not available, using fallback diff functionality');
     // Create a simple fallback for basic diff functionality
     Diff = {
         createPatch: (fileName, oldStr, newStr) => {
@@ -460,7 +460,7 @@ async function showAzureDevOpsDiffInWebview(prAnalysis, stream) {
     const accessToken = getTokenForPR(prUrl);
     
     if (!accessToken) {
-        console.warn(`⚠️ No token configured for Azure DevOps organization: ${data.organization}`);
+        aidaLogging(`⚠️ No token configured for Azure DevOps organization: ${data.organization}`);
     }
     
     // Store global Azure DevOps API info for parseFullDiffContentEnhanced
@@ -917,7 +917,7 @@ async function processPrReview(userMessage, repoType, prId, owner, repo, organiz
     } catch (error) {
         stream.markdown('❌ **Unexpected Error in PR Processing**\n\n');
         stream.markdown(`Details: ${error.message}\n\n`);
-        console.error('Process PR Review error:', error);
+        aidaLogging('Process PR Review error:', error);
     }
 }
 
@@ -1064,7 +1064,7 @@ async function analyzePullRequest(stream, prUrl, organization = null, project = 
 
         } catch (apiError) {
             // Return error instead of mock data
-            console.error('❌ Azure DevOps API failed:', apiError.message);
+            aidaLogging('❌ Azure DevOps API failed:', apiError.message);
             stream.markdown('❌ **Azure DevOps API Error**\n\n');
             stream.markdown(`Error: ${apiError.message}\n\n`);
             return { error: `Azure DevOps API failed: ${apiError.message}` };
@@ -1087,7 +1087,7 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
         const prResponse = await makeAzureDevOpsRequest(prUrl, token);
 
         if (!prResponse.success) {
-            console.error('Failed to get PR details:', prResponse.error);
+            aidaLogging('Failed to get PR details:', prResponse.error);
             throw new Error(`Failed to get PR details: ${prResponse.error}`);
         }
 
@@ -1382,7 +1382,7 @@ async function getAzureDevOpsPR(organization, project, repository, prId, token) 
             }
         };
     } catch (error) {
-        console.error('Error in getAzureDevOpsPR:', error);
+        aidaLogging('Error in getAzureDevOpsPR:', error);
         throw new Error(`Unable to fetch PR data: ${error.message}`);
     }
 }
@@ -1627,7 +1627,7 @@ async function analyzeGitHubPullRequest(stream, owner, repo, prId) {
         const prData = await getGitHubPR(owner, repo, prId, githubToken);
 
         if (!prData.success) {
-            console.error('Failed to get GitHub PR:', prData.error);
+            aidaLogging('Failed to get GitHub PR:', prData.error);
             stream.markdown('❌ **GitHub API Error**\n\n');
             stream.markdown(`Error: ${prData.error}\n\n`);
 
@@ -1637,7 +1637,7 @@ async function analyzeGitHubPullRequest(stream, owner, repo, prId) {
         return prData;
 
     } catch (error) {
-        console.error('Error in analyzeGitHubPullRequest:', error);
+        aidaLogging('Error in analyzeGitHubPullRequest:', error);
         return { error: `Analysis failed: ${error.message}` };
     }
 }
@@ -1658,7 +1658,7 @@ async function getGitHubPR(owner, repo, prId, token) {
         const prResponse = await makeGitHubRequest(prUrl, token);
 
         if (!prResponse.success) {
-            console.error('Failed to get PR details:', prResponse.error);
+            aidaLogging('Failed to get PR details:', prResponse.error);
             return { success: false, error: `Failed to get PR: ${prResponse.error}` };
         }
 
@@ -1670,7 +1670,7 @@ async function getGitHubPR(owner, repo, prId, token) {
         const filesResponse = await makeGitHubRequest(filesUrl, token);
 
         if (!filesResponse.success) {
-            console.error('Failed to get files:', filesResponse.error);
+            aidaLogging('Failed to get files:', filesResponse.error);
             return { success: false, error: `Failed to get files: ${filesResponse.error}` };
         }
 
@@ -1819,7 +1819,7 @@ async function getGitHubPR(owner, repo, prId, token) {
             }
         };
     } catch (error) {
-        console.error('Error in getGitHubPR:', error);
+        aidaLogging('Error in getGitHubPR:', error);
         return { success: false, error: `Unable to fetch PR: ${error.message}` };
     }
 }
@@ -1926,7 +1926,7 @@ async function analyzeGitLabMergeRequest(stream, gitlabHost, owner, repo, mrId) 
         const mrData = await getGitLabMR(gitlabHost, owner, repo, mrId, gitlabToken);
 
         if (!mrData.success) {
-            console.error('Failed to get GitLab MR:', mrData.error);
+            aidaLogging('Failed to get GitLab MR:', mrData.error);
             stream.markdown('❌ **GitLab API Error**\n\n');
             stream.markdown(`Error: ${mrData.error}\n\n`);
             return { error: mrData.error };
@@ -1942,7 +1942,7 @@ async function analyzeGitLabMergeRequest(stream, gitlabHost, owner, repo, mrId) 
         };
 
     } catch (error) {
-        console.error('Error in analyzeGitLabMergeRequest:', error);
+        aidaLogging('Error in analyzeGitLabMergeRequest:', error);
         return { error: `Analysis failed: ${error.message}` };
     }
 }
@@ -1967,7 +1967,7 @@ async function getGitLabMR(gitlabHost, owner, repo, mrId, token) {
         const mrResponse = await makeGitLabRequest(mrUrl, token);
 
         if (!mrResponse.success) {
-            console.error('Failed to get MR details:', mrResponse.error);
+            aidaLogging('Failed to get MR details:', mrResponse.error);
             return { success: false, error: `Failed to get MR: ${mrResponse.error}` };
         }
 
@@ -1979,7 +1979,7 @@ async function getGitLabMR(gitlabHost, owner, repo, mrId, token) {
         const changesResponse = await makeGitLabRequest(changesUrl, token);
 
         if (!changesResponse.success) {
-            console.error('Failed to get changes:', changesResponse.error);
+            aidaLogging('Failed to get changes:', changesResponse.error);
             return { success: false, error: `Failed to get changes: ${changesResponse.error}` };
         }
 
@@ -2148,7 +2148,7 @@ async function getGitLabMR(gitlabHost, owner, repo, mrId, token) {
             }
         };
     } catch (error) {
-        console.error('Error in getGitLabMR:', error);
+        aidaLogging('Error in getGitLabMR:', error);
         return { success: false, error: `Unable to fetch MR: ${error.message}` };
     }
 }
@@ -2396,7 +2396,7 @@ async function addQuickReviewOption(stream, prAnalysis, request, originalUrl = n
         await performQuickReviewWithAI(stream, data, request, diffContent, originalUrl);
 
     } catch (error) {
-        console.error('Error in quick review option:', error);
+        aidaLogging('Error in quick review option:', error);
         stream.markdown('⚠️ Quick review option temporarily unavailable.\n\n');
     }
 }
@@ -2677,7 +2677,7 @@ async function assessFileQuickly(file, fullDiff, templateContent = null) {
         return aiResponse;
 
     } catch (error) {
-        console.error(`❌ AI assessment failed for ${file.path}:`, error.message);
+        aidaLogging(`❌ AI assessment failed for ${file.path}:`, error.message);
         // Fallback to rule-based assessment
         return assessFileQuicklyFallback(file, fullDiff);
     }

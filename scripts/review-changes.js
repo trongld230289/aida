@@ -13,7 +13,7 @@ try {
     chatSessions = extensionModule.chatSessions;
     aidaLogging('✅ Successfully imported chatSessions from extension.js:', typeof chatSessions, chatSessions ? chatSessions.constructor.name : 'null');
 } catch (error) {
-    console.warn('⚠️ Could not import chatSessions from extension.js, creating fallback:', error.message);
+    aidaLogging('⚠️ Could not import chatSessions from extension.js, creating fallback:', error.message);
     chatSessions = new Map();
 }
 
@@ -52,7 +52,7 @@ function initializeReviewChanges(context) {
         } catch (error) {
             stream.markdown(`❌ Error: ${error.message}\n\n`);
             stream.markdown('**Fallback:** Try running a git status check first, or specify a file path to review.\n');
-            console.error('Review Changes error:', error);
+            aidaLogging('Review Changes error:', error);
         }
     });
 
@@ -126,7 +126,7 @@ async function processReviewChanges(targetInput, stream, context = null, request
         
     } catch (error) {
         stream.markdown(`❌ **Review processing failed:** ${error.message}\n\n`);
-        console.error('Process Review Changes error:', error);
+        aidaLogging('Process Review Changes error:', error);
     }
 }
 
@@ -388,7 +388,7 @@ async function aiReviewChanges(input, stream, selectedModel = null, context = nu
         stream.markdown('- Try `@review-file` for active file review\n');
         stream.markdown('- Check if VS Code has proper workspace access\n');
         stream.markdown('- Restart VS Code if issues persist\n');
-        console.error('AI Review Changes error:', error);
+        aidaLogging('AI Review Changes error:', error);
     } 
 }
 

@@ -662,7 +662,7 @@ async function autoDetectWorkspace(workspacePath, targetFilePath = null) {
         return detectionResult;
 
     } catch (error) {
-        console.error('Detection error:', error);
+        aidaLogging('Detection error:', error);
         return detectionResult;
     }
 }
@@ -858,7 +858,7 @@ async function detectFromPRFiles(prFiles) {
     };
 
   } catch (error) {
-    console.error('PR Detection Error:', error);
+    aidaLogging('PR Detection Error:', error);
     return {
       language: null,
       framework: null,

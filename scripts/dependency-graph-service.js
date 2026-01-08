@@ -137,7 +137,7 @@ class DependencyGraphService {
             aidaLogging(`✅ Built graph: ${graph.nodes.length} nodes, ${graph.edges.length} edges`);
             return graph;
         } catch (error) {
-            console.error('❌ Error building graph:', error);
+            aidaLogging('❌ Error building graph:', error);
             throw error;
         }
     }

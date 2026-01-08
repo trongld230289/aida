@@ -39,7 +39,7 @@ class TemplateLoader {
                 );
                 aidaLogging('📜 Inlined script content into template');
             } catch (scriptError) {
-                console.warn('⚠️ Could not load script file:', scriptError.message);
+                aidaLogging('⚠️ Could not load script file:', scriptError.message);
             }
             
             // Cache for future use
@@ -47,7 +47,7 @@ class TemplateLoader {
             
             return template;
         } catch (error) {
-            console.warn('Failed to load sidebar template:', error.message);
+            aidaLogging('Failed to load sidebar template:', error.message);
             return this.getFallbackTemplate();
         }
     }
@@ -121,7 +121,7 @@ class TemplateLoader {
             await this.getSidebarTemplate();
             aidaLogging('✅ Templates preloaded successfully');
         } catch (error) {
-            console.warn('⚠️ Failed to preload templates:', error.message);
+            aidaLogging('⚠️ Failed to preload templates:', error.message);
         }
     }
 }

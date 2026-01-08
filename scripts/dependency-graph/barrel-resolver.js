@@ -33,7 +33,7 @@ class BarrelResolver {
         
         // Protection against infinite loops
         if (currentLevel > 10) {
-            console.warn('⚠️ Barrel chain depth exceeded 10 levels, stopping recursion');
+            aidaLogging('⚠️ Barrel chain depth exceeded 10 levels, stopping recursion');
             return { references: allReferences, barrelChain };
         }
         
@@ -57,7 +57,7 @@ class BarrelResolver {
                 try {
                     directReferences = await Promise.race([refPromise, timeout]);
                 } catch (timeoutError) {
-                    console.warn(`         ⚠️ Timeout finding references for ${symbolName}`);
+                    aidaLogging(`         ⚠️ Timeout finding references for ${symbolName}`);
                     return { references: allReferences, barrelChain };
                 }
                 
@@ -155,7 +155,7 @@ class BarrelResolver {
             return { references: allReferences, barrelChain };
             
         } catch (error) {
-            console.error(`         ❌ Barrel resolution error at level ${currentLevel}:`, error.message);
+            aidaLogging(`         ❌ Barrel resolution error at level ${currentLevel}:`, error.message);
             // 🔥 IMPROVED: Clear cache on error
             const cacheKey = `${symbolUri.fsPath}:${symbolPosition.line}:${symbolPosition.character}:v2`;
             this.referenceCache.delete(cacheKey);
@@ -282,7 +282,7 @@ class BarrelResolver {
             
             return null;
         } catch (error) {
-            console.error(`Error parsing barrel export:`, error.message);
+            aidaLogging(`Error parsing barrel export:`, error.message);
             return null;
         }
     }
@@ -384,7 +384,7 @@ class BarrelResolver {
             return imports;
             
         } catch (error) {
-            console.error(`Error finding imports of barrel:`, error.message);
+            aidaLogging(`Error finding imports of barrel:`, error.message);
             return imports;
         }
     }

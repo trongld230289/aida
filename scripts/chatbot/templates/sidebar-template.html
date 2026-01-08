@@ -176,8 +176,8 @@
       }
 
       .message.assistant .msg-avatar {
-        background: linear-gradient(135deg, #7c3aed 0%, #3b82f6 100%);
-        color: white;
+        background: var(--vscode-button-background);
+        color: var(--vscode-button-foreground);
       }
 
       /* Flat message design like GitHub Copilot */
@@ -185,7 +185,7 @@
         margin-left: 0;
         padding: 0;
         font-size: var(--vscode-chat-font-size-body-m);
-        line-height: 1.4;
+        line-height: 1.6;
         word-wrap: break-word;
         word-break: break-word;
         color: var(--vscode-foreground);
@@ -193,7 +193,7 @@
 
       .message-body hr {
         border-color: #ffffff2e;
-        margin: 2px 0;
+        margin: 8px 0;
       }
 
       .message.user .message-body {
@@ -256,21 +256,21 @@
       .message-body h2,
       .message-body h3,
       .message-body h4 {
-        margin: 8px 0 6px 0;
+        margin: 12px 0 8px 0;
         font-weight: 600;
         color: var(--vscode-foreground);
       }
 
       .message-body h1 {
-        font-size: 1.538em;
+        font-size: 1.15em;
       }
 
       .message-body h2 {
-        font-size: 1.384em;
+        font-size: 1.1em;
       }
 
       .message-body h3 {
-        font-size: 1.157em;
+        font-size: 1.05em;
       }
 
       .message-body h4 {
@@ -386,18 +386,19 @@
 
       .message-body ul,
       .message-body ol {
-        margin: 8px 0;
-        padding-left: 20px;
+        margin: 12px 0;
+        padding-left: 24px;
       }
 
       .message-body li {
-        margin: 4px 0;
+        margin: 6px 0;
+        line-height: 1.5;
       }
 
       .message-body blockquote {
         border-left: 3px solid var(--vscode-textLink-foreground);
-        padding-left: 12px;
-        margin: 8px 0;
+        padding-left: 16px;
+        margin: 12px 0;
         font-style: italic;
         opacity: 0.8;
       }
@@ -527,21 +528,82 @@
         font-size: 11px;
         color: var(--vscode-input-foreground);
         transition: all 0.2s;
+        position: relative;
       }
 
       .model-selector:hover {
         background-color: var(--vscode-list-hoverBackground);
       }
 
+      .model-selector .dropdown-arrow {
+        font-size: 8px;
+        margin-left: 2px;
+        transition: transform 0.2s;
+      }
+
+      .model-selector.open .dropdown-arrow {
+        transform: rotate(180deg);
+      }
+
+      /* Model Dropdown */
+      .model-dropdown {
+        position: absolute;
+        bottom: 100%;
+        right: 0;
+        min-width: 220px;
+        background: var(--vscode-dropdown-background);
+        border: 1px solid var(--vscode-dropdown-border);
+        border-radius: 6px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        z-index: 1000;
+        display: none;
+        margin-bottom: 4px;
+        max-height: 300px;
+        overflow-y: auto;
+      }
+
+      .model-dropdown.show {
+        display: block;
+      }
+
+      .model-dropdown-item {
+        padding: 8px 12px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        color: var(--vscode-dropdown-foreground);
+        border-bottom: 1px solid var(--vscode-widget-border);
+      }
+
+      .model-dropdown-item:last-child {
+        border-bottom: none;
+      }
+
+      .model-dropdown-item:hover {
+        background-color: var(--vscode-list-hoverBackground);
+      }
+
+      .model-dropdown-item.selected {
+        background-color: var(--vscode-list-activeSelectionBackground);
+        color: var(--vscode-list-activeSelectionForeground);
+      }
+
+      .model-dropdown-item .model-check {
+        width: 16px;
+        color: var(--vscode-charts-green);
+      }
+
       .model-icon {
         width: 12px;
         height: 12px;
         border-radius: 50%;
-        background: linear-gradient(135deg, #7c3aed 0%, #3b82f6 100%);
+        background: var(--vscode-button-background);
         display: flex;
         align-items: center;
         justify-content: center;
-        color: white;
+        color: var(--vscode-button-foreground);
         font-size: 8px;
         font-weight: bold;
       }
@@ -918,14 +980,14 @@
         width: 48px;
         height: 48px;
         border-radius: 50%;
-        background: linear-gradient(135deg, #7c3aed 0%, #3b82f6 100%);
+        background: var(--vscode-button-background);
         display: flex;
         align-items: center;
         justify-content: center;
-        color: white;
+        color: var(--vscode-button-foreground);
         font-size: 24px;
         margin-bottom: 12px;
-        box-shadow: 0 4px 16px rgba(124, 58, 237, 0.3);
+        box-shadow: 0 4px 16px rgba(0, 120, 212, 0.3);
       }
 
       .empty-state h3 {
@@ -1099,12 +1161,19 @@
         </div>
 
         <div class="model-selector"
-             onclick="openModelConfig()">
+             id="modelSelector">
           <div class="model-icon">C</div>
           <span class="model-name"
                 id="modelNameDisplay">Loading...</span>
+          <span class="dropdown-arrow">▼</span>
           <div class="model-status"
                title="Model Active"></div>
+
+          <!-- Model Dropdown -->
+          <div class="model-dropdown"
+               id="modelDropdown">
+            <!-- Items populated by JS -->
+          </div>
         </div>
       </div>
     </div>

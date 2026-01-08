@@ -145,7 +145,7 @@ class ContextDetector {
       return result;
 
     } catch (error) {
-      console.warn('Context detection error:', error);
+      aidaLogging('Context detection error:', error);
       result.reasons.push(`Error during analysis: ${error.message}`);
       result.confidence = 10;
       this._trackRequest(result, startTime);
@@ -529,7 +529,7 @@ class ContextDetector {
         analysis.reasons = relevanceScore.reasons;
         
       } catch (error) {
-        console.warn(`Image analysis failed for image ${i}:`, error.message);
+        aidaLogging(`Image analysis failed for image ${i}:`, error.message);
         analysis.reasons.push(`Analysis failed: ${error.message}`);
       }
 
@@ -599,7 +599,7 @@ class ContextDetector {
         // File path - check if file exists
         const fs = require('fs');
         if (!fs.existsSync(imagePath)) {
-          console.warn('Image file not found:', imagePath);
+          aidaLogging('Image file not found:', imagePath);
           return this.extractTextFromFilename(image);
         }
       } else {
@@ -635,7 +635,7 @@ class ContextDetector {
       return cleanedText;
 
     } catch (error) {
-      console.warn('OCR extraction failed:', error.message);
+      aidaLogging('OCR extraction failed:', error.message);
       // Fallback to filename-based detection
       return this.extractTextFromFilename(image);
     }
@@ -666,7 +666,7 @@ class ContextDetector {
       
       return detectedTerms.join(' ');
     } catch (error) {
-      console.warn('Filename extraction failed:', error.message);
+      aidaLogging('Filename extraction failed:', error.message);
       return '';
     }
   }

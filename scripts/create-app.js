@@ -21,7 +21,7 @@ function initializeCreateApp(context) {
                 await analyzeWireframe(stream);
             }
         } catch (error) {
-            console.error('Create-app error:', error);
+            aidaLogging('Create-app error:', error);
             stream.markdown(`❌ **Error:** ${error.message}`);
         }
     });
@@ -117,7 +117,7 @@ function findImageFiles(dirPath) {
             }
         }
     } catch (error) {
-        console.error('Error reading directory:', error);
+        aidaLogging('Error reading directory:', error);
     }
     
     return imageFiles;
@@ -532,7 +532,7 @@ async function generateReactApp(stream, fileName) {
         stream.markdown('🌐 **The app will open at:** http://localhost:3000\n');
         
     } catch (error) {
-        console.error('React app generation error:', error);
+        aidaLogging('React app generation error:', error);
         stream.markdown(`❌ **Error generating React app:** ${error.message}\n\n`);
     }
 }
@@ -1159,7 +1159,7 @@ async function createReactFiles(appPath, reactStructure, stream) {
             }
             
         } catch (error) {
-            console.error(`Error creating file ${file.path}:`, error);
+            aidaLogging(`Error creating file ${file.path}:`, error);
             stream.markdown(`⚠️ **Warning:** Could not create \`${file.path}\`\n`);
         }
     }

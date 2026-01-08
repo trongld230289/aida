@@ -241,7 +241,7 @@ async function getFallbackModel(currentModel, stream, attemptNumber = 1) {
         return fallbackModel;
 
     } catch (error) {
-        console.error('❌ Fallback model selection failed:', error);
+        aidaLogging('❌ Fallback model selection failed:', error);
         stream.markdown(`❌ **Fallback failed:** ${error.message}\n\n`);
         throw error;
     }
@@ -308,11 +308,11 @@ function mapSTUResponse(data) {
 
     // Special case: STU Platform sometimes returns empty content even with tokens
     if (!content && data.usage?.completion_tokens > 0) {
-        console.warn('⚠️ STU Platform returned tokens but empty content:');
-        console.warn(`   - Input tokens: ${data.usage.prompt_tokens}`);
-        console.warn(`   - Output tokens: ${data.usage.completion_tokens}`);
-        console.warn(`   - Total tokens: ${data.usage.total_tokens}`);
-        console.warn('   - Checking alternative content fields...');
+        aidaLogging('⚠️ STU Platform returned tokens but empty content:');
+        aidaLogging(`   - Input tokens: ${data.usage.prompt_tokens}`);
+        aidaLogging(`   - Output tokens: ${data.usage.completion_tokens}`);
+        aidaLogging(`   - Total tokens: ${data.usage.total_tokens}`);
+        aidaLogging('   - Checking alternative content fields...');
 
         // Try alternative fields
         const alternatives = ['content', 'answer', 'generated_text', 'completion', 'text'];
@@ -332,7 +332,7 @@ function mapSTUResponse(data) {
 
         // If still no content but we have tokens, try aggressive parsing
         if (!content) {
-            console.warn('⚠️ STU Platform: Trying aggressive content parsing...');
+            aidaLogging('⚠️ STU Platform: Trying aggressive content parsing...');
 
             // Enhanced content extraction for complex structures
             const smartContentExtraction = (obj, path = '', depth = 0) => {
@@ -385,7 +385,7 @@ function mapSTUResponse(data) {
 
             // Advanced recovery: Try to reconstruct content from partial data
             if (!content) {
-                console.warn('🔄 STU Platform: Attempting advanced content recovery...');
+                aidaLogging('🔄 STU Platform: Attempting advanced content recovery...');
 
                 // Try to find any text fragments
                 const fragments = [];
@@ -429,8 +429,8 @@ function mapSTUResponse(data) {
 
                 // If absolutely no content found, return error for fallback
                 if (!content) {
-                    console.error('❌ STU Platform: All content recovery attempts failed');
-                    console.error('🔧 Falling back to Copilot for this request');
+                    aidaLogging('❌ STU Platform: All content recovery attempts failed');
+                    aidaLogging('🔧 Falling back to Copilot for this request');
                     return { content: null, error: 'COMPLEX_PARSING_FAILED', inputTokens: data.usage?.prompt_tokens || 0, outputTokens: data.usage?.completion_tokens || 0 };
                 }
             }
@@ -625,7 +625,7 @@ async function executeAIReviewWithApiKey(userPrompt, stream, reviewType, attempt
                                     totalOutputTokens = parsed.usage.completion_tokens || 0;
                                 }
                             } catch (e) {
-                                console.warn('⚠️ Failed to parse streaming chunk:', data);
+                                aidaLogging('⚠️ Failed to parse streaming chunk:', data);
                             }
                         }
                     }
@@ -633,7 +633,7 @@ async function executeAIReviewWithApiKey(userPrompt, stream, reviewType, attempt
 
                 // Fallback to estimation if streaming didn't provide token usage
                 if (totalInputTokens === 0 && totalOutputTokens === 0) {
-                    console.warn('⚠️ STU Platform streaming: No token usage in response, falling back to estimation');
+                    aidaLogging('⚠️ STU Platform streaming: No token usage in response, falling back to estimation');
                     totalInputTokens = estimateTokenCount(userPrompt);
                     totalOutputTokens = estimateTokenCount(outputText);
                 }
@@ -656,7 +656,7 @@ async function executeAIReviewWithApiKey(userPrompt, stream, reviewType, attempt
 
             // Handle complex parsing failure - trigger fallback to Copilot
             if (mappedResponse.error === 'COMPLEX_PARSING_FAILED') {
-                console.warn(`⚠️ ${provider} failed on complex content parsing - triggering Copilot fallback`);
+                aidaLogging(`⚠️ ${provider} failed on complex content parsing - triggering Copilot fallback`);
                 // Only throw if we truly have no content
                 if (!mappedResponse.content || mappedResponse.content.trim().length === 0) {
                     throw new Error(`${provider} complex parsing failed - content too complex for current parser`);
@@ -668,7 +668,7 @@ async function executeAIReviewWithApiKey(userPrompt, stream, reviewType, attempt
             }
 
             if (!mappedResponse.content) {
-                console.warn(`⚠️ No content extracted from ${provider} response, but API call succeeded`);
+                aidaLogging(`⚠️ No content extracted from ${provider} response, but API call succeeded`);
                 // Don't throw error - API succeeded, just show a helpful message
                 const fallbackMessage = `⚠️ **${provider.toUpperCase()} API Response Issue**: The API call succeeded and returned ${mappedResponse.outputTokens} tokens, but content extraction failed. This suggests a response format compatibility issue rather than an API failure.\n\n**Possible solutions:**\n- Try a different model (e.g., switch from GPT-5 to GPT-4o)\n- Check API provider documentation for response format changes\n- Contact support if the issue persists\n\n**Debug info**: Provider: ${provider}, Output tokens: ${mappedResponse.outputTokens}`;
 
@@ -702,7 +702,7 @@ async function executeAIReviewWithApiKey(userPrompt, stream, reviewType, attempt
         return true;
 
     } catch (apiError) {
-        console.error(`❌ API Key mode failed (attempt ${attemptCount + 1}):`, apiError);
+        aidaLogging(`❌ API Key mode failed (attempt ${attemptCount + 1}):`, apiError);
 
         // Provide detailed error information
         let errorDetails = apiError.message;
@@ -811,7 +811,7 @@ function normalizeApiParameters(model, apiHost, options) {
 
             // Remove ALL potentially problematic parameters for GPT-5
             if (model.includes('gpt-5') || model.toLowerCase().includes('gpt-5')) {
-                console.warn('⚠️ GPT-5 on STU Platform - Using minimal parameter set');
+                aidaLogging('⚠️ GPT-5 on STU Platform - Using minimal parameter set');
 
                 // Keep only essential parameters
                 const essentialParams = {
@@ -1101,12 +1101,12 @@ function prepareImageForProvider(imageInput, provider = 'openai') {
     // Validate mime type
     const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (!allowedTypes.includes(mimeType)) {
-        console.warn('Unsupported image type:', mimeType, 'defaulting to image/png');
+        aidaLogging('Unsupported image type:', mimeType, 'defaulting to image/png');
         mimeType = 'image/png';
     }
 
     if (!base64Data) {
-        console.error('Failed to extract base64 data from image');
+        aidaLogging('Failed to extract base64 data from image');
         return null;
     }
 
@@ -1185,11 +1185,11 @@ async function executeAIReviewWithCopilot(userPrompt, model, stream, reviewType 
         const COPILOT_HARD_LIMIT = 32000;  // Likely failure point
 
         if (inputTokens > COPILOT_HARD_LIMIT) {
-            console.warn(`🚨 CRITICAL: Token count ${inputTokens} exceeds hard limit ${COPILOT_HARD_LIMIT}!`);
-            console.warn(`   ❌ This request will likely FAIL with "Message exceeds token limit"`);
+            aidaLogging(`🚨 CRITICAL: Token count ${inputTokens} exceeds hard limit ${COPILOT_HARD_LIMIT}!`);
+            aidaLogging(`   ❌ This request will likely FAIL with "Message exceeds token limit"`);
         } else if (inputTokens > COPILOT_SOFT_LIMIT) {
-            console.warn(`⚠️ WARNING: Token count ${inputTokens} approaching limit (${Math.round(inputTokens / COPILOT_HARD_LIMIT * 100)}% of ${COPILOT_HARD_LIMIT})`);
-            console.warn(`   🔥 Risk of "Message exceeds token limit" error`);
+            aidaLogging(`⚠️ WARNING: Token count ${inputTokens} approaching limit (${Math.round(inputTokens / COPILOT_HARD_LIMIT * 100)}% of ${COPILOT_HARD_LIMIT})`);
+            aidaLogging(`   🔥 Risk of "Message exceeds token limit" error`);
         } else {
             aidaLogging(`✅ Token count OK: ${inputTokens} / ${COPILOT_HARD_LIMIT} (${Math.round(inputTokens / COPILOT_HARD_LIMIT * 100)}%)`);
         }
@@ -1249,7 +1249,7 @@ async function executeAIReviewWithCopilot(userPrompt, model, stream, reviewType 
         return true; // Success
 
     } catch (modelError) {
-        console.error(`❌ Copilot model ${model?.family || 'unknown'} failed (attempt ${attemptCount + 1}):`, modelError);
+        aidaLogging(`❌ Copilot model ${model?.family || 'unknown'} failed (attempt ${attemptCount + 1}):`, modelError);
 
         // If we've reached max attempts, throw the error
         if (attemptCount >= maxAttempts - 1) {
@@ -1357,11 +1357,11 @@ function processTemplateWithPlaceholders(templateContent, templateDir) {
 
             return processedContent;
         } else {
-            console.warn(`⚠️ Base template not found at: ${basePath}, using original content`);
+            aidaLogging(`⚠️ Base template not found at: ${basePath}, using original content`);
             return templateContent;
         }
     } catch (error) {
-        console.error('❌ Error processing template placeholders:', error);
+        aidaLogging('❌ Error processing template placeholders:', error);
         return templateContent; // Return original content on error
     }
 }
@@ -1376,7 +1376,7 @@ function extractAngularChecks(baseContent) {
     const startIndex = lines.findIndex(line => line.includes('### 🚨 SECURITY VIOLATIONS:'));
 
     if (startIndex === -1) {
-        console.warn('⚠️ Could not find Angular critical checks start marker in base template');
+        aidaLogging('⚠️ Could not find Angular critical checks start marker in base template');
         return '<!-- Angular critical checks not found -->';
     }
 
@@ -1432,7 +1432,7 @@ function getReviewTemplate(templateName, context = null) {
         }
 
     } catch (error) {
-        console.error('❌ Template loading error:', error);
+        aidaLogging('❌ Template loading error:', error);
         throw new Error(`Failed to load template: ${error.message}`);
     }
 }
@@ -1541,7 +1541,7 @@ async function getUnifiedModel(stream, requestedModel = null, chatContext = null
         aidaLogging('📋 All available models:', models.map(m => `${m.family || m.id} (${m.vendor || 'Unknown'})`));
 
         if (models.length === 0) {
-            console.warn('⚠️ No Copilot models available - check GitHub Copilot installation and authentication');
+            aidaLogging('⚠️ No Copilot models available - check GitHub Copilot installation and authentication');
             // If API key is configured, suggest using it instead
             if (vscode.workspace.getConfiguration('aida').get('ai.apiKey')) {
                 aidaLogging('💡 Suggestion: Enable API key mode in settings: aida.useExternalAI = true');
@@ -1596,11 +1596,11 @@ async function getUnifiedModel(stream, requestedModel = null, chatContext = null
             }
         }
     } catch (error) {
-        console.error('❌ Error getting Copilot models:', error.message);
+        aidaLogging('❌ Error getting Copilot models:', error.message);
 
         // Check if this is a GitHub authentication error
         if (error.message.includes('GitHubLoginFailed') || error.message.includes('authentication')) {
-            console.warn('🔑 GitHub Copilot authentication failed. Consider using API key mode instead.');
+            aidaLogging('🔑 GitHub Copilot authentication failed. Consider using API key mode instead.');
 
             // If user has API key configured, suggest enabling API key mode
             const config = vscode.workspace.getConfiguration('aida');
@@ -1621,10 +1621,10 @@ async function getUnifiedModel(stream, requestedModel = null, chatContext = null
 
     // If no model is available, provide helpful guidance
     if (!finalModel) {
-        console.warn('⚠️ No AI models available. Options:');
-        console.warn('   1. Install and authenticate GitHub Copilot');
-        console.warn('   2. Configure API key mode in extension settings');
-        console.warn('   3. Check VS Code language model permissions');
+        aidaLogging('⚠️ No AI models available. Options:');
+        aidaLogging('   1. Install and authenticate GitHub Copilot');
+        aidaLogging('   2. Configure API key mode in extension settings');
+        aidaLogging('   3. Check VS Code language model permissions');
 
         // Show user-friendly error in stream if available
         if (stream) {
@@ -1698,7 +1698,7 @@ function displayDocumentReviewHeader(stream) {
                 docPath = doc.displayName || doc.relativePath || doc.name;
             } else {
                 // Invalid entry
-                console.warn('⚠️ Invalid business document entry:', doc);
+                aidaLogging('⚠️ Invalid business document entry:', doc);
                 stream.markdown(`${index + 1}. Invalid document entry (type: ${typeof doc})\n`);
                 return;
             }
@@ -1754,7 +1754,7 @@ async function getAvailableModels() {
             countTokens: model.countTokens ? 'supported' : 'not supported'
         }));
     } catch (error) {
-        console.error('Error fetching available models:', error);
+        aidaLogging('Error fetching available models:', error);
         return [];
     }
 }
@@ -1799,7 +1799,7 @@ async function showAvailableModels() {
         }
 
     } catch (error) {
-        console.error('Error showing available models:', error);
+        aidaLogging('Error showing available models:', error);
         vscode.window.showErrorMessage(`Error fetching models: ${error.message}`);
     }
 }
@@ -1904,7 +1904,7 @@ async function executeApiAnalysisCall(prompt, stream, analysisType = 'API Patter
         }
 
     } catch (error) {
-        console.error(`❌ ${analysisType} failed:`, error);
+        aidaLogging(`❌ ${analysisType} failed:`, error);
         stream.markdown(`❌ **${analysisType} failed:** ${error.message}\n\n`);
 
         // Try fallback if quota/model error
@@ -2169,7 +2169,7 @@ async function autoDetectLanguage(workspacePath, targetFilePath = null) {
         };
 
     } catch (error) {
-        console.error('❌ Error during language detection:', error);
+        aidaLogging('❌ Error during language detection:', error);
         return {
             ...detectionResult,
             type: 'fallback',
@@ -2259,7 +2259,7 @@ async function getReviewTemplateWithDetection(templateType, context = null, targ
         };
 
     } catch (error) {
-        console.error('❌ Template loading error:', error);
+        aidaLogging('❌ Template loading error:', error);
         throw new Error(`Failed to load template: ${error.message}`);
     }
 }
@@ -2622,7 +2622,7 @@ function resolveAidaBasePath(workspaceFolder) {
             };
         } else {
             // Auto-create AIDA structure if base path doesn't exist
-            console.warn(`⚠️ Configured AIDA path not found: ${templatesPath}`);
+            aidaLogging(`⚠️ Configured AIDA path not found: ${templatesPath}`);
             aidaLogging(`🔧 Attempting to create AIDA structure at: ${resolvedPath}`);
 
             try {
@@ -2661,8 +2661,8 @@ function resolveAidaBasePath(workspaceFolder) {
                 };
 
             } catch (error) {
-                console.error(`❌ Failed to create AIDA structure: ${error.message}`);
-                console.warn(`⚠️ Falling back to extension templates`);
+                aidaLogging(`❌ Failed to create AIDA structure: ${error.message}`);
+                aidaLogging(`⚠️ Falling back to extension templates`);
             }
         }
     }
@@ -2903,12 +2903,12 @@ function buildBusinessDocsContent(selectedBusinessDocs) {
 
                     aidaLogging(`📄 Loaded ${file.name}: ${fileContent.substring(0, 50)}...`);
                 } catch (fileError) {
-                    console.error(`❌ Error reading file ${file.path}:`, fileError.message);
+                    aidaLogging(`❌ Error reading file ${file.path}:`, fileError.message);
                 }
             });
 
         } catch (folderError) {
-            console.error(`❌ Error reading folder ${category.path}:`, folderError.message);
+            aidaLogging(`❌ Error reading folder ${category.path}:`, folderError.message);
         }
 
         docsContent += '---\n\n';
@@ -3031,7 +3031,7 @@ async function getBusinessDocumentFolders(workspaceFolder) {
                                     };
                                 });
                         } catch (error) {
-                            console.error(`❌ Error reading files in ${folderPath}:`, error);
+                            aidaLogging(`❌ Error reading files in ${folderPath}:`, error);
                             return [];
                         }
                     },
@@ -3044,7 +3044,7 @@ async function getBusinessDocumentFolders(workspaceFolder) {
         aidaLogging(`📚 Found ${subFolders.length} business document categories:`, subFolders.map(f => f.name));
         return subFolders;
     } catch (error) {
-        console.error('❌ Error scanning business documents:', error);
+        aidaLogging('❌ Error scanning business documents:', error);
         return [];
     }
 }
@@ -3304,7 +3304,7 @@ function getTokenForPR(prUrl) {
         return null;
 
     } catch (error) {
-        console.error('❌ Error getting token for PR:', error.message);
+        aidaLogging('❌ Error getting token for PR:', error.message);
         return null;
     }
 }
@@ -3415,7 +3415,7 @@ function showTokenConfigurationHelp(provider, organization, stream = null) {
 
     // Quick setup button
 
-    console.error(`❌ Missing token: ${providerName}/${organization}`);
+    aidaLogging(`❌ Missing token: ${providerName}/${organization}`);
     aidaLogging('🔧 Configuration help displayed to user');
 
     if (stream) {

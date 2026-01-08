@@ -31,7 +31,7 @@ class SymbolAnalyzer {
                 uri
             );
         } catch (e) {
-            console.error('Error getting symbols:', e);
+            aidaLogging('Error getting symbols:', e);
             return null;
         }
 
@@ -108,7 +108,7 @@ class SymbolAnalyzer {
                     sym.selectionRange.start // Position of the symbol name
                 );
             } catch (e) {
-                console.warn(`Could not get references for ${sym.name}`);
+                aidaLogging(`Could not get references for ${sym.name}`);
             }
 
             const symbolId = `sym_${sym.name}_${sym.range.start.line}`;
@@ -343,7 +343,7 @@ class SymbolAnalyzer {
             return Array.from(dependencies.values());
 
         } catch (error) {
-            console.error('Error finding dependencies:', error);
+            aidaLogging('Error finding dependencies:', error);
             return [];
         }
     }

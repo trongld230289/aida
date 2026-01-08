@@ -366,7 +366,7 @@
       {
         "id": "dependency",
         "name": "dependency",
-        "description": "📊 Analyze project dependencies, detect circular deps, and get architecture insights",
+        "description": "📊 Analyze dependencies & PR impact with visual graph",
         "isSticky": true
       }
     ]

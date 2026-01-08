@@ -66,7 +66,7 @@ class VSCodeApiDependencyAnalyzer {
 
             aidaLogging('✅ Graph model restored from cache');
         } catch (error) {
-            console.error('❌ Failed to load graph from cache:', error);
+            aidaLogging('❌ Failed to load graph from cache:', error);
             this.isReady = false;
         }
     }
@@ -106,7 +106,7 @@ class VSCodeApiDependencyAnalyzer {
             return this.buildGraphResult();
 
         } catch (error) {
-            console.error('❌ Symbol crawling failed:', error);
+            aidaLogging('❌ Symbol crawling failed:', error);
             throw new Error(`Symbol crawling analysis failed: ${error.message}`);
         }
     }
@@ -143,7 +143,7 @@ class VSCodeApiDependencyAnalyzer {
                 );
                 allFiles.push(...files);
             } catch (error) {
-                console.warn(`⚠️ Error finding files with pattern ${pattern}:`, error.message);
+                aidaLogging(`⚠️ Error finding files with pattern ${pattern}:`, error.message);
             }
         }
 
@@ -190,7 +190,7 @@ class VSCodeApiDependencyAnalyzer {
             // Auto-detect language from extension
             const language = this.extensionMap.get(extension);
             if (!language) {
-                // console.warn(`⚠️ Unsupported file extension: ${extension}`);
+                // aidaLogging(`⚠️ Unsupported file extension: ${extension}`);
                 return;
             }
 
@@ -205,7 +205,7 @@ class VSCodeApiDependencyAnalyzer {
             }
 
         } catch (error) {
-            console.warn(`⚠️ Error processing file ${fileUri.fsPath}:`, error.message);
+            aidaLogging(`⚠️ Error processing file ${fileUri.fsPath}:`, error.message);
         }
     }
 
@@ -323,7 +323,7 @@ class VSCodeApiDependencyAnalyzer {
             }
 
         } catch (error) {
-            console.warn(`⚠️ Error processing ${language} file:`, error.message);
+            aidaLogging(`⚠️ Error processing ${language} file:`, error.message);
         }
     }
 
@@ -395,7 +395,7 @@ class VSCodeApiDependencyAnalyzer {
             ).catch(lspError => {
                 // C# Language Server can throw "Sequence contains no matching element"
                 // Silently ignore LSP errors and continue analysis
-                console.warn(`⚠️ LSP error for ${document.fileName}:${position.line} - ${lspError.message}`);
+                aidaLogging(`⚠️ LSP error for ${document.fileName}:${position.line} - ${lspError.message}`);
                 return null;
             });
 

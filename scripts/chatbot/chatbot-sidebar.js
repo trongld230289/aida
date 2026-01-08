@@ -117,7 +117,7 @@ class CopilotSidebarChat {
             await this.chatbotService.initialize();
             aidaLogging('✅ AIDA Chatbot Service initialized');
         } catch (error) {
-            console.error('❌ Failed to initialize chatbot service:', error);
+            aidaLogging('❌ Failed to initialize chatbot service:', error);
         }
     }
 
@@ -192,7 +192,7 @@ class CopilotSidebarChat {
             const workspaceName = vscode.workspace.workspaceFolders?.[0]?.name || 'global';
             aidaLogging(`📚 Loaded ${this.chatHistory.length} chat messages for workspace: ${workspaceName}`);
         } catch (error) {
-            console.error('Failed to load chat history:', error);
+            aidaLogging('Failed to load chat history:', error);
             this.chatHistory = [];
             this.messageHistory = [];
         }
@@ -222,7 +222,7 @@ class CopilotSidebarChat {
             const workspaceName = vscode.workspace.workspaceFolders?.[0]?.name || 'global';
             aidaLogging(`💾 Saved ${historyToSave.length} chat messages for workspace: ${workspaceName}`);
         } catch (error) {
-            console.error('Failed to save chat history:', error);
+            aidaLogging('Failed to save chat history:', error);
         }
     }
 
@@ -449,7 +449,7 @@ class CopilotSidebarChat {
                     }
 
                 } catch (engineError) {
-                    console.warn('⚠️ Context engine error, falling back to basic logic:', engineError.message);
+                    aidaLogging('⚠️ Context engine error, falling back to basic logic:', engineError.message);
                     // Fallback to basic pattern matching if engine fails
                     contextDecision = this.basicContextDecision(userMessage, currentFileContext);
                 }
@@ -772,7 +772,7 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
             }
 
         } catch (error) {
-            console.error('❌ Error processing sidebar message:', error);
+            aidaLogging('❌ Error processing sidebar message:', error);
             if (this.webviewView) {
                 this.webviewView.webview.postMessage({
                     type: 'showError',
@@ -1899,7 +1899,7 @@ Keep the analysis practical and actionable.`;
             const response = await this.chatbotService.sendMessage(prompt);
             return { success: true, content: response };
         } catch (error) {
-            console.warn('AI analysis service unavailable:', error.message);
+            aidaLogging('AI analysis service unavailable:', error.message);
             return { success: false, error: error.message };
         }
     }
@@ -2253,7 +2253,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
                 };
             }
         } catch (error) {
-            console.warn('AI analysis unavailable, using fallback:', error.message);
+            aidaLogging('AI analysis unavailable, using fallback:', error.message);
             return {
                 success: true,
                 content: 'Basic code analysis completed. Consider adding OnDestroy interface for subscription management and proper TypeScript typing.'
@@ -2289,7 +2289,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
 
             return null;
         } catch (error) {
-            console.warn('Failed to extract code from AI response:', error);
+            aidaLogging('Failed to extract code from AI response:', error);
             return null;
         }
     }
@@ -2720,7 +2720,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
                         await reviewFileModule.processReviewFile(messageWithoutParticipant, mockStream);
                         return result || '✅ **File Review Complete**\n\nCode analysis completed.';
                     } catch (error) {
-                        console.error('❌ AIDA Chat review-file error:', error);
+                        aidaLogging('❌ AIDA Chat review-file error:', error);
                         return '❌ **Error**: ' + error.message + '\n\nPlease check the console for details.';
                     }
 
@@ -2735,7 +2735,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
                         await reviewChangesModule.processReviewChanges(messageWithoutParticipant, mockStream);
                         return result || '✅ **Changes Review Complete**\n\nGit changes analysis completed.';
                     } catch (error) {
-                        console.error('❌ AIDA Chat review-changes error:', error);
+                        aidaLogging('❌ AIDA Chat review-changes error:', error);
                         return '❌ **Error**: ' + error.message + '\n\nPlease check the console for details.';
                     }
 
@@ -2750,7 +2750,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
                         await reviewAllChangesModule.processReviewAllChanges(messageWithoutParticipant, mockStream);
                         return result || '✅ **All Changes Review Complete**\n\nWorkspace git changes analysis completed.';
                     } catch (error) {
-                        console.error('❌ AIDA Chat review-all-changes error:', error);
+                        aidaLogging('❌ AIDA Chat review-all-changes error:', error);
                         return '❌ **Error**: ' + error.message + '\n\nPlease check the console for details.';
                     }
 
@@ -2765,7 +2765,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
                         await reviewPRModule.processReviewPr(messageWithoutParticipant, mockStream);
                         return result || '✅ **PR Review Complete**\n\nPull request analysis completed.';
                     } catch (error) {
-                        console.error('❌ AIDA Chat review-pr error:', error);
+                        aidaLogging('❌ AIDA Chat review-pr error:', error);
                         return '❌ **Error**: ' + error.message + '\n\nPlease check the console for details.';
                     }
 
@@ -2776,7 +2776,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
                         await syncModule.aiSyncReviewTemplates(messageWithoutParticipant, mockStream, null, this.context);
                         return result || '✅ **Template Sync Complete**\n\nTemplate synchronization completed.';
                     } catch (error) {
-                        console.error('❌ AIDA Chat sync-review-templates error:', error);
+                        aidaLogging('❌ AIDA Chat sync-review-templates error:', error);
                         return '❌ **Error**: ' + error.message + '\n\nPlease check the console for details.';
                     }
 
@@ -2787,7 +2787,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
                         await dependencyModule.aiDependencyAnalysis(messageWithoutParticipant, mockStream, null, this.context);
                         return result || '✅ **Dependency Analysis Complete**\n\nDependency analysis completed.';
                     } catch (error) {
-                        console.error('❌ AIDA Chat dependency error:', error);
+                        aidaLogging('❌ AIDA Chat dependency error:', error);
                         return '❌ **Error**: ' + error.message + '\n\nPlease check the console for details.';
                     }
 
@@ -2798,7 +2798,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
                         await scanModule.handleScanApp(messageWithoutParticipant, mockStream, null, this.context);
                         return result || '✅ **Scan Complete**\n\nCode scanning and duplicate detection completed.';
                     } catch (error) {
-                        console.error('❌ AIDA Chat scan-app error:', error);
+                        aidaLogging('❌ AIDA Chat scan-app error:', error);
                         return '❌ **Error**: ' + error.message + '\n\nPlease check the console for details.';
                     }
 
@@ -2807,7 +2807,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
             }
 
         } catch (error) {
-            console.error('❌ Error calling ' + participant + ' participant:', error);
+            aidaLogging('❌ Error calling ' + participant + ' participant:', error);
             return '❌ **Error**\n\nSorry, I encountered an error: ' + error.message;
         }
     }
@@ -2829,7 +2829,7 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
             return response;
 
         } catch (error) {
-            console.error('❌ Error generating conversation response:', error);
+            aidaLogging('❌ Error generating conversation response:', error);
 
             // Fallback to simple response
             return this.getFallbackResponse(message);
@@ -2897,7 +2897,7 @@ What interesting project are you working on? 🚀`;
 
             return await this.templateLoader.getSidebarTemplate();
         } catch (error) {
-            console.error('Failed to load template:', error);
+            aidaLogging('Failed to load template:', error);
             // Return basic fallback template
             return `<!DOCTYPE html>
 <html lang="en">
@@ -3199,6 +3199,21 @@ Summary: ${currentFileContext.summary}`;
  * WebView Provider for Sidebar (like GitHub Copilot)
  */
 class AidaChatViewProvider {
+    // Default model priority: Opus > Sonnet > Gemini
+    // Higher number = higher priority
+    static MODEL_PRIORITY_KEYWORDS = [
+        { keyword: 'opus', priority: 100 },
+        { keyword: 'sonnet', priority: 90 },
+        { keyword: 'gemini', priority: 80 },
+        { keyword: 'gpt-5', priority: 75 },
+        { keyword: 'gpt5', priority: 75 },
+        { keyword: 'gpt-4', priority: 70 },
+        { keyword: 'gpt4', priority: 70 },
+        { keyword: 'claude', priority: 85 },
+        { keyword: 'o4', priority: 72 },
+        { keyword: 'o3', priority: 68 },
+    ];
+
     constructor(context, chatInstance) {
         this.context = context;
         this.chatInstance = chatInstance;
@@ -3208,11 +3223,168 @@ class AidaChatViewProvider {
     }
 
     /**
+     * Get model priority score (higher = better)
+     * Priority: Opus > Sonnet > Gemini
+     */
+    getModelPriority(modelFamily) {
+        if (!modelFamily) return 0;
+        const key = modelFamily.toLowerCase().trim();
+
+        // Check keywords in order
+        for (const { keyword, priority } of AidaChatViewProvider.MODEL_PRIORITY_KEYWORDS) {
+            if (key.includes(keyword)) {
+                return priority;
+            }
+        }
+
+        return 50; // Default priority for unknown models
+    }
+
+    /**
+     * Get available models list
+     * If External API mode: returns single model from settings
+     * If Copilot mode: returns all available models sorted by priority
+     */
+    async getAvailableModels() {
+        const config = vscode.workspace.getConfiguration('aida');
+        const useExternalAI = config.get('useExternalAI', false);
+
+        if (useExternalAI) {
+            // External API mode - single model from settings
+            const modelName = config.get('ai.model', 'GPT-4');
+            return [{
+                id: 'external-api',
+                family: modelName,
+                name: modelName,
+                isExternal: true
+            }];
+        }
+
+        // Copilot mode - get all available models
+        try {
+            const models = await vscode.lm.selectChatModels();
+            if (!models || models.length === 0) {
+                aidaLogging('⚠️ No Copilot models available');
+                return [];
+            }
+
+            // Sort by priority (highest first)
+            const sortedModels = models.sort((a, b) => {
+                const priorityA = this.getModelPriority(a.family);
+                const priorityB = this.getModelPriority(b.family);
+                return priorityB - priorityA;
+            });
+
+            aidaLogging('🤖 Available models (sorted by priority):',
+                sortedModels.map(m => `${m.family} (${this.getModelPriority(m.family)})`).join(', '));
+
+            return sortedModels;
+        } catch (error) {
+            aidaLogging('Failed to get Copilot models:', error);
+            return [];
+        }
+    }
+
+    /**
+     * Get selected model from workspaceState, or default to highest priority
+     */
+    async getSelectedModel() {
+        const models = await this.getAvailableModels();
+        if (models.length === 0) return null;
+
+        // External API mode - always use the single model
+        if (models[0].isExternal) {
+            return models[0];
+        }
+
+        // Check workspaceState for saved selection
+        const savedModelId = this.context.workspaceState.get('aida.selectedModelId');
+        if (savedModelId) {
+            const savedModel = models.find(m => m.id === savedModelId);
+            if (savedModel) {
+                aidaLogging('🤖 Using saved model from workspaceState:', savedModel.family);
+                return savedModel;
+            }
+        }
+
+        // Default to highest priority model (first in sorted list)
+        aidaLogging('🤖 Using default highest priority model:', models[0].family);
+        return models[0];
+    }
+
+    /**
+     * Save selected model to workspaceState
+     */
+    async saveSelectedModel(model) {
+        await this.context.workspaceState.update('aida.selectedModelId', model.id);
+        aidaLogging('💾 Saved selected model to workspaceState:', model.family);
+    }
+
+    /**
+     * Show model picker (QuickPick like GitHub Copilot)
+     */
+    async showModelPicker() {
+        const models = await this.getAvailableModels();
+
+        if (models.length === 0) {
+            vscode.window.showWarningMessage('No AI models available. Please check your Copilot license or enable External API mode.');
+            return;
+        }
+
+        // External API mode - show info, can't change
+        if (models[0].isExternal) {
+            vscode.window.showInformationMessage(
+                `External API mode is enabled. Using model: ${models[0].family}. ` +
+                `Change in Settings → AIDA → AI Model.`
+            );
+            return;
+        }
+
+        const currentModel = await this.getSelectedModel();
+
+        // Create QuickPick items
+        const items = models.map(model => {
+            const priority = this.getModelPriority(model.family);
+            const isSelected = currentModel && model.id === currentModel.id;
+
+            // Add tier indicator based on priority
+            let tier = '';
+            if (priority >= 95) tier = '⭐⭐⭐ Premium';
+            else if (priority >= 85) tier = '⭐⭐ Pro';
+            else if (priority >= 75) tier = '⭐ Standard';
+            else tier = '○ Basic';
+
+            return {
+                label: `${isSelected ? '$(check) ' : ''}${model.family}`,
+                description: tier,
+                detail: `Model ID: ${model.id}`,
+                model: model
+            };
+        });
+
+        const selected = await vscode.window.showQuickPick(items, {
+            placeHolder: 'Select AI Model for AIDA',
+            title: 'AIDA - Choose AI Model',
+            matchOnDescription: true,
+            matchOnDetail: true
+        });
+
+        if (selected) {
+            await this.saveSelectedModel(selected.model);
+            // Update UI
+            if (this.chatInstance.webviewView) {
+                this.sendCurrentModelName(this.chatInstance.webviewView);
+            }
+            vscode.window.showInformationMessage(`AIDA now using: ${selected.model.family}`);
+        }
+    }
+
+    /**
      * Setup listener for configuration changes
      */
     setupConfigurationListener() {
         vscode.workspace.onDidChangeConfiguration((event) => {
-            if (event.affectsConfiguration('aida.ai.model')) {
+            if (event.affectsConfiguration('aida.ai.model') || event.affectsConfiguration('aida.useExternalAI')) {
                 aidaLogging('🤖 Model configuration changed, updating webview...');
                 if (this.chatInstance.webviewView) {
                     this.sendCurrentModelName(this.chatInstance.webviewView);
@@ -3238,7 +3410,7 @@ class AidaChatViewProvider {
                 this.initializeWebviewState(webviewView);
             }, 100);
         }).catch(error => {
-            console.error('Failed to load webview content, initializing anyway:', error);
+            aidaLogging('Failed to load webview content, initializing anyway:', error);
             setTimeout(() => {
                 this.initializeWebviewState(webviewView);
             }, 200);
@@ -3406,11 +3578,11 @@ class AidaChatViewProvider {
                             }
                             aidaLogging('✅ Command executed successfully');
                         } catch (error) {
-                            console.error('❌ Command execution failed:', error);
+                            aidaLogging('❌ Command execution failed:', error);
                             vscode.window.showErrorMessage(`Failed to open file: ${error.message}`);
                         }
                     } else {
-                        console.error('❌ Invalid command or arguments:', message);
+                        aidaLogging('❌ Invalid command or arguments:', message);
                     }
                     break;
 
@@ -3431,8 +3603,8 @@ class AidaChatViewProvider {
                     break;
 
                 case 'frontendReady':
-                    // Frontend is ready, send current file info
-                    aidaLogging('📁 Frontend ready, updating current file...');
+                    // Frontend is ready, send current file info and model name
+                    aidaLogging('📁 Frontend ready, updating current file and model...');
                     if (this.chatInstance && typeof this.chatInstance.updateCurrentFile === 'function') {
                         const currentEditor = vscode.window.activeTextEditor;
                         if (currentEditor) {
@@ -3442,6 +3614,31 @@ class AidaChatViewProvider {
                             this.chatInstance.updateCurrentFile(null, true);
                             aidaLogging('📁 No active editor, sent null to frontend');
                         }
+                    }
+                    // Also send model name when frontend is ready
+                    this.sendCurrentModelName(webviewView);
+                    break;
+
+                case 'openModelConfig':
+                    // Show model picker (QuickPick like GitHub Copilot)
+                    aidaLogging('🤖 Opening model picker...');
+                    this.showModelPicker();
+                    break;
+
+                case 'getModelList':
+                    // Send available models to frontend dropdown
+                    aidaLogging('🤖 Frontend requested model list');
+                    await this.sendModelListToFrontend(webviewView);
+                    break;
+
+                case 'selectModel':
+                    // Handle model selection from frontend dropdown
+                    aidaLogging('🤖 Model selected from dropdown:', message.modelFamily);
+                    const models = await this.getAvailableModels();
+                    const selectedModel = models.find(m => m.id === message.modelId);
+                    if (selectedModel) {
+                        await this.saveSelectedModel(selectedModel);
+                        this.sendCurrentModelName(webviewView);
                     }
                     break;
             }
@@ -3479,32 +3676,108 @@ class AidaChatViewProvider {
                     aidaLogging('📁 No active editor found during webview init');
                 }
             } else {
-                console.warn('updateCurrentFile not available on chatInstance');
+                aidaLogging('updateCurrentFile not available on chatInstance');
             }
 
             aidaLogging('🔄 Webview state initialized');
         } catch (error) {
-            console.error('Failed to initialize webview state:', error);
+            aidaLogging('Failed to initialize webview state:', error);
         }
     }
 
     /**
-     * Send current model name from settings to webview
+     * Send model list to frontend for dropdown
      */
-    sendCurrentModelName(webviewView) {
+    async sendModelListToFrontend(webviewView) {
         try {
-            const config = vscode.workspace.getConfiguration('aida');
-            const modelFromSettings = config.get('ai.model', 'Claude-4-Sonnet');
+            const models = await this.getAvailableModels();
+            const selectedModel = await this.getSelectedModel();
 
-            aidaLogging('🤖 Sending model name to frontend:', modelFromSettings);
+            // Format models for frontend
+            const formattedModels = models.map(m => ({
+                id: m.id,
+                family: m.family,
+                displayName: this.formatModelName(m.family),
+                isExternal: m.isExternal || false
+            }));
+
+            aidaLogging('🤖 Sending model list to frontend:', formattedModels.map(m => m.displayName).join(', '));
+
+            webviewView.webview.postMessage({
+                type: 'updateModelList',
+                models: formattedModels,
+                selectedModelId: selectedModel ? selectedModel.id : null,
+                selectedModelName: selectedModel ? this.formatModelName(selectedModel.family) : 'AIDA'
+            });
+        } catch (error) {
+            aidaLogging('Failed to send model list:', error);
+        }
+    }
+
+    /**
+     * Send current model name to webview (uses workspaceState selection)
+     */
+    async sendCurrentModelName(webviewView) {
+        try {
+            const selectedModel = await this.getSelectedModel();
+            let modelName = 'AIDA';
+
+            if (selectedModel) {
+                modelName = this.formatModelName(selectedModel.family);
+            }
+
+            aidaLogging('🤖 Sending model name to frontend:', modelName);
 
             webviewView.webview.postMessage({
                 type: 'updateModelName',
-                modelName: modelFromSettings
+                modelName: modelName
             });
         } catch (error) {
-            console.error('Failed to send model name:', error);
+            aidaLogging('Failed to send model name:', error);
+            webviewView.webview.postMessage({
+                type: 'updateModelName',
+                modelName: 'AIDA'
+            });
         }
+    }
+
+    /**
+     * Format model name for display
+     */
+    formatModelName(rawName) {
+        if (!rawName) return 'Unknown';
+
+        let name = rawName.toString();
+
+        // Handle common patterns
+        const patterns = [
+            { match: /claude.*opus.*4\.?5/i, replace: 'Claude Opus 4.5' },
+            { match: /claude.*opus.*4(?!\.)/i, replace: 'Claude Opus 4' },
+            { match: /claude.*sonnet.*4\.?5/i, replace: 'Claude Sonnet 4.5' },
+            { match: /claude.*sonnet.*4(?!\.)/i, replace: 'Claude Sonnet 4' },
+            { match: /claude.*sonnet.*3\.?7/i, replace: 'Claude Sonnet 3.7' },
+            { match: /claude.*sonnet.*3\.?5/i, replace: 'Claude Sonnet 3.5' },
+            { match: /gpt.*4\.?1/i, replace: 'GPT-4.1' },
+            { match: /gpt.*4o.*mini/i, replace: 'GPT-4o Mini' },
+            { match: /gpt.*4o/i, replace: 'GPT-4o' },
+            { match: /gpt.*5.*mini/i, replace: 'GPT-5 Mini' },
+            { match: /gpt.*5/i, replace: 'GPT-5' },
+            { match: /gemini.*2\.?5.*pro/i, replace: 'Gemini 2.5 Pro' },
+            { match: /gemini.*2\.?0.*flash/i, replace: 'Gemini 2.0 Flash' },
+            { match: /o4.*mini/i, replace: 'o4-mini' },
+            { match: /o3.*mini/i, replace: 'o3-mini' },
+        ];
+
+        for (const pattern of patterns) {
+            if (pattern.match.test(name)) {
+                return pattern.replace;
+            }
+        }
+
+        // If no pattern matches, capitalize words
+        return name.split(/[-_]/).map(word =>
+            word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+        ).join(' ');
     }
 
     /**
@@ -3607,7 +3880,7 @@ class AidaChatViewProvider {
             const htmlContent = await this.chatInstance.getCopilotSidebarHTML();
             webviewView.webview.html = htmlContent;
         } catch (error) {
-            console.error('Failed to load webview content:', error);
+            aidaLogging('Failed to load webview content:', error);
             webviewView.webview.html = '<h1>Error loading AIDA Chat</h1>';
         }
     }
@@ -3635,7 +3908,7 @@ function initializeCopilotSidebarChat(context) {
         };
 
     } catch (error) {
-        console.error('❌ Failed to initialize Chatbot Sidebar:', error);
+        aidaLogging('❌ Failed to initialize Chatbot Sidebar:', error);
         return null;
     }
 }

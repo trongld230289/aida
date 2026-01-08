@@ -102,7 +102,7 @@ function initializeReviewFile(context) {
         } catch (error) {
             stream.markdown(`❌ Error: ${error.message}\n\n`);
             stream.markdown('**Fallback:** Please open a file in the editor and try again.\n');
-            console.error('Review File error:', error);
+            aidaLogging('Review File error:', error);
         }
     });
 
@@ -219,7 +219,7 @@ async function aiReviewFile(input, stream, selectedModel = null, context = null,
         stream.markdown('- Check if the file exists and is accessible\n');
         stream.markdown('- Ensure VS Code has proper file access\n');
         stream.markdown('- Try opening the file in the editor first\n');
-        console.error('AI Review File error:', error);
+        aidaLogging('AI Review File error:', error);
     }
 }
 
@@ -317,7 +317,7 @@ async function handleActiveFileReview(stream, requestedModel = null, context = n
         stream.markdown('- Try refreshing the editor\n');
         stream.markdown('- Save the file and try again\n');
         stream.markdown('- Use `@review-changes` for git diff review instead\n');
-        console.error('Active file review error:', error);
+        aidaLogging('Active file review error:', error);
     }
 }
 

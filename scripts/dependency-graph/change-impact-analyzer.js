@@ -121,7 +121,7 @@ class ChangeImpactAnalyzer {
                     aidaLogging(`  ⚠ ${path.basename(file)}: No symbols found`);
                 }
             } catch (error) {
-                console.error(`  ✗ Error analyzing ${file}:`, error.message);
+                aidaLogging(`  ✗ Error analyzing ${file}:`, error.message);
             }
         }
 
@@ -170,7 +170,7 @@ class ChangeImpactAnalyzer {
             }
 
         } catch (error) {
-            console.error(`Error extracting symbols from ${absolutePath}:`, error.message);
+            aidaLogging(`Error extracting symbols from ${absolutePath}:`, error.message);
         }
 
         return symbols;
@@ -218,7 +218,7 @@ class ChangeImpactAnalyzer {
                 }
             }
         } catch (error) {
-            console.error(`Error extracting resource keys:`, error.message);
+            aidaLogging(`Error extracting resource keys:`, error.message);
         }
 
         return keys;
@@ -250,7 +250,7 @@ class ChangeImpactAnalyzer {
                     aidaLogging(`  ✓ "${symbolName}": Found in ${locations.length} files`);
                 }
             } catch (error) {
-                console.warn(`  ⚠ Error searching for "${symbolName}":`, error.message);
+                aidaLogging(`  ⚠ Error searching for "${symbolName}":`, error.message);
             }
         }
 
@@ -288,7 +288,7 @@ class ChangeImpactAnalyzer {
                 }
             }
         } catch (error) {
-            console.error(`Error finding usages for ${symbolName}:`, error.message);
+            aidaLogging(`Error finding usages for ${symbolName}:`, error.message);
         }
 
         return locations;
@@ -536,7 +536,7 @@ class ChangeImpactAnalyzer {
             
             aidaLogging(`📋 Found ${files.length} changed files from git`);
         } catch (error) {
-            console.error('Error getting changed files from git:', error.message);
+            aidaLogging('Error getting changed files from git:', error.message);
         }
         
         return changedFiles;

@@ -24,7 +24,7 @@ class AidaChatbotService {
             this.systemPrompt = await this.loadSystemPrompt();
             aidaLogging('✅ AIDA Chatbot initialized with system prompt');
         } catch (error) {
-            console.warn('⚠️ Failed to load system prompt, using default');
+            aidaLogging('⚠️ Failed to load system prompt, using default');
             this.systemPrompt = this.getDefaultSystemPrompt();
         }
     }
@@ -153,7 +153,7 @@ class AidaChatbotService {
             return aiResponse;
 
         } catch (error) {
-            console.error('❌ Error generating AI response:', error);
+            aidaLogging('❌ Error generating AI response:', error);
             // Fallback to rule-based response
             return this.generateFallbackResponse(userMessage, images);
         }
@@ -229,7 +229,7 @@ class AidaChatbotService {
             }
             
         } catch (error) {
-            console.error('❌ Shared callAI failed:', error);
+            aidaLogging('❌ Shared callAI failed:', error);
             
             // Fall back to smart responses
             aidaLogging('🔄 Falling back to smart responses');
@@ -420,8 +420,8 @@ try {
     const result = riskyOperation();
     aidaLogging('Success:', result);
 } catch (error) {
-    console.error('Error details:', error);
-    console.error('Stack trace:', error.stack);
+    aidaLogging('Error details:', error);
+    aidaLogging('Stack trace:', error.stack);
 }
 \`\`\`
 
@@ -598,12 +598,12 @@ What interesting project are you working on? 🚀`;
         // Validate mime type
         const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
         if (!allowedTypes.includes(mimeType)) {
-            console.warn('Unsupported image type:', mimeType, 'defaulting to image/png');
+            aidaLogging('Unsupported image type:', mimeType, 'defaulting to image/png');
             mimeType = 'image/png';
         }
         
         if (!base64Data) {
-            console.error('Failed to extract base64 data from image');
+            aidaLogging('Failed to extract base64 data from image');
             return null;
         }
         
@@ -728,7 +728,7 @@ Please try asking again with more details! 🙏`;
                                 streamCallback(content);
                             }
                         } catch (parseError) {
-                            console.warn('⚠️ Failed to parse streaming chunk:', parseError);
+                            aidaLogging('⚠️ Failed to parse streaming chunk:', parseError);
                         }
                     }
                 }
@@ -741,7 +741,7 @@ Please try asking again with more details! 🙏`;
             return fullContent;
             
         } catch (error) {
-            console.error('❌ Streaming response error:', error);
+            aidaLogging('❌ Streaming response error:', error);
             throw error;
         }
     }

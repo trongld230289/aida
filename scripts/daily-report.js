@@ -76,7 +76,7 @@ function initializeDailyReport(context) {
             }
 
         } catch (error) {
-            console.error('❌ Daily Report participant error:', error);
+            aidaLogging('❌ Daily Report participant error:', error);
             stream.markdown('❌ **Error generating daily report**\n\n');
             stream.markdown(`**Details:** ${error.message}\n\n`);
             stream.markdown('Please try again or check the extension logs for more details.\n');

@@ -11,7 +11,7 @@ if (!global.fetch) {
         global.fetch = fetch;
         aidaLogging('✅ node-fetch loaded successfully');
     } catch (error) {
-        console.warn('⚠️ node-fetch not available, using https module fallback');
+        aidaLogging('⚠️ node-fetch not available, using https module fallback');
         // You can add a custom fetch implementation here if needed
     }
 }
@@ -40,7 +40,7 @@ async function handleScanApp(message, stream, token, context) {
         }
         
     } catch (error) {
-        console.error('Smart Scanner error:', error);
+        aidaLogging('Smart Scanner error:', error);
         stream.markdown(`❌ **Error:** ${error.message}`);
         throw error;
     }
@@ -89,7 +89,7 @@ function initializeScanApp(context) {
         return { scanAppParticipant };
         
     } catch (error) {
-        console.error('❌ Failed to create scan-app participant:', error);
+        aidaLogging('❌ Failed to create scan-app participant:', error);
         throw error;
     }
 }
@@ -222,7 +222,7 @@ async function findApiFiles(workspacePath) {
                 }
             }
         } catch (error) {
-            console.error(`Error scanning directory ${dir}:`, error);
+            aidaLogging(`Error scanning directory ${dir}:`, error);
         }
     }
     
@@ -355,7 +355,7 @@ async function extractAllApiEndpoints(apiFiles, stream) {
             }
             
         } catch (error) {
-            console.error(`Error processing file ${file.path}:`, error);
+            aidaLogging(`Error processing file ${file.path}:`, error);
         }
     }
     
@@ -442,7 +442,7 @@ ${content}
             };
         }
     } catch (error) {
-        console.error('AI extraction failed:', error);
+        aidaLogging('AI extraction failed:', error);
     }
     
     // Fallback to rule-based
@@ -470,7 +470,7 @@ async function callAIForExtraction(prompt) {
             ? JSON.parse(mappedResponse.content) 
             : mappedResponse.content;
     } catch (parseError) {
-        console.warn('⚠️ Failed to parse AI response as JSON:', parseError);
+        aidaLogging('⚠️ Failed to parse AI response as JSON:', parseError);
         parsedResponse = { endpoints: [] };
     }
     
@@ -1015,7 +1015,7 @@ async function callOpenAIForSmartAnalysis(endpoints, analysisType) {
     const model = config.get('ai.model') || 'gpt-4o';
     
     if (!apiKey) {
-        console.warn('⚠️ AI API key not configured - using static analysis only');
+        aidaLogging('⚠️ AI API key not configured - using static analysis only');
         return null;
     }
     
@@ -1133,8 +1133,8 @@ ${JSON.stringify(endpoints, null, 2)}
         };
         
     } catch (error) {
-        console.error('❌ AI API call failed:', error);
-        console.error(`📡 API Host: ${apiHost}, Model: ${model}`);
+        aidaLogging('❌ AI API call failed:', error);
+        aidaLogging(`📡 API Host: ${apiHost}, Model: ${model}`);
         return null;
     }
 }

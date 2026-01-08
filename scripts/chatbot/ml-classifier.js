@@ -108,7 +108,7 @@ class MLClassifier {
       
       aidaLogging('✅ ML Classifier trained with', contextRequired.length + noContext.length, 'examples');
     } catch (error) {
-      console.warn('❌ Failed to train ML classifier:', error.message);
+      aidaLogging('❌ Failed to train ML classifier:', error.message);
       this.trained = false;
     }
   }
@@ -132,7 +132,7 @@ class MLClassifier {
         return this.fallbackClassify(text);
       }
     } catch (error) {
-      console.warn('ML classification error:', error.message);
+      aidaLogging('ML classification error:', error.message);
       return this.fallbackClassify(text);
     }
   }
@@ -315,7 +315,7 @@ class MLClassifier {
       
       return Math.max(...similarities);
     } catch (error) {
-      console.warn('String similarity error:', error.message);
+      aidaLogging('String similarity error:', error.message);
       // Fallback to Jaccard similarity
       const textWords = text.toLowerCase().split(/\s+/);
       let maxSimilarity = 0;

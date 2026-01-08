@@ -354,7 +354,7 @@ class PRDependencyAnalyzer {
                                 }
                             }
                         } catch (error) {
-                            console.error(`            ❌ Error finding barrel references: ${error.message}`);
+                            aidaLogging(`            ❌ Error finding barrel references: ${error.message}`);
                         }
                     }
                 }
@@ -1034,7 +1034,7 @@ class PRDependencyAnalyzer {
             return uniqueSymbols;
 
         } catch (error) {
-            console.error(`   ❌ Error in VS Code symbol extraction: ${error.message}`);
+            aidaLogging(`   ❌ Error in VS Code symbol extraction: ${error.message}`);
             return [];
         }
     }
@@ -1439,7 +1439,7 @@ class PRDependencyAnalyzer {
                     }
 
                 } catch (error) {
-                    console.error(`            ❌ Reference error: ${error.message}`);
+                    aidaLogging(`            ❌ Reference error: ${error.message}`);
                 }
             }
 
@@ -1451,7 +1451,7 @@ class PRDependencyAnalyzer {
 
             return usedSymbols;
         } catch (error) {
-            console.error(`      ❌ Analysis failed for ${dependentPath}:`, error.message);
+            aidaLogging(`      ❌ Analysis failed for ${dependentPath}:`, error.message);
             return [];
         }
     }

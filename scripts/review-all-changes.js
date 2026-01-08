@@ -103,7 +103,7 @@ function initializeReviewAllChanges(context) {
         } catch (error) {
             stream.markdown(`❌ Error: ${error.message}\n\n`);
             stream.markdown('**Fallback:** Try running a git status check first, or use @review-changes for specific files.\n');
-            console.error('Review All Changes error:', error);
+            aidaLogging('Review All Changes error:', error);
         }
     });
 
@@ -459,7 +459,7 @@ async function aiReviewAllChanges(input, stream, selectedModel = null, context =
         stream.markdown('- Try `@review-file` for active file review\n');
         stream.markdown('- Check if VS Code has proper workspace access\n');
         stream.markdown('- Restart VS Code if issues persist\n');
-        console.error('AI Review All Changes error:', error);
+        aidaLogging('AI Review All Changes error:', error);
     }
 }
 

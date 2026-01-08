@@ -48,7 +48,7 @@ async function activateDependencyWatcherIfCacheExists(context) {
             aidaLogging('✅ Dependency watcher activated from cache');
         }
     } catch (error) {
-        console.error('❌ Failed to auto-activate dependency watcher:', error);
+        aidaLogging('❌ Failed to auto-activate dependency watcher:', error);
     }
 }
 
@@ -177,8 +177,8 @@ function initializeDependencyGraph(context) {
             }
 
         } catch (error) {
-            console.error('❌ Dependency analysis error:', error);
-            console.error('❌ Stack trace:', error.stack);
+            aidaLogging('❌ Dependency analysis error:', error);
+            aidaLogging('❌ Stack trace:', error.stack);
             stream.markdown(`❌ **Analysis Error**\n\n**Error:** ${error.message}\n\n**Debug Info:**\n- Workspace: \`${workspaceRoot || 'undefined'}\`\n- Please check console for details\n\n💡 **Fix:** Ensure the workspace folder is properly opened.`);
         }
     });
@@ -274,7 +274,7 @@ async function aiDependencyAnalysis(message, stream, token, context) {
         }
 
     } catch (error) {
-        console.error('❌ aiDependencyAnalysis error:', error);
+        aidaLogging('❌ aiDependencyAnalysis error:', error);
         stream.markdown(`❌ **Error:** ${error.message}\n\n`);
         stream.markdown('Please check the console for details.\n\n');
     }
@@ -295,7 +295,7 @@ function registerCacheCommands(context) {
                 vscode.window.showErrorMessage('❌ Failed to load cache data');
             }
         } catch (error) {
-            console.error('❌ Error loading cache:', error);
+            aidaLogging('❌ Error loading cache:', error);
             vscode.window.showErrorMessage(`❌ Cache load failed: ${error.message}`);
         }
     });
@@ -311,7 +311,7 @@ function registerCacheCommands(context) {
                 query: '@dependency re-analyze'
             });
         } catch (error) {
-            console.error('❌ Error triggering re-analysis:', error);
+            aidaLogging('❌ Error triggering re-analysis:', error);
             vscode.window.showErrorMessage(`❌ Failed to trigger re-analysis: ${error.message}`);
         }
     });
@@ -356,9 +356,9 @@ async function saveToCache(graph, report, analysisType) {
         };
 
         await fs.promises.writeFile(cacheFilePath, JSON.stringify(cacheData, null, 2));
-        console.log('💾 Dependency analysis cached successfully');
+        aidaLogging('💾 Dependency analysis cached successfully');
     } catch (error) {
-        console.warn('⚠️ Failed to save cache:', error.message);
+        aidaLogging('⚠️ Failed to save cache:', error.message);
     }
 }
 
@@ -372,20 +372,20 @@ async function loadFromCache() {
         const cacheData = JSON.parse(await fs.promises.readFile(cacheFilePath, 'utf8'));
 
         if (cacheData.version !== CACHE_VERSION) {
-            console.log('🔄 Cache version mismatch, will regenerate');
+            aidaLogging('🔄 Cache version mismatch, will regenerate');
             return null;
         }
 
         // Validate cache structure
         if (!cacheData.graph || !cacheData.report || !cacheData.report.summary) {
-            console.log('⚠️ Invalid cache data structure, will regenerate');
+            aidaLogging('⚠️ Invalid cache data structure, will regenerate');
             return null;
         }
 
-        console.log('💾 Loaded dependency analysis from cache');
+        aidaLogging('💾 Loaded dependency analysis from cache');
         return cacheData;
     } catch (error) {
-        console.warn('⚠️ Failed to load cache:', error.message);
+        aidaLogging('⚠️ Failed to load cache:', error.message);
         return null;
     }
 }
@@ -421,7 +421,7 @@ function performDependencyAnalysisInBackground(workspaceRoot) {
                 throw new Error('Invalid graph data: missing or invalid edges array');
             }
 
-            console.log(`🔍 Graph validation: ${graph.nodes.length} nodes, ${graph.edges.length} edges`);
+            aidaLogging(`🔍 Graph validation: ${graph.nodes.length} nodes, ${graph.edges.length} edges`);
 
             progress.report({ increment: 85, message: "Saving cache..." });
             await saveToCache(graph, report, analysisType);
@@ -441,8 +441,8 @@ function performDependencyAnalysisInBackground(workspaceRoot) {
             });
 
         } catch (error) {
-            console.error('❌ Background analysis error:', error);
-            console.error('❌ Stack trace:', error.stack);
+            aidaLogging('❌ Background analysis error:', error);
+            aidaLogging('❌ Stack trace:', error.stack);
             vscode.window.showErrorMessage(
                 `❌ Dependency analysis failed: ${error.message}`,
                 'View Details'
@@ -455,6 +455,77 @@ function performDependencyAnalysisInBackground(workspaceRoot) {
     });
 }
 
+/**
+ * Perform PR dependency analysis in background (non-blocking)
+ * @param {string} prUrl - The PR URL
+ * @param {object} prInfo - Parsed PR info (repo, owner, prNumber, repoType)
+ * @param {Array} prFiles - List of files changed in PR
+ * @param {string} workspaceRoot - Workspace root path
+ */
+function performPRAnalysisInBackground(prUrl, prInfo, prFiles, workspaceRoot) {
+    // Run analysis in background with status bar progress (lightweight, non-intrusive)
+    vscode.window.withProgress({
+        location: vscode.ProgressLocation.Window,
+        title: "🔍 Analyzing PR Dependencies",
+        cancellable: false
+    }, async (progress) => {
+        try {
+            progress.report({ increment: 0, message: "Starting PR analysis - you can continue working..." });
+
+            // Build file summary for notification
+            const added = prFiles.filter(f => f.status === 'add').length;
+            const modified = prFiles.filter(f => f.status === 'edit').length;
+            const deleted = prFiles.filter(f => f.status === 'delete').length;
+
+            progress.report({ increment: 30, message: `Analyzing ${prFiles.length} files...` });
+
+            // Analyze dependencies for PR files
+            const analyzer = new PRDependencyAnalyzer(workspaceRoot);
+            const graph = await analyzer.analyzePRFiles(prFiles);
+
+            progress.report({ increment: 70, message: "Generating graph visualization..." });
+
+            // Create and open PR graph webview
+            const summary = graph.prSummary;
+            await createPRGraphWebview(graph, prInfo, summary);
+
+            progress.report({ increment: 95, message: "Complete!" });
+
+            // Calculate impact stats
+            const impactedFiles = graph.nodes.filter(n => n.nodeType === 'dependent').length;
+            const dependencies = graph.nodes.filter(n => n.nodeType === 'dependency').length;
+
+            // Show completion notification
+            vscode.window.showInformationMessage(
+                `✅ PR Analysis complete! ${prFiles.length} PR files → ${impactedFiles} impacted, ${dependencies} dependencies`,
+                'View Graph'
+            ).then(selection => {
+                if (selection === 'View Graph') {
+                    // Focus the graph view
+                    vscode.commands.executeCommand('workbench.view.extension.aida-dependency-view');
+                }
+            });
+
+        } catch (error) {
+            aidaLogging('❌ Background PR analysis error:', error);
+            aidaLogging('❌ Stack trace:', error.stack);
+
+            let errorMessage = `❌ PR analysis failed: ${error.message}`;
+            if (error.message.includes('cache') || error.message.includes('graph')) {
+                errorMessage += ' - Run @dependency first to build workspace cache';
+            }
+
+            vscode.window.showErrorMessage(
+                errorMessage,
+                'View Details'
+            ).then(selection => {
+                if (selection === 'View Details') {
+                    vscode.window.showErrorMessage(`Error Details:\n${error.stack || error.message}`);
+                }
+            });
+        }
+    });
+}
 
 
 /**
@@ -473,7 +544,7 @@ async function createWebviewFromData(graph, report, analysisType) {
     );
 
     // Generate webview content
-    console.log(`📊 Creating webview with data:`, {
+    aidaLogging(`📊 Creating webview with data:`, {
         nodeCount: graph.nodes.length,
         edgeCount: graph.edges.length,
         analysisType
@@ -494,7 +565,7 @@ async function createWebviewFromData(graph, report, analysisType) {
         }
     });
 
-    console.log(`✅ Webview created with ${graph.nodes.length} nodes, ${graph.edges.length} edges`);
+    aidaLogging(`✅ Webview created with ${graph.nodes.length} nodes, ${graph.edges.length} edges`);
 }
 
 
@@ -506,13 +577,13 @@ async function buildSelectedNodeObject(nodeId, graph, panel) {
     try {
         const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath;
         if (!workspaceRoot) {
-            console.error('No workspace root found');
+            aidaLogging('No workspace root found');
             return;
         }
 
         const selectedNode = graph.nodes.find(n => n.id === nodeId);
         if (!selectedNode) {
-            console.error('Node not found:', nodeId);
+            aidaLogging('Node not found:', nodeId);
             return;
         }
 
@@ -590,7 +661,7 @@ async function buildSelectedNodeObject(nodeId, graph, panel) {
             dependents
         };
 
-        console.log('\n🎯 Selected Node Object:', JSON.stringify(selectedNodeObject, null, 2));
+        aidaLogging('\n🎯 Selected Node Object:', JSON.stringify(selectedNodeObject, null, 2));
 
         // Send to AI for analysis
         await analyzeImpactWithAI(selectedNodeObject, panel);
@@ -598,7 +669,7 @@ async function buildSelectedNodeObject(nodeId, graph, panel) {
         return selectedNodeObject;
 
     } catch (error) {
-        console.error('❌ Error building selected node object:', error);
+        aidaLogging('❌ Error building selected node object:', error);
         return null;
     }
 }
@@ -749,8 +820,8 @@ Sections to include:
 Keep the language simple and focus on USER IMPACT, not technical details.`;
         }
 
-        console.log('🤖 Sending to AI for analysis...');
-        console.log('📋 Prompt:', prompt);
+        aidaLogging('🤖 Sending to AI for analysis...');
+        aidaLogging('📋 Prompt:', prompt);
 
         // Create a stream object to collect AI response
         let aiResponse = '';
@@ -760,7 +831,7 @@ Keep the language simple and focus on USER IMPACT, not technical details.`;
                 aiResponse += text;
             },
             progress: (text) => {
-                console.log('Progress:', text);
+                aidaLogging('Progress:', text);
             }
         };
 
@@ -771,7 +842,7 @@ Keep the language simple and focus on USER IMPACT, not technical details.`;
         const success = await executeAIReview(prompt, model, mockStream, 'Impact Analysis', 0, null, null);
 
         if (success) {
-            console.log('✅ AI Response received, length:', aiResponse.length);
+            aidaLogging('✅ AI Response received, length:', aiResponse.length);
 
             // Clean up the response - remove markdown decorations that we added
             let cleanResponse = aiResponse
@@ -790,7 +861,7 @@ Keep the language simple and focus on USER IMPACT, not technical details.`;
         }
 
     } catch (error) {
-        console.error('❌ Error analyzing with AI:', error);
+        aidaLogging('❌ Error analyzing with AI:', error);
         analysisPanel.webview.html = getHtml(`<div style="color: #f48771;">❌ Error: ${error.message}</div>`);
     }
 }
@@ -854,7 +925,7 @@ async function openImpactAnalysisWebview(nodeId, graph = null) {
                     });
                 }
             } catch (error) {
-                console.error('Impact analysis error:', error);
+                aidaLogging('Impact analysis error:', error);
                 panel.webview.postMessage({
                     command: 'error',
                     error: error.message
@@ -866,7 +937,7 @@ async function openImpactAnalysisWebview(nodeId, graph = null) {
         await runAnalysis();
 
     } catch (error) {
-        console.error('Error opening impact analysis:', error);
+        aidaLogging('Error opening impact analysis:', error);
         vscode.window.showErrorMessage(`Failed to open impact analysis: ${error.message}`);
     }
 }
@@ -1277,114 +1348,16 @@ async function handlePRDependencyAnalysis(prUrl, stream, token, workspaceRoot) {
         if (renamed > 0) stream.markdown(`🔵 Renamed: ${renamed}\n`);
         stream.markdown('\n');
 
-        // Step 3: Analyze dependencies for PR files
-        stream.markdown('🔗 Analyzing dependencies and dependents...\n\n');
+        // Step 3: Start background analysis (non-blocking)
+        stream.markdown('✅ **Analysis started in background** - You can continue working!\n\n');
+        stream.markdown('💡 The dependency graph will open automatically when complete.\n\n');
+        stream.markdown('📊 Check the **status bar** at the bottom for progress updates.\n\n');
 
-        const analyzer = new PRDependencyAnalyzer(workspaceRoot);
-        let graph;
-
-        try {
-            graph = await analyzer.analyzePRFiles(prFiles);
-        } catch (error) {
-            stream.markdown(`❌ **Analysis Error:** ${error.message}\n\n`);
-
-            if (error.message.includes('cache') || error.message.includes('graph')) {
-                stream.markdown('💡 **Tip:** Run `@dependency` first to build the workspace dependency cache\n\n');
-            }
-
-            return;
-        }
-
-        // Step 4: Show extracted symbols with impact analysis
-        if (!isProd) {
-            stream.markdown('✨ **Symbol Extraction Results:**\n\n');
-
-            const prNodesWithSymbols = graph.nodes.filter(n => n.isPRFile);
-
-            if (prNodesWithSymbols.length === 0) {
-                stream.markdown('ℹ️ No PR files found\n\n');
-            }
-
-            let totalSymbols = 0;
-            const symbolToDependentsMap = graph.symbolToDependentsMap || new Map();
-
-            for (const prNode of prNodesWithSymbols) {
-                stream.markdown(`📄 **File:** ${prNode.prPath}\n\n`);
-
-                if (!prNode.changedSymbols || prNode.changedSymbols.length === 0) {
-                    stream.markdown('  ℹ️ No symbols extracted\n\n');
-                    continue;
-                }
-
-                stream.markdown(`🔤 **Symbols (${prNode.changedSymbols.length}):**\n\n`);
-
-                for (const symbol of prNode.changedSymbols) {
-                    // Handle both string and object formats
-                    const symbolName = typeof symbol === 'string' ? symbol : symbol.fullName;
-                    const symbolType = typeof symbol === 'object' ? symbol.type : 'unknown';
-
-                    stream.markdown(`  - \`${symbolName}\` _(${symbolType})_`);
-
-                    // Show impacted files for this symbol
-                    const impactedFiles = symbolToDependentsMap.get(symbolName) || [];
-                    if (impactedFiles.length > 0) {
-                        stream.markdown(` → **${impactedFiles.length} files**`);
-                    }
-
-                    stream.markdown('\n');
-                    totalSymbols++;
-                }
-
-                stream.markdown('\n');
-            }
-
-            // Step 5: Show Impact Analysis Summary
-            stream.markdown('\n---\n\n');
-            stream.markdown('📊 **Impact Analysis Summary:**\n\n');
-            stream.markdown(`- **Changed Symbols:** ${totalSymbols}\n`);
-            stream.markdown(`- **Total Files Analyzed:** ${graph.nodes.length}\n`);
-            stream.markdown(`- **Impacted Files:** ${graph.nodes.filter(n => n.nodeType === 'dependent').length}\n`);
-            stream.markdown(`- **Dependencies:** ${graph.nodes.filter(n => n.nodeType === 'dependency').length}\n\n`);
-
-            // Show top impacted symbols
-            if (symbolToDependentsMap.size > 0) {
-                stream.markdown('🔥 **Top Impacted Symbols:**\n\n');
-
-                const sortedSymbols = Array.from(symbolToDependentsMap.entries())
-                    .sort((a, b) => b[1].length - a[1].length)
-                    .slice(0, 5);
-
-                for (const [symbolName, dependents] of sortedSymbols) {
-                    const impactLevel = dependents.length > 5 ? '🔴 HIGH' :
-                        dependents.length > 2 ? '🟡 MEDIUM' : '🟢 LOW';
-                    stream.markdown(`  ${impactLevel} \`${symbolName}\` → **${dependents.length} files**\n`);
-
-                    // Show first 3 impacted files
-                    const preview = dependents.slice(0, 3);
-                    for (const file of preview) {
-                        const fileName = file.split('/').pop();
-                        stream.markdown(`    - ${fileName}\n`);
-                    }
-                    if (dependents.length > 3) {
-                        stream.markdown(`    - _...and ${dependents.length - 3} more_\n`);
-                    }
-                    stream.markdown('\n');
-                }
-            } else {
-                stream.markdown('✅ **No external files impacted** (low risk change)\n\n');
-            }
-        }
-
-        // Step 6: Display graph
-        stream.markdown('\n🎨 Opening graph viewer...\n\n');
-
-        const summary = graph.prSummary;
-        await createPRGraphWebview(graph, prInfo, summary);
-
-        stream.markdown('✅ **Graph viewer opened!** Check the new tab for visual analysis.\n\n');
+        // Run analysis in background without blocking chat
+        performPRAnalysisInBackground(prUrl, prInfo, prFiles, workspaceRoot);
 
     } catch (error) {
-        console.error('❌ PR dependency analysis error:', error);
+        aidaLogging('❌ PR dependency analysis error:', error);
         stream.markdown(`❌ **Unexpected Error:** ${error.message}\n\n`);
         stream.markdown('Please check the console for details.\n\n');
     }
@@ -1461,7 +1434,7 @@ async function createPRGraphWebview(graph, prInfo, summary) {
         );
 
     } catch (error) {
-        console.error('❌ Error creating PR graph webview:', error);
+        aidaLogging('❌ Error creating PR graph webview:', error);
         vscode.window.showErrorMessage(`Failed to create graph viewer: ${error.message}`);
     }
 }
@@ -1486,8 +1459,8 @@ function generatePRGraphWebviewHtml(graph, summary, prInfo) {
     let filteredEdges = graph.edges;
     let impactedPaths = new Set(); // ✅ Moved outside for access in map()
 
-    console.log(`📊 Original graph: ${graph.nodes.length} nodes, ${graph.edges.length} edges`);
-    console.log(`📊 symbolToDependentsMap type:`, symbolToDependentsMap?.constructor?.name, 'size:', symbolToDependentsMap?.size);
+    aidaLogging(`📊 Original graph: ${graph.nodes.length} nodes, ${graph.edges.length} edges`);
+    aidaLogging(`📊 symbolToDependentsMap type:`, symbolToDependentsMap?.constructor?.name, 'size:', symbolToDependentsMap?.size);
 
     // Check if symbolToDependentsMap exists and has data (could be Map or Object)
     const hasImpactData = symbolToDependentsMap && (
@@ -1502,63 +1475,63 @@ function generatePRGraphWebviewHtml(graph, summary, prInfo) {
         // Handle both Map and Object formats
         if (symbolToDependentsMap instanceof Map) {
             for (const [symbol, files] of symbolToDependentsMap) {
-                console.log(`   Symbol: ${symbol} → ${files.length} files`);
+                aidaLogging(`   Symbol: ${symbol} → ${files.length} files`);
                 files.forEach(f => impactedPaths.add(f));
             }
         } else {
             for (const [symbol, files] of Object.entries(symbolToDependentsMap)) {
-                console.log(`   Symbol: ${symbol} → ${files.length} files`);
+                aidaLogging(`   Symbol: ${symbol} → ${files.length} files`);
                 files.forEach(f => impactedPaths.add(f));
             }
         }
 
-        console.log(`🎯 Total impacted files from symbols: ${impactedPaths.size}`);
-        console.log(`🎯 Impacted paths:`, Array.from(impactedPaths));
+        aidaLogging(`🎯 Total impacted files from symbols: ${impactedPaths.size}`);
+        aidaLogging(`🎯 Impacted paths:`, Array.from(impactedPaths));
 
         // Keep: PR files + dependencies + actually impacted dependents
         const keepNodeIds = new Set();
         filteredNodes = graph.nodes.filter(node => {
-            console.log(`   Checking node: ${node.id}, type: ${node.nodeType}, isPR: ${node.isPRFile}`);
+            aidaLogging(`   Checking node: ${node.id}, type: ${node.nodeType}, isPR: ${node.isPRFile}`);
 
             // Always keep PR files
             if (node.isPRFile) {
                 keepNodeIds.add(node.id);
-                console.log(`      ✅ Keep (PR file)`);
+                aidaLogging(`      ✅ Keep (PR file)`);
                 return true;
             }
             // 🚫 HIDE dependencies in PR mode (user doesn't need to see what PR file imports)
             if (node.nodeType === 'dependency') {
-                console.log(`      ❌ Filter out (dependency - not needed in PR mode)`);
+                aidaLogging(`      ❌ Filter out (dependency - not needed in PR mode)`);
                 return false;
             }
             // Keep dependents that are actually impacted
             if (node.nodeType === 'dependent') {
                 const nodePath = node.relativePath || node.id;
                 const isImpacted = impactedPaths.has(nodePath);
-                console.log(`      Path: ${nodePath}, Impacted: ${isImpacted}`);
+                aidaLogging(`      Path: ${nodePath}, Impacted: ${isImpacted}`);
                 if (isImpacted) {
                     keepNodeIds.add(node.id);
-                    console.log(`      ✅ Keep (impacted dependent)`);
+                    aidaLogging(`      ✅ Keep (impacted dependent)`);
                     return true;
                 }
-                console.log(`      ❌ Filter out (non-impacted dependent)`);
+                aidaLogging(`      ❌ Filter out (non-impacted dependent)`);
                 return false;
             }
             // Handle "both" type (dependency + dependent)
             if (node.nodeType === 'both') {
                 const nodePath = node.relativePath || node.id;
                 const isImpacted = impactedPaths.has(nodePath);
-                console.log(`      Path: ${nodePath}, Impacted: ${isImpacted}`);
+                aidaLogging(`      Path: ${nodePath}, Impacted: ${isImpacted}`);
                 if (isImpacted) {
                     keepNodeIds.add(node.id);
-                    console.log(`      ✅ Keep (impacted both)`);
+                    aidaLogging(`      ✅ Keep (impacted both)`);
                     return true;
                 }
-                console.log(`      ❌ Filter out (non-impacted both)`);
+                aidaLogging(`      ❌ Filter out (non-impacted both)`);
                 return false;
             }
             // Filter out other types by default
-            console.log(`      ❌ Filter out (other type)`);
+            aidaLogging(`      ❌ Filter out (other type)`);
             return false;
         });
 
@@ -1569,9 +1542,9 @@ function generatePRGraphWebviewHtml(graph, summary, prInfo) {
             return keepNodeIds.has(sourceId) && keepNodeIds.has(targetId);
         });
 
-        console.log(`🎯 Filtered graph: ${filteredNodes.length} nodes (from ${graph.nodes.length}), ${filteredEdges.length} edges (from ${graph.edges.length})`);
+        aidaLogging(`🎯 Filtered graph: ${filteredNodes.length} nodes (from ${graph.nodes.length}), ${filteredEdges.length} edges (from ${graph.edges.length})`);
     } else {
-        console.log(`⚠️ No impact data available, filtering to show ONLY PR files`);
+        aidaLogging(`⚠️ No impact data available, filtering to show ONLY PR files`);
         // If no impact data, we still want to hide dependencies in PR mode
         // Only show the PR files themselves
         filteredNodes = graph.nodes.filter(node => node.isPRFile);
@@ -1732,7 +1705,7 @@ async function analyzeFileDependency(uri) {
             await createFileGraphWebview(graph, filePath);
 
         } catch (error) {
-            console.error('Error analyzing file dependency:', error);
+            aidaLogging('Error analyzing file dependency:', error);
             vscode.window.showErrorMessage(`Analysis failed: ${error.message}`);
         }
     });
@@ -1771,7 +1744,7 @@ async function createFileGraphWebview(graph, filePath) {
         );
 
     } catch (error) {
-        console.error('❌ Error creating file graph webview:', error);
+        aidaLogging('❌ Error creating file graph webview:', error);
         vscode.window.showErrorMessage(`Failed to create graph viewer: ${error.message}`);
     }
 }

@@ -43,7 +43,7 @@ class ChatbotContextEngine {
             
             return decision;
         } catch (error) {
-            console.error('❌ Context detection error:', error);
+            aidaLogging('❌ Context detection error:', error);
             // Fallback to conservative approach
             return {
                 includeContent: !!editorContext.selectedText, // Include content only if text is selected
@@ -107,7 +107,7 @@ class ChatbotContextEngine {
             };
 
         } catch (error) {
-            console.warn('Context decision engine error:', error);
+            aidaLogging('Context decision engine error:', error);
             // Fallback to conservative approach
             return this.fallbackDecision(userInput, currentFileContext);
         }
@@ -975,7 +975,7 @@ class ChatbotContextEngine {
             };
             
         } catch (error) {
-            console.warn('Universal context decision error:', error);
+            aidaLogging('Universal context decision error:', error);
             // Safe fallback
             return {
                 shouldInclude: false,
@@ -1167,11 +1167,11 @@ class ChatbotContextEngine {
                         extractedTexts.push(text.trim());
                         aidaLogging('✅ Tesseract OCR extracted:', text.substring(0, 100) + '...');
                     } else {
-                        console.warn('⚠️ No text extracted from image');
+                        aidaLogging('⚠️ No text extracted from image');
                     }
                     
                 } catch (ocrError) {
-                    console.error('❌ OCR extraction failed for image:', ocrError.message);
+                    aidaLogging('❌ OCR extraction failed for image:', ocrError.message);
                     throw new Error(`OCR not supported: ${ocrError.message}`);
                 }
             }
@@ -1182,7 +1182,7 @@ class ChatbotContextEngine {
             return combinedText;
             
         } catch (error) {
-            console.error('❌ OCR processing failed:', error);
+            aidaLogging('❌ OCR processing failed:', error);
             // Return error message instead of empty string
             return `[OCR Error: ${error.message}]`;
         }
@@ -1223,7 +1223,7 @@ class ChatbotContextEngine {
                 throw new Error('OCR not supported in browser environment. Tesseract.js requires Node.js runtime');
             }
         } catch (error) {
-            console.error('❌ Tesseract OCR failed:', error.message);
+            aidaLogging('❌ Tesseract OCR failed:', error.message);
             throw new Error(`Tesseract OCR failed: ${error.message}`);
         }
     }
