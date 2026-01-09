@@ -757,7 +757,7 @@ function sendMessage() {
     updateSendButtonState();
 }
 
-function addMessage(content, role, images = []) {
+function addMessage(content, role, images = [], isFromHistory = false) {
     // Remove empty state
     const emptyState = chatContainer.querySelector('.empty-state');
     const isFirstMessage = emptyState !== null;
@@ -785,8 +785,8 @@ function addMessage(content, role, images = []) {
     const displayName = role === 'user' ? 'You' : 'AIDA';
     const avatar = role === 'user' ? '👤' : '🤖';
 
-    // Parse markdown content
-    const parsedContent = parseMarkdown(content);
+    // Parse markdown content - use isFromHistory flag for proper HTML encoding
+    const parsedContent = parseMarkdown(content, isFromHistory);
 
     // Build images HTML for user messages
     let imagesHTML = '';
@@ -927,8 +927,39 @@ function hideTyping() {
     }
 }
 
-function parseMarkdown(text) {
+/**
+ * Encode HTML-like tags inside code blocks to prevent marked from stripping them
+ * This is needed for Angular/React component tags like <app-gantt-chart>
+ */
+function encodeHtmlInCodeBlocks(text) {
+    // Handle fenced code blocks (```...```)
+    text = text.replace(/```([\w]*)\n([\s\S]*?)```/g, (match, lang, code) => {
+        // Encode < and > inside code blocks
+        const encodedCode = code
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+        return '```' + lang + '\n' + encodedCode + '```';
+    });
+
+    // Handle inline code (`...`)
+    text = text.replace(/`([^`]+)`/g, (match, code) => {
+        const encodedCode = code
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+        return '`' + encodedCode + '`';
+    });
+
+    return text;
+}
+
+function parseMarkdown(text, isFromHistory = false) {
     try {
+        // Pre-process: Encode HTML tags in code blocks ONLY for history restore
+        // Streaming already handles this correctly
+        if (isFromHistory) {
+            text = encodeHtmlInCodeBlocks(text);
+        }
+
         // Configure marked for GitHub Copilot style with highlight.js
         if (typeof marked !== 'undefined' && typeof hljs !== 'undefined') {
             marked.setOptions({
@@ -1244,14 +1275,16 @@ window.addEventListener('message', event => {
 
     switch (message.type) {
         case 'addUserMessage':
-            addMessage(message.message, 'user', message.images);
+            // isFromHistory = true because this is from restored chat history
+            addMessage(message.message, 'user', message.images, true);
             // Schedule reprocess for history loading (debounced)
             scheduleReprocess();
             break;
 
         case 'addAssistantMessage':
             hideTyping();
-            addMessage(message.message, 'assistant');
+            // isFromHistory = true because this is from restored chat history
+            addMessage(message.message, 'assistant', [], true);
             // Schedule reprocess for history loading (debounced)
             scheduleReprocess();
             break;
