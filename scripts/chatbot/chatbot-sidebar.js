@@ -3383,11 +3383,12 @@ class AidaChatViewProvider {
      * Setup listener for configuration changes
      */
     setupConfigurationListener() {
-        vscode.workspace.onDidChangeConfiguration((event) => {
+        vscode.workspace.onDidChangeConfiguration(async (event) => {
             if (event.affectsConfiguration('aida.ai.model') || event.affectsConfiguration('aida.useExternalAI')) {
-                aidaLogging('🤖 Model configuration changed, updating webview...');
+                aidaLogging('🤖 Model configuration changed, reloading model list...');
                 if (this.chatInstance.webviewView) {
-                    this.sendCurrentModelName(this.chatInstance.webviewView);
+                    // Reload entire model list when External AI toggle changes
+                    await this.sendModelListToFrontend(this.chatInstance.webviewView);
                 }
             }
         });
@@ -3603,7 +3604,7 @@ class AidaChatViewProvider {
                     break;
 
                 case 'frontendReady':
-                    // Frontend is ready, send current file info and model name
+                    // Frontend is ready, send current file info and model list
                     aidaLogging('📁 Frontend ready, updating current file and model...');
                     if (this.chatInstance && typeof this.chatInstance.updateCurrentFile === 'function') {
                         const currentEditor = vscode.window.activeTextEditor;
@@ -3615,8 +3616,8 @@ class AidaChatViewProvider {
                             aidaLogging('📁 No active editor, sent null to frontend');
                         }
                     }
-                    // Also send model name when frontend is ready
-                    this.sendCurrentModelName(webviewView);
+                    // Send model list instead of just model name (includes selected model)
+                    await this.sendModelListToFrontend(webviewView);
                     break;
 
                 case 'openModelConfig':

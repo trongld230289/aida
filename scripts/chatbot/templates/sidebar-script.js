@@ -20,7 +20,7 @@ let imageCounter = 0; // Counter for image numbering
 
 // Mode and model state
 let currentMode = 'ask'; // 'ask' or 'agent'
-let currentModel = 'claude-sonnet-4';
+let currentModel = 'claude-sonnet-4.5'; // Default to Sonnet 4.5, will be updated from backend
 let currentFileContext = null; // Track current file context
 
 // Available chat participants
@@ -1358,6 +1358,14 @@ window.addEventListener('message', event => {
             console.log('🤖 Frontend received model list:', message.models);
             availableModels = message.models || [];
             selectedModelId = message.selectedModelId;
+
+            // Update currentModel from backend selected model
+            const selectedModel = availableModels.find(m => m.id === selectedModelId);
+            if (selectedModel) {
+                currentModel = selectedModel.family;
+                console.log('🎯 Updated currentModel from backend:', currentModel);
+            }
+
             renderModelDropdown();
             // Also update display with selected model
             if (message.selectedModelName) {

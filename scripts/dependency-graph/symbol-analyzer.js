@@ -20,7 +20,7 @@ class SymbolAnalyzer {
      */
     async analyzeFile(filePath, graph = null) {
         const uri = vscode.Uri.file(filePath);
-        
+
         // 1. Get all symbols in the file
         // We use executeDocumentSymbolProvider
         // Note: This requires the language extension (e.g. C#, TS) to be active and ready
@@ -31,22 +31,33 @@ class SymbolAnalyzer {
                 uri
             );
         } catch (e) {
-            aidaLogging('Error getting symbols:', e);
+            // LSP errors are expected for external dependencies - silently ignore common cases:
+            // - C# Language Server: "Sequence contains no matching element"
+            // - Python Language Server: "No module named"
+            // - Angular/CSS Language Server: "Invalid Selector"
+            // - CSS Peek extension: "Request textDocument/definition failed"
+            const errorMsg = e?.message || String(e);
+            if (!errorMsg.includes('Sequence contains no matching element') &&
+                !errorMsg.includes('No module named') &&
+                !errorMsg.includes('Invalid Selector') &&
+                !errorMsg.includes('textDocument/definition failed')) {
+                aidaLogging(`⚠️ Error getting symbols from ${path.basename(filePath)}: ${errorMsg}`);
+            }
             return null;
         }
 
         if (!symbols || symbols.length === 0) {
-            return { 
+            return {
                 file: filePath,
                 fileName: path.basename(filePath),
-                symbols: [], 
-                relatedFiles: [] 
+                symbols: [],
+                relatedFiles: []
             };
         }
 
         // Flatten symbols if they are hierarchical (e.g. Class -> Methods)
         const flatSymbols = this.flattenSymbols(symbols);
-        
+
         // Filter for "interesting" symbols (e.g. exported ones, or public members)
         // We skip local variables inside functions usually, keeping Class, Method, Property, Interface, Variable (top level)
         // UPDATE: Removed strict isTopLevel check as it was hiding Classes in some language servers.
@@ -60,21 +71,21 @@ class SymbolAnalyzer {
             }
 
             // For methods/properties, exclude common lifecycle hooks or noisy names
-            if (s.kind === vscode.SymbolKind.Method || 
+            if (s.kind === vscode.SymbolKind.Method ||
                 s.kind === vscode.SymbolKind.Property ||
                 s.kind === vscode.SymbolKind.Function ||
                 s.kind === vscode.SymbolKind.Variable) {
-                
+
                 // CRITICAL FIX: Exclude local variables/properties that are NOT top-level
                 // If it has a containerName (meaning it's inside something) AND it's a Variable/Function, 
                 // it's likely a local variable or inner function which shouldn't be analyzed for external impact.
                 // Exception: Class Methods/Properties (which have containerName = ClassName) are fine.
-                if (!s.isTopLevel && 
+                if (!s.isTopLevel &&
                     (s.kind === vscode.SymbolKind.Variable || s.kind === vscode.SymbolKind.Function) &&
                     s.containerName && !s.containerName.endsWith('Component') && !s.containerName.endsWith('Service') && !s.containerName.endsWith('Store')) {
-                     // This heuristic is tricky. Safer bet: Only analyze Top Level Variables/Functions.
-                     // Class Members (Method/Property) are fine.
-                     return false;
+                    // This heuristic is tricky. Safer bet: Only analyze Top Level Variables/Functions.
+                    // Class Members (Method/Property) are fine.
+                    return false;
                 }
 
                 // Even stricter: If it's a Variable, ONLY analyze if it's Top Level (Global/Module scope).
@@ -86,7 +97,7 @@ class SymbolAnalyzer {
                 const name = s.name;
                 // Exclude Angular lifecycle methods
                 if (name.startsWith('ngOn') || name === 'constructor') return false;
-                
+
                 return true;
             }
 
@@ -108,18 +119,29 @@ class SymbolAnalyzer {
                     sym.selectionRange.start // Position of the symbol name
                 );
             } catch (e) {
-                aidaLogging(`Could not get references for ${sym.name}`);
+                // LSP errors are expected for external dependencies - silently ignore common cases:
+                // - C# Language Server: "Sequence contains no matching element"
+                // - Python Language Server: "No module named"
+                // - Angular/CSS Language Server: "Invalid Selector"
+                // - CSS Peek extension: "Request textDocument/definition failed"
+                const errorMsg = e?.message || String(e);
+                if (!errorMsg.includes('Sequence contains no matching element') &&
+                    !errorMsg.includes('No module named') &&
+                    !errorMsg.includes('Invalid Selector') &&
+                    !errorMsg.includes('textDocument/definition failed')) {
+                    aidaLogging(`⚠️ Could not get references for ${sym.name}: ${errorMsg}`);
+                }
             }
 
             const symbolId = `sym_${sym.name}_${sym.range.start.line}`;
-            
+
             // Map SymbolKind number to string name
             const kindName = vscode.SymbolKind[sym.kind];
 
             const symbolData = {
                 id: symbolId,
                 name: sym.name,
-                kind: kindName, 
+                kind: kindName,
                 line: sym.range.start.line,
                 containerName: sym.containerName || '',
                 usedByFiles: [] // List of file paths that use this symbol
@@ -128,12 +150,12 @@ class SymbolAnalyzer {
             if (references && references.length > 0) {
                 for (const ref of references) {
                     const refFilePath = ref.uri.fsPath;
-                    
+
                     // Skip self-references for the "usedByFiles" list to keep it clean for impact analysis
                     // But we might want to know if it's used internally too? 
                     // For "Impact", external is key.
                     const isSelf = refFilePath.toLowerCase() === filePath.toLowerCase();
-                    
+
                     // Check if file should be excluded (e.g. test files)
                     const isExcluded = this.isExcludedFile(refFilePath);
 
@@ -161,7 +183,7 @@ class SymbolAnalyzer {
                     }
                 }
             }
-            
+
             resultSymbols.push(symbolData);
         }
 
@@ -171,19 +193,19 @@ class SymbolAnalyzer {
 
         // 4. If graph is provided, merge graph-based dependents with symbol-based relatedFiles
         let finalRelatedFiles = Array.from(relatedFilesMap.values());
-        
+
         if (graph) {
             const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath;
             if (workspaceRoot) {
                 // Get relative path for matching with graph
                 const relativeFilePath = path.relative(workspaceRoot, filePath).replace(/\\/g, '/');
-                
+
                 // Find dependents from graph (files that import this file)
                 const graphDependents = this.getGraphDependents(relativeFilePath, graph, workspaceRoot);
-                
+
                 // Merge: Include all graph files, enhance with symbol data when available
                 finalRelatedFiles = this.mergeGraphWithSymbolData(graphDependents, finalRelatedFiles);
-                
+
                 aidaLogging(`📊 SymbolAnalyzer merged: ${graphDependents.length} graph dependents, ${finalRelatedFiles.length} final (with details)`);
             }
         }
@@ -234,18 +256,18 @@ class SymbolAnalyzer {
     mergeGraphWithSymbolData(graphFiles, symbolFiles) {
         const merged = [];
         const symbolFileMap = new Map();
-        
+
         // Create map of symbol-based files for quick lookup (normalize paths)
         symbolFiles.forEach(sf => {
             const normalizedPath = sf.path.replace(/\\/g, '/').toLowerCase();
             symbolFileMap.set(normalizedPath, sf);
         });
-        
+
         // For each graph file, try to find matching symbol data
         graphFiles.forEach(gf => {
             const normalizedGraphPath = gf.path.replace(/\\/g, '/').toLowerCase();
             const symbolData = symbolFileMap.get(normalizedGraphPath);
-            
+
             if (symbolData && symbolData.usages && symbolData.usages.length > 0) {
                 // Has detailed usage info - use it with all details
                 merged.push(symbolData);
@@ -259,7 +281,7 @@ class SymbolAnalyzer {
                 });
             }
         });
-        
+
         return merged;
     }
 
@@ -273,7 +295,7 @@ class SymbolAnalyzer {
             const document = await vscode.workspace.openTextDocument(uri);
             const text = document.getText();
             const ext = path.extname(filePath).toLowerCase();
-            
+
             // Get language config
             let language = null;
             let config = null;
@@ -293,10 +315,10 @@ class SymbolAnalyzer {
             for (const pattern of config.importPatterns) {
                 let match;
                 pattern.lastIndex = 0;
-                
+
                 while ((match = pattern.exec(text)) !== null) {
                     const importPath = match[1];
-                    
+
                     // Skip external/standard libraries
                     if (this.apiAnalyzer.isExternalImport(importPath, config.standardLibraries, language)) {
                         continue;
@@ -305,7 +327,7 @@ class SymbolAnalyzer {
                     // Resolve file path
                     // We use a simplified resolution here since we don't want to call LSP for every import if possible
                     // But for accuracy we should try LSP if regex gives us a position
-                    
+
                     // Calculate position
                     // We need to point exactly to the import path string for resolveDefinition to work
                     const matchString = match[0];
@@ -318,13 +340,13 @@ class SymbolAnalyzer {
 
                     // Try LSP resolution first
                     let targetFile = await this.apiAnalyzer.resolveDefinition(document, position);
-                    
+
                     if (targetFile) {
                         // Check if it's a barrel file (index.ts/js)
                         if (this.isBarrelFile(targetFile)) {
                             // Try to resolve specific symbols to get actual files
                             const resolvedFiles = await this.resolveBarrelImports(document, line, text);
-                            
+
                             if (resolvedFiles.length > 0) {
                                 for (const resolved of resolvedFiles) {
                                     this.addDependency(dependencies, resolved, importPath);
@@ -354,11 +376,11 @@ class SymbolAnalyzer {
      */
     async isBarrelFile(filePath) {
         // Simple filename check (legacy behavior)
-        const isIndexFile = filePath.endsWith('index.ts') || filePath.endsWith('index.js') || 
-                           filePath.endsWith('index.tsx') || filePath.endsWith('index.jsx');
-        
+        const isIndexFile = filePath.endsWith('index.ts') || filePath.endsWith('index.js') ||
+            filePath.endsWith('index.tsx') || filePath.endsWith('index.jsx');
+
         if (!isIndexFile) return false;
-        
+
         // 🔥 Use BarrelResolver for deeper analysis
         try {
             const uri = vscode.Uri.file(filePath);
@@ -376,36 +398,36 @@ class SymbolAnalyzer {
     async resolveBarrelImports(document, lineIndex, fullText) {
         const resolvedFiles = [];
         const lineText = document.lineAt(lineIndex).text;
-        
+
         // 1. Handle single-line named imports: import { A, B } from '...'
         const namedImportMatch = lineText.match(/\{([^}]+)\}/);
         if (namedImportMatch) {
             const symbols = namedImportMatch[1].split(',').map(s => s.trim()).filter(s => s);
-            
+
             for (const symbol of symbols) {
                 // Handle "A as B" - we need to look up A
                 const actualSymbol = symbol.split(/\s+as\s+/)[0];
-                
+
                 // Find position of symbol in the line
                 // Note: This is a simple search, might be inaccurate if symbol appears multiple times in line
                 const symbolIndex = lineText.indexOf(actualSymbol);
-                
+
                 if (symbolIndex !== -1) {
                     const position = new vscode.Position(lineIndex, symbolIndex);
                     const targetFile = await this.apiAnalyzer.resolveDefinition(document, position);
-                    
+
                     if (targetFile) {
-                         const absoluteTarget = path.join(this.apiAnalyzer.workspaceRoot, targetFile);
-                         resolvedFiles.push(absoluteTarget);
+                        const absoluteTarget = path.join(this.apiAnalyzer.workspaceRoot, targetFile);
+                        resolvedFiles.push(absoluteTarget);
                     }
                 }
             }
         }
-        
+
         // 2. Handle multiline imports (basic support)
         // If we didn't find {} on this line, but it's an import, maybe look backwards?
         // For now, we'll stick to single line to avoid complexity and performance issues.
-        
+
         return resolvedFiles;
     }
 
@@ -434,7 +456,7 @@ class SymbolAnalyzer {
             // We need to handle DocumentSymbol vs SymbolInformation. 
             // executeDocumentSymbolProvider usually returns DocumentSymbol[] (hierarchical) or SymbolInformation[] (flat)
             // If it has 'children', it's DocumentSymbol.
-            
+
             const flatSym = {
                 name: sym.name,
                 kind: sym.kind,
@@ -444,7 +466,7 @@ class SymbolAnalyzer {
             };
 
             result.push(flatSym);
-            
+
             if (sym.children && sym.children.length > 0) {
                 result = result.concat(this.flattenSymbols(sym.children, sym.name));
             }
@@ -459,7 +481,7 @@ class SymbolAnalyzer {
     isExcludedFile(filePath) {
         const lowerPath = filePath.toLowerCase();
         const ext = path.extname(filePath).toLowerCase();
-        
+
         // Get language from extension
         let language = null;
         for (const [lang, config] of Object.entries(this.apiAnalyzer.languageConfig)) {

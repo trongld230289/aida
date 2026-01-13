@@ -836,7 +836,8 @@ Keep the language simple and focus on USER IMPACT, not technical details.`;
         };
 
         // Get current selected model using getUnifiedModel (same as review-changes)
-        const model = await getUnifiedModel(mockStream, null, null, null);
+        // Pass global.aidaExtensionContext to respect AIDA Chatbot model selection
+        const model = await getUnifiedModel(mockStream, null, global.aidaExtensionContext, null);
 
         // Use executeAIReview which handles both Copilot and API key modes
         const success = await executeAIReview(prompt, model, mockStream, 'Impact Analysis', 0, null, null);

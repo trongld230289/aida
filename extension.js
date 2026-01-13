@@ -131,11 +131,14 @@ async function setupAzureDevOpsSettings() {
  */
 function activate(context) {
     // console.log('Reload 4');
-    console.log('🤖 AIDA v1.1.4 - AI Development Assistant');
+    console.log('🤖 AIDA v1.1.9 - AI Development Assistant');
     console.log('🚀 AIDA extension is now active!');
 
     // Store extension path globally
     global.extensionPath = context.extensionPath;
+
+    // Store extension context globally for review commands to access workspaceState
+    global.aidaExtensionContext = context;
 
     // Auto-activate dependency watcher if cache exists
     activateDependencyWatcherIfCacheExists(context);

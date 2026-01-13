@@ -5,6 +5,57 @@ All notable changes to the "AIDA - AI Development Assistant" extension will be d
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.34/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.9] - 2026-01-13
+
+### Fixed
+- **🐛 Dependency Analysis**: Fixed model selection not using AIDA Chatbot selected model
+- **🐛 Model Context**: Fixed `getUnifiedModel` receiving null context from dependency analysis
+
+### Changed
+- **♻️ Dependency Analysis**: Now passes `global.aidaExtensionContext` to respect user's model selection
+
+## [1.1.8] - 2026-01-13
+
+### Fixed
+- **🐛 Model Selection**: Fixed AIDA Chatbot model selection not being used by review commands
+- **🐛 Model Selection**: Review commands now respect user's model selection from AIDA Chatbot
+- **🐛 Model List Reload**: Fixed model list not reloading immediately when toggling "Use External AI"
+
+### Added
+- **🆕 Global Context**: Added `global.aidaExtensionContext` for review commands to access workspaceState
+- **🆕 Default Model**: First-time AIDA Chatbot users now default to Claude Opus 4.5
+- **🆕 Helper Function**: Added `getAidaChatbotSelectedModel()` for unified model retrieval
+
+### Changed
+- **♻️ Model Priority**: Simplified model selection priority - AIDA Chatbot selection takes precedence
+- **♻️ Code Cleanup**: Removed hardcoded model preference lists in favor of user selection
+
+## [1.1.7] - 2026-01-13
+
+### Fixed
+- **🐛 Dependency Analysis**: Fixed CSS Peek "Request textDocument/definition failed" error handling
+- **🐛 Dependency Analysis**: Excluded Migrations folder from C# scanning (auto-generated files)
+- **🔇 Logging**: Added comprehensive LSP error filtering for CSS Peek extension
+
+### Added
+- **🆕 C# Support**: Added full C# language configuration for dependency analysis
+- **🔗 C# Patterns**: Enhanced detection for MediatR, constructor injection, base classes, and property access
+- **📝 Documentation**: Updated LSP-ERROR-FIXES.md with CSS Peek error explanations
+
+## [1.1.6] - 2026-01-13
+
+### Fixed
+- **🐛 Dependency Analysis**: Fixed Angular/CSS LSP "Invalid Selector" error handling
+- **🔇 Logging**: Added filter for CSS peek errors and Angular decorator parsing issues
+- **📝 Documentation**: Updated LSP-ERROR-FIXES.md to cover C#, Angular, and Python LSP errors
+
+## [1.1.5] - 2026-01-13
+
+### Fixed
+- **🐛 Dependency Analysis**: Fixed C# LSP "Sequence contains no matching element" error handling
+- **🔇 Logging**: Silenced expected LSP errors for external library symbols
+- **📝 Error Messages**: Improved error filtering to only show relevant LSP issues
+
 ## [1.1.4] - 2026-01-13
 
 ### Changed

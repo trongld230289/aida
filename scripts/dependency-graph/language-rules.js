@@ -38,8 +38,8 @@ const languageConfig = {
             interface: /interface\s+([a-zA-Z_$][a-zA-Z0-9_$]*)/
         },
         standardLibraries: ['String', 'Number', 'Boolean', 'Object', 'Array', 'Function',
-                           'Promise', 'Date', 'RegExp', 'Error', 'Map', 'Set', 'WeakMap',
-                           'Component', 'Injectable', 'NgModule', 'Directive', 'Pipe'],
+            'Promise', 'Date', 'RegExp', 'Error', 'Map', 'Set', 'WeakMap',
+            'Component', 'Injectable', 'NgModule', 'Directive', 'Pipe'],
         excludePatterns: [
             '**/node_modules/**',
             '**/dist/**',
@@ -74,7 +74,7 @@ const languageConfig = {
             function: /def\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/,
         },
         standardLibraries: ['os', 'sys', 'json', 'urllib', 'datetime', 'collections',
-                           'itertools', 'functools', 'typing', 're', 'math', 'random'],
+            'itertools', 'functools', 'typing', 're', 'math', 'random'],
         excludePatterns: [
             '**/dist/**',
             '**/build/**',
@@ -107,9 +107,65 @@ const languageConfig = {
             blockEnd: /^\s*\}\s*$/
         },
         standardLibraries: ['String', 'Int32', 'Boolean', 'Object', 'Void', 'Task', 'IEnumerable',
-                           'List', 'Dictionary', 'HttpClient', 'JsonSerializer', 'DateTime',
-                           'Guid', 'Exception', 'StringBuilder', 'Console', 'Math'],
+            'List', 'Dictionary', 'HttpClient', 'JsonSerializer', 'DateTime',
+            'Guid', 'Exception', 'StringBuilder', 'Console', 'Math'],
         excludePatterns: [
+            ...languageIgnores.csharp
+        ]
+    },
+    csharp: {
+        extensions: ['.cs'],
+        // 🔥 NEW: Barrel/Entry file names
+        barrelFiles: [],
+        importPatterns: [
+            /using\s+([a-zA-Z_][a-zA-Z0-9_.]*);/g,
+            // 🔥 Generic patterns - work with ANY framework (MediatR, custom handlers, etc.)
+            // Method calls with parameters: someMethod(paramName) → extract paramName's type from context
+            /\.\w+\s*\(\s*([a-z][a-zA-Z0-9_]*)\s*[,)]/g,
+            // Generic type parameters: Method<TypeName>() or new Class<TypeName>()
+            /<\s*([A-Z][a-zA-Z0-9_]*)\s*>/g,
+            // Constructor injection - detect any injected interface/class
+            /public\s+\w+\s*\(\s*I?([A-Z][a-zA-Z0-9_]*)\s+/g,
+            // Variable declarations: var x = new ClassName() or ClassName x = ...
+            /new\s+([A-Z][a-zA-Z0-9_]*)\s*[(<]/g,
+            // Method parameters with type hints
+            /\[\s*From\w+\]\s*([A-Z][a-zA-Z0-9_]*)\s+/g,
+            // 🔥 Base class inheritance: class MyClass : BaseClass
+            /:\s*([A-Z][a-zA-Z0-9_]*)\s*(?:\{|,)/g,
+            // 🔥 Field/Property declarations: private IService _service; or protected IService Service { get; }
+            /(?:private|protected|public|internal)\s+I?([A-Z][a-zA-Z0-9_]*)\s+(?:_?[a-z][a-zA-Z0-9_]*)\s*[;{=]/g,
+            // 🔥 Property access patterns: this.Service, _service, Service (when followed by method call)
+            /(?:this\.|_)?([A-Z][a-zA-Z0-9_]*)\s*\.\s*\w+\s*\(/g
+        ],
+        // 🔥 NEW: Asset patterns
+        assetPatterns: [],
+        // 🔥 NEW: Ignore patterns
+        ignorePatterns: [
+            '**/*Test.cs',
+            '**/Test*.cs',
+            '**/*.Designer.cs',
+            '**/*.AssemblyInfo.cs',
+            '**/Migrations/**'
+        ],
+        classPattern: /\b([A-Z][a-zA-Z0-9]*)\b/g,
+        // 🔥 NEW: Regex patterns for symbol extraction from patches
+        symbolPatterns: {
+            class: /(?:class|interface|enum|struct)\s+([a-zA-Z_][a-zA-Z0-9_]*)/,
+            function: /(?:public|private|protected|internal)?\s*(?:static)?\s*(?:async)?\s*\w+\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/,
+            property: /(?:public|private|protected|internal)?\s*(?:static)?\s*\w+\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\{\s*get/,
+            blockEnd: /^\s*\}\s*$/
+        },
+        standardLibraries: ['System', 'Microsoft', 'String', 'Int32', 'Boolean', 'Object', 'List', 'Dictionary'],
+        excludePatterns: [
+            '**/bin/**',
+            '**/obj/**',
+            '**/packages/**',
+            '**/.vs/**',
+            '**/Debug/**',
+            '**/Release/**',
+            '**/Migrations/**',
+            '**/*.AssemblyInfo.cs',
+            '**/*.Designer.cs',
             ...languageIgnores.csharp
         ]
     },
@@ -139,7 +195,7 @@ const languageConfig = {
             blockEnd: /^\s*\}\s*$/
         },
         standardLibraries: ['String', 'Integer', 'Boolean', 'Object', 'List', 'Map', 'Set',
-                           'ArrayList', 'HashMap', 'Exception', 'System'],
+            'ArrayList', 'HashMap', 'Exception', 'System'],
         excludePatterns: [
             '**/target/**',
             '**/build/**',

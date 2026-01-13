@@ -29,9 +29,9 @@ const languageIgnores = {
         '**/.vs/**',
         '**/Debug/**',
         '**/Release/**',
+        '**/Migrations/**', // Exclude all migration files (auto-generated)
         '**/*.AssemblyInfo.cs',
-        '**/*.Designer.cs',
-        '**/Migrations/*.Designer.cs' // Specific for Migration Designer
+        '**/*.Designer.cs'
     ],
     typescript: [
         '**/*.spec.ts',

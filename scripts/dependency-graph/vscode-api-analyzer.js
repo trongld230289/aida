@@ -393,9 +393,21 @@ class VSCodeApiDependencyAnalyzer {
                 document.uri,
                 position
             ).catch(lspError => {
-                // C# Language Server can throw "Sequence contains no matching element"
-                // Silently ignore LSP errors and continue analysis
-                aidaLogging(`⚠️ LSP error for ${document.fileName}:${position.line} - ${lspError.message}`);
+                // LSP errors are expected for external dependencies - silently ignore common cases:
+                // - C# Language Server: "Sequence contains no matching element" (external library without PDB)
+                // - Python Language Server: "No module named" (unresolved imports)
+                // - Angular/CSS Language Server: "Invalid Selector" (CSS peek issues)
+                // - CSS Peek extension: "Request textDocument/definition failed" (definition lookup failed)
+                const errorMsg = lspError?.message || String(lspError);
+
+                // Only log if it's NOT a common/expected LSP error
+                if (!errorMsg.includes('Sequence contains no matching element') &&
+                    !errorMsg.includes('No module named') &&
+                    !errorMsg.includes('Invalid Selector') &&
+                    !errorMsg.includes('textDocument/definition failed')) {
+                    aidaLogging(`⚠️ LSP error for ${path.basename(document.fileName)}:${position.line} - ${errorMsg}`);
+                }
+
                 return null;
             });
 
