@@ -130,5 +130,5 @@ grep -r "1.0.27" . --include="*.json" --include="*.js" --include="*.md"
 - Historical version references in CHANGELOG.md should remain unchanged
 
 ---
-**Last Updated**: December 7, 2025  
-**Current Version**: 1.1.0
+**Last Updated**: January 14, 2026  
+**Current Version**: 1.1.11

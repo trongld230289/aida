@@ -2730,7 +2730,19 @@ function resolveAidaBasePath(workspaceFolder) {
         }
     }
 
-    // Priority 2: Extension templates (fallback)
+    // Priority 2: Workspace AIDA folder
+    if (workspaceFolder) {
+        const workspaceAidaPath = path.join(workspaceFolder.uri.fsPath, 'AIDA');
+        if (fs.existsSync(workspaceAidaPath)) {
+            aidaLogging(`✅ Found workspace AIDA folder: ${workspaceAidaPath}`);
+            return {
+                basePath: workspaceAidaPath,
+                source: 'workspace'
+            };
+        }
+    }
+
+    // Priority 3: Extension templates (fallback)
     aidaLogging(`✅ Using extension AIDA templates`);
     return {
         basePath: global.extensionPath,

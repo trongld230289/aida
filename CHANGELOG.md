@@ -5,6 +5,28 @@ All notable changes to the "AIDA - AI Development Assistant" extension will be d
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.34/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.11] - 2026-01-14
+
+### Fixed
+- **🐛 Business Documents**: Implemented workspace AIDA folder detection in resolveAidaBasePath function
+- **🐛 Review Options**: Fixed business documents not being found from workspace AIDA/business-docs/ folder
+- **🐛 Path Resolution**: Added Priority 2 check for workspace AIDA folder before extension fallback
+
+### Added
+- **🆕 Workspace Detection**: Added automatic detection of workspace AIDA folder structure
+- **🆕 Business Docs Support**: Enhanced review workflow now properly detects business documents
+
+## [1.1.10] - 2026-01-14
+
+### Fixed
+- **🐛 Business Documents**: Fixed workspace AIDA folder detection for business documents
+- **🐛 Review Options**: Fixed review options dialog not showing when business documents exist
+- **🐛 Path Resolution**: Added workspace AIDA folder priority in `resolveAidaBasePath()` function
+
+### Changed
+- **♻️ Path Priority**: Business documents now properly detected from workspace `AIDA/business-docs/` folder
+- **♻️ Review Flow**: Enhanced review options dialog now shows correctly when business documents are available
+
 ## [1.1.9] - 2026-01-13
 
 ### Fixed

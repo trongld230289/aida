@@ -24,3 +24,7 @@ AIDA sẽ giúp các bạn control dc code, chọn model AI tuỳ thích,
 Đã số các devloper đang sự dụng VS rất nhiều, AIDA tận dụng sự quen thuộc này với tiêu chí:
 VS is HOME. Tất cả quy trình của AIDA đều thực hiện trong VS ko cần phải đi đâu cả.
 
+
+Ở đây có bạn nào đang làm dự án mà ko có copilot hay cursor ko?
+
+Mình có thể scan code toàn dự án để tìm impact được không? Bằng cách nào? Chi phí ra sao?
