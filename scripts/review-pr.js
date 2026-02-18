@@ -1441,7 +1441,26 @@ async function makeAzureDevOpsRequest(url, token, method = 'GET', body = null) {
                         const parsed = JSON.parse(data);
                         resolve({ success: true, data: parsed });
                     } else {
-                        resolve({ success: false, error: `HTTP ${res.statusCode}: ${data}` });
+                        // Return concise error messages for common HTTP errors
+                        let errorMsg = `HTTP ${res.statusCode}`;
+                        if (res.statusCode === 401) {
+                            errorMsg = 'HTTP 401 Unauthorized - Personal Access Token (PAT) is expired or invalid. Please create a new PAT at Azure DevOps > User Settings > Personal Access Tokens.';
+                        } else if (res.statusCode === 403) {
+                            errorMsg = 'HTTP 403 Forbidden - Access denied. Check your PAT permissions (need Code > Read scope).';
+                        } else if (res.statusCode === 404) {
+                            errorMsg = 'HTTP 404 Not Found - PR, repository, or project not found. Check the URL.';
+                        } else {
+                            // Try to extract a short message, avoid dumping raw HTML
+                            try {
+                                const errorData = JSON.parse(data);
+                                errorMsg += `: ${errorData.message || errorData.typeKey || 'Unknown error'}`;
+                            } catch {
+                                // data is likely HTML - don't dump it
+                                const statusText = res.statusMessage || 'Error';
+                                errorMsg += `: ${statusText}`;
+                            }
+                        }
+                        resolve({ success: false, error: errorMsg });
                     }
                 } catch (parseError) {
                     resolve({ success: false, error: `JSON parse error: ${parseError.message}` });
@@ -1891,11 +1910,20 @@ async function makeGitHubRequest(url, token, method = 'GET', customHeaders = {})
                         }
                     } else {
                         let errorMsg = `HTTP ${res.statusCode}`;
-                        try {
-                            const errorData = JSON.parse(data);
-                            errorMsg += `: ${errorData.message || data}`;
-                        } catch {
-                            errorMsg += `: ${data}`;
+                        if (res.statusCode === 401) {
+                            errorMsg = 'HTTP 401 Unauthorized - Token is expired or invalid. Please create a new token.';
+                        } else if (res.statusCode === 403) {
+                            errorMsg = 'HTTP 403 Forbidden - Access denied. Check your token permissions.';
+                        } else if (res.statusCode === 404) {
+                            errorMsg = 'HTTP 404 Not Found - PR, repository, or resource not found. Check the URL.';
+                        } else {
+                            try {
+                                const errorData = JSON.parse(data);
+                                errorMsg += `: ${errorData.message || 'Unknown error'}`;
+                            } catch {
+                                const statusText = res.statusMessage || 'Error';
+                                errorMsg += `: ${statusText}`;
+                            }
                         }
                         resolve({ success: false, error: errorMsg });
                     }
@@ -2220,11 +2248,20 @@ async function makeGitLabRequest(url, token, method = 'GET', customHeaders = {})
                         }
                     } else {
                         let errorMsg = `HTTP ${res.statusCode}`;
-                        try {
-                            const errorData = JSON.parse(data);
-                            errorMsg += `: ${errorData.message || data}`;
-                        } catch {
-                            errorMsg += `: ${data}`;
+                        if (res.statusCode === 401) {
+                            errorMsg = 'HTTP 401 Unauthorized - Token is expired or invalid. Please create a new token.';
+                        } else if (res.statusCode === 403) {
+                            errorMsg = 'HTTP 403 Forbidden - Access denied. Check your token permissions.';
+                        } else if (res.statusCode === 404) {
+                            errorMsg = 'HTTP 404 Not Found - MR, project, or resource not found. Check the URL.';
+                        } else {
+                            try {
+                                const errorData = JSON.parse(data);
+                                errorMsg += `: ${errorData.message || errorData.error || 'Unknown error'}`;
+                            } catch {
+                                const statusText = res.statusMessage || 'Error';
+                                errorMsg += `: ${statusText}`;
+                            }
                         }
                         resolve({ success: false, error: errorMsg });
                     }
