@@ -6,6 +6,10 @@ const { getUnifiedModel, executeAIReview, shouldUseApiKey, processTemplateConten
 const { detectFromPRFiles, getReviewTemplateWithDetection, displayDetectionInfo } = require('./language-detection');
 const { aidaLogging } = require('./settings');
 
+// Usage Tracking
+const { trackEvent } = require('./usage-tracking');
+const { TrackingEvent, AiProvider } = require('./tracking-enums');
+
 /**
  * Parse PR URL and extract repository information
  * @param {string} userMessage - The user input containing PR URL
@@ -596,6 +600,12 @@ async function processReviewPr(userMessage, stream) {
     const parsedInfo = parsePRUrlInfo(userMessage);
     const { prId, repoType, organization, project, repository, owner, repo, originalUrl } = parsedInfo;
 
+    // Track PR review usage
+    trackEvent(TrackingEvent.REVIEW_PR, {
+        repoType: repoType || 'unknown',
+        aiProvider: AiProvider.AIDA_CHATBOT
+    });
+
     // Check for global selectedBusinessDocs (unified pattern with other review modules)
     if (global.selectedBusinessDocs) {
         aidaLogging('🎯 Enhanced/Quick PR Review detected:', global.selectedBusinessDocs);
@@ -696,6 +706,14 @@ async function handleReviewPr(request, context, stream, token) {
         // Parse PR URL using centralized function
         const parsedInfo = parsePRUrlInfo(userMessage);
         ({ prId, repoType, organization, project, repository, owner, repo, originalUrl } = parsedInfo);
+
+        // Track PR review usage (GitHub Copilot participant)
+        if (prId) {
+            trackEvent(TrackingEvent.REVIEW_PR, {
+                repoType: repoType || 'unknown',
+                aiProvider: AiProvider.GITHUB_COPILOT
+            });
+        }
 
         // Check for quick-analyze command
         if (userMessage.toLowerCase().includes('quick-analyze')) {

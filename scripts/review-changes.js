@@ -5,6 +5,8 @@ const { execSync } = require('child_process');
 const { executeAIReview, getUnifiedModel, getChecklistStatusIcon, shouldUseApiKey, displayReviewHeader, loadTemplateWithPriority, displayCommonReviewInfo, getBusinessDocumentFolders, showReviewOptions } = require('./review-common');
 const { autoDetectWorkspace, getReviewTemplateWithDetection, displayDetectionInfo } = require('./language-detection');
 const { aidaLogging } = require('./settings');
+const { trackEvent } = require('./usage-tracking');
+const { TrackingEvent, AiProvider, TrackingSource } = require('./tracking-enums');
 
 // Import chatSessions from extension.js for session tracking
 let chatSessions;
@@ -41,6 +43,12 @@ function initializeReviewChanges(context) {
             if (ensureAidaTemplatesForReview) {
                 await ensureAidaTemplatesForReview(context);
             }
+
+            // Track usage - Copilot chat participant
+            trackEvent(TrackingEvent.REVIEW_CHANGES, {
+                source: TrackingSource.CHAT_PARTICIPANT,
+                aiProvider: AiProvider.GITHUB_COPILOT
+            });
             
             const activeEditor = vscode.window.activeTextEditor;
             const input = request.prompt.trim();

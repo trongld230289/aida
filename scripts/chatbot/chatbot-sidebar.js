@@ -5,6 +5,8 @@ const { ChatbotContextEngine } = require('./chatbot-algorithm.js');
 const TemplateLoader = require('./template-loader');
 const { setGlobalAbortSignal } = require('../review-common');
 const { aidaLogging } = require('../settings');
+const { trackEvent } = require('../usage-tracking');
+const { TrackingEvent, AiProvider, TrackingSource } = require('../tracking-enums');
 
 /**
  * GitHub Copilot-Style Sidebar Chat (True Right Sidebar like Copilot)
@@ -389,7 +391,7 @@ class CopilotSidebarChat {
 
             // Get current file context first (for context engine analysis)
             const participantType = this.determineParticipant(userMessage);
-            const isReviewCommand = ['review-file', 'review-changes', 'review-all-changes', 'review-pr', 'sync-review-templates', 'scan-app', 'dependency'].includes(participantType);
+            const isReviewCommand = ['review-file', 'review-changes', 'review-all-changes', 'review-pr', 'sync-review-templates', 'scan-app', 'dependency', 'dependency-pr'].includes(participantType);
 
             if (!isReviewCommand) {
                 currentFileContext = await this.getCurrentFileContext();
@@ -725,7 +727,7 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
             };
 
             // Determine if streaming should be used
-            const isReviewMode = ['review-file', 'review-changes', 'review-all-changes', 'review-pr', 'scan-app', 'sync-review-templates', 'dependency'].includes(participant);
+            const isReviewMode = ['review-file', 'review-changes', 'review-all-changes', 'review-pr', 'scan-app', 'sync-review-templates', 'dependency', 'dependency-pr'].includes(participant);
             const shouldStream = participant === 'general' || isReviewMode;
 
             let response;
@@ -794,6 +796,7 @@ Please share your code and I'll provide a comprehensive ${userMessage.toLowerCas
         if (lowerMessage.includes('@review-pr')) return 'review-pr';
         if (lowerMessage.includes('@sync-review-templates')) return 'sync-review-templates';
         if (lowerMessage.includes('@scan-app')) return 'scan-app';
+        if (lowerMessage.includes('@dependency-pr')) return 'dependency-pr';
         if (lowerMessage.includes('@dependency')) return 'dependency';
 
         return 'general';
@@ -2713,6 +2716,12 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
                     try {
                         aidaLogging('📁 AIDA Chat: Calling review-file with streaming');
 
+                        // Track usage - AIDA Chatbot
+                        trackEvent(TrackingEvent.REVIEW_FILE, {
+                            source: TrackingSource.AIDA_CHATBOT,
+                            aiProvider: AiProvider.AIDA_CHATBOT
+                        });
+
                         // Ensure AIDA templates exist before review (like Copilot does)
                         await this.ensureAidaTemplatesExist();
 
@@ -2728,6 +2737,12 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
                     try {
                         aidaLogging('📝 AIDA Chat: Calling review-changes with streaming');
 
+                        // Track usage - AIDA Chatbot
+                        trackEvent(TrackingEvent.REVIEW_CHANGES, {
+                            source: TrackingSource.AIDA_CHATBOT,
+                            aiProvider: AiProvider.AIDA_CHATBOT
+                        });
+
                         // Ensure AIDA templates exist before review (like Copilot does)
                         await this.ensureAidaTemplatesExist();
 
@@ -2742,6 +2757,12 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
                 case 'review-all-changes':
                     try {
                         aidaLogging('🔍 AIDA Chat: Calling review-all-changes with streaming');
+
+                        // Track usage - AIDA Chatbot
+                        trackEvent(TrackingEvent.REVIEW_ALL_CHANGES, {
+                            source: TrackingSource.AIDA_CHATBOT,
+                            aiProvider: AiProvider.AIDA_CHATBOT
+                        });
 
                         // Ensure AIDA templates exist before review (like Copilot does)
                         await this.ensureAidaTemplatesExist();
@@ -2772,6 +2793,13 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
                 case 'sync-review-templates':
                     try {
                         aidaLogging('🔄 AIDA Chat: Calling sync-review-templates with reusable logic');
+
+                        // Track usage - AIDA Chatbot
+                        trackEvent(TrackingEvent.SYNC_REVIEW_TEMPLATES, {
+                            source: TrackingSource.AIDA_CHATBOT,
+                            aiProvider: AiProvider.AIDA_CHATBOT
+                        });
+
                         const syncModule = require('../sync-review-templates.js');
                         await syncModule.aiSyncReviewTemplates(messageWithoutParticipant, mockStream, null, this.context);
                         return result || '✅ **Template Sync Complete**\n\nTemplate synchronization completed.';
@@ -2791,9 +2819,28 @@ Please provide the COMPLETE refactored code, not just suggestions.`;
                         return '❌ **Error**: ' + error.message + '\n\nPlease check the console for details.';
                     }
 
+                case 'dependency-pr':
+                    try {
+                        aidaLogging('🔍 AIDA Chat: Calling dependency-pr analysis');
+
+                        const dependencyPrModule = require('../dependency.js');
+                        await dependencyPrModule.aiDependencyPrAnalysis(messageWithoutParticipant, mockStream, null, this.context);
+                        return result || '✅ **Dependency PR Analysis Complete**\n\nPR dependency analysis completed.';
+                    } catch (error) {
+                        aidaLogging('❌ AIDA Chat dependency-pr error:', error);
+                        return '❌ **Error**: ' + error.message + '\n\nPlease check the console for details.';
+                    }
+
                 case 'scan-app':
                     try {
                         aidaLogging('🔍 AIDA Chat: Calling scan-app with reusable logic');
+
+                        // Track usage - AIDA Chatbot
+                        trackEvent(TrackingEvent.SCAN_APP, {
+                            source: TrackingSource.AIDA_CHATBOT,
+                            aiProvider: AiProvider.AIDA_CHATBOT
+                        });
+
                         const scanModule = require('../scan-app.js');
                         await scanModule.handleScanApp(messageWithoutParticipant, mockStream, null, this.context);
                         return result || '✅ **Scan Complete**\n\nCode scanning and duplicate detection completed.';

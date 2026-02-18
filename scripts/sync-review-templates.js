@@ -2,6 +2,8 @@ const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
 const { aidaLogging } = require('./settings');
+const { trackEvent } = require('./usage-tracking');
+const { TrackingEvent, AiProvider, TrackingSource } = require('./tracking-enums');
 
 // Import sync function from extension.js
 let handleSyncTemplates;
@@ -23,6 +25,12 @@ function initializeSyncTemplates(context) {
     // Create sync-review-templates chat participant
     const syncTemplatesParticipant = vscode.chat.createChatParticipant('sync-review-templates', async (request, chatContext, stream, token) => {
         aidaLogging('🔄 @sync-review-templates triggered');
+
+        // Track usage - Copilot chat participant
+        trackEvent(TrackingEvent.SYNC_REVIEW_TEMPLATES, {
+            source: TrackingSource.CHAT_PARTICIPANT,
+            aiProvider: AiProvider.GITHUB_COPILOT
+        });
         
         try {
             stream.markdown('# 🔄 AIDA Template Sync\n\n');

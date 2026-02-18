@@ -3,6 +3,8 @@ const fs = require('fs');
 const path = require('path');
 const { showTokenStatistics, estimateTokenCount, callAI, normalizeApiParameters, detectProvider, mapProviderResponse } = require('./review-common');
 const { aidaLogging } = require('./settings');
+const { trackEvent } = require('./usage-tracking');
+const { TrackingEvent, AiProvider, TrackingSource } = require('./tracking-enums');
 
 // Add fetch polyfill for older Node.js versions
 if (!global.fetch) {
@@ -54,6 +56,12 @@ function initializeScanApp(context) {
     
     try {
         const scanAppParticipant = vscode.chat.createChatParticipant('scan-app', async (request, context, stream, token) => {
+            // Track usage - Copilot chat participant
+            trackEvent(TrackingEvent.SCAN_APP, {
+                source: TrackingSource.CHAT_PARTICIPANT,
+                aiProvider: AiProvider.GITHUB_COPILOT
+            });
+
             await handleScanApp(request.prompt, stream, token, context);
         });
         

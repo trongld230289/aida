@@ -4,6 +4,8 @@ const path = require('path');
 const { executeAIReview, getUnifiedModel, shouldUseApiKey, displayReviewHeader, loadTemplateWithPriority, displayCommonReviewInfo, showReviewOptions } = require('./review-common');
 const { autoDetectWorkspace, displayDetectionInfo, getLanguageFromExtension } = require('./language-detection');
 const { aidaLogging } = require('./settings');
+const { trackEvent } = require('./usage-tracking');
+const { TrackingEvent, AiProvider, TrackingSource } = require('./tracking-enums');
 
 // Import functions from extension.js
 let handleEnterTwiceLogic;
@@ -25,6 +27,12 @@ function initializeReviewFile(context) {
     // Create chat participant for review-file
     const reviewFileParticipant = vscode.chat.createChatParticipant('review-file', async (request, chatContext, stream, token) => {
         try {
+            // Track usage - Copilot chat participant
+            trackEvent(TrackingEvent.REVIEW_FILE, {
+                source: TrackingSource.CHAT_PARTICIPANT,
+                aiProvider: AiProvider.GITHUB_COPILOT
+            });
+
             // Ensure AIDA templates exist for review commands (create if not exists)
             if (ensureAidaTemplatesForReview) {
                 await ensureAidaTemplatesForReview(context);

@@ -17,6 +17,10 @@ const {
 
 const { analyzeFileDependency, activateDependencyWatcherIfCacheExists } = require('./scripts/dependency');
 
+// Usage Tracking for Company Version
+const { trackEvent, isTrackingConfigured } = require('./scripts/usage-tracking');
+const { TrackingEvent, AiProvider, TrackingSource } = require('./scripts/tracking-enums');
+
 
 // Session tracking for "Enter twice" functionality and change scores
 const chatSessions = new Map();
@@ -131,8 +135,14 @@ async function setupAzureDevOpsSettings() {
  */
 function activate(context) {
     // console.log('Reload 4');
-    console.log('🤖 AIDA v1.1.9 - AI Development Assistant');
+    console.log('🤖 AIDA v1.1.11 - AI Development Assistant');
     console.log('🚀 AIDA extension is now active!');
+
+    // Track extension activation
+    trackEvent(TrackingEvent.EXTENSION_ACTIVATED, {
+        isNewInstall: vscode.env.isNewAppInstall,
+        remoteName: vscode.env.remoteName || 'local'
+    });
 
     // Store extension path globally
     global.extensionPath = context.extensionPath;
@@ -172,6 +182,11 @@ function activate(context) {
 
     // Register command to open AIDA sidebar chat directly
     let openAidaChat = vscode.commands.registerCommand('aida.openChat', async () => {
+        // Track usage - this is AIDA chatbot
+        trackEvent(TrackingEvent.OPEN_CHAT, {
+            aiProvider: AiProvider.AIDA_CHATBOT
+        });
+
         if (copilotSidebarChat) {
             copilotSidebarChat.show();
         } else {
@@ -272,11 +287,21 @@ function activate(context) {
     // Register commands matching package.json (for right-click menu)
     let reviewFileCommand = vscode.commands.registerCommand('aida.reviewFile', async (uri) => {
         console.log('🎯 Review File command called', uri);
+        
+        // Check AI provider
+        const config = vscode.workspace.getConfiguration('aida');
+        const useAIDAChatbot = config.get('useAIDAChatbot', false);
+        const aiProvider = useAIDAChatbot ? AiProvider.AIDA_CHATBOT : AiProvider.GITHUB_COPILOT;
+        
+        // Track usage with AI provider info
+        trackEvent(TrackingEvent.REVIEW_FILE, {
+            fileType: uri?.fsPath ? path.extname(uri.fsPath) : 'unknown',
+            source: TrackingSource.CONTEXT_MENU,
+            aiProvider: aiProvider
+        });
+
         try {
             // Check if AIDA chat should be used
-            const config = vscode.workspace.getConfiguration('aida');
-            const useAIDAChatbot = config.get('useAIDAChatbot', false);
-
             console.log('🔍 useAIDAChatbot flag:', useAIDAChatbot);
             console.log('🔍 GitHub Copilot extension active:', vscode.extensions.getExtension('GitHub.copilot')?.isActive);
 
@@ -311,6 +336,12 @@ function activate(context) {
 
     let analyzeFileDependencyCommand = vscode.commands.registerCommand('aida.analyzeDependency', async (uri) => {
         console.log('🎯 Analyze File Dependency command called', uri);
+        
+        // Track usage
+        trackEvent(TrackingEvent.ANALYZE_DEPENDENCY, {
+            fileType: uri?.fsPath ? path.extname(uri.fsPath) : 'unknown'
+        });
+
         try {
             // If uri is undefined (called from command palette), try to get active editor
             if (!uri && vscode.window.activeTextEditor) {
@@ -331,11 +362,21 @@ function activate(context) {
 
     let reviewChangesCommand = vscode.commands.registerCommand('aida.reviewChanges', async (uri) => {
         console.log('🎯 Review Changes command called', uri);
+        
+        // Check AI provider
+        const config = vscode.workspace.getConfiguration('aida');
+        const useAIDAChatbot = config.get('useAIDAChatbot', false);
+        const aiProvider = useAIDAChatbot ? AiProvider.AIDA_CHATBOT : AiProvider.GITHUB_COPILOT;
+        
+        // Track usage with AI provider info
+        trackEvent(TrackingEvent.REVIEW_CHANGES, {
+            fileType: uri?.fsPath ? path.extname(uri.fsPath) : 'unknown',
+            source: TrackingSource.CONTEXT_MENU,
+            aiProvider: aiProvider
+        });
+
         try {
             // Check if AIDA chat should be used
-            const config = vscode.workspace.getConfiguration('aida');
-            const useAIDAChatbot = config.get('useAIDAChatbot', false);
-
             console.log('🔍 useAIDAChatbot flag:', useAIDAChatbot);
             console.log('🔍 GitHub Copilot extension active:', vscode.extensions.getExtension('GitHub.copilot')?.isActive);
 
@@ -370,11 +411,19 @@ function activate(context) {
 
     let reviewAllChangesCommand = vscode.commands.registerCommand('aida.reviewAllChanges', async (uri) => {
         console.log('🎯 Review All Changes command called', uri);
+        
+        // Check AI provider
+        const config = vscode.workspace.getConfiguration('aida');
+        const useAIDAChatbot = config.get('useAIDAChatbot', false);
+        const aiProvider = useAIDAChatbot ? AiProvider.AIDA_CHATBOT : AiProvider.GITHUB_COPILOT;
+        
+        // Track usage with AI provider info
+        trackEvent(TrackingEvent.REVIEW_ALL_CHANGES, {
+            aiProvider: aiProvider
+        });
+
         try {
             // Check if AIDA chat should be used
-            const config = vscode.workspace.getConfiguration('aida');
-            const useAIDAChatbot = config.get('useAIDAChatbot', false);
-
             if (useAIDAChatbot) {
                 // Use AIDA Copilot-style chat
                 await vscode.commands.executeCommand('aida.reviewAllChangesContext', uri);
@@ -478,7 +527,7 @@ function activate(context) {
     console.log('🔍 useAIDAChatbot flag:', useAIDAChatbot);
     console.log('🔍 GitHub Copilot active:', vscode.extensions.getExtension('GitHub.copilot')?.isActive);
 
-    let reviewChangesParticipant, reviewFileParticipant, reviewAllChangesParticipant, dependencyParticipant;
+    let reviewChangesParticipant, reviewFileParticipant, reviewAllChangesParticipant, dependencyParticipant, dependencyPrParticipant;
 
     if (shouldRegisterParticipants) {
         // Always initialize review modules for both AIDA and GitHub Copilot compatibility
@@ -496,6 +545,7 @@ function activate(context) {
             const dependency = require('./scripts/dependency');
             const dependencyResult = dependency.initializeDependencyGraph(context);
             dependencyParticipant = dependencyResult.dependencyParticipant;
+            dependencyPrParticipant = dependencyResult.dependencyPrParticipant;
 
             // Register cache commands if available
             if (dependencyResult && typeof dependencyResult.registerCacheCommands === 'function') {
@@ -506,6 +556,7 @@ function activate(context) {
             }
 
             console.log('✅ Dependency graph analysis participant registered');
+            console.log('✅ Dependency PR analysis participant registered');
         } catch (error) {
             console.error('❌ Failed to initialize dependency graph analysis:', error.message);
             console.log('⚠️ Continuing without dependency analysis...');

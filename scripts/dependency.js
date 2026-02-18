@@ -5,6 +5,10 @@ const fs = require('fs');
 // Import settings
 const { isProd, aidaLogging } = require('./settings');
 
+// Usage Tracking
+const { trackEvent } = require('./usage-tracking');
+const { TrackingEvent, AiProvider, TrackingSource } = require('./tracking-enums');
+
 // Import VS Code API analyzer - required
 const { VSCodeApiDependencyAnalyzer } = require('./dependency-graph/vscode-api-analyzer');
 const { SymbolAnalyzer } = require('./dependency-graph/symbol-analyzer');
@@ -123,11 +127,11 @@ function initializeDependencyGraph(context) {
 
             const userMessage = request.prompt.trim();
 
-            // ✅ NEW: Check if message contains PR URL
-            if (isPRUrl(userMessage)) {
-                await handlePRDependencyAnalysis(userMessage, stream, token, workspaceRoot);
-                return;
-            }
+            // Track dependency analysis (workspace)
+            trackEvent(TrackingEvent.ANALYZE_DEPENDENCY, {
+                aiProvider: AiProvider.GITHUB_COPILOT,
+                source: TrackingSource.CHAT_PARTICIPANT
+            });
 
             // Check if user explicitly requested re-analysis
             const isReAnalyzeRequest = userMessage.toLowerCase().includes('re-analyze') || userMessage.toLowerCase().includes('reanalyze');
@@ -191,8 +195,53 @@ function initializeDependencyGraph(context) {
     // Remove followup provider that might be causing help responses
     // dependencyParticipant.followupProvider = null;
 
+    // Create chat participant for dependency-pr analysis (similar to @review-pr)
+    const dependencyPrParticipant = vscode.chat.createChatParticipant('dependency-pr', async (request, chatContext, stream, token) => {
+        try {
+            const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath;
+            if (!workspaceRoot) {
+                stream.markdown('❌ **Error**: No workspace folder found. Please open a project folder.');
+                return;
+            }
+
+            // Set cache file path
+            cacheFilePath = path.join(workspaceRoot, '.vscode', 'dependency-cache.json');
+
+            const userMessage = request.prompt.trim();
+
+            // Track dependency PR analysis
+            trackEvent(TrackingEvent.ANALYZE_DEPENDENCY_PR, {
+                source: TrackingSource.CHAT_PARTICIPANT,
+                aiProvider: AiProvider.GITHUB_COPILOT
+            });
+
+            if (!userMessage || !isPRUrl(userMessage)) {
+                stream.markdown('## 🔍 Dependency PR Analysis\n\n');
+                stream.markdown('Please provide a Pull Request URL to analyze.\n\n');
+                stream.markdown('**Usage:** `@dependency-pr <pr-url>`\n\n');
+                stream.markdown('**Examples:**\n');
+                stream.markdown('- `@dependency-pr https://dev.azure.com/org/project/_git/repo/pullrequest/123`\n');
+                stream.markdown('- `@dependency-pr https://github.com/user/repo/pull/456`\n');
+                stream.markdown('- `@dependency-pr https://gitlab.com/group/repo/-/merge_requests/78`\n');
+                return;
+            }
+
+            await handlePRDependencyAnalysis(userMessage, stream, token, workspaceRoot);
+
+        } catch (error) {
+            aidaLogging('❌ Dependency PR analysis error:', error);
+            stream.markdown(`❌ **Analysis Error**\n\n**Error:** ${error.message}\n\n`);
+        }
+    });
+
+    // Set participant metadata
+    dependencyPrParticipant.iconPath = vscode.Uri.file(
+        path.join(context.extensionPath, 'icons', 'dependency-icon.svg')
+    );
+
     return {
         dependencyParticipant,
+        dependencyPrParticipant,
         registerCacheCommands
     };
 }
@@ -219,11 +268,11 @@ async function aiDependencyAnalysis(message, stream, token, context) {
 
         const userMessage = message.trim();
 
-        // ✅ NEW: Check if message contains PR URL (Support for AIDA Chatbot)
-        if (isPRUrl(userMessage)) {
-            await handlePRDependencyAnalysis(userMessage, stream, token, workspaceRoot);
-            return;
-        }
+        // Track dependency analysis (workspace) from AIDA Chatbot
+        trackEvent(TrackingEvent.ANALYZE_DEPENDENCY, {
+            aiProvider: AiProvider.AIDA_CHATBOT,
+            source: TrackingSource.AIDA_CHATBOT
+        });
 
         // Check if user explicitly requested re-analysis
         const lowerMessage = userMessage.toLowerCase();
@@ -678,6 +727,13 @@ async function buildSelectedNodeObject(nodeId, graph, panel) {
  * Analyze impact with AI using selected node data or PR context
  */
 async function analyzeImpactWithAI(data, originalPanel) {
+    // Track AI analysis button click
+    const eventName = data.isPRAnalysis ? TrackingEvent.ANALYZE_DEPENDENCY_AI_PR : TrackingEvent.ANALYZE_DEPENDENCY_AI_NODE;
+    trackEvent(eventName, {
+        aiProvider: AiProvider.GITHUB_COPILOT,
+        source: TrackingSource.WEBVIEW_BUTTON
+    });
+
     // Create NEW panel aside
     const analysisPanel = vscode.window.createWebviewPanel(
         'aiImpactAnalysis',
@@ -1785,9 +1841,55 @@ function generateFileGraphWebviewHtml(graph, fileName) {
 }
 
 
+/**
+ * AI Dependency PR Analysis function for AIDA Chatbot
+ * @param {string} message - PR URL message
+ * @param {object} stream - Stream object for responses
+ * @param {object} token - Cancellation token
+ * @param {vscode.ExtensionContext} context - Extension context
+ */
+async function aiDependencyPrAnalysis(message, stream, token, context) {
+    try {
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath;
+        if (!workspaceRoot) {
+            stream.markdown('❌ **Error:** No workspace folder found. Please open a project folder.\n\n');
+            return;
+        }
+
+        // Set cache file path
+        cacheFilePath = path.join(workspaceRoot, '.vscode', 'dependency-cache.json');
+
+        const userMessage = message.trim();
+
+        // Track dependency PR analysis from AIDA Chatbot
+        trackEvent(TrackingEvent.ANALYZE_DEPENDENCY_PR, {
+            source: TrackingSource.AIDA_CHATBOT,
+            aiProvider: AiProvider.AIDA_CHATBOT
+        });
+
+        if (!userMessage || !isPRUrl(userMessage)) {
+            stream.markdown('## 🔍 Dependency PR Analysis\n\n');
+            stream.markdown('Please provide a Pull Request URL to analyze.\n\n');
+            stream.markdown('**Usage:** `@dependency-pr <pr-url>`\n\n');
+            stream.markdown('**Examples:**\n');
+            stream.markdown('- `@dependency-pr https://dev.azure.com/org/project/_git/repo/pullrequest/123`\n');
+            stream.markdown('- `@dependency-pr https://github.com/user/repo/pull/456`\n');
+            stream.markdown('- `@dependency-pr https://gitlab.com/group/repo/-/merge_requests/78`\n');
+            return;
+        }
+
+        await handlePRDependencyAnalysis(userMessage, stream, token, workspaceRoot);
+
+    } catch (error) {
+        aidaLogging('❌ aiDependencyPrAnalysis error:', error);
+        stream.markdown(`❌ **Error:** ${error.message}\n\n`);
+    }
+}
+
 module.exports = {
     initializeDependencyGraph,
     aiDependencyAnalysis,
+    aiDependencyPrAnalysis,
     analyzeFileDependency,
     activateDependencyWatcherIfCacheExists
 };

@@ -366,18 +366,26 @@
       {
         "id": "dependency",
         "name": "dependency",
-        "description": "📊 Analyze dependencies & PR impact with visual graph",
+        "description": "📊 Analyze workspace dependencies with visual graph",
+        "isSticky": true
+      },
+      {
+        "id": "dependency-pr",
+        "name": "dependency-pr",
+        "description": "🔍 Analyze PR impact on dependencies by URL",
         "isSticky": true
       }
     ]
   },
   "scripts": {
-    "vscode:prepublish": "webpack --mode production",
+    "vscode:prepublish": "webpack --env edition=public --mode production",
     "test": "echo 'Extension test placeholder'",
-    "build": "webpack --mode production",
-    "build:dev": "webpack --mode development",
-    "webpack": "webpack --mode development --watch",
-    "package": "vsce package"
+    "build": "webpack --env edition=public --mode production",
+    "build:company": "webpack --env edition=company --mode production",
+    "build:dev": "webpack --env edition=company --mode development",
+    "webpack": "webpack --env edition=company --mode development --watch",
+    "package": "vsce package",
+    "package:company": "webpack --env edition=company --mode production && vsce package"
   },
   "dependencies": {
     "@vscode/vscode-languagedetection": "^1.0.22",

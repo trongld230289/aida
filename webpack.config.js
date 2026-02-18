@@ -1,58 +1,65 @@
 const path = require('path');
+const webpack = require('webpack');
 const CopyPlugin = require('copy-webpack-plugin');
+const { getDefinePluginConfig } = require('./edition.config');
 
-/**@type {import('webpack').Configuration}*/
-const config = {
-  target: 'node', // VS Code extensions run in a Node.js-context
-  mode: 'none', // this leaves the source code as close as possible to the original (when packaging we set this to 'production')
+/**
+ * Webpack config as function to receive --env flag.
+ * Usage:
+ *   webpack --env edition=public   → Public edition (no tracking)
+ *   webpack --env edition=company  → Company edition (tracking enabled)
+ *   webpack                        → Defaults to company edition
+ */
+module.exports = (env = {}) => {
+  const edition = env.edition || 'company';
+  console.log(`\n🏷️  Building AIDA extension — Edition: ${edition.toUpperCase()}\n`);
 
-  entry: './extension.js', // the entry point of this extension, 📖 -> https://webpack.js.org/configuration/entry-context/
-  output: {
-    // the bundle is stored in the 'dist' folder (check package.json), 📖 -> https://webpack.js.org/configuration/output/
-    path: path.resolve(__dirname, 'dist'),
-    filename: 'extension.js',
-    libraryTarget: 'commonjs2'
-  },
-  externals: {
-    vscode: 'commonjs vscode', // the vscode-module is created on-the-fly and must be excluded. Add other modules that cannot be webpack'ed, 📖 -> https://webpack.js.org/configuration/externals/
-    'webworker-threads': 'commonjs webworker-threads', // exclude webworker-threads
-    'worker_threads': 'commonjs worker_threads' // exclude worker_threads
-  },
-  resolve: {
-    // support reading TypeScript and JavaScript files, 📖 -> https://github.com/TypeStrong/ts-loader
-    extensions: ['.ts', '.js']
-  },
-  plugins: [
-    new CopyPlugin({
-      patterns: [
-        {
-          from: 'scripts/chatbot/templates/**/*',
-          to: 'scripts/chatbot/templates/[name][ext]',
-          noErrorOnMissing: true
-        }
-      ],
-    }),
-  ],
-  module: {
-    rules: [
-      {
-        test: /\.ts$/,
-        exclude: /node_modules/,
-        use: [
+  return {
+    target: 'node',
+    mode: 'none',
+
+    entry: './extension.js',
+    output: {
+      path: path.resolve(__dirname, 'dist'),
+      filename: 'extension.js',
+      libraryTarget: 'commonjs2'
+    },
+    externals: {
+      vscode: 'commonjs vscode',
+      'webworker-threads': 'commonjs webworker-threads',
+      'worker_threads': 'commonjs worker_threads'
+    },
+    resolve: {
+      extensions: ['.ts', '.js']
+    },
+    plugins: [
+      new webpack.DefinePlugin(getDefinePluginConfig(edition)),
+      new CopyPlugin({
+        patterns: [
           {
-            loader: 'ts-loader'
+            from: 'scripts/chatbot/templates/**/*',
+            to: 'scripts/chatbot/templates/[name][ext]',
+            noErrorOnMissing: true
           }
-        ]
-      },
-      {
-        test: /\.html$/,
-        type: 'asset/resource'
-      }
-    ]
-  },
-  devtool: 'nosources-source-map',
-  infrastructureLogging: {
-    level: "log", // enables logging required for problem matchers
-  },
+        ],
+      }),
+    ],
+    module: {
+      rules: [
+        {
+          test: /\.ts$/,
+          exclude: /node_modules/,
+          use: [{ loader: 'ts-loader' }]
+        },
+        {
+          test: /\.html$/,
+          type: 'asset/resource'
+        }
+      ]
+    },
+    devtool: 'nosources-source-map',
+    infrastructureLogging: {
+      level: 'log',
+    },
+  };
 };
-module.exports = config;

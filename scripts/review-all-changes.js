@@ -5,6 +5,8 @@ const { execSync } = require('child_process');
 const { executeAIReview, getUnifiedModel, getChecklistStatusIcon, shouldUseApiKey, displayReviewHeader, loadTemplateWithPriority, displayCommonReviewInfo, showReviewOptions } = require('./review-common');
 const { autoDetectWorkspace, getReviewTemplateWithDetection, displayDetectionInfo } = require('./language-detection');
 const { aidaLogging } = require('./settings');
+const { trackEvent } = require('./usage-tracking');
+const { TrackingEvent, AiProvider, TrackingSource } = require('./tracking-enums');
 
 // Import functions from extension.js
 let handleEnterTwiceLogic;
@@ -30,6 +32,12 @@ function initializeReviewAllChanges(context) {
             if (ensureAidaTemplatesForReview) {
                 await ensureAidaTemplatesForReview(context);
             }
+
+            // Track usage - Copilot chat participant
+            trackEvent(TrackingEvent.REVIEW_ALL_CHANGES, {
+                source: TrackingSource.CHAT_PARTICIPANT,
+                aiProvider: AiProvider.GITHUB_COPILOT
+            });
             
             aidaLogging('🎯 review-all-changes participant called');
             aidaLogging('📥 Request object:', request);
