@@ -2,9 +2,9 @@ const vscode = require('vscode');
 const path = require('path');
 const fs = require('fs');
 
-const { VSCodeApiDependencyAnalyzer } = require('../dependency-graph/vscode-api-analyzer');
-const { SymbolAnalyzer } = require('../dependency-graph/symbol-analyzer');
-const { BarrelResolver } = require('../dependency-graph/barrel-resolver');
+const { VSCodeApiDependencyAnalyzer } = require('./graph/vscode-api-analyzer');
+const { SymbolAnalyzer } = require('./graph/symbol-analyzer');
+const { BarrelResolver } = require('./graph/barrel-resolver');
 const { DependencyGraphService } = require('./dependency-graph-service');
 const { aidaLogging } = require('../core/settings');
 

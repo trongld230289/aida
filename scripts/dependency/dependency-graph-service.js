@@ -1,7 +1,7 @@
 const vscode = require('vscode');
 const path = require('path');
 const fs = require('fs');
-const { VSCodeApiDependencyAnalyzer } = require('../dependency-graph/vscode-api-analyzer');
+const { VSCodeApiDependencyAnalyzer } = require('./graph/vscode-api-analyzer');
 const { aidaLogging } = require('../core/settings');
 
 const CACHE_VERSION = '1.1';

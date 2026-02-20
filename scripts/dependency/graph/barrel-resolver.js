@@ -1,7 +1,7 @@
 const vscode = require('vscode');
 const path = require('path');
 const fs = require('fs');
-const { aidaLogging } = require('../core/settings');
+const { aidaLogging } = require('../../core/settings');
 
 /**
  * BarrelResolver - Module xử lý barrel files (index.ts re-exports)

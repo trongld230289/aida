@@ -1,8 +1,8 @@
 const vscode = require('vscode');
 const path = require('path');
 const { DependencyGraphService } = require('./dependency-graph-service');
-const { VSCodeApiDependencyAnalyzer } = require('../dependency-graph/vscode-api-analyzer');
-const { DependencyUtils } = require('../dependency-graph/dependency-utils');
+const { VSCodeApiDependencyAnalyzer } = require('./graph/vscode-api-analyzer');
+const { DependencyUtils } = require('./graph/dependency-utils');
 const { aidaLogging } = require('../core/settings');
 
 class FileDependencyAnalyzer {

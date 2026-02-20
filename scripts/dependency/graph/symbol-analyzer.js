@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const { VSCodeApiDependencyAnalyzer } = require('./vscode-api-analyzer');
 const { BarrelResolver } = require('./barrel-resolver');
-const { aidaLogging } = require('../core/settings');
+const { aidaLogging } = require('../../core/settings');
 
 class SymbolAnalyzer {
     constructor() {

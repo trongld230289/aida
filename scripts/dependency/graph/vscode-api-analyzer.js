@@ -2,7 +2,7 @@ const vscode = require('vscode');
 const path = require('path');
 const fs = require('fs');
 const { BarrelResolver } = require('./barrel-resolver');
-const { aidaLogging } = require('../core/settings');
+const { aidaLogging } = require('../../core/settings');
 const { languageConfig } = require('./language-rules');
 const { DependencyGraphModel } = require('./graph-model');
 const { GraphWatcher } = require('./graph-watcher');
@@ -123,7 +123,7 @@ class VSCodeApiDependencyAnalyzer {
         )];
 
         // Collect all exclude patterns from language configs + common excludes
-        const { commonIgnores } = require('../core/ignore-rules');
+        const { commonIgnores } = require('../../core/ignore-rules');
         const commonExcludes = commonIgnores;
 
         const languageExcludes = [...new Set(

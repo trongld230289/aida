@@ -2,7 +2,7 @@
  * Language Configuration Rules for Dependency Analysis
  * Defines regex patterns and rules for different programming languages
  */
-const { languageIgnores } = require('../core/ignore-rules');
+const { languageIgnores } = require('../../core/ignore-rules');
 
 const languageConfig = {
     typescript: {

@@ -171,9 +171,9 @@ export class AidaContext {
 
 ---
 
-## Phase 3 — Review + Dependency-Graph TypeScript Migration (5-7 days)
+## Phase 3 — Review + Dependency Graph TypeScript Migration (5-7 days)
 
-> Migrate review + dependency-graph modules, fix code duplication.
+> Migrate review + dependency graph modules, fix code duplication.
 
 ### 3.1 — Migrate Review Modules
 
@@ -249,7 +249,15 @@ export async function getGitDiff(filePath: string): Promise<IGitDiffResult> {
 - [ ] Replace all `execSync` in `review-changes.ts`
 - [ ] Verify git diff review still works
 
-### 3.4 — Migrate Dependency-Graph Modules
+### 3.4 — Migrate Dependency Graph Modules
+
+> **✅ DONE:** `dependency-graph/` folder restructured into `dependency/graph/` (8 JS modules) + `dependency/views/` (3 view files). 3 dead files deleted (1,393 lines removed): `change-impact-analyzer.js`, `environment-check.js`, `change-impact-view.html`. All import paths updated. Webpack build verified.
+
+- [x] Move graph modules → `dependency/graph/`
+- [x] Move view files → `dependency/views/`
+- [x] Delete dead files: `change-impact-analyzer.js`, `environment-check.js`, `change-impact-view.html`
+- [x] Update all `require()` and `path.join()` references
+- [x] Verify webpack build passes
 
 - [ ] Migrate `graph-model.js` → `.ts` + add reverse dependency index
 - [ ] Migrate `language-rules.js` → `.ts` + **fix duplicate `csharp` key**
@@ -562,6 +570,6 @@ npm install --save-dev husky lint-staged
 - Template system: Clean separation fallback/language-specific
 - Graceful degradation: Multiple fallback layers everywhere
 - Edition system: Public vs Company builds qua webpack DefinePlugin
-- Module separation: `core/`, `review/`, `chatbot/`, `dependency-graph/`, `tracking/`
+- Module separation: `core/`, `review/`, `chatbot/`, `dependency/` (with `graph/` + `views/` subfolders), `tracking/`
 - LRU caching trong context detection
 - Barrel resolver có proper loop protection + timeout

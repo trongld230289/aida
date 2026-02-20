@@ -1,5 +1,5 @@
 const vscode = require('vscode');
-const { aidaLogging } = require('../core/settings');
+const { aidaLogging } = require('../../core/settings');
 
 /**
  * @file graph-watcher.js

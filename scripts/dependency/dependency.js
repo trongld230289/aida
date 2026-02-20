@@ -11,8 +11,8 @@ const { trackEvent } = require('../tracking/usage-tracking');
 const { TrackingEvent, AiProvider, TrackingSource } = require('../tracking/tracking-enums');
 
 // Import VS Code API analyzer - required
-const { VSCodeApiDependencyAnalyzer } = require('../dependency-graph/vscode-api-analyzer');
-const { SymbolAnalyzer } = require('../dependency-graph/symbol-analyzer');
+const { VSCodeApiDependencyAnalyzer } = require('./graph/vscode-api-analyzer');
+const { SymbolAnalyzer } = require('./graph/symbol-analyzer');
 
 // Import PR analysis modules
 const { PRFileFetcher } = require('../review/pr-file-fetcher');
@@ -659,7 +659,7 @@ async function buildSelectedNodeObject(nodeId, graph, panel) {
 
             // Detect framework and load assets accordingly
             // 🔥 REFACTORED: Use AssetLoaderStrategy pattern instead of hardcoded if/else
-            const { AssetLoaderFactory } = require('../dependency-graph/asset-loader-factory');
+            const { AssetLoaderFactory } = require('./graph/asset-loader-factory');
             const assetLoader = AssetLoaderFactory.getLoader(fileName);
 
             if (assetLoader) {
@@ -855,7 +855,7 @@ async function openImpactAnalysisWebview(nodeId, graph = null) {
 
         // Load HTML content
         const extensionPath = extensionContext ? extensionContext.extensionPath : __dirname;
-        const htmlPath = path.join(extensionPath, 'scripts', 'dependency-graph', 'impact-analysis.html');
+        const htmlPath = path.join(extensionPath, 'scripts', 'dependency', 'views', 'impact-analysis.html');
         let htmlContent = fs.readFileSync(htmlPath, 'utf8');
         panel.webview.html = htmlContent;
 
@@ -1406,11 +1406,11 @@ function generatePRGraphWebviewHtml(graph, summary, prInfo) {
     const extensionPath = extensionContext ? extensionContext.extensionPath : __dirname;
 
     // Read HTML template
-    const htmlTemplatePath = path.join(extensionPath, 'scripts', 'dependency-graph', 'graph-view.html');
+    const htmlTemplatePath = path.join(extensionPath, 'scripts', 'dependency', 'views', 'graph-view.html');
     let htmlTemplate = fs.readFileSync(htmlTemplatePath, 'utf8');
 
     // Read TypeScript script
-    const scriptPath = path.join(extensionPath, 'scripts', 'dependency-graph', 'graph-view.ts');
+    const scriptPath = path.join(extensionPath, 'scripts', 'dependency', 'views', 'graph-view-script.js');
     let scriptContent = fs.readFileSync(scriptPath, 'utf8');
 
     // 🔥 Filter graph to show only impacted nodes in PR mode
@@ -1580,11 +1580,11 @@ function generateFilteredGraphWebviewHtml(graph, summary, searchTerm) {
     const extensionPath = extensionContext ? extensionContext.extensionPath : __dirname;
 
     // Read HTML template
-    const htmlTemplatePath = path.join(extensionPath, 'scripts', 'dependency-graph', 'graph-view.html');
+    const htmlTemplatePath = path.join(extensionPath, 'scripts', 'dependency', 'views', 'graph-view.html');
     let htmlTemplate = fs.readFileSync(htmlTemplatePath, 'utf8');
 
     // Read TypeScript script
-    const scriptPath = path.join(extensionPath, 'scripts', 'dependency-graph', 'graph-view.ts');
+    const scriptPath = path.join(extensionPath, 'scripts', 'dependency', 'views', 'graph-view-script.js');
     let scriptContent = fs.readFileSync(scriptPath, 'utf8');
 
     // Replace placeholders in HTML
@@ -1713,11 +1713,11 @@ function generateFileGraphWebviewHtml(graph, fileName) {
     const extensionPath = extensionContext ? extensionContext.extensionPath : __dirname;
 
     // Read HTML template
-    const htmlTemplatePath = path.join(extensionPath, 'scripts', 'dependency-graph', 'graph-view.html');
+    const htmlTemplatePath = path.join(extensionPath, 'scripts', 'dependency', 'views', 'graph-view.html');
     let htmlTemplate = fs.readFileSync(htmlTemplatePath, 'utf8');
 
     // Read TypeScript script
-    const scriptPath = path.join(extensionPath, 'scripts', 'dependency-graph', 'graph-view.ts');
+    const scriptPath = path.join(extensionPath, 'scripts', 'dependency', 'views', 'graph-view-script.js');
     let scriptContent = fs.readFileSync(scriptPath, 'utf8');
 
     // Prepare data for the view
