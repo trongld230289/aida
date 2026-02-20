@@ -3,7 +3,7 @@ const MLClassifier = require('./ml-classifier');
 const LanguageProcessor = require('./language-processor');
 const fs = require('fs');
 const path = require('path');
-const { aidaLogging } = require('../settings');
+const { aidaLogging } = require('../core/settings');
 
 class ContextDetector {
   constructor() {

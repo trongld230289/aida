@@ -1,6 +1,6 @@
 const vscode = require('vscode');
-const { aidaLogging } = require('../settings');
-const { getLanguagesRequiringExtensions, SUPPORTED_LANGUAGES } = require('../language-support-config');
+const { aidaLogging } = require('../core/settings');
+const { getLanguagesRequiringExtensions, SUPPORTED_LANGUAGES } = require('../core/language-support-config');
 
 /**
  * Checks the VS Code environment for required extensions based on project type.

@@ -1,4 +1,4 @@
-# AIDA Extension - Tổng hợp chức năng (v1.1.11)
+# AIDA Extension - Tổng hợp chức năng (v1.1.12)
 
 > Tài liệu tổng hợp tất cả các chức năng mà extension **AIDA (AI Development Assistant)** cung cấp cho user.
 
@@ -186,4 +186,4 @@
 
 ---
 
-*Tài liệu được tạo ngày 17/02/2026 — dựa trên AIDA v1.1.11*
+*Tài liệu được tạo ngày 17/02/2026 — dựa trên AIDA v1.1.12*

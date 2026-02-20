@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Analysis: {{FILE_NAME}}</title>
+    <style>
+        body {
+            font-family: var(--vscode-font-family);
+            background-color: var(--vscode-editor-background);
+            color: var(--vscode-editor-foreground);
+            padding: 20px;
+            line-height: 1.5;
+            font-size: 13px;
+        }
+        h1 { color: #3794ff; margin-top: 15px; margin-bottom: 10px; font-size: 1.4em; display: block; }
+        h2 { color: #3794ff; margin-top: 15px; margin-bottom: 10px; font-size: 1.2em; display: block; clear: both; }
+        h3 { color: #3794ff; margin-top: 10px; margin-bottom: 8px; font-size: 1.1em; display: block; clear: both; }
+        h4 { color: #3794ff; margin-top: 10px; margin-bottom: 8px; font-size: 1em; display: block; clear: both; }
+        strong { color: #e0e0e0; }
+        ul { padding-left: 20px; margin-top: 5px; margin-bottom: 10px; }
+        li { margin-bottom: 4px; }
+        .loading { display: flex; align-items: center; gap: 10px; font-style: italic; color: #cccccc; }
+    </style>
+</head>
+<body>
+    <h2 style="margin-top: 0;">🤖 AI Analysis: {{FILE_NAME}}</h2>
+    <hr style="border: 0; border-top: 1px solid #333; margin: 15px 0;">
+    <div id="content">{{CONTENT}}</div>
+</body>
+</html>

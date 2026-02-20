@@ -18,10 +18,86 @@ const removeFileBtn = document.getElementById('removeFileBtn');
 let imageAttachments = [];
 let imageCounter = 0; // Counter for image numbering
 
+// Streaming state (declared early for scroll tracking)
+let isStreaming = false;
+
 // Mode and model state
 let currentMode = 'ask'; // 'ask' or 'agent'
-let currentModel = 'claude-sonnet-4.5'; // Default to Sonnet 4.5, will be updated from backend
+let currentModel = (window.__AIDA_CONFIG__ && window.__AIDA_CONFIG__.CHATBOT_DEFAULT_MODEL) || 'claude-opus-4.6'; // From core/aida-config.js via template-loader
 let currentFileContext = null; // Track current file context
+
+// ========== Smart Auto-Scroll ==========
+// Track whether user has manually scrolled up during streaming
+let userScrolledUp = false;
+const SCROLL_BOTTOM_THRESHOLD = 60; // px from bottom to consider "at bottom"
+
+function isNearBottom() {
+    const { scrollTop, scrollHeight, clientHeight } = chatContainer;
+    return scrollHeight - scrollTop - clientHeight <= SCROLL_BOTTOM_THRESHOLD;
+}
+
+function smartScrollToBottom() {
+    if (!userScrolledUp) {
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+    updateScrollToBottomBtn();
+}
+
+function forceScrollToBottom() {
+    userScrolledUp = false;
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+    updateScrollToBottomBtn();
+}
+
+// Detect user scroll during streaming
+chatContainer.addEventListener('scroll', () => {
+    if (isStreaming) {
+        userScrolledUp = !isNearBottom();
+        updateScrollToBottomBtn();
+    }
+});
+
+// Floating "Scroll to Bottom" button
+function createScrollToBottomBtn() {
+    const btn = document.createElement('button');
+    btn.id = 'scrollToBottomBtn';
+    btn.innerHTML = '<svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor"><path d="M8 11.4L2.3 5.7l.7-.7L8 10 13 5l.7.7L8 11.4z"/></svg>';
+    btn.title = 'Scroll to bottom';
+    Object.assign(btn.style, {
+        display: 'none',
+        position: 'fixed',
+        bottom: '90px',
+        right: '24px',
+        width: '22px',
+        height: '22px',
+        borderRadius: '4px',
+        background: 'var(--vscode-toolbar-hoverBackground, rgba(90,93,94,0.31))',
+        color: 'var(--vscode-descriptionForeground, #888)',
+        border: '1px solid var(--vscode-widget-border, rgba(255,255,255,0.08))',
+        cursor: 'pointer',
+        fontSize: '0',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
+        zIndex: '1000',
+        transition: 'opacity 0.15s ease, background 0.15s ease',
+        opacity: '0.75',
+        padding: '0',
+        alignItems: 'center',
+        justifyContent: 'center'
+    });
+    btn.addEventListener('click', forceScrollToBottom);
+    btn.addEventListener('mouseenter', () => { btn.style.opacity = '1'; btn.style.background = 'var(--vscode-toolbar-activeBackground, rgba(99,102,103,0.5))'; });
+    btn.addEventListener('mouseleave', () => { btn.style.opacity = '0.75'; btn.style.background = 'var(--vscode-toolbar-hoverBackground, rgba(90,93,94,0.31))'; });
+    document.body.appendChild(btn);
+    return btn;
+}
+
+const scrollToBottomBtn = createScrollToBottomBtn();
+
+function updateScrollToBottomBtn() {
+    if (scrollToBottomBtn) {
+        scrollToBottomBtn.style.display = (isStreaming && userScrolledUp) ? 'flex' : 'none';
+    }
+}
 
 // Available chat participants
 const participants = [
@@ -30,7 +106,6 @@ const participants = [
     { name: '@review-all-changes', icon: '🔍', description: 'Review ALL git changes in workspace (all modified files)' },
     { name: '@review-pr', icon: '🔄', description: 'Review Pull Request by URL' },
     { name: '@sync-review-templates', icon: '⚙️', description: 'Sync AIDA review templates to workspace' },
-    { name: '@scan-app', icon: '🤖', description: 'AI-powered code scanning and duplicate detection' },
     { name: '@dependency', icon: '🕸️', description: 'Analyze dependencies & PR impact with visual graph' },
     { name: '/clear', icon: '🗑️', description: 'Clear chat history and start fresh conversation' }
 ];
@@ -840,7 +915,12 @@ function addMessage(content, role, images = [], isFromHistory = false) {
         console.log('✅ Added copy buttons and syntax highlighting for message');
     }
 
-    chatContainer.scrollTop = chatContainer.scrollHeight;
+    // For user messages, always scroll; for assistant messages during streaming, use smart scroll
+    if (role === 'user') {
+        forceScrollToBottom();
+    } else {
+        smartScrollToBottom();
+    }
 }
 
 function showTyping() {
@@ -878,7 +958,7 @@ function showTyping() {
         '</div>';
 
     chatContainer.appendChild(typingDiv);
-    chatContainer.scrollTop = chatContainer.scrollHeight;
+    forceScrollToBottom();
 }
 
 function showTypingWithMessage(message) {
@@ -916,7 +996,7 @@ function showTypingWithMessage(message) {
         '</div>';
 
     chatContainer.appendChild(typingDiv);
-    chatContainer.scrollTop = chatContainer.scrollHeight;
+    forceScrollToBottom();
 }
 
 function hideTyping() {
@@ -1020,7 +1100,7 @@ function parseMarkdown(text, isFromHistory = false) {
 let currentStreamingMessage = null;
 let streamingParseTimeout = null;
 let lastParsedLength = 0;
-let isStreaming = false;
+// isStreaming is declared at the top of the file
 
 function startStreamingMessage() {
     // Remove empty state
@@ -1051,8 +1131,8 @@ function startStreamingMessage() {
     currentStreamingMessage = messageDiv;
     lastParsedLength = 0;
 
-    // Scroll to bottom
-    chatContainer.scrollTop = chatContainer.scrollHeight;
+    // Reset scroll tracking at start of new stream & scroll to bottom
+    forceScrollToBottom();
 
     console.log('✅ Started streaming message');
 }
@@ -1092,9 +1172,9 @@ function appendStreamingChunk(chunk) {
             }, 32); // ~30fps for smoother experience instead of 100ms
         }
 
-        // Smooth scroll to bottom
+        // Smart scroll: only scroll if user hasn't scrolled up
         requestAnimationFrame(() => {
-            chatContainer.scrollTop = chatContainer.scrollHeight;
+            smartScrollToBottom();
         });
     }
 }
@@ -1264,6 +1344,8 @@ function endStreamingMessage() {
         streamingParseTimeout = null;
         lastParsedLength = 0;
         isStreaming = false;
+        userScrolledUp = false;
+        updateScrollToBottomBtn();
         updateButtonStates();
         console.log('✅ Ended streaming message');
     }

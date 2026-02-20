@@ -1,6 +1,6 @@
 const natural = require('natural');
 const stringSimilarity = require('string-similarity');
-const { aidaLogging } = require('../settings');
+const { aidaLogging } = require('../core/settings');
 
 class MLClassifier {
   constructor() {

@@ -1,6 +1,6 @@
 # AIDA Extension - Hướng dẫn Build & Phát hành
 
-> **Áp dụng cho:** AIDA v1.1.11+  
+> **Áp dụng cho:** AIDA v1.1.12+  
 > **Yêu cầu:** Node.js 18+, npm 9+
 
 ---
@@ -62,13 +62,13 @@ npm run package
 npm run package:company
 ```
 
-Output: `aida-dev-1.1.11.vsix` trong thư mục gốc.
+Output: `aida-dev-1.1.12.vsix` trong thư mục gốc.
 
 ### 5. Cài VSIX cho người dùng
 
 Cách 1 — Command line:
 ```bash
-code --install-extension aida-dev-1.1.11.vsix
+code --install-extension aida-dev-1.1.12.vsix
 ```
 
 Cách 2 — VS Code UI:
@@ -171,6 +171,22 @@ Xem dòng log đầu tiên khi build:
 ```
 🏷️  Building AIDA extension — Edition: COMPANY
 ```
+
+---
+
+## 📄 Template Files
+
+HTML templates are stored in `templates/` subdirectories alongside their modules:
+
+```
+scripts/review/templates/       → Monaco diff viewer
+scripts/daily/templates/        → Daily report templates
+scripts/dependency/templates/   → AI analysis panel
+scripts/chatbot/templates/      → Sidebar templates & fallbacks
+```
+
+Webpack `CopyPlugin` automatically copies these to `dist/` during build.
+When adding new templates, add a corresponding entry in `webpack.config.js`.
 
 ---
 

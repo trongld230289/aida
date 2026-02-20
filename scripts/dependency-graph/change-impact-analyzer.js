@@ -2,7 +2,7 @@ const vscode = require('vscode');
 const path = require('path');
 const fs = require('fs').promises;
 const { VSCodeApiDependencyAnalyzer } = require('./vscode-api-analyzer');
-const { aidaLogging } = require('../settings');
+const { aidaLogging } = require('../core/settings');
 
 /**
  * Change-Impact Analysis System

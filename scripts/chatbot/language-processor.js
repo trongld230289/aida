@@ -1,5 +1,5 @@
 const { franc } = require('franc');
-const { aidaLogging } = require('../settings');
+const { aidaLogging } = require('../core/settings');
 
 class LanguageProcessor {
   constructor() {

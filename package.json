@@ -1,8 +1,8 @@
 {
   "name": "aida-dev",
   "displayName": "AIDA - AI Development Assistant",
-  "description": "Advanced AI Development Assistant with intelligent code review, PR analysis, project scanning, and AIDA Chatbot. Use your own AI API (OpenAI/Claude) or GitHub Copilot. Complete development workflows for TypeScript, JavaScript, Python, C#, and more. Now with Cursor IDE support!",
-  "version": "1.1.11",
+  "description": "Advanced AI Development Assistant with intelligent code review, PR analysis, and AIDA Chatbot. Use your own AI API (OpenAI/Claude) or GitHub Copilot. Complete development workflows for TypeScript, JavaScript, Python, C#, and more. Now with Cursor IDE support!",
+  "version": "1.1.12",
   "publisher": "trongld232",
   "icon": "icons/extension-icon.png",
   "author": {
@@ -25,8 +25,7 @@
     "development assistant",
     "code review",
     "copilot",
-    "intelligent analysis",
-    "project scanner"
+    "intelligent analysis"
   ],
   "engines": {
     "vscode": "^1.90.0"
@@ -355,12 +354,6 @@
         "id": "sync-review-templates",
         "name": "sync-review-templates",
         "description": "🔄 Sync AIDA review templates to workspace",
-        "isSticky": true
-      },
-      {
-        "id": "scan-app",
-        "name": "scan-app",
-        "description": "🤖 AI-powered code scanning and duplicate detection",
         "isSticky": true
       },
       {

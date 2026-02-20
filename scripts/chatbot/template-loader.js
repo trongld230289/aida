@@ -1,6 +1,7 @@
 const fs = require('fs').promises;
 const path = require('path');
-const { aidaLogging } = require('../settings');
+const { aidaLogging } = require('../core/settings');
+const { DEFAULTS } = require('../core/aida-config');
 
 /**
  * Template Loader for AIDA Chatbot
@@ -32,12 +33,13 @@ class TemplateLoader {
             const scriptPath = path.join(this.templateDir, 'sidebar-script.js');
             try {
                 const scriptContent = await fs.readFile(scriptPath, 'utf8');
-                // Replace script src with inline script content
+                // Inject AIDA config before the main script
+                const configScript = `<script type="text/javascript">\nwindow.__AIDA_CONFIG__ = ${JSON.stringify(DEFAULTS)};\n</script>`;
                 template = template.replace(
                     '<script src="./sidebar-script.js"></script>',
-                    `<script type="text/javascript">\n${scriptContent}\n</script>`
+                    `${configScript}\n<script type="text/javascript">\n${scriptContent}\n</script>`
                 );
-                aidaLogging('📜 Inlined script content into template');
+                aidaLogging('📜 Inlined script content + AIDA config into template');
             } catch (scriptError) {
                 aidaLogging('⚠️ Could not load script file:', scriptError.message);
             }
@@ -56,54 +58,14 @@ class TemplateLoader {
      * Get fallback template if main template fails
      */
     getFallbackTemplate() {
-        return `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AIDA Chat</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        try {
+            const fsSync = require('fs');
+            const fallbackPath = path.join(this.templateDir, 'sidebar-fallback.html');
+            return fsSync.readFileSync(fallbackPath, 'utf8');
+        } catch (e) {
+            // Ultimate fallback if even the fallback template file can't be read
+            return `<!DOCTYPE html><html><body style="font-family:var(--vscode-font-family);background:var(--vscode-sideBar-background);color:var(--vscode-sideBar-foreground);text-align:center;padding:20px;"><h2>⚠️ Template Loading Error</h2><p>Failed to load AIDA Chat template.</p></body></html>`;
         }
-        body {
-            font-family: var(--vscode-font-family);
-            background-color: var(--vscode-sideBar-background);
-            color: var(--vscode-sideBar-foreground);
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-        }
-        .error-container {
-            text-align: center;
-            padding: 20px;
-        }
-        .error-icon {
-            font-size: 48px;
-            margin-bottom: 16px;
-        }
-        h2 {
-            margin-bottom: 8px;
-            color: var(--vscode-foreground);
-        }
-        p {
-            color: var(--vscode-descriptionForeground);
-            font-size: 12px;
-        }
-    </style>
-</head>
-<body>
-    <div class="error-container">
-        <div class="error-icon">⚠️</div>
-        <h2>Template Loading Error</h2>
-        <p>Failed to load AIDA Chat template. Using fallback interface.</p>
-    </div>
-</body>
-</html>`;
     }
 
     /**

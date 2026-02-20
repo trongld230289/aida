@@ -1,0 +1,1075 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" 
+          content="default-src 'none'; 
+                   script-src {{CSP_SOURCE}} 'unsafe-inline' 'unsafe-eval'; 
+                   style-src {{CSP_SOURCE}} 'unsafe-inline';
+                   font-src {{CSP_SOURCE}} data:;
+                   img-src {{CSP_SOURCE}} data:;
+                   worker-src blob: data: {{CSP_SOURCE}};
+                   connect-src {{CSP_SOURCE}};">
+    <title>Monaco Diff View: {{FILE_PATH_ESCAPED}}</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--vscode-editor-background);
+            color: var(--vscode-editor-foreground);
+            font-family: var(--vscode-editor-font-family);
+        }
+        
+        .header {
+            padding: 16px 20px;
+            background-color: var(--vscode-editorWidget-background);
+            border-bottom: 1px solid var(--vscode-panel-border);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 20px;
+        }
+        
+        .file-info {
+            flex: 1;
+            min-width: 0; /* Allow text to truncate */
+        }
+        
+        .file-path {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: var(--vscode-editor-foreground);
+        }
+        
+        .file-path-link {
+            color: var(--vscode-textLink-foreground);
+            text-decoration: none;
+            border-bottom: 1px solid transparent;
+            transition: all 0.2s ease;
+        }
+        
+        .file-path-link:hover {
+            color: var(--vscode-textLink-activeForeground);
+            border-bottom-color: var(--vscode-textLink-activeForeground);
+        }
+        
+        .file-path-link:focus {
+            outline: 1px solid var(--vscode-focusBorder);
+            outline-offset: 2px;
+        }
+        
+        .file-stats {
+            font-size: 12px;
+            color: var(--vscode-descriptionForeground);
+        }
+        
+        .stats-badge {
+            display: inline-block;
+            padding: 2px 4px;
+            margin-right: 4px;
+            border-radius: 3px;
+            font-weight: 600;
+        }
+        
+        .badge-add {
+            background-color: rgba(46, 160, 67, 0.2);
+            color: #2ea043;
+        }
+        
+        .badge-remove {
+            background-color: rgba(248, 81, 73, 0.2);
+            color: #f85149;
+        }
+        
+        .badge-type {
+            background-color: var(--vscode-button-secondaryBackground);
+            color: var(--vscode-button-secondaryForeground);
+        }
+
+        #container {
+            height: calc(100vh - 120px);
+            width: 100%;
+        }
+        
+        /* Force scrollbar visibility for Monaco Diff Editor */
+        .monaco-diff-editor .editor.modified .monaco-scrollable-element > .scrollbar,
+        .monaco-diff-editor .editor.original .monaco-scrollable-element > .scrollbar {
+            visibility: visible !important;
+            opacity: 1 !important;
+        }
+        
+        .monaco-diff-editor .editor.modified .monaco-scrollable-element > .scrollbar.horizontal,
+        .monaco-diff-editor .editor.original .monaco-scrollable-element > .scrollbar.horizontal {
+            visibility: visible !important;
+            opacity: 1 !important;
+            height: 14px !important;
+        }
+        
+        .monaco-diff-editor .editor.modified .monaco-scrollable-element > .scrollbar.vertical,
+        .monaco-diff-editor .editor.original .monaco-scrollable-element > .scrollbar.vertical {
+            visibility: visible !important;
+            opacity: 1 !important;
+            width: 14px !important;
+        }
+        
+        /* Force scrollbar track visibility */
+        .monaco-diff-editor .monaco-scrollable-element .scrollbar .slider {
+            visibility: visible !important;
+            opacity: 1 !important;
+        }
+        
+        .view-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0; /* Don't shrink on small screens */
+        }
+        
+        .toggle-group {
+            display: flex;
+            border: 1px solid var(--vscode-button-border);
+            border-radius: 4px;
+            overflow: hidden;
+            background-color: var(--vscode-button-secondaryBackground);
+        }
+        
+        .toggle-btn {
+            padding: 6px 12px;
+            background-color: var(--vscode-button-secondaryBackground);
+            color: var(--vscode-button-secondaryForeground);
+            border: none;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            min-width: 85px;
+            text-align: center;
+            white-space: nowrap;
+        }
+        
+        .toggle-btn:hover {
+            background-color: var(--vscode-button-hoverBackground);
+        }
+        
+        .toggle-btn.active {
+            background-color: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
+            font-weight: 600;
+        }
+        
+        .toggle-label {
+            font-size: 11px;
+            color: var(--vscode-descriptionForeground);
+            font-weight: 500;
+        }
+        
+        /* Azure DevOps Style Layout */
+        .main-container {
+            display: flex;
+            height: calc(100vh - 80px);
+            overflow: hidden;
+        }
+        
+        body.resizing {
+            cursor: col-resize !important;
+            user-select: none;
+        }
+        
+        body.resizing * {
+            cursor: col-resize !important;
+            user-select: none;
+        }
+        
+        .file-sidebar {
+            width: 350px;
+            background-color: var(--vscode-sideBar-background);
+            border-right: 1px solid var(--vscode-panel-border);
+            overflow-y: auto;               /* Enable vertical scroll when needed */
+            overflow-x: hidden;             /* Keep horizontal hidden */
+            flex-shrink: 0;
+            min-width: 200px;
+            max-width: 600px;
+            position: relative;
+            user-select: none; /* Prevent text selection during resize */
+        }
+        
+        /* Custom resize handle - full height drag area */
+        .file-sidebar .resize-handle {
+            position: absolute;
+            top: 0;
+            right: -2px;
+            width: 4px;
+            height: 100%;
+            background-color: transparent;
+            cursor: col-resize;
+            z-index: 100;
+            transition: background-color 0.2s ease;
+        }
+        
+        .file-sidebar .resize-handle:hover {
+            background-color: var(--vscode-focusBorder);
+            opacity: 0.7;
+        }
+        
+        .file-sidebar .resize-handle.dragging {
+            background-color: var(--vscode-focusBorder);
+            opacity: 1;
+        }
+        
+        /* Remove default resize styles */
+        .file-sidebar::after {
+            display: none;
+        }
+        
+        .sidebar-header {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--vscode-panel-border);
+            background-color: var(--vscode-editorWidget-background);
+            font-weight: 600;
+            font-size: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .files-count {
+            font-size: 12px;
+            color: var(--vscode-descriptionForeground);
+            font-weight: normal;
+        }
+        
+        .file-item {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--vscode-panel-border);
+            cursor: pointer;
+            transition: background-color 0.2s;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+        }
+        
+        .file-item:hover {
+            background-color: var(--vscode-list-hoverBackground);
+        }
+        
+        .file-item.active {
+            background-color: var(--vscode-list-activeSelectionBackground);
+            color: var(--vscode-list-activeSelectionForeground);
+        }
+        
+        .file-icon {
+            font-size: 16px;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+        
+        .file-details {
+            flex: 1;
+            min-width: 0;
+        }
+        
+        .file-item .file-name {
+            font-weight: 600;
+            margin-bottom: 4px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-size: 13px;
+        }
+        
+        .file-item .file-path {
+            font-size: 12px;
+            color: var(--vscode-descriptionForeground);
+            margin-bottom: 6px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        .file-item .file-stats {
+            display: flex;
+            gap: 8px;
+            font-size: 11px;
+            flex-wrap: wrap;
+        }
+        
+        .file-item .additions {
+            color: var(--vscode-gitDecoration-addedResourceForeground);
+            font-weight: 500;
+        }
+        
+        .file-item .deletions {
+            color: var(--vscode-gitDecoration-deletedResourceForeground);
+            font-weight: 500;
+        }
+        
+        .file-item .change-type {
+            color: var(--vscode-descriptionForeground);
+            font-size: 10px;
+            text-transform: uppercase;
+            font-weight: 500;
+        }
+        
+        .editor-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        #container {
+            flex: 1;
+            overflow: hidden;
+        }
+        
+        /* Hide sidebar when no files */
+        .hide-sidebar .file-sidebar {
+            display: none;
+        }
+        
+        .hide-sidebar .editor-area {
+            width: 100%;
+        }
+        
+        /* Inline mode styles - Keep sidebar on left, only change editor area */
+        .inline-mode .main-container {
+            display: flex; /* Keep horizontal layout */
+            height: calc(100vh - 80px);
+        }
+        
+        .inline-mode .file-sidebar {
+            width: 350px; /* Keep default width */
+            height: calc(100vh - 80px); /* Keep full height */
+            resize: horizontal; /* Keep horizontal resize */
+            min-width: 200px;
+            max-width: 600px;
+            border-right: 1px solid var(--vscode-panel-border);
+            border-bottom: none; /* Remove bottom border */
+        }
+        
+        .inline-mode .file-sidebar::after {
+            top: 0; /* Reset to default */
+            right: 0;
+            bottom: auto;
+            left: auto;
+            width: 4px; /* Keep horizontal resize handle */
+            height: 100%;
+            cursor: col-resize; /* Keep horizontal cursor */
+        }
+        
+        .inline-mode .editor-area {
+            flex: 1;
+            overflow: hidden;
+        }
+        
+        /* Inline diff styles */
+        .inline-diff-container {
+            display: none;
+            height: 100%;
+            overflow: auto;
+            background-color: var(--vscode-editor-background);
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+        }
+        
+        .inline-mode .inline-diff-container {
+            display: block;
+        }
+        
+        .inline-mode #container {
+            display: none;
+        }
+        
+        .inline-diff-line {
+            display: flex;
+            min-height: 20px;
+            line-height: 20px;
+            padding: 2px 0;
+            border-left: 3px solid transparent;
+            font-size: 13px;
+        }
+        
+        .inline-diff-line.added {
+            background-color: rgba(46, 160, 67, 0.15);
+            border-left-color: #2ea043;
+        }
+        
+        .inline-diff-line.removed {
+            background-color: rgba(248, 81, 73, 0.15);
+            border-left-color: #f85149;
+        }
+        
+        .inline-diff-line.context {
+            background-color: var(--vscode-editor-background);
+        }
+        
+        .inline-line-num {
+            width: 80px;
+            text-align: right;
+            padding: 0 8px;
+            color: var(--vscode-editorLineNumber-foreground);
+            background-color: var(--vscode-editorGutter-background);
+            user-select: none;
+            flex-shrink: 0;
+            font-size: 12px;
+            display: flex;
+            gap: 4px;
+        }
+        
+        .inline-line-content {
+            flex: 1;
+            padding: 0 8px;
+            color: var(--vscode-editor-foreground);
+            white-space: pre;
+            overflow-x: auto;
+        }
+        
+        .inline-change-indicator {
+            width: 20px;
+            text-align: center;
+            font-weight: bold;
+            flex-shrink: 0;
+            color: var(--vscode-editor-foreground);
+        }
+        
+        /* Loading spinner styles - lightweight version */
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--vscode-button-secondaryBackground);
+            border-radius: 50%;
+            border-top: 2px solid var(--vscode-button-background);
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Lightweight loading for diff editor */
+        .editor-loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+            background-color: var(--vscode-editor-background);
+            padding: 12px;
+            border-radius: 6px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: var(--vscode-editor-foreground);
+        }
+        
+        .editor-loading .loading-spinner {
+            width: 16px;
+            height: 16px;
+            border-width: 2px;
+        }
+        
+        /* Remove heavy overlay styles */
+        .loading-overlay {
+            display: none; /* Disable heavy overlay */
+        }
+    </style>
+</head>
+<body class="{{SIDEBAR_CLASS}}">
+    <div class="header">
+        <div class="header-content">
+            <div class="file-info">
+                <div class="file-path">
+                    🚀 Monaco Diff View: 
+                    {{FILE_PATH_LINK}}
+                </div>
+                <div class="file-stats">
+                    <span class="stats-badge badge-type">{{CHANGE_TYPE}}</span>
+                    <span class="stats-badge badge-add">+{{ADDITIONS}}</span>
+                    <span class="stats-badge badge-remove">-{{DELETIONS}}</span>
+                    <span style="margin-left: 10px; color: var(--vscode-descriptionForeground);">Language: {{LANGUAGE}}</span>
+                </div>
+            </div>
+            <div class="view-toggle">
+                <div class="toggle-group">
+                    <button class="toggle-btn active" data-mode="side-by-side" title="Side by side comparison">📊 Side by Side</button>
+                    <button class="toggle-btn" data-mode="inline" title="Inline unified diff">📝 Inline</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="main-container">
+        {{FILES_SIDEBAR}}
+        
+        <div class="editor-area">
+            <div id="container"></div>
+            <div class="inline-diff-container" id="inlineContainer">
+                <!-- Inline diff content will be generated here -->
+            </div>
+        </div>
+    </div>
+    
+    <script src="{{MONACO_URI}}/loader.js"></script>
+    <script>
+        console.log('🚀 Monaco script loading started');
+        console.log('📁 Monaco URI:', '{{MONACO_URI}}');
+        
+        // Add error handler
+        window.addEventListener('error', function(e) {
+            console.error('❌ Script error:', e.error, e.filename, e.lineno);
+            showFallbackView();
+        });
+        
+        // Fallback function to show simple diff view
+        function showFallbackView() {
+            console.log('🔄 Loading fallback diff view...');
+            document.getElementById('container').innerHTML = `
+                <div style="padding: 20px;">
+                    <h3>Simple Diff View (Monaco Editor not available)</h3>
+                    <div style="display: flex; gap: 20px;">
+                        <div style="flex: 1;">
+                            <h4>Original</h4>
+                            <pre style="background: #1e1e1e; padding: 10px; border-radius: 4px; overflow: auto; max-height: 400px;">${originalContent}</pre>
+                        </div>
+                        <div style="flex: 1;">
+                            <h4>Modified</h4>
+                            <pre style="background: #1e1e1e; padding: 10px; border-radius: 4px; overflow: auto; max-height: 400px;">${modifiedContent}</pre>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Try to load Monaco with timeout
+        const timeoutId = setTimeout(() => {
+            console.warn('⚠️ Monaco loading timeout, showing fallback view');
+            showFallbackView();
+        }, 5000);
+        
+        try {
+            require.config({ paths: { vs: '{{MONACO_URI}}' } });
+            
+            console.log('⚙️ Require config set, loading Monaco...');
+            
+            require(['vs/editor/editor.main'], function() {
+                clearTimeout(timeoutId);
+                console.log('✅ Monaco editor loaded successfully');
+                
+                try {
+                // Configure Monaco Editor theme to match VS Code
+                monaco.editor.defineTheme('vs-code-dark', {
+                    base: 'vs-dark',
+                    inherit: true,
+                    rules: [],
+                    colors: {
+                        'editor.background': '#1e1e1e',
+                        'editor.foreground': '#d4d4d4'
+                    }
+                });
+                
+                console.log('🎨 Theme configured');
+
+                // Create diff editor
+                const diffEditor = monaco.editor.createDiffEditor(document.getElementById('container'), {
+                    theme: 'vs-code-dark',
+                    readOnly: true,
+                    automaticLayout: true,
+                    renderSideBySide: true,
+                    renderOverviewRuler: true,
+                    diffWordWrap: 'off',           // Turn OFF word wrap để code không bị break
+                    wordWrap: 'off',               // Also disable regular word wrap
+                    scrollBeyondLastLine: false,
+                    scrollbar: {
+                        horizontal: 'auto',        // auto = chỉ hiện khi cần
+                        vertical: 'auto',          // auto = chỉ hiện khi cần  
+                        horizontalScrollbarSize: 14,
+                        verticalScrollbarSize: 14,
+                        useShadows: false,         // bỏ shadow cho scrollbar
+                        handleMouseWheel: true,
+                        alwaysConsumeMouseWheel: false
+                    },
+                    overviewRuler: {
+                        border: true
+                    },
+                    minimap: {
+                        enabled: true,
+                        side: 'right'
+                    },
+                    fontSize: 13,
+                    lineHeight: 20,
+                    fontFamily: 'Consolas, Monaco, "Courier New", monospace',
+                    enableSplitViewResizing: false,
+                    renderIndicators: true,
+                    ignoreTrimWhitespace: false,
+                    originalEditable: false,
+                    diffAlgorithm: 'advanced'
+                });
+            
+            console.log('🎯 Diff editor created');
+
+            // Set the model for diff editor
+            const originalModel = monaco.editor.createModel(
+                {{ORIGINAL_CONTENT_JSON}},
+                '{{LANGUAGE}}'
+            );
+            
+            console.log('📄 Original model created, language:', '{{LANGUAGE}}');
+            
+            const modifiedModel = monaco.editor.createModel(
+                {{MODIFIED_CONTENT_JSON}}, 
+                '{{LANGUAGE}}'
+            );
+            
+            console.log('📄 Modified model created');
+
+            diffEditor.setModel({
+                original: originalModel,
+                modified: modifiedModel
+            });
+            
+            console.log('✅ Diff models set successfully');
+
+            // Get individual editors and force scrollbar settings
+            const originalEditor = diffEditor.getOriginalEditor();
+            const modifiedEditor = diffEditor.getModifiedEditor();
+            
+            // Force scrollbar settings on both editors individually
+            originalEditor.updateOptions({
+                scrollbar: {
+                    horizontal: 'auto',        // chỉ hiện khi content overflow
+                    vertical: 'auto',          // chỉ hiện khi content overflow
+                    horizontalScrollbarSize: 14,
+                    verticalScrollbarSize: 14,
+                    useShadows: false,         // bỏ shadow 
+                    handleMouseWheel: true,
+                    alwaysConsumeMouseWheel: false
+                },
+                wordWrap: 'off',               // Disable word wrap
+                wordWrapColumn: 120            // Set wrap column if needed
+            });
+            
+            modifiedEditor.updateOptions({
+                scrollbar: {
+                    horizontal: 'auto',        // chỉ hiện khi content overflow 
+                    vertical: 'auto',          // chỉ hiện khi content overflow
+                    horizontalScrollbarSize: 14,
+                    verticalScrollbarSize: 14,
+                    useShadows: false,         // bỏ shadow
+                    handleMouseWheel: true,
+                    alwaysConsumeMouseWheel: false
+                },
+                wordWrap: 'off',               // Disable word wrap
+                wordWrapColumn: 120            // Set wrap column if needed
+            });
+            
+            console.log('🔧 Individual editor scrollbar settings applied');
+            
+            // Force layout refresh to ensure scrollbars are visible
+            setTimeout(() => {
+                diffEditor.layout();
+                originalEditor.layout();
+                modifiedEditor.layout();
+                console.log('🔄 Layout refreshed for scrollbar visibility');
+                
+                // Force refresh by updating options again
+                if (originalModel && modifiedModel) {
+                    // Force refresh by updating options again
+                    diffEditor.updateOptions({
+                        scrollbar: {
+                            horizontal: 'visible',     // Force visible instead of auto
+                            vertical: 'visible',       // Force visible instead of auto
+                            horizontalScrollbarSize: 14,
+                            verticalScrollbarSize: 14,
+                            useShadows: false,
+                            handleMouseWheel: true,
+                            alwaysConsumeMouseWheel: false
+                        },
+                        diffWordWrap: 'off',           // Ensure word wrap is OFF
+                        wordWrap: 'off'                // Ensure word wrap is OFF
+                    });
+                    
+                    // Also force on individual editors again
+                    originalEditor.updateOptions({
+                        scrollbar: {
+                            horizontal: 'visible',
+                            vertical: 'visible',
+                            horizontalScrollbarSize: 14,
+                            verticalScrollbarSize: 14,
+                            useShadows: false,
+                            handleMouseWheel: true,
+                            alwaysConsumeMouseWheel: false
+                        },
+                        wordWrap: 'off'                // Disable word wrap
+                    });
+                    
+                    modifiedEditor.updateOptions({
+                        scrollbar: {
+                            horizontal: 'visible',
+                            vertical: 'visible',
+                            horizontalScrollbarSize: 14,
+                            verticalScrollbarSize: 14,
+                            useShadows: false,
+                            handleMouseWheel: true,
+                            alwaysConsumeMouseWheel: false
+                        },
+                        wordWrap: 'off'                // Disable word wrap
+                    });
+                    
+                    console.log('🔄 Scrollbar options refreshed with forced visibility');
+                }
+            }, 100);
+
+            // Use a flag to prevent infinite loop
+            let isScrolling = false;
+            
+            // Synchronize scrolling between editors using DOM events as fallback
+            originalEditor.onDidScrollChange((e) => {
+                if (isScrolling) return;
+                isScrolling = true;
+                
+                if (e.scrollLeftChanged) {
+                    modifiedEditor.setScrollLeft(e.scrollLeft);
+                }
+                if (e.scrollTopChanged) {
+                    modifiedEditor.setScrollTop(e.scrollTop);
+                }
+                
+                setTimeout(() => { isScrolling = false; }, 10);
+            });
+            
+            modifiedEditor.onDidScrollChange((e) => {
+                if (isScrolling) return;
+                isScrolling = true;
+                
+                if (e.scrollLeftChanged) {
+                    originalEditor.setScrollLeft(e.scrollLeft);
+                }
+                if (e.scrollTopChanged) {
+                    originalEditor.setScrollTop(e.scrollTop);
+                }
+                
+                setTimeout(() => { isScrolling = false; }, 10);
+            });
+            
+            // Additional DOM-based scroll sync as backup
+            setTimeout(() => {
+                const originalDomNode = originalEditor.getDomNode();
+                const modifiedDomNode = modifiedEditor.getDomNode();
+                
+                if (originalDomNode && modifiedDomNode) {
+                    // Force scrollbar visibility by manipulating DOM
+                    const forceScrollbarVisibility = (editorNode, editorName) => {
+                        const scrollbars = editorNode.querySelectorAll('.monaco-scrollable-element > .scrollbar');
+                        scrollbars.forEach((scrollbar, index) => {
+                            scrollbar.style.visibility = 'visible';
+                            scrollbar.style.opacity = '1';
+                            console.log('🔧 Forced scrollbar ' + index + ' visibility for ' + editorName);
+                        });
+                        
+                        const sliders = editorNode.querySelectorAll('.monaco-scrollable-element .scrollbar .slider');
+                        sliders.forEach((slider, index) => {
+                            slider.style.visibility = 'visible';
+                            slider.style.opacity = '1';
+                            console.log('🔧 Forced slider ' + index + ' visibility for ' + editorName);
+                        });
+                    };
+                    
+                    forceScrollbarVisibility(originalDomNode, 'original');
+                    forceScrollbarVisibility(modifiedDomNode, 'modified');
+                    
+                    const originalScrollable = originalDomNode.querySelector('.monaco-scrollable-element');
+                    const modifiedScrollable = modifiedDomNode.querySelector('.monaco-scrollable-element');
+                    
+                    if (originalScrollable && modifiedScrollable) {
+                        let domScrolling = false;
+                        
+                        originalScrollable.addEventListener('scroll', function() {
+                            if (domScrolling) return;
+                            domScrolling = true;
+                            modifiedScrollable.scrollLeft = this.scrollLeft;
+                            modifiedScrollable.scrollTop = this.scrollTop;
+                            console.log('🔄 DOM sync: Original → Modified', this.scrollLeft, this.scrollTop);
+                            setTimeout(() => { domScrolling = false; }, 10);
+                        });
+                        
+                        modifiedScrollable.addEventListener('scroll', function() {
+                            if (domScrolling) return;
+                            domScrolling = true;
+                            originalScrollable.scrollLeft = this.scrollLeft;
+                            originalScrollable.scrollTop = this.scrollTop;
+                            console.log('🔄 DOM sync: Modified → Original', this.scrollLeft, this.scrollTop);
+                            setTimeout(() => { domScrolling = false; }, 10);
+                        });
+                        
+                        console.log('🔄 DOM-based scroll sync configured as backup');
+                    }
+                }
+            }, 500);
+            
+            console.log('🔄 Scroll synchronization configured');
+
+            // Add toggle functionality for side-by-side vs inline mode with resizable sidebar
+            const toggleButtons = document.querySelectorAll('.toggle-btn');
+            toggleButtons.forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const mode = this.getAttribute('data-mode');
+                    
+                    // Update button states
+                    toggleButtons.forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                    
+                    if (mode === 'inline') {
+                        console.log('🔄 Switching to Monaco inline mode');
+                        
+                        // Use Monaco's built-in inline mode
+                        diffEditor.updateOptions({
+                            renderSideBySide: false
+                        });
+                        
+                    } else {
+                        console.log('🔄 Switching to Monaco side-by-side mode');
+                        
+                        // Use Monaco's side-by-side mode
+                        diffEditor.updateOptions({
+                            renderSideBySide: true
+                        });
+                    }
+                    
+                    // Trigger layout update
+                    setTimeout(() => {
+                        diffEditor.layout();
+                    }, 100);
+                });
+            });
+            
+            // Handle window resize
+            window.addEventListener('resize', () => {
+                diffEditor.layout();
+            });
+            
+            } catch (error) {
+                console.error('❌ Error creating Monaco diff editor:', error);
+                document.getElementById('container').innerHTML = '<div style="padding: 20px; color: red;">Error loading Monaco Editor: ' + error.message + '</div>';
+            }
+        }, function(error) {
+            console.error('❌ Error loading Monaco editor:', error);
+            document.getElementById('container').innerHTML = '<div style="padding: 20px; color: red;">Failed to load Monaco Editor: ' + error + '</div>';
+        });
+        
+        // File sidebar click handlers
+        document.addEventListener('DOMContentLoaded', function() {
+            // File item click handlers
+            const fileItems = document.querySelectorAll('.file-item');
+            const editorArea = document.querySelector('.editor-area');
+            
+            fileItems.forEach(item => {
+                item.addEventListener('click', function() {
+                    const filePath = this.getAttribute('data-path');
+                    if (filePath) {
+                        console.log('🔄 Loading file:', filePath);
+                        
+                        // Update active state only (no loading state)
+                        fileItems.forEach(f => f.classList.remove('active'));
+                        this.classList.add('active');
+                        
+                        // Show lightweight loading spinner in editor area
+                        const loadingSpinner = document.createElement('div');
+                        loadingSpinner.className = 'editor-loading';
+                        loadingSpinner.innerHTML = '<div class="loading-spinner"></div>Loading...';
+                        editorArea.style.position = 'relative';
+                        editorArea.appendChild(loadingSpinner);
+                        
+                        // Send message to VS Code extension to load new file
+                        try {
+                            // Use VS Code webview message API to request file content
+                            if (window.acquireVsCodeApi) {
+                                const vscode = window.acquireVsCodeApi();
+                                vscode.postMessage({
+                                    type: 'openFileInMonaco',
+                                    filePath: filePath
+                                });
+                                console.log('📤 Sent message to VS Code to load file:', filePath);
+                                
+                                // Store reference to current active item and loading spinner for VS Code response
+                                window.currentLoadingContext = {
+                                    filePath: filePath,
+                                    activeItem: this,
+                                    loadingSpinner: loadingSpinner
+                                };
+                            } else {
+                                // Fallback for testing
+                                console.warn('⚠️ VS Code API not available, simulating file load');
+                                simulateFileLoad(filePath, this, loadingSpinner);
+                            }
+                        } catch (error) {
+                            console.error('❌ Error sending message to VS Code:', error);
+                            simulateFileLoad(filePath, this, loadingSpinner);
+                        }
+                    }
+                });
+            });
+            
+            // Listen for messages from VS Code extension
+            if (window.acquireVsCodeApi) {
+                window.addEventListener('message', function(event) {
+                    const message = event.data;
+                    
+                    if (message.type === 'fileLoaded') {
+                        console.log('📦 Received file content from VS Code:', message.filePath);
+                        
+                        // Get the stored loading context
+                        const context = window.currentLoadingContext;
+                        if (context && context.filePath === message.filePath) {
+                            // Remove loading spinner
+                            if (context.loadingSpinner && context.loadingSpinner.parentNode) {
+                                context.loadingSpinner.parentNode.removeChild(context.loadingSpinner);
+                            }
+                            
+                            // Active state is already set, just update content
+                            // Update header to show currently viewing file
+                            const filePathElement = document.querySelector('.file-path');
+                            if (filePathElement) {
+                                filePathElement.innerHTML = '🚀 Monaco Diff View: ' + message.filePath;
+                            }
+                            
+                            // Update file stats if provided
+                            if (message.fileStats) {
+                                const fileStats = document.querySelector('.file-stats');
+                                if (fileStats) {
+                                    fileStats.innerHTML = `
+                                        <span class="stats-badge badge-type">${message.fileStats.changeType}</span>
+                                        <span class="stats-badge badge-add">+${message.fileStats.additions}</span>
+                                        <span class="stats-badge badge-remove">-${message.fileStats.deletions}</span>
+                                        <span style="margin-left: 10px; color: var(--vscode-descriptionForeground);">Language: ${message.fileStats.language}</span>
+                                    `;
+                                }
+                            }
+                            
+                            // Clear the loading context
+                            window.currentLoadingContext = null;
+                            
+                            console.log('✅ File loaded and UI updated, active state preserved');
+                        }
+                    }
+                });
+            }
+            
+            // Simulate file loading for testing
+            function simulateFileLoad(filePath, clickedItem, loadingSpinner) {
+                setTimeout(() => {
+                    // Remove loading spinner only
+                    if (loadingSpinner && loadingSpinner.parentNode) {
+                        loadingSpinner.parentNode.removeChild(loadingSpinner);
+                    }
+                    
+                    // Keep the clicked item active - DON'T reset active state
+                    // The active state was already set when user clicked the item
+                    
+                    // Update header to show currently viewing file
+                    const filePathElement = document.querySelector('.file-path');
+                    if (filePathElement) {
+                        filePathElement.innerHTML = '🚀 Monaco Diff View: ' + filePath;
+                    }
+                    
+                    // Also update the file stats in header if available
+                    const fileFromCache = getFileStatsFromCache(filePath);
+                    if (fileFromCache) {
+                        const fileStats = document.querySelector('.file-stats');
+                        if (fileStats) {
+                            const changeType = fileFromCache.changeType || 'modified';
+                            const additions = fileFromCache.additions || 0;
+                            const deletions = fileFromCache.deletions || 0;
+                            
+                            fileStats.innerHTML = `
+                                <span class="stats-badge badge-type">${changeType}</span>
+                                <span class="stats-badge badge-add">+${additions}</span>
+                                <span class="stats-badge badge-remove">-${deletions}</span>
+                                <span style="margin-left: 10px; color: var(--vscode-descriptionForeground);">Language: ${getLanguageFromPath(filePath)}</span>
+                            `;
+                        }
+                    }
+                    
+                    console.log('✅ File loaded successfully (simulated), active state preserved:', filePath);
+                    
+                }, 800); // Faster loading time
+            }
+            
+            // Helper function to get file stats from cache
+            function getFileStatsFromCache(filePath) {
+                // This would be populated from the allFiles data passed to webview
+                const allFilesList = {{ALL_FILES_JSON}};
+                return allFilesList.find(file => file.path === filePath);
+            }
+            
+            // Helper function to get language from file path
+            function getLanguageFromPath(filePath) {
+                const ext = filePath.split('.').pop().toLowerCase();
+                const langMap = {
+                    'js': 'javascript', 'jsx': 'javascript', 'ts': 'typescript', 'tsx': 'typescript',
+                    'py': 'python', 'java': 'java', 'cs': 'csharp', 'cpp': 'cpp', 'c': 'c',
+                    'php': 'php', 'rb': 'ruby', 'go': 'go', 'rs': 'rust', 'swift': 'swift',
+                    'html': 'html', 'css': 'css', 'json': 'json', 'xml': 'xml'
+                };
+                return langMap[ext] || 'plaintext';
+            }
+
+            // Resize handle functionality
+            const resizeHandle = document.querySelector('.resize-handle');
+            const fileSidebar = document.querySelector('.file-sidebar');
+            
+            if (resizeHandle && fileSidebar) {
+                let isResizing = false;
+                let startX, startWidth;
+                
+                resizeHandle.addEventListener('mousedown', function(e) {
+                    isResizing = true;
+                    startX = e.clientX;
+                    startWidth = parseInt(getComputedStyle(fileSidebar).width, 10);
+                    
+                    document.body.classList.add('resizing');
+                    document.addEventListener('mousemove', doResize);
+                    document.addEventListener('mouseup', stopResize);
+                    
+                    e.preventDefault();
+                });
+                
+                function doResize(e) {
+                    if (!isResizing) return;
+                    
+                    const diffX = e.clientX - startX;
+                    const newWidth = startWidth + diffX;
+                    
+                    // Constrain width between 200px and 800px
+                    const minWidth = 200;
+                    const maxWidth = 800;
+                    const constrainedWidth = Math.max(minWidth, Math.min(maxWidth, newWidth));
+                    
+                    fileSidebar.style.width = constrainedWidth + 'px';
+                }
+                
+                function stopResize() {
+                    isResizing = false;
+                    document.body.classList.remove('resizing');
+                    document.removeEventListener('mousemove', doResize);
+                    document.removeEventListener('mouseup', stopResize);
+                }
+            }
+        });
+        } catch (error) {
+            clearTimeout(timeoutId);
+            console.error('❌ Error loading Monaco Editor:', error);
+            showFallbackView();
+        }
+    </script>
+</body>
+</html>

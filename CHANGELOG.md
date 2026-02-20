@@ -5,6 +5,18 @@ All notable changes to the "AIDA - AI Development Assistant" extension will be d
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.34/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.12] - 2026-02-20
+
+### Changed
+- **♻️ Refactoring**: Major codebase restructuring — domain folder organization, template extraction, circular dependency fixes
+- **♻️ Token Estimator**: Replaced hardcoded model list with dynamic slug-ify normalization (auto-supports new Copilot models)
+- **♻️ Architecture**: Split monolithic files into domain modules (review/, dependency/, tracking/, scan/, chatbot/, daily/)
+- **♻️ Templates**: Extracted 7 inline HTML templates into separate `.html` files for maintainability
+
+### Added
+- **📄 Architecture Docs**: Created `docs/ARCHITECTURE.md` with full module map and design decisions
+- **📄 Build Guide**: Updated `docs/BUILD-GUIDE.md` with template files section
+
 ## [1.1.11] - 2026-01-14
 
 ### Fixed

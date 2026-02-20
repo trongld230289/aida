@@ -1,5 +1,5 @@
 const vscode = require('vscode');
-const { aidaLogging } = require('../settings');
+const { aidaLogging } = require('../core/settings');
 
 /**
  * Test script to get all available GitHub Copilot models

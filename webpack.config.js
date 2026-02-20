@@ -40,6 +40,16 @@ module.exports = (env = {}) => {
             from: 'scripts/chatbot/templates/**/*',
             to: 'scripts/chatbot/templates/[name][ext]',
             noErrorOnMissing: true
+          },
+          {
+            from: 'scripts/review/templates/**/*',
+            to: 'scripts/review/templates/[name][ext]',
+            noErrorOnMissing: true
+          },
+          {
+            from: 'scripts/dependency/templates/**/*',
+            to: 'scripts/dependency/templates/[name][ext]',
+            noErrorOnMissing: true
           }
         ],
       }),

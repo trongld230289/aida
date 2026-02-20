@@ -1,7 +1,7 @@
 const fs = require('fs').promises;
 const path = require('path');
-const { detectProvider, callAI, mapProviderResponse } = require('../review-common');
-const { aidaLogging } = require('../settings');
+const { detectProvider, callAI, mapProviderResponse } = require('../review/review-common');
+const { aidaLogging } = require('../core/settings');
 
 /**
  * AIDA Chatbot Service - Conversational AI for coding assistance
@@ -750,7 +750,7 @@ Please try asking again with more details! 🙏`;
      * Extract content from streaming chunk based on provider
      */
     extractContentFromStreamChunk(chunk, apiHost) {
-        const { detectProvider } = require('../review-common');
+        const { detectProvider } = require('../review/review-common');
         const provider = detectProvider(apiHost, '');
         
         if (provider === 'anthropic') {

@@ -6,7 +6,7 @@
 
 // Import the new context detector
 const ContextDetector = require('./context-detector');
-const { aidaLogging } = require('../settings');
+const { aidaLogging } = require('../core/settings');
 
 class ChatbotContextEngine {
     constructor() {
