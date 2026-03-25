@@ -106,7 +106,8 @@ const participants = [
     { name: '@review-all-changes', icon: '🔍', description: 'Review ALL git changes in workspace (all modified files)' },
     { name: '@review-pr', icon: '🔄', description: 'Review Pull Request by URL' },
     { name: '@sync-review-templates', icon: '⚙️', description: 'Sync AIDA review templates to workspace' },
-    { name: '@dependency', icon: '🕸️', description: 'Analyze dependencies & PR impact with visual graph' },
+    { name: '@dependency', icon: '🕸️', description: 'Analyze workspace dependencies with visual graph' },
+    { name: '@dependency-pr', icon: '📊', description: 'Analyze PR impact on dependencies by URL' },
     { name: '/clear', icon: '🗑️', description: 'Clear chat history and start fresh conversation' }
 ];
 
@@ -169,6 +170,7 @@ function openModelDropdown() {
 
     // Request model list from backend if empty
     if (availableModels.length === 0) {
+        modelDropdown.innerHTML = '<div class="model-dropdown-item" style="opacity:0.6;justify-content:center;"><span>⏳ Loading models...</span></div>';
         vscode.postMessage({ type: 'getModelList' });
     }
 }

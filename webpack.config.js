@@ -4,21 +4,17 @@ const CopyPlugin = require('copy-webpack-plugin');
 const { getDefinePluginConfig } = require('./edition.config');
 
 /**
- * Webpack config as function to receive --env flag.
- * Usage:
- *   webpack --env edition=public   → Public edition (no tracking)
- *   webpack --env edition=company  → Company edition (tracking enabled)
- *   webpack                        → Defaults to company edition
+ * Webpack config for AIDA extension.
+ * Single build — activation key is always required.
  */
 module.exports = (env = {}) => {
-  const edition = env.edition || 'company';
-  console.log(`\n🏷️  Building AIDA extension — Edition: ${edition.toUpperCase()}\n`);
+  console.log(`\n🏷️  Building AIDA extension\n`);
 
   return {
     target: 'node',
     mode: 'none',
 
-    entry: './extension.js',
+    entry: './extension.ts',
     output: {
       path: path.resolve(__dirname, 'dist'),
       filename: 'extension.js',
@@ -33,7 +29,7 @@ module.exports = (env = {}) => {
       extensions: ['.ts', '.js']
     },
     plugins: [
-      new webpack.DefinePlugin(getDefinePluginConfig(edition)),
+      new webpack.DefinePlugin(getDefinePluginConfig()),
       new CopyPlugin({
         patterns: [
           {
@@ -49,6 +45,17 @@ module.exports = (env = {}) => {
           {
             from: 'scripts/dependency/templates/**/*',
             to: 'scripts/dependency/templates/[name][ext]',
+            noErrorOnMissing: true
+          },
+          {
+            from: 'scripts/dependency/views/**/*',
+            to: 'scripts/dependency/views/[name][ext]',
+            noErrorOnMissing: true
+          },
+          {
+            from: '**/*',
+            to: 'monaco-editor/min/',
+            context: 'node_modules/monaco-editor/min/',
             noErrorOnMissing: true
           }
         ],

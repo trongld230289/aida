@@ -5,6 +5,89 @@ All notable changes to the "AIDA - AI Development Assistant" extension will be d
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.34/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.20] - 2026-03-22
+
+### Changed
+- **🔑 Removed Public Key from README**: All activation keys now require contacting the project owner — no public key exposed in documentation
+
+## [1.1.19] - 2026-03-21
+
+### Added
+- **🔑 Public Activation Key**: Added `aida-public-key` for external/public users — bypasses encryption, domain check, and expiry validation. Usage tracking is disabled (no App Insights config)
+- **📤 `isPublicKey()` export**: New helper in `activation-key.ts` to detect public key usage
+
+### Changed
+- **📧 Removed company emails from README**: Replaced personal emails with GitHub Issues contact link
+- **⚙️ Settings description updated**: `aida.activationKey` now documents the public key option
+
+## [1.1.18] - 2026-03-21
+
+### Fixed
+- **🔧 Chatbot "is not a function" Error**: Fixed mixin method shadowing in `sidebar-core.ts` — class field initializers (`= null`) were creating instance own-properties that shadowed prototype methods from `Object.assign`. Changed to definite assignment (`!:`) declarations
+
+### Changed
+- **📦 Installation Flow**: Updated to marketplace install (Extensions → search `aida-dev`) instead of offline `.vsix`
+- **📝 README Rewrite**: Cleaner structure matching the HTML presentation slides — punchy intro, streamlined quick start, consolidated settings
+- **🔑 Activation Key Required**: Highlighted as mandatory in all docs (README, HTML slides)
+- **🛡️ Trust Accounts**: Added GitHub & Microsoft trust account steps to README and HTML presentation
+
+## [1.1.17] - 2026-03-20
+
+### Changed
+- **🔑 Single Edition — Activation Key Always Required**: Removed dual public/company edition system. Every build now requires a valid activation key to unlock features
+- **🏗️ Simplified Build Pipeline**: Single `npm run build` replaces `build:company` / `build:dev`. No more `--env edition=` flag
+- **📦 Simplified Packaging**: Single `npm run package` replaces `package:company`. Removed `readme-edition.js` and `package-company.js` scripts
+- **📊 Tracking Always Enabled**: Usage tracking always active (config delivered via activation key)
+- **⚙️ edition.config.js**: Removed `public`/`company` editions object. Single config with `ENCRYPTION_SECRET: 'CEP_AIDA'`
+- **🧹 Removed Build Constants**: `__IS_COMPANY_VERSION__`, `__EDITION_TYPE__` no longer exist. Removed from `edition.config.js`, `webpack.config.js`, `activation-key.ts`, `usage-tracking.ts`, `global.d.ts`
+
+### Removed
+- `scripts/package-company.js` — no longer needed
+- `scripts/readme-edition.js` — no longer needed
+- `npm run build:company` / `build:dev` / `webpack:company` / `package:company` scripts
+- `<!-- COMPANY_ONLY_START -->` README marker system
+
+## [1.1.16] - 2026-03-04
+
+### Added
+- **🔑 Activation Key System**: Company edition now requires an encrypted activation key for tracking. iKey removed from VSIX build — delivered via `aida.activationKey` VS Code setting
+- **🛡️ 3-Layer Security**: (1) No iKey in VSIX, (2) AES-256-CBC encrypted key, (3) Windows domain check
+- **⚙️ New Setting**: `aida.activationKey` — paste activation key from admin
+- **📋 New Commands**: `Clear Activation Key`, `Show Activation Status`
+- **🔧 Admin CLI Tool**: `generate-activation-key.js` for generating encrypted keys per company
+
+### Changed
+- **📊 Tracking gated behind activation**: Company edition tracking requires valid activation key (domain + expiry check)
+- **🏗️ edition.config.js**: App Insights credentials removed from build, replaced with `ENCRYPTION_SECRET`
+
+### Security
+- VSIX no longer contains App Insights instrumentation key
+- Public edition has no encryption secret (completely safe)
+
+## [1.1.15] - 2026-02-25
+
+### Changed
+- **🔄 Identity System Rewrite**: Replaced 5-priority sequential identity chain with 3 parallel sources collected via `Promise.all()` — Windows, Microsoft, GitHub
+- **🆕 Windows Display Name**: Added `getWindowsDisplayName()` using Win32 `GetUserNameEx(NameDisplay)` via `secur32.dll` to retrieve Active Directory display name (e.g., "Trong Duc Le")
+- **📊 Tracking Schema**: New fields — `windowsId`, `windowsDomain`, `windowsUsername`, `computerName`, `windowsDisplayName`, `microsoftAccount`, `githubAccount`, `machineId`; removed `userEmail`, `userType`
+
+### Removed
+- **🗑️ IdentityProvider enum**: Removed from `tracking-enums.ts` — no longer needed with parallel collection
+- **🗑️ Git Email / Machine ID providers**: Removed `getGitIdentity()`, `getGitEmail()`, `resolveIdentity()` from `usage-tracking.ts`
+
+## [1.1.14] - 2026-02-23
+
+### Fixed
+- **🐛 Emoji Encoding**: Fixed double-encoded UTF-8 emoji characters across 22 TypeScript source files (CP1252/Latin-1 double-encoding from v1.1.13 TypeScript migration)
+- **🐛 Streaming Render**: Fixed broken HTML/markdown rendering during AI review streaming — fragments now flush on line boundaries to prevent incomplete syntax glitches (e.g., partial `**bold**`, broken lists)
+
+## [1.1.13] - 2026-02-21
+
+### Changed
+- **♻️ TypeScript Migration**: Converted all JavaScript source files to TypeScript (.js → .ts)
+- **♻️ Entry Point**: Migrated extension.js → extension.ts with ES module imports
+- **♻️ Build Config**: Updated webpack entry from extension.js to extension.ts
+
 ## [1.1.12] - 2026-02-20
 
 ### Changed

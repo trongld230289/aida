@@ -1,0 +1,55 @@
+# ── AIDA .vscodeignore ────────────────────────────────────────────
+# Controls which files are EXCLUDED from the .vsix package.
+# Uses .gitignore syntax. Negation (!) re-includes a file.
+#
+# Goal: Keep VSIX lean (~7 MB) — only ship runtime-required files.
+# ──────────────────────────────────────────────────────────────────
+
+# ── Version control ──────────────────────────────────────────────
+.git/
+.gitignore
+
+# ── Build / config (not needed at runtime) ───────────────────────
+edition.config.js
+eslint.config.mjs
+webpack.config.js
+tsconfig.json
+vitest.config.ts
+_eslint-temp.json
+package-lock.json
+
+# ── Dev documentation (not needed for end users) ─────────────────
+docs/
+phase6-refactor.md
+AIDA_SHARING_EN.html
+
+# ── ALL TypeScript source (bundled into dist/extension.js by webpack) ─
+extension.ts
+scripts/**/*.ts
+scripts/**/*.d.ts
+scripts/types/
+
+# ── Admin-only tools & build scripts ────────────────────────────
+scripts/tracking/generate-activation-key.js
+scripts/tracking/activation-keys.json
+scripts/package-company.js
+scripts/readme-edition.js
+
+# ── Test / mock files ────────────────────────────────────────────
+scripts/__tests__/**
+scripts/__mocks__/**
+scripts/test/**
+
+# ── Build artifacts ──────────────────────────────────────────────
+*.vsix
+*.bak
+coverage/
+out/
+
+# ── Source maps (reduce VSIX size significantly) ─────────────────
+dist/*.map
+
+# ── Node modules ─────────────────────────────────────────────────
+# Webpack bundles all dependencies into dist/extension.js.
+# Only keep monaco-editor/min/** for webview diff viewer.
+node_modules/

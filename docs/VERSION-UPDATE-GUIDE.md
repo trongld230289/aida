@@ -31,8 +31,8 @@ When releasing a new version of AIDA extension, you need to update version numbe
 **Location**: Line ~3 and ~8
 **What to update**: Both version fields (root and packages[""])
 
-### 3. `extension.js`
-```javascript
+### 3. `extension.ts`
+```typescript
 console.log('AIDA Extension v1.X.X activated');
 ```
 **Location**: Around line 15-20 in activate function
@@ -65,27 +65,27 @@ Follow semantic versioning:
 ### Step 2: Search and Replace
 Use grep to find all old version references:
 ```bash
-grep -r "1.0.27" . --include="*.json" --include="*.js" --include="*.md"
+grep -r "1.0.27" . --include="*.json" --include="*.ts" --include="*.md"
 ```
 
 ### Step 3: Update Files Systematically
 1. **package.json** - Main version field
 2. **package-lock.json** - Root version + packages[""] version  
-3. **extension.js** - Console log message
+3. **extension.ts** - Console log message
 4. **README.md** - All version references
 5. **CHANGELOG.md** - Add new version entry
 
 ### Step 4: Verify Updates
 ```bash
-grep -r "OLD_VERSION" . --include="*.json" --include="*.js" --include="*.md"
+grep -r "OLD_VERSION" . --include="*.json" --include="*.ts" --include="*.md"
 ```
 Should only return CHANGELOG.md references (historical versions)
 
 ### Step 5: Test Extension
 ```bash
-node -c extension.js
+npm run build
 ```
-Verify no syntax errors and proper activation.
+Verify webpack builds successfully and no TypeScript errors.
 
 ## Example Update Commands
 
@@ -93,7 +93,7 @@ Replace `1.0.27` with `1.0.28`:
 
 ```bash
 # 1. Find all occurrences
-grep -r "1.0.27" . --include="*.json" --include="*.js" --include="*.md"
+grep -r "1.0.27" . --include="*.json" --include="*.ts" --include="*.md"
 
 # 2. Update package.json
 # Update line: "version": "1.0.27" → "version": "1.0.28"
@@ -101,7 +101,7 @@ grep -r "1.0.27" . --include="*.json" --include="*.js" --include="*.md"
 # 3. Update package-lock.json (2 locations)
 # Update version fields in root and packages[""]
 
-# 4. Update extension.js
+# 4. Update extension.ts
 # Update console.log message
 
 # 5. Update README.md
@@ -114,11 +114,11 @@ grep -r "1.0.27" . --include="*.json" --include="*.js" --include="*.md"
 ## Checklist
 - [ ] package.json version updated
 - [ ] package-lock.json version updated (2 locations)
-- [ ] extension.js console log updated
+- [ ] extension.ts console log updated
 - [ ] README.md version references updated
 - [ ] CHANGELOG.md new version entry added
 - [ ] All files verified with grep search
-- [ ] Extension tested with `node -c extension.js`
+- [ ] Extension tested with `npm run build`
 - [ ] No syntax errors
 - [ ] Webpack build successful
 
@@ -131,5 +131,5 @@ grep -r "1.0.27" . --include="*.json" --include="*.js" --include="*.md"
 - **Do NOT update `templates/review-code/**/*.md` version** — these stay at their own version (currently v1.0.0) and are only updated when explicitly requested by the user
 
 ---
-**Last Updated**: February 20, 2026  
-**Current Version**: 1.1.12
+**Last Updated**: March 21, 2026  
+**Current Version**: 1.1.20

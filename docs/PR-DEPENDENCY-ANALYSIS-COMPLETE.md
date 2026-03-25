@@ -8,32 +8,32 @@
 
 ### Core Modules
 
-1. **`pr-file-fetcher.js`** ✅
+1. **`pr-file-fetcher.ts`** ✅
    - Unified API cho GitHub/Azure DevOps/GitLab
    - Parse PR URLs
    - Fetch file changes từ PR
    - Normalize file structure across providers
 
-2. **`pr-dependency-analyzer.js`** ✅
+2. **`pr-dependency-analyzer.ts`** ✅
    - Analyze dependencies cho PR files
    - Match PR files với workspace graph
    - Build filtered dependency graph
    - Calculate impact metrics & risk levels
    - Generate recommendations
 
-3. **`dependency.js` (Enhanced)** ✅
+3. **`dependency.ts` (Enhanced)** ✅
    - PR URL detection
    - PR analysis workflow orchestration
    - Chat interface integration
    - PR-enhanced webview creation
 
-4. **`graph-view.ts` (Enhanced)** ✅
+4. **`graph-view-script.js` (Modified)** ✅
    - PR node rendering with status colors
    - PR-specific tooltips
    - PR metadata display in detail panel
    - Helper functions for PR visualization
 
-5. **`graph-view.html` (Enhanced)** ✅
+5. **`graph-view.html` (Modified)** ✅
    - CSS styles for PR nodes
    - PR legend display
    - Responsive PR mode UI
@@ -41,16 +41,14 @@
 ## 📁 Files Created/Modified
 
 ### New Files
-- ✅ `scripts/pr-file-fetcher.js` (460 lines)
-- ✅ `scripts/pr-dependency-analyzer.js` (410 lines)
-- ✅ `scripts/test-pr-dependency.js` (280 lines)
-- ✅ `docs/PR-DEPENDENCY-ANALYSIS-PLAN.md` (19KB)
-- ✅ `docs/PR-DEPENDENCY-ANALYSIS-FEATURE.md` (6.5KB)
+- ✅ `scripts/review/pr-file-fetcher.ts`
+- ✅ `scripts/dependency/pr-dependency-analyzer.ts`
+- ✅ `docs/PR-DEPENDENCY-ANALYSIS-PLAN.md`
+- ✅ `docs/PR-DEPENDENCY-ANALYSIS-FEATURE.md`
 
 ### Modified Files
-- ✅ `scripts/dependency.js` (+250 lines)
-- ✅ `scripts/dependency-graph/graph-view.ts` (+150 lines)
-- ✅ `scripts/dependency-graph/graph-view.html` (+45 lines)
+- ✅ `scripts/dependency/dependency.ts`
+- ✅ `scripts/dependency/views/graph-view.html`
 
 ## ✨ Features
 
@@ -230,7 +228,6 @@ Total: 33/33 Tests Passed ✅
 
 - [Implementation Plan](./PR-DEPENDENCY-ANALYSIS-PLAN.md)
 - [Feature Guide](./PR-DEPENDENCY-ANALYSIS-FEATURE.md)
-- [Test Script](../scripts/test-pr-dependency.js)
 
 ## 🎉 Success Criteria - ALL MET! ✅
 

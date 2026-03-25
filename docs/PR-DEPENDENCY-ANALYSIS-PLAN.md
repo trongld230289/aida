@@ -620,11 +620,10 @@ AIDA:
 
 ## 📚 Related Files
 
-- `dependency.js` - Main entry point
-- `review-pr.js` - PR fetching logic (reuse)
-- `vscode-api-analyzer.js` - Dependency analysis
-- `graph-view.ts` - Graph visualization
-- `graph-view.html` - Graph HTML template
+- `dependency/dependency.ts` - Main entry point
+- `review/review-pr.ts` - PR fetching logic (reuse)
+- `dependency/graph/vscode-api-analyzer.ts` - Dependency analysis
+- `dependency/views/graph-view.html` - Graph visualization template
 
 ---
 

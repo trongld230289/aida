@@ -2,7 +2,7 @@
   "name": "aida-dev",
   "displayName": "AIDA - AI Development Assistant",
   "description": "Advanced AI Development Assistant with intelligent code review, PR analysis, and AIDA Chatbot. Use your own AI API (OpenAI/Claude) or GitHub Copilot. Complete development workflows for TypeScript, JavaScript, Python, C#, and more. Now with Cursor IDE support!",
-  "version": "1.1.12",
+  "version": "1.1.20",
   "publisher": "trongld232",
   "icon": "icons/extension-icon.png",
   "author": {
@@ -43,20 +43,6 @@
     "onStartupFinished"
   ],
   "main": "./dist/extension.js",
-  "files": [
-    "dist/**/*",
-    "icons/**/*",
-    "templates/**/*",
-    "docs/**/*",
-    "documents/**/*",
-    "scripts/**/*",
-    "node_modules/monaco-editor/min/**/*",
-    "*.md",
-    "LICENSE.txt",
-    "*.png",
-    "*.jpg",
-    "*.html"
-  ],
   "contributes": {
     "commands": [
       {
@@ -134,6 +120,18 @@
         "title": "Analyze Dependency",
         "category": "AIDA",
         "icon": "$(hubot)"
+      },
+      {
+        "command": "aida.clearActivationKey",
+        "title": "Clear Activation Key",
+        "category": "AIDA",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "aida.showActivationStatus",
+        "title": "Show Activation Status",
+        "category": "AIDA",
+        "icon": "$(info)"
       }
     ],
     "keybindings": [
@@ -303,6 +301,12 @@
           "default": false,
           "description": "Enable debug mode for AIDA extension logging",
           "scope": "window"
+        },
+        "aida.activationKey": {
+          "type": "string",
+          "default": "",
+          "description": "Activation key for AIDA. Provided by your admin. All features require a valid key.",
+          "scope": "application"
         }
       }
     },
@@ -371,14 +375,15 @@
     ]
   },
   "scripts": {
-    "vscode:prepublish": "webpack --env edition=public --mode production",
-    "test": "echo 'Extension test placeholder'",
-    "build": "webpack --env edition=public --mode production",
-    "build:company": "webpack --env edition=company --mode production",
-    "build:dev": "webpack --env edition=company --mode development",
-    "webpack": "webpack --env edition=company --mode development --watch",
-    "package": "vsce package",
-    "package:company": "webpack --env edition=company --mode production && vsce package"
+    "vscode:prepublish": "webpack --mode production",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix",
+    "build": "webpack --mode production",
+    "webpack": "webpack --mode development --watch",
+    "package": "vsce package"
   },
   "dependencies": {
     "@vscode/vscode-languagedetection": "^1.0.22",
@@ -395,10 +400,16 @@
   },
   "devDependencies": {
     "@types/vscode": "^1.80.0",
+    "@typescript-eslint/eslint-plugin": "^8.56.0",
+    "@typescript-eslint/parser": "^8.56.0",
+    "@vitest/coverage-v8": "^4.0.18",
     "@vscode/vsce": "^2.19.0",
     "copy-webpack-plugin": "^13.0.1",
+    "eslint": "^10.0.1",
     "ts-loader": "^9.5.4",
     "typescript": "^5.9.3",
+    "typescript-eslint": "^8.56.0",
+    "vitest": "^4.0.18",
     "webpack-cli": "^6.0.1"
   }
 }

@@ -101,24 +101,24 @@ User Input → PR URL Parser → File Fetcher → Dependency Analyzer → Graph 
 
 ### Key Components
 
-#### 1. `pr-file-fetcher.js`
+#### 1. `pr-file-fetcher.ts`
 - Parse PR URL (GitHub/Azure/GitLab)
 - Fetch file changes từ API
 - Normalize file structure across providers
 
-#### 2. `pr-dependency-analyzer.js`
+#### 2. `pr-dependency-analyzer.ts`
 - Load/build full dependency graph (với cache)
 - Match PR files với graph nodes
 - Scan dependencies/dependents cho PR files only
 - Build filtered graph
 
-#### 3. `dependency.js` (Updated)
+#### 3. `dependency.ts` (Updated)
 - Detect PR URL trong user message
 - Orchestrate PR analysis workflow
 - Display results trong chat
 - Create PR-enhanced webview
 
-#### 4. `graph-view.ts` (Enhanced)
+#### 4. `graph-view.html` (Enhanced)
 - Render PR-specific node styles
 - Show PR metadata trong tooltips
 - Display PR info trong detail panel
@@ -244,7 +244,7 @@ AIDA:
 
 - [Dependency Graph Feature](./ANALYSIS_METHODS.md)
 - [AIDA Extension Guide](../README.md)
-- [Review PR Feature](../scripts/review-pr.js)
+- [Review PR Feature](../scripts/review/review-pr.ts)
 
 ## 🤝 Contributing
 

@@ -1,0 +1,1 @@
+# vscode.SecretStorage là API built-in của VS Code để lưu trữ sensitive data (tokens, passwords, secrets) một cách an toàn.

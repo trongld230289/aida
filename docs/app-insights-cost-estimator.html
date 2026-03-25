@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AIDA — App Insights Cost Estimator</title>
+    <style>
+        :root {
+            --bg: #0f172a; --card: #1e293b; --border: #334155;
+            --accent: #38bdf8; --accent2: #818cf8;
+            --green: #34d399; --red: #f87171; --yellow: #fbbf24;
+            --text: #e2e8f0; --muted: #94a3b8; --dim: #64748b;
+        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family:'Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; padding:2rem; }
+        .container { max-width:1300px; margin:0 auto; }
+        header { text-align:center; margin-bottom:2rem; }
+        header h1 { font-size:1.75rem; font-weight:700; background:linear-gradient(135deg,var(--accent),var(--accent2)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; margin-bottom:.25rem; }
+        header p { color:var(--muted); font-size:.9rem; }
+
+        /* Cards */
+        .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:1.5rem; margin-bottom:1.5rem; }
+        .card h3 { font-size:.85rem; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin-bottom:1rem; }
+
+        /* Input grid */
+        .input-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:1rem; margin-bottom:1.5rem; }
+        .input-card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:1rem; }
+        .input-card label { display:block; font-size:.7rem; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin-bottom:.4rem; }
+        .input-card input[type="number"] { width:100%; background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); font-size:1.3rem; font-weight:600; padding:.4rem .6rem; outline:none; }
+        .input-card input:focus { border-color:var(--accent); }
+        .input-card .unit { font-size:.75rem; color:var(--dim); margin-top:.3rem; }
+
+        /* Results row */
+        .results-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:1rem; margin-bottom:1.5rem; }
+        .result-card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:1.25rem; }
+        .result-card h3 { font-size:.7rem; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin-bottom:.75rem; }
+        .result-card .value { font-size:1.75rem; font-weight:700; line-height:1; margin-bottom:.2rem; }
+        .result-card .sub { font-size:.8rem; color:var(--dim); }
+        .value.green { color:var(--green); } .value.accent { color:var(--accent); } .value.yellow { color:var(--yellow); } .value.red { color:var(--red); }
+
+        /* Tables */
+        table { width:100%; border-collapse:collapse; }
+        th, td { padding:.55rem .7rem; text-align:left; font-size:.825rem; }
+        th { color:var(--dim); font-weight:500; border-bottom:1px solid var(--border); }
+        td { border-bottom:1px solid rgba(51,65,85,.4); }
+        tr:last-child td { border-bottom:none; }
+        .num { text-align:right; font-variant-numeric:tabular-nums; }
+        .total-row td { font-weight:700; font-size:.95rem; border-top:2px solid var(--border); padding-top:.7rem; }
+
+        /* Progress bar */
+        .progress-bar-bg { background:var(--bg); border-radius:8px; height:28px; position:relative; overflow:hidden; }
+        .progress-bar-fill { height:100%; border-radius:8px; transition:width .4s,background .4s; display:flex; align-items:center; padding:0 .7rem; font-size:.75rem; font-weight:600; min-width:fit-content; }
+        .progress-labels { display:flex; justify-content:space-between; margin-top:.4rem; font-size:.75rem; color:var(--dim); }
+
+        /* Pricing table highlight */
+        .pricing-table td:first-child { font-weight:600; }
+        .free-tag { background:rgba(52,211,153,.15); color:var(--green); padding:.15rem .5rem; border-radius:4px; font-size:.75rem; font-weight:600; }
+        .paid-tag { background:rgba(248,113,113,.12); color:var(--red); padding:.15rem .5rem; border-radius:4px; font-size:.75rem; font-weight:600; }
+        .zero-tag { background:rgba(56,189,248,.12); color:var(--accent); padding:.15rem .5rem; border-radius:4px; font-size:.75rem; font-weight:600; }
+
+        /* Projection table */
+        .proj-table input { width:70px; background:var(--bg); border:1px solid var(--border); border-radius:4px; color:var(--text); font-size:.8rem; padding:.2rem .4rem; text-align:right; }
+        .proj-table input:focus { border-color:var(--accent); }
+        .proj-table td { font-size:.78rem; white-space:nowrap; }
+        .proj-highlight { background:rgba(56,189,248,.06); }
+
+        /* Scenarios */
+        .scenario-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:.7rem; }
+        .scenario-item { background:var(--bg); border-radius:8px; padding:.7rem; text-align:center; cursor:pointer; border:1px solid transparent; transition:border-color .2s; }
+        .scenario-item:hover { border-color:var(--accent); }
+        .scenario-item .s-users { font-size:.7rem; color:var(--dim); }
+        .scenario-item .s-data { font-size:1rem; font-weight:700; margin:.2rem 0; }
+        .scenario-item .s-cost { font-size:.75rem; font-weight:600; }
+
+        /* Callout */
+        .callout { background:rgba(52,211,153,.08); border:1px solid rgba(52,211,153,.25); border-radius:10px; padding:1rem 1.25rem; margin-bottom:1.5rem; }
+        .callout-title { font-weight:700; color:var(--green); margin-bottom:.4rem; font-size:.9rem; }
+        .callout p { font-size:.85rem; color:var(--muted); line-height:1.5; }
+        .callout-warn { background:rgba(251,191,36,.08); border-color:rgba(251,191,36,.25); }
+        .callout-warn .callout-title { color:var(--yellow); }
+        .callout-info { background:rgba(56,189,248,.08); border-color:rgba(56,189,248,.25); }
+        .callout-info .callout-title { color:var(--accent); }
+
+        /* Workflow */
+        .wf-row { display:flex; align-items:center; width:100%; gap:1rem; }
+        .wf-label { width:80px; flex-shrink:0; font-size:.65rem; text-transform:uppercase; letter-spacing:.05em; color:var(--dim); text-align:right; font-weight:600; }
+        .wf-nodes { display:flex; flex-wrap:wrap; gap:.5rem; flex:1; justify-content:center; }
+        .wf-node { border-radius:8px; padding:.45rem .65rem; font-size:.75rem; text-align:center; border:1px solid; display:flex; flex-direction:column; gap:.1rem; min-width:100px; }
+        .wf-node strong { font-size:.75rem; } .wf-node small { font-size:.6rem; opacity:.7; line-height:1.3; }
+        .wf-wide { flex:1; min-width:180px; }
+        .wf-user { background:rgba(56,189,248,.1); border-color:rgba(56,189,248,.3); color:var(--accent); }
+        .wf-code { background:rgba(129,140,248,.1); border-color:rgba(129,140,248,.3); color:var(--accent2); }
+        .wf-azure { background:rgba(56,189,248,.15); border-color:rgba(56,189,248,.4); color:#7dd3fc; min-width:280px; }
+        .wf-storage { background:rgba(251,191,36,.1); border-color:rgba(251,191,36,.3); color:var(--yellow); flex:1; min-width:180px; }
+        .wf-workbook { background:rgba(52,211,153,.1); border-color:rgba(52,211,153,.3); color:var(--green); }
+        .wf-out { background:rgba(52,211,153,.08); border-color:rgba(52,211,153,.25); color:#6ee7b7; min-width:90px; font-size:.65rem; }
+        .wf-arrow { color:var(--dim); font-size:.85rem; padding:.35rem 0; display:flex; align-items:center; gap:.5rem; margin-left:80px; }
+        .wf-arrow span { font-size:.65rem; color:var(--dim); font-style:italic; }
+
+        /* Identity chain */
+        .identity-chain { display:flex; align-items:center; justify-content:center; gap:.5rem; flex-wrap:wrap; }
+        .id-step { background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:.45rem .65rem; text-align:center; display:flex; flex-direction:column; gap:.1rem; min-width:85px; position:relative; }
+        .id-step strong { font-size:.75rem; } .id-step small { font-size:.6rem; color:var(--dim); }
+        .id-num { position:absolute; top:-7px; left:-7px; width:18px; height:18px; border-radius:50%; background:var(--border); color:var(--text); font-size:.6rem; font-weight:700; display:flex; align-items:center; justify-content:center; }
+        .id-active { border-color:var(--green); } .id-active .id-num { background:var(--green); color:var(--bg); }
+        .id-arrow { color:var(--dim); font-size:.9rem; }
+
+        /* Payload */
+        .payload-columns { display:grid; grid-template-columns:repeat(3,1fr); gap:1rem; }
+        .payload-col { background:var(--bg); border-radius:8px; padding:.65rem; }
+        .payload-group-title { font-size:.65rem; text-transform:uppercase; letter-spacing:.04em; color:var(--accent); font-weight:600; margin-bottom:.4rem; padding-bottom:.3rem; border-bottom:1px solid var(--border); }
+        .payload-item { font-size:.68rem; padding:.12rem 0; display:flex; gap:.4rem; line-height:1.4; }
+        .pk { color:var(--accent2); font-weight:500; white-space:nowrap; } .pv { color:var(--dim); word-break:break-all; }
+
+        footer { text-align:center; color:var(--dim); font-size:.7rem; margin-top:2rem; padding-top:1rem; border-top:1px solid var(--border); }
+
+        @media (max-width:768px) { .input-grid { grid-template-columns:1fr 1fr; } .payload-columns { grid-template-columns:1fr; } }
+    </style>
+</head>
+<body>
+<div class="container">
+    <header>
+        <h1>AIDA — App Insights Cost Estimator</h1>
+        <p>Azure Application Insights — full pricing breakdown with 12-month growth projection</p>
+    </header>
+
+    <!-- ═══════════════════ PRICING OVERVIEW ═══════════════════ -->
+    <div class="card">
+        <h3 style="display:flex;align-items:center;justify-content:space-between;">📊 Azure Application Insights — Full Pricing Overview <a href="https://azure.microsoft.com/en-us/pricing/details/monitor/" target="_blank" style="font-size:.72rem;font-weight:600;color:#fcd34d;text-decoration:none;background:rgba(252,211,77,.12);padding:.3rem .7rem;border-radius:6px;border:1px solid rgba(252,211,77,.35);transition:background .2s;">🔗 Official Azure Pricing ↗</a></h3>
+        <table class="pricing-table">
+            <thead><tr><th>Category</th><th>Free Tier</th><th>When Exceeded</th><th>Notes</th></tr></thead>
+            <tbody>
+                <tr><td>1. Data Ingestion</td><td><span class="free-tag">5 GB / month</span></td><td><span class="paid-tag">~$2.30 / GB</span></td><td>Resets every calendar month. Only pay for GB above 5.</td></tr>
+                <tr><td>2. Data Retention (first 90 days)</td><td><span class="free-tag">FREE for 90 days</span></td><td>—</td><td>All ingested data (free + paid) is searchable for 90 days at no extra cost.</td></tr>
+                <tr><td>3. Retention beyond 90 days (Interactive)</td><td>—</td><td><span class="paid-tag">~$0.10 / GB / month</span></td><td>Pro-rated daily. Keeps data queryable in Workbooks.</td></tr>
+                <tr><td>4. Long-term Archive (91 days → 12 years)</td><td>—</td><td><span class="paid-tag">~$0.02 / GB / month</span></td><td>Cheaper but slower queries (Search Job). Useful for compliance.</td></tr>
+                <tr><td>5. Queries &amp; Workbooks</td><td><span class="zero-tag">$0 ALWAYS FREE</span></td><td><span class="zero-tag">$0</span></td><td>Running KQL queries, viewing Workbook dashboards → always free.</td></tr>
+                <tr><td>6. Data Export</td><td>CSV download = free</td><td><span class="paid-tag">~$0.10 / GB</span></td><td>Only if you pipe data out via Continuous Export / Diagnostic Settings.</td></tr>
+                <tr><td>7. Alerts</td><td>—</td><td><span class="paid-tag">$0.10–$1.50 / rule / month</span></td><td>Only if you create alert rules. AIDA doesn't use alerts.</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- ═══════════════════ CALLOUTS ═══════════════════ -->
+    <div class="callout">
+        <div class="callout-title">✅ Workbook / Report / Dashboard = ALWAYS FREE</div>
+        <p>Running KQL queries, viewing Azure Workbook dashboards, refreshing data → never costs money. Costs only come from <strong>ingestion</strong> (sending data up) and <strong>retention</strong> (keeping data beyond 90 days). Viewing reports is completely free, no matter how many times.</p>
+    </div>
+
+    <div class="callout callout-info">
+        <div class="callout-title">💡 Tips to keep cost = $0 forever</div>
+        <p>Go to <strong>Usage and estimated costs → Data Retention = 90 days</strong>. Data older than 90 days will be auto-deleted. As long as monthly ingestion stays under 5 GB, everything is completely free.</p>
+    </div>
+
+    <div class="callout callout-warn">
+        <div class="callout-title">⚠️ After 2 years of operation — what should you do?</div>
+        <p><strong>Option A:</strong> Keep Retention = 90 days → no storage cost, old data auto-deletes.<br>
+           <strong>Option B:</strong> Export data to CSV (free) or Azure Blob before the 90-day window expires, then delete old data.<br>
+           <strong>Option C:</strong> If you need to keep data &gt; 90 days → use Archive tier ($0.02/GB/month) for compliance.<br>
+           <strong>Option D:</strong> Create a new App Insights resource, start fresh (free tier resets).</p>
+    </div>
+
+    <!-- ═══════════════════ INPUTS ═══════════════════ -->
+    <div class="input-grid">
+        <div class="input-card">
+            <label>Starting Users</label>
+            <input type="number" id="startUsers" value="200" min="1" max="100000" step="10">
+            <div class="unit">month 1 users</div>
+        </div>
+        <div class="input-card">
+            <label>Growth / Month</label>
+            <input type="number" id="growthPerMonth" value="50" min="0" max="10000" step="5">
+            <div class="unit">new users each month</div>
+        </div>
+        <div class="input-card">
+            <label>Actions / User / Day <span title="Number of times a user triggers tracked features per day:&#10;• Review File / Changes / PR&#10;• Dependency Analysis (4 modes)&#10;• Template sync&#10;Each action = 1 telemetry event." style="cursor:help;font-size:1rem;vertical-align:middle;">ℹ️</span></label>
+            <input type="number" id="actionsPerDay" value="35" min="1" max="500" step="1">
+            <div class="unit">review, dependency, sync, etc.</div>
+        </div>
+        <div class="input-card">
+            <label>Working Days / Month</label>
+            <input type="number" id="workingDays" value="22" min="1" max="31" step="1">
+            <div class="unit">business days</div>
+        </div>
+        <div class="input-card">
+            <label>Payload Size (KB)</label>
+            <input type="number" id="payloadSize" value="1.5" min="0.1" max="50" step="0.1">
+            <div class="unit">avg. JSON per event</div>
+        </div>
+        <div class="input-card" style="position:relative;">
+            <label>Retention Days <span title="💡 90 = FREE forever! Data auto-deletes after 90 days → $0 retention.&#10;365/730 = data kept longer, first 90 days free, then $0.10/GB/month.&#10;Azure default = 90 days." style="cursor:help;font-size:1rem;vertical-align:middle;">ℹ️</span></label>
+            <input type="number" id="retentionDays" value="365" min="30" max="730" step="1">
+            <div class="unit">⚡ <strong style="color:var(--green)">90 = always FREE</strong> (data removed after 90 days)</div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════ RESULTS ═══════════════════ -->
+    <div class="results-grid">
+        <div class="result-card">
+            <h3>📊 Month-1 Events</h3>
+            <div class="value accent" id="eventsMonth">—</div>
+            <div class="sub" id="eventsDay">—</div>
+        </div>
+        <div class="result-card">
+            <h3>💾 Month-1 Ingested</h3>
+            <div class="value accent" id="dataMonth">—</div>
+            <div class="sub" id="dataDetail">—</div>
+        </div>
+        <div class="result-card">
+            <h3>🆓 Free Tier Usage</h3>
+            <div class="value green" id="freeUsage">—</div>
+            <div class="sub" id="freeStatus">—</div>
+        </div>
+        <div class="result-card">
+            <h3>💰 Month-1 Cost</h3>
+            <div class="value green" id="monthlyCost">—</div>
+            <div class="sub" id="costDetail">—</div>
+        </div>
+        <div class="result-card">
+            <h3>📅 Year-1 Total Cost</h3>
+            <div class="value green" id="yearCost">—</div>
+            <div class="sub" id="yearDetail">—</div>
+        </div>
+    </div>
+
+    <!-- Free Tier Progress Bar -->
+    <div class="card">
+        <h3>Free Tier Capacity — Month 1 (5 GB / month)</h3>
+        <div class="progress-bar-bg">
+            <div class="progress-bar-fill" id="progressFill">—</div>
+        </div>
+        <div class="progress-labels">
+            <span>0 GB</span>
+            <span id="usageLabel">—</span>
+            <span>5 GB (free limit)</span>
+        </div>
+    </div>
+
+    <!-- ═══════════════════ 12-MONTH PROJECTION ═══════════════════ -->
+    <div class="card">
+        <h3>📅 12-Month Growth Projection (editable per month)</h3>
+        <p style="font-size:.8rem;color:var(--dim);margin-bottom:1rem;">
+            Edit <strong>Users</strong> or <strong>Actions/Day</strong> per month. First 90 days retention = FREE for all data.<br>
+            If Retention &gt; 90 days: M1 data starts costing at M4 (9 months paid), M2 at M5 (8 months paid), M3 at M6 (7 months paid)...<br>
+            If Retention = 90 days: all retention = $0 because old data auto-deletes before exceeding the free window.
+        </p>
+        <div style="overflow-x:auto;">
+        <table class="proj-table" id="projTable">
+            <thead>
+                <tr>
+                    <th>Month</th>
+                    <th class="num">Users</th>
+                    <th class="num">Events/Mo</th>
+                    <th class="num">Ingested (GB)</th>
+                    <th class="num">Free 5GB</th>
+                    <th class="num">Ingestion $</th>
+                    <th class="num">Ret. Months</th>
+                    <th class="num">Ret. GB</th>
+                    <th class="num">Ret. $/Mo</th>
+                    <th class="num">Total $/Mo</th>
+                    <th class="num">Cumul. $</th>
+                </tr>
+            </thead>
+            <tbody id="projBody"></tbody>
+            <tfoot id="projFoot"></tfoot>
+        </table>
+        </div>
+        <p style="font-size:.72rem;color:var(--dim);margin-top:.75rem;">
+            <strong>Ret. Months</strong> = number of past months whose data has exceeded the free 90-day window and is now charged retention.<br>
+            E.g., at M7: data from M1→M4 has exceeded 90 days → 4 months charged. <strong>Ret. GB</strong> = total GB from those months combined.<br>
+            If Retention ≤ 90 days → always $0 (data auto-deleted before exceeding free window).<br>
+            Retention: <strong>$0.10/GB/month</strong> (Interactive) · $0.02/GB/month (Archive).
+        </p>
+    </div>
+
+    <!-- ═══════════════════ QUICK SCENARIOS ═══════════════════ -->
+    <div class="card">
+        <h3>📐 Quick Scenarios (click to apply)</h3>
+        <div class="scenario-grid" id="scenarioGrid"></div>
+    </div>
+
+    <!-- ═══════════════════ DETAILED BREAKDOWN ═══════════════════ -->
+    <div class="card">
+        <h3>📋 Month-1 Detailed Breakdown</h3>
+        <table>
+            <thead><tr><th>Metric</th><th class="num">Per Day</th><th class="num">Per Month</th><th class="num">Per Year (×12)</th></tr></thead>
+            <tbody id="breakdownBody"></tbody>
+        </table>
+    </div>
+
+    <!-- ═══════════════════ WORKFLOW ═══════════════════ -->
+    <div class="card">
+        <h3>🔄 AIDA Tracking → App Insights → Workbook Workflow</h3>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:0;">
+            <div class="wf-row">
+                <div class="wf-label">User</div>
+                <div class="wf-nodes">
+                    <div class="wf-node wf-user">Review File</div>
+                    <div class="wf-node wf-user">Review Changes</div>
+                    <div class="wf-node wf-user">Review All</div>
+                    <div class="wf-node wf-user">Review PR</div>
+                    <div class="wf-node wf-user">Dependency</div>
+                    <div class="wf-node wf-user">Dep PR</div>
+                    <div class="wf-node wf-user">Sync Templates</div>
+                </div>
+            </div>
+            <div class="wf-arrow">▼ <span>trackEvent() — 10 event types</span></div>
+            <div class="wf-row">
+                <div class="wf-label">Extension</div>
+                <div class="wf-nodes">
+                    <div class="wf-node wf-code wf-wide"><strong>tracking-enums.ts</strong><small>10 events · 3 providers · 4 sources</small></div>
+                    <div class="wf-node wf-code wf-wide"><strong>tracking-event-model.ts</strong><small>18 custom props + identity</small></div>
+                    <div class="wf-node wf-code wf-wide"><strong>usage-tracking.ts</strong><small>HTTPS POST (~1.5 KB) no SDK</small></div>
+                </div>
+            </div>
+            <div class="wf-arrow">▼ <span>HTTPS POST to /v2/track — THIS IS THE ONLY COST (ingestion)</span></div>
+            <div class="wf-row">
+                <div class="wf-label">Azure</div>
+                <div class="wf-nodes">
+                    <div class="wf-node wf-azure"><strong>Application Insights</strong><small>Ingestion: $2.30/GB over 5GB free</small></div>
+                </div>
+            </div>
+            <div class="wf-arrow">▼ <span>stored in Log Analytics (90 days FREE)</span></div>
+            <div class="wf-row">
+                <div class="wf-label">Storage</div>
+                <div class="wf-nodes">
+                    <div class="wf-node wf-storage"><strong>customEvents</strong><small>name · timestamp · 18 custom props</small></div>
+                    <div class="wf-node wf-storage"><strong>Log Analytics</strong><small>KQL engine · 90-day free retention</small></div>
+                </div>
+            </div>
+            <div class="wf-arrow">▼ <span>queried by Workbook — <strong style="color:var(--green)">$0 ALWAYS FREE</strong></span></div>
+            <div class="wf-row">
+                <div class="wf-label">Dashboard</div>
+                <div class="wf-nodes">
+                    <div class="wf-node wf-workbook wf-wide"><strong>Azure Workbook — FREE</strong><small>12 KQL queries → interactive dashboard</small></div>
+                </div>
+            </div>
+            <div class="wf-arrow">▼ <span>12 visualizations — all free to render</span></div>
+            <div class="wf-row">
+                <div class="wf-label">Outputs</div>
+                <div class="wf-nodes">
+                    <div class="wf-node wf-out">Q1–Q2<small>User & Log</small></div>
+                    <div class="wf-node wf-out">Q3–Q5<small>Charts</small></div>
+                    <div class="wf-node wf-out">Q6–Q8<small>AI & Users</small></div>
+                    <div class="wf-node wf-out">Q9–Q11<small>Review Mode</small></div>
+                    <div class="wf-node wf-out">Q12<small>Ghost Users</small></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Payload detail -->
+        <div style="margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--border);">
+            <h4 style="font-size:.78rem;color:var(--muted);margin-bottom:.6rem;">📦 Event Payload (~1.5 KB)</h4>
+            <div class="payload-columns">
+                <div class="payload-col">
+                    <div class="payload-group-title">Envelope</div>
+                    <div class="payload-item"><span class="pk">name</span><span class="pv">Microsoft.ApplicationInsights.{iKey}.Event</span></div>
+                    <div class="payload-item"><span class="pk">time</span><span class="pv">2026-02-26T10:30:00Z</span></div>
+                    <div class="payload-item"><span class="pk">iKey</span><span class="pv">xxxxxxxx-xxxx-xxxx-xxxx</span></div>
+                </div>
+                <div class="payload-col">
+                    <div class="payload-group-title">Tags</div>
+                    <div class="payload-item"><span class="pk">ai.user.id</span><span class="pv">DOMAIN\user</span></div>
+                    <div class="payload-item"><span class="pk">ai.session.id</span><span class="pv">vscode-session-abc</span></div>
+                    <div class="payload-item"><span class="pk">ai.device.os</span><span class="pv">win32</span></div>
+                    <div class="payload-item"><span class="pk">ai.application.ver</span><span class="pv">1.1.15</span></div>
+                </div>
+                <div class="payload-col">
+                    <div class="payload-group-title">customDimensions (18 props)</div>
+                    <div class="payload-item"><span class="pk">userDisplayName</span><span class="pv">Trong Duc Le</span></div>
+                    <div class="payload-item"><span class="pk">windowsId</span><span class="pv">DOMAIN\user01</span></div>
+                    <div class="payload-item"><span class="pk">microsoftAccount</span><span class="pv">user@company.com</span></div>
+                    <div class="payload-item"><span class="pk">eventData</span><span class="pv">{"source":"chat","aiProvider":"copilot"}</span></div>
+                    <div class="payload-item"><span class="pk">editionType</span><span class="pv">company</span></div>
+                    <div class="payload-item"><span class="pk">+ 13 more...</span><span class="pv">version, os, arch, language, etc.</span></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Identity chain -->
+        <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border);">
+            <h4 style="font-size:.78rem;color:var(--muted);margin-bottom:.6rem;">🔑 Identity Collection (Parallel)</h4>
+            <div class="identity-chain">
+                <div class="id-step id-active"><span class="id-num">1</span><strong>Windows</strong><small>domain\user + AD name</small></div>
+                <div class="id-arrow">+</div>
+                <div class="id-step id-active"><span class="id-num">2</span><strong>Microsoft</strong><small>Auth API</small></div>
+                <div class="id-arrow">+</div>
+                <div class="id-step id-active"><span class="id-num">3</span><strong>GitHub</strong><small>Auth API</small></div>
+            </div>
+            <div style="text-align:center;margin-top:.5rem;color:var(--muted);font-size:.78rem;">displayName = windowsDisplayName ?? microsoftAccount ?? githubAccount</div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════ ASSUMPTIONS ═══════════════════ -->
+    <div class="card">
+        <h3>📝 Assumptions</h3>
+        <ul style="list-style:none;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:.35rem;">
+            <li style="font-size:.8rem;color:var(--dim);padding-left:1.2rem;position:relative;"><span style="position:absolute;left:0;color:var(--accent);">•</span>Each user action ≈ 1.3 App Insights events (some flows emit 2)</li>
+            <li style="font-size:.8rem;color:var(--dim);padding-left:1.2rem;position:relative;"><span style="position:absolute;left:0;color:var(--accent);">•</span>Ingestion overhead: ×2 raw payload (indexing, metadata)</li>
+            <li style="font-size:.8rem;color:var(--dim);padding-left:1.2rem;position:relative;"><span style="position:absolute;left:0;color:var(--accent);">•</span>Free tier: 5 GB/month — resets each calendar month</li>
+            <li style="font-size:.8rem;color:var(--dim);padding-left:1.2rem;position:relative;"><span style="position:absolute;left:0;color:var(--accent);">•</span>First 90 days retention: FREE (all data)</li>
+            <li style="font-size:.8rem;color:var(--dim);padding-left:1.2rem;position:relative;"><span style="position:absolute;left:0;color:var(--accent);">•</span>Overage: $2.30/GB ingestion, $0.10/GB/month retention</li>
+            <li style="font-size:.8rem;color:var(--dim);padding-left:1.2rem;position:relative;"><span style="position:absolute;left:0;color:var(--accent);">•</span>Payload ~1.5 KB based on AIDA TrackingEventModel (18 custom props)</li>
+            <li style="font-size:.8rem;color:var(--dim);padding-left:1.2rem;position:relative;"><span style="position:absolute;left:0;color:var(--accent);">•</span>Queries &amp; Workbooks: always $0 regardless of volume</li>
+            <li style="font-size:.8rem;color:var(--dim);padding-left:1.2rem;position:relative;"><span style="position:absolute;left:0;color:var(--accent);">•</span>No sampling — every event sent. Sampling can reduce 2–10×</li>
+        </ul>
+    </div>
+
+    <footer>
+        AIDA Extension — Azure Application Insights Cost Estimator &bull; Updated February 2026 &bull; Queries &amp; Workbooks = always FREE
+    </footer>
+
+</div>
+<script>
+const FREE_INGESTION_GB = 5;
+const COST_PER_GB_INGESTION = 2.30;
+const COST_PER_GB_RETENTION = 0.10;
+const EVENTS_PER_ACTION = 1.3;
+const INGESTION_OVERHEAD = 2.0;
+const FREE_RETENTION_DAYS = 90;
+
+const $ = id => document.getElementById(id);
+const fmt = n => Math.round(n).toLocaleString('en-US');
+
+const inputs = {
+    startUsers: $('startUsers'),
+    growthPerMonth: $('growthPerMonth'),
+    actionsPerDay: $('actionsPerDay'),
+    workingDays: $('workingDays'),
+    payloadSize: $('payloadSize'),
+    retentionDays: $('retentionDays'),
+};
+
+// ── Scenarios ──
+const scenarios = [
+    { users:50, growth:10, actions:10, label:'Tiny Team' },
+    { users:100, growth:20, actions:15, label:'Small' },
+    { users:200, growth:50, actions:20, label:'Current' },
+    { users:300, growth:50, actions:20, label:'Target' },
+    { users:500, growth:80, actions:25, label:'Growth' },
+    { users:1000, growth:100, actions:30, label:'Enterprise' },
+];
+
+function renderScenarios() {
+    $('scenarioGrid').innerHTML = scenarios.map(s => {
+        const ev = s.users * s.actions * EVENTS_PER_ACTION * 22;
+        const gb = (ev * 1.5 / 1024 / 1024) * INGESTION_OVERHEAD;
+        const cost = Math.max(0, (gb - FREE_INGESTION_GB) * COST_PER_GB_INGESTION);
+        const cls = cost===0?'green':cost<10?'yellow':'red';
+        return `<div class="scenario-item" onclick="applyScenario(${s.users},${s.growth},${s.actions})">
+            <div class="s-users">${s.users} users +${s.growth}/mo × ${s.actions}/day</div>
+            <div class="s-data" style="color:var(--accent)">${gb.toFixed(2)} GB</div>
+            <div class="s-cost" style="color:var(--${cls})">${cost===0?'FREE ✓':'$'+cost.toFixed(2)}</div>
+        </div>`;
+    }).join('');
+}
+
+function applyScenario(u, g, a) {
+    inputs.startUsers.value = u;
+    inputs.growthPerMonth.value = g;
+    inputs.actionsPerDay.value = a;
+    calculate();
+}
+
+// ── Calc helpers ──
+function calcMonth(users, actionsPerDay, workingDays, payloadKB) {
+    const eventsDay = users * actionsPerDay * EVENTS_PER_ACTION;
+    const eventsMonth = eventsDay * workingDays;
+    const rawMB = (eventsMonth * payloadKB) / 1024;
+    const ingestedMB = rawMB * INGESTION_OVERHEAD;
+    const ingestedGB = ingestedMB / 1024;
+    const overageGB = Math.max(0, ingestedGB - FREE_INGESTION_GB);
+    const ingestionCost = overageGB * COST_PER_GB_INGESTION;
+    return { eventsDay, eventsMonth, rawMB, ingestedMB, ingestedGB, overageGB, ingestionCost };
+}
+
+// ── Main ──
+function calculate() {
+    const startUsers = Math.max(1, +inputs.startUsers.value || 200);
+    const growth = Math.max(0, +inputs.growthPerMonth.value || 50);
+    const actionsPerDay = Math.max(1, +inputs.actionsPerDay.value || 20);
+    const workingDays = Math.max(1, +inputs.workingDays.value || 22);
+    const payloadKB = Math.max(0.1, +inputs.payloadSize.value || 1.5);
+    const retDays = Math.max(30, +inputs.retentionDays.value || 90);
+
+    // Month 1 summary
+    const m1 = calcMonth(startUsers, actionsPerDay, workingDays, payloadKB);
+
+    $('eventsMonth').textContent = fmt(m1.eventsMonth);
+    $('eventsDay').textContent = `${fmt(m1.eventsDay)} events/day`;
+    $('dataMonth').textContent = m1.ingestedGB >= 1 ? m1.ingestedGB.toFixed(2)+' GB' : m1.ingestedMB.toFixed(0)+' MB';
+    $('dataDetail').textContent = `Raw: ${m1.rawMB.toFixed(0)} MB → ×${INGESTION_OVERHEAD} = ${m1.ingestedMB.toFixed(0)} MB ingested`;
+
+    const pct = (m1.ingestedGB / FREE_INGESTION_GB) * 100;
+    const freeEl = $('freeUsage');
+    freeEl.textContent = pct.toFixed(1)+'%';
+    freeEl.className = 'value '+(pct<=80?'green':pct<=100?'yellow':'red');
+    $('freeStatus').textContent = pct<=100
+        ? `${(FREE_INGESTION_GB - m1.ingestedGB).toFixed(2)} GB remaining`
+        : `⚠️ Exceeds by ${m1.overageGB.toFixed(2)} GB`;
+
+    const costEl = $('monthlyCost');
+    costEl.textContent = m1.ingestionCost===0 ? '$0 FREE' : '$'+m1.ingestionCost.toFixed(2);
+    costEl.className = 'value '+(m1.ingestionCost===0?'green':m1.ingestionCost<10?'yellow':'red');
+    $('costDetail').textContent = m1.ingestionCost===0
+        ? 'Within free tier (ingestion only)'
+        : `${m1.overageGB.toFixed(2)} GB × $${COST_PER_GB_INGESTION}/GB`;
+
+    // Progress bar
+    const fill = $('progressFill');
+    fill.style.width = Math.max(Math.min(pct,100),8)+'%';
+    fill.textContent = m1.ingestedGB.toFixed(2)+' GB';
+    fill.style.background = pct<=60?'linear-gradient(90deg,#059669,#34d399)':pct<=90?'linear-gradient(90deg,#d97706,#fbbf24)':'linear-gradient(90deg,#dc2626,#f87171)';
+    $('usageLabel').textContent = `Month 1: ${m1.ingestedGB.toFixed(2)} GB (${pct.toFixed(1)}%)`;
+
+    // ── 12-Month Projection ──
+    // Per-origin view: each month's data gets free 90 days (≈3 months).
+    // M1 data: free M1-M3, charged M4-M12 = 9 months retention
+    // M2 data: free M2-M4, charged M5-M12 = 8 months retention
+    // ...M9: 1 month, M10-M12: 0 months (still within 90-day free window)
+    const months = [];
+    let totalIngestionCost = 0;
+    let totalRetentionCost = 0;
+
+    for (let i = 0; i < 12; i++) {
+        const users = startUsers + growth * i;
+        const mc = calcMonth(users, actionsPerDay, workingDays, payloadKB);
+
+        // How many months THIS month's data will be charged retention?
+        // Data ingested at month i (0-based) gets free for 3 months (i, i+1, i+2).
+        // Charged from month (i+3) to month 11 → count = max(0, 12 - (i+3)) = max(0, 9 - i)
+        const retMonths = (retDays > FREE_RETENTION_DAYS) ? Math.max(0, 9 - i) : 0;
+        const retCostForThisData = retMonths * mc.ingestedGB * COST_PER_GB_RETENTION;
+
+        totalIngestionCost += mc.ingestionCost;
+        totalRetentionCost += retCostForThisData;
+
+        months.push({
+            month: i + 1, users, ...mc,
+            retMonths,
+            retCostForThisData,
+            totalCost: mc.ingestionCost + retCostForThisData,
+        });
+    }
+
+    // Render projection table
+    const tbody = $('projBody');
+    let cumulCost = 0;
+    tbody.innerHTML = months.map((m, i) => {
+        cumulCost += m.totalCost;
+        const highlight = i >= 9 ? ' class="proj-highlight"' : '';
+
+        const retMonthsLabel = m.retMonths > 0
+            ? `<span style="color:var(--yellow)">${m.retMonths}</span>`
+            : '<span style="color:var(--green)">0 ✓</span>';
+
+        const retCostLabel = m.retCostForThisData > 0
+            ? '<span style="color:var(--yellow)">$'+m.retCostForThisData.toFixed(2)+'</span>'
+            : '<span style="color:var(--green)">$0</span>';
+        const totalLabel = m.totalCost === 0
+            ? '<span style="color:var(--green);font-weight:700">$0 ✓</span>'
+            : '<span style="color:'+(m.totalCost<5?'var(--yellow)':'var(--red)')+';font-weight:700">$'+m.totalCost.toFixed(2)+'</span>';
+        const ingLabel = m.ingestionCost === 0
+            ? '<span style="color:var(--green)">$0</span>'
+            : '$'+m.ingestionCost.toFixed(2);
+        const freeNote = m.ingestedGB <= FREE_INGESTION_GB
+            ? '<span style="color:var(--green)">within</span>'
+            : '<span style="color:var(--red)">+'+m.overageGB.toFixed(2)+'</span>';
+        const cumulLabel = cumulCost === 0
+            ? '<span style="color:var(--green)">$0</span>'
+            : '<span style="color:var(--dim)">$'+cumulCost.toFixed(2)+'</span>';
+
+        return `<tr${highlight}>
+            <td>M${m.month}${i>=9?' <span style="font-size:.62rem;color:var(--green)">(90d free)</span>':''}</td>
+            <td class="num">${fmt(m.users)}</td>
+            <td class="num">${fmt(m.eventsMonth)}</td>
+            <td class="num">${m.ingestedGB.toFixed(2)}</td>
+            <td class="num">${freeNote}</td>
+            <td class="num">${ingLabel}</td>
+            <td class="num">${retMonthsLabel}</td>
+            <td class="num">${m.ingestedGB.toFixed(2)}</td>
+            <td class="num">${retCostLabel}</td>
+            <td class="num">${totalLabel}</td>
+            <td class="num">${cumulLabel}</td>
+        </tr>`;
+    }).join('');
+
+    const grandTotal = totalIngestionCost + totalRetentionCost;
+    $('projFoot').innerHTML = `<tr class="total-row">
+        <td colspan="5" style="text-align:right;">12-Month Totals →</td>
+        <td class="num" style="color:var(--${totalIngestionCost===0?'green':'yellow'})">$${totalIngestionCost.toFixed(2)}</td>
+        <td class="num">—</td>
+        <td class="num">—</td>
+        <td class="num" style="color:var(--${totalRetentionCost===0?'green':'yellow'})">$${totalRetentionCost.toFixed(2)}</td>
+        <td class="num" style="color:var(--${grandTotal===0?'green':grandTotal<50?'yellow':'red'});font-size:1rem;">$${grandTotal.toFixed(2)}</td>
+        <td class="num" style="color:var(--${grandTotal===0?'green':grandTotal<50?'yellow':'red'});">$${grandTotal.toFixed(2)}</td>
+    </tr>`;
+
+    // Year cost card
+    const ycEl = $('yearCost');
+    ycEl.textContent = grandTotal===0 ? '$0 FREE' : '$'+grandTotal.toFixed(2);
+    ycEl.className = 'value '+(grandTotal===0?'green':grandTotal<50?'yellow':'red');
+    $('yearDetail').textContent = `Ingestion: $${totalIngestionCost.toFixed(2)} + Retention: $${totalRetentionCost.toFixed(2)}`;
+
+    // ── Month-1 Breakdown ──
+    const bRows = [
+        ['👥 Active Users', startUsers, startUsers, startUsers],
+        ['⚡ Actions', fmt(startUsers*actionsPerDay), fmt(startUsers*actionsPerDay*workingDays), fmt(startUsers*actionsPerDay*workingDays*12)],
+        ['📡 Events', fmt(m1.eventsDay), fmt(m1.eventsMonth), fmt(m1.eventsMonth*12)],
+        ['📦 Raw payload', m1.rawMB.toFixed(1)+' MB/mo', (m1.rawMB).toFixed(0)+' MB', (m1.rawMB*12/1024).toFixed(2)+' GB'],
+        ['💾 Ingested (×2)', (m1.ingestedMB/workingDays).toFixed(1)+' MB/day', m1.ingestedMB.toFixed(0)+' MB', (m1.ingestedMB*12/1024).toFixed(2)+' GB'],
+        ['🆓 Free tier', '—', FREE_INGESTION_GB+' GB', (FREE_INGESTION_GB*12)+' GB'],
+        ['📊 Ingestion overage', '—', m1.overageGB.toFixed(2)+' GB', (m1.overageGB*12).toFixed(2)+' GB'],
+        ['🗄️ Retention (M1)', '—', '<span style="color:var(--green)">FREE (90 days)</span>', '—'],
+    ];
+    const totalM1 = m1.ingestionCost;
+    $('breakdownBody').innerHTML = bRows.map(r => `<tr><td>${r[0]}</td><td class="num">${r[1]}</td><td class="num">${r[2]}</td><td class="num">${r[3]}</td></tr>`).join('')
+        + `<tr class="total-row"><td>💰 Month-1 Cost</td><td class="num">—</td><td class="num" style="color:var(--${totalM1===0?'green':'red'})">${totalM1===0?'$0 ✓':'$'+totalM1.toFixed(2)}</td><td class="num">—</td></tr>`;
+}
+
+Object.values(inputs).forEach(el => el.addEventListener('input', calculate));
+renderScenarios();
+calculate();
+</script>
+</body>
+</html>

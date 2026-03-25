@@ -1,4 +1,4 @@
-# AIDA Extension - Tổng hợp chức năng (v1.1.12)
+# AIDA Extension - Tổng hợp chức năng (v1.1.14)
 
 > Tài liệu tổng hợp tất cả các chức năng mà extension **AIDA (AI Development Assistant)** cung cấp cho user.
 
@@ -10,6 +10,7 @@
 - Hỗ trợ đa ngôn ngữ: **TypeScript, JavaScript, Python, C#, Go, Java, PHP, Ruby, Rust, Kotlin, Swift**
 - Nhận diện framework: **Angular, React, Vue, Node.js**
 - Hỗ trợ **Technical Project Rules** và **Business Project Rules** tùy chỉnh
+- **Review Mode:** Quick (không business docs) / Enhanced (có business docs từ `AIDA/business-docs/`)
 - **Truy cập:**
   - Right-click → `AIDA: Review File`
   - Command Palette (`Ctrl+Shift+P`) → `AIDA: Review File`
@@ -186,4 +187,4 @@
 
 ---
 
-*Tài liệu được tạo ngày 17/02/2026 — dựa trên AIDA v1.1.12*
+*Tài liệu được cập nhật ngày 25/02/2026 — dựa trên AIDA v1.1.14*

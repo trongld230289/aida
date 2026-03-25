@@ -2,7 +2,8 @@
 
 > **Created:** February 18, 2026  
 > **Goal:** Restructure ~28,600 lines across ~40 files into clean, domain-organized modules  
-> **Rule:** Check off ✅ each item as you complete it. Done when everything is checked.
+> **Rule:** Check off ✅ each item as you complete it. Done when everything is checked.  
+> **Note:** This checklist was written during the JavaScript era. All `.js` files referenced below have since been migrated to `.ts` (TypeScript) in the deep refactor. File paths also moved into organized subfolders (see [ARCHITECTURE.md](./ARCHITECTURE.md) for current structure).
 
 ---
 
