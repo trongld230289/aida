@@ -107,7 +107,8 @@ async function getMonacoWebviewContent(diffData: Record<string, any>, panel: vsc
                 additions: file.additions || 0,
                 deletions: file.deletions || 0,
                 changeType: file.changeType || 'modified',
-                active: isCurrentFile
+                active: isCurrentFile,
+                cacheKey: key // Store the cache key for direct access
             };
         });
 
@@ -124,31 +125,29 @@ async function getMonacoWebviewContent(diffData: Record<string, any>, panel: vsc
             setTimeout(async () => {
                 console.log('🔄 Starting background preload of other files...');
                 let preloadCount = 0;
-                const maxPreload = Math.min(3, allFiles.length - 1); // Preload max 3 files
+                const maxPreload = 3; // Preload max 3 files
 
-                for (const file of allFiles) {
-                    if (file.path !== filePath && preloadCount < maxPreload) {
+                // Only iterate through the next few files, not all files
+                for (let i = 1; i <= maxPreload; i++) {
+                    const nextIndex = (currentFileIndex + i) % allFiles.length; // Wrap around
+                    const file = allFiles[nextIndex];
+                    
+                    if (file && file.path !== filePath) {
                         const contentCacheKey = `content_${file.path}`;
-                        if (!(cache)[contentCacheKey]) {
+                        if (!(cache)[contentCacheKey] && file.cacheKey && (cache)[file.cacheKey]) {
                             try {
-                                // Find the full diff data for this file
-                                const cacheKeys = Object.keys(cache);
-                                for (const key of cacheKeys) {
-                                    if (key.startsWith('pr') && (cache)[key].path === file.path) {
-                                        console.log('📋 Preloading:', file.path);
-                                        const { originalLines, modifiedLines } = await parseFullDiffContentEnhanced((cache)[key].diff, file.path);
+                                console.log('📋 Preloading:', file.path);
+                                const diffEntry = (cache)[file.cacheKey];
+                                const { originalLines, modifiedLines } = await parseFullDiffContentEnhanced(diffEntry.diff, file.path);
 
-                                        (cache)[contentCacheKey] = {
-                                            originalContent: originalLines.map((line) => line.content).join('\n'),
-                                            modifiedContent: modifiedLines.map((line) => line.content).join('\n'),
-                                            timestamp: Date.now()
-                                        };
+                                (cache)[contentCacheKey] = {
+                                    originalContent: originalLines.map((line) => line.content).join('\n'),
+                                    modifiedContent: modifiedLines.map((line) => line.content).join('\n'),
+                                    timestamp: Date.now()
+                                };
 
-                                        preloadCount++;
-                                        console.log('💾 Preloaded:', file.path);
-                                        break;
-                                    }
-                                }
+                                preloadCount++;
+                                console.log('💾 Preloaded:', file.path);
                             } catch (_error: unknown) {
                                 const error = toError(_error);
                                 console.warn('⚠️ Failed to preload:', file.path, error.message);
@@ -156,7 +155,7 @@ async function getMonacoWebviewContent(diffData: Record<string, any>, panel: vsc
                         }
                     }
                 }
-            }, 1000); // Start preload after 1 second to not block initial load
+            }, 100); // Start preload quickly after load
         }
     }
 

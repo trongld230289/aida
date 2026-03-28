@@ -132,4 +132,4 @@ grep -r "1.0.27" . --include="*.json" --include="*.ts" --include="*.md"
 
 ---
 **Last Updated**: March 21, 2026  
-**Current Version**: 1.1.20
+**Current Version**: 1.1.21

@@ -52,7 +52,6 @@ export interface ActivationKeyPayload {
     company: string;
     project: string;              // Project name (e.g. "ProjectX")
     domains: string[];           // Windows domains (e.g. ["CORPDOMAIN"])
-    emailDomains: string[];      // Email domains (e.g. ["examplecorp.com"])
     appInsights: {
         instrumentationKey: string;
         ingestionEndpoint: string;
@@ -236,7 +235,6 @@ export function validateActivationKey(): ActivationResult {
                 company: 'Public',
                 project: 'AIDA-Public',
                 domains: [],
-                emailDomains: [],
                 appInsights: {
                     instrumentationKey: '',
                     ingestionEndpoint: '',

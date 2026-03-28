@@ -68,7 +68,8 @@ class AidaChatbotService {
      * Get default system prompt if file not found
      */
     getDefaultSystemPrompt() {
-        return `You are AIDA (AI Development Assistant), a helpful AI coding assistant integrated into VS Code.
+        return `You are AIDA (AI Development Assistant), a free VS Code extension built by the AIDA team.
+You are NOT the AIDA marketing framework (Attention-Interest-Desire-Action).
 
 ## Your Role:
 - Help developers with coding questions, debugging, and best practices
@@ -76,10 +77,19 @@ class AidaChatbotService {
 - Support multiple programming languages and frameworks
 - Maintain conversation context and build upon previous questions
 
+## What is AIDA:
+When users ask "what is AIDA", describe it as a VS Code extension with features:
+- @review-file, @review-changes, @review-all-changes — AI code review
+- @review-pr — PR review for Azure DevOps, GitHub, GitLab
+- @dependency / @dependency-pr — Dependency graph + AI analysis
+- Smart chat, code explanation, refactoring suggestions
+- Works with GitHub Copilot, OpenAI, Anthropic, Google, Ollama
+- $0 cost with GitHub Copilot, supports 20+ languages
+
 ## Language Guidelines:
 - ALWAYS respond in the SAME language as the user's message
-- Vietnamese input ? Vietnamese response
-- English input ? English response
+- Vietnamese input → Vietnamese response
+- English input → English response
 - Detect language patterns and maintain consistency
 
 ## Response Style:
@@ -300,10 +310,12 @@ class AidaChatbotService {
     }
 
     /**
-     * Detect if message is in Vietnamese
+     * Detect if message is in Vietnamese.
+     * Checks for Vietnamese diacritical marks (tổ hợp dấu tiếng Việt).
      */
-    detectVietnamese(text: string) {
-        return /[ï¿½ï¿½?ï¿½?a?????ï¿½?????dï¿½ï¿½???ï¿½?????ï¿½ï¿½?i?ï¿½ï¿½?ï¿½?ï¿½?????o?????ï¿½ï¿½?u?u??????ï¿½???]/.test(text);
+    detectVietnamese(text: string): boolean {
+        // Vietnamese-specific characters with diacritics
+        return /[àáảãạăắằẳẵặâấầẩẫậđèéẻẽẹêếềểễệìíỉĩịòóỏõọôốồổỗộơớờởỡợùúủũụưứừửữựỳýỷỹỵ]/i.test(text);
     }
 
     /**
@@ -312,11 +324,11 @@ class AidaChatbotService {
     generateContextualResponse(message: string, isVietnamese: boolean, conversationHistory: IChatMessage[]) {
         const lowerMessage = message.toLowerCase();
         
-        // Check for code-related keywords
+        // Check for code-related keywords (both EN and VI)
         const codeKeywords = [
             'code', 'function', 'variable', 'class', 'method', 'api', 'debug', 'error',
             'javascript', 'typescript', 'python', 'react', 'vue', 'angular', 'node',
-            'l?p trï¿½nh', 'code', 'function', 'bi?n', 'l?i', 'debug', '?ng d?ng'
+            'lập trình', 'biến', 'lỗi', 'ứng dụng', 'hàm', 'chạy', 'compile', 'build'
         ];
         
         const isCodeQuestion = codeKeywords.some(keyword => lowerMessage.includes(keyword));
@@ -338,19 +350,19 @@ class AidaChatbotService {
         // React component question
         if (lowerMessage.includes('react component')) {
             if (isVietnamese) {
-                return `# ?? T?o React Component
+                return `# 🧩 Tạo React Component
 
-ï¿½ï¿½y lï¿½ cï¿½ch t?o React component co b?n:
+Đây là cách tạo React component cơ bản:
 
 \`\`\`jsx
-// Functional Component v?i Hooks
+// Functional Component với Hooks
 import React, { useState, useEffect } from 'react';
 
 const MyComponent = ({ title, data }) => {
     const [count, setCount] = useState(0);
     
     useEffect(() => {
-        aidaLogging('Component mounted');
+        console.log('Component mounted');
     }, []);
     
     return (
@@ -358,7 +370,7 @@ const MyComponent = ({ title, data }) => {
             <h2>{title}</h2>
             <p>Count: {count}</p>
             <button onClick={() => setCount(count + 1)}>
-                Increment
+                Tăng
             </button>
         </div>
     );
@@ -367,28 +379,27 @@ const MyComponent = ({ title, data }) => {
 export default MyComponent;
 \`\`\`
 
-**Cï¿½c di?m quan tr?ng:**
-- S? d?ng functional components v?i hooks
-- Props d? truy?n d? li?u
+**Các điểm quan trọng:**
+- Sử dụng functional components với hooks
+- Props để truyền dữ liệu
 - useState cho state management
 - useEffect cho side effects
 
-B?n mu?n tï¿½m hi?u thï¿½m v? hooks nï¿½o khï¿½c khï¿½ng? ??`;
+Bạn muốn tìm hiểu thêm về hooks nào khác không? 🚀`;
             } else {
-                return `# ?? Creating React Components
+                return `# 🧩 Creating React Components
 
 Here's how to create a basic React component:
 
 \`\`\`jsx
 // Functional Component with Hooks
 import React, { useState, useEffect } from 'react';
-import { toError } from '../core/error-utils';
 
 const MyComponent = ({ title, data }) => {
     const [count, setCount] = useState(0);
     
     useEffect(() => {
-        aidaLogging('Component mounted');
+        console.log('Component mounted');
     }, []);
     
     return (
@@ -411,20 +422,20 @@ export default MyComponent;
 - useState for state management
 - useEffect for side effects
 
-Want to learn about other hooks? ??`;
+Want to learn about other hooks? 🚀`;
             }
         }
         
         // JavaScript debugging
         if (lowerMessage.includes('debug') && lowerMessage.includes('javascript')) {
             if (isVietnamese) {
-                return `# ?? Debug JavaScript
+                return `# 🐛 Debug JavaScript
 
-Cï¿½c cï¿½ch debug JavaScript hi?u qu?:
+Các cách debug JavaScript hiệu quả:
 
 \`\`\`javascript
 // 1. Console debugging
-aidaLogging('Debug value:', variable);
+console.log('Debug value:', variable);
 console.table(arrayData);
 console.group('Function trace');
 console.trace();
@@ -432,7 +443,7 @@ console.groupEnd();
 
 // 2. Debugger statement
 function problematicFunction() {
-    debugger; // Trï¿½nh duy?t s? d?ng t?i dï¿½y
+    debugger; // Trình duyệt sẽ dừng tại đây
     const result = someCalculation();
     return result;
 }
@@ -440,46 +451,46 @@ function problematicFunction() {
 // 3. Try-catch error handling
 try {
     const result = riskyOperation();
-    aidaLogging('Success:', result);
-} catch (error: unknown) {
-    const error = toError(_error);
-    aidaLogging('Error details:', error);
-    aidaLogging('Stack trace:', error.stack);
+    console.log('Success:', result);
+} catch (error) {
+    console.error('Error details:', error);
+    console.error('Stack trace:', error.stack);
 }
 \`\`\`
 
-**Tools h?u ï¿½ch:**
+**Tools hữu ích:**
 - Browser DevTools (F12)
 - VS Code Debugger
 - Node.js Inspector
-- ESLint d? tï¿½m l?i ti?m ?n
+- ESLint để tìm lỗi tiềm ẩn
 
-B?n dang g?p l?i gï¿½ c? th? khï¿½ng? ??`;
+Bạn đang gặp lỗi gì cụ thể không? 🔍`;
             }
         }
         
         // Generic code response
         if (isVietnamese) {
-            return `# ?? AIDA - Tr? lï¿½ Code
+            return `# 💻 AIDA - Trợ lý Code
 
-Tï¿½i cï¿½ th? giï¿½p b?n v?i cï¿½u h?i v? "${message}".
+Tôi có thể giúp bạn với câu hỏi về lập trình.
 
-**ï¿½? h? tr? t?t hon, b?n cï¿½ th?:**
-- Chia s? code hi?n t?i 
-- Mï¿½ t? c? th? v?n d? g?p ph?i
-- Cho bi?t ngï¿½n ng?/framework dang dï¿½ng
+**Để hỗ trợ tốt hơn, bạn có thể:**
+- Chia sẻ code hiện tại
+- Mô tả cụ thể vấn đề gặp phải
+- Cho biết ngôn ngữ/framework đang dùng
 
-**Ho?c th? cï¿½c l?nh d?c bi?t:**
-- \`@review-file\` - Review file code
-- \`@review-changes\` - Phï¿½n tï¿½ch thay d?i
-- \`@review-all-changes\` - Phï¿½n tï¿½ch T?T C? thay d?i trong workspace
-- \`@review-pr\` - Review pull request
+**Hoặc thử các lệnh đặc biệt:**
+- \`@review-file\` — Review file code
+- \`@review-changes\` — Phân tích thay đổi
+- \`@review-all-changes\` — Phân tích TẤT CẢ thay đổi trong workspace
+- \`@review-pr\` — Review pull request
+- \`@dependency\` / \`@dependency-pr\` — Impact Analysis (phân tích ảnh hưởng)
 
-Hï¿½y cho tï¿½i thï¿½m chi ti?t nhï¿½! ??`;
+Hãy cho tôi thêm chi tiết nhé! 🚀`;
         } else {
-            return `# ?? AIDA - Code Assistant
+            return `# 💻 AIDA - Code Assistant
 
-I can help you with your question about "${message}".
+I can help you with your coding question.
 
 **For better assistance, you can:**
 - Share your current code
@@ -487,12 +498,13 @@ I can help you with your question about "${message}".
 - Mention the language/framework you're using
 
 **Or try special commands:**
-- \`@review-file\` - Review current file
-- \`@review-changes\` - Analyze changes
-- \`@review-all-changes\` - Analyze ALL changes in workspace
-- \`@review-pr\` - Review pull request
+- \`@review-file\` — Review current file
+- \`@review-changes\` — Analyze changes
+- \`@review-all-changes\` — Analyze ALL changes in workspace
+- \`@review-pr\` — Review pull request
+- \`@dependency\` / \`@dependency-pr\` — Impact Analysis (dependency graph + AI)
 
-Please provide more details! ??`;
+Please provide more details! 🚀`;
         }
     }
 
@@ -503,85 +515,108 @@ Please provide more details! ??`;
         const lowerMessage = message.toLowerCase();
         
         // Time/date questions
-        if (lowerMessage.includes('th? m?y') || lowerMessage.includes('what day')) {
+        if (lowerMessage.includes('thứ mấy') || lowerMessage.includes('ngày mấy') || lowerMessage.includes('what day') || lowerMessage.includes('what date')) {
             const now = new Date();
             const days = isVietnamese 
-                ? ['Ch? nh?t', 'Th? hai', 'Th? ba', 'Th? tu', 'Th? nam', 'Th? sï¿½u', 'Th? b?y']
+                ? ['Chủ nhật', 'Thứ hai', 'Thứ ba', 'Thứ tư', 'Thứ năm', 'Thứ sáu', 'Thứ bảy']
                 : ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
             
             const today = days[now.getDay()];
             const date = now.toLocaleDateString(isVietnamese ? 'vi-VN' : 'en-US');
             
             if (isVietnamese) {
-                return `# ?? Thï¿½ng tin th?i gian
+                return `Hôm nay là **${today}**, ngày ${date}.
 
-Hï¿½m nay lï¿½ **${today}**, ngï¿½y ${date}.
-
-Nhï¿½n ti?n, b?n cï¿½ dang lï¿½m project gï¿½ thï¿½ v? khï¿½ng? Tï¿½i cï¿½ th? h? tr? v?i:
-- Code review vï¿½ t?i uu hï¿½a
-- Debug vï¿½ fix l?i
-- Gi?i thï¿½ch concepts vï¿½ patterns
-- Hu?ng d?n best practices
-
-Chia s? code v?i tï¿½i nhï¿½! ??`;
+Nhân tiện, bạn có đang làm project gì thú vị không? Tôi có thể hỗ trợ code review, debug, hoặc giải thích concepts. Chia sẻ code với tôi nhé! 🚀`;
             } else {
-                return `# ?? Time Information
+                return `Today is **${today}**, ${date}.
 
-Today is **${today}**, ${date}.
+By the way, are you working on any interesting projects? I can help with code review, debugging, or explaining concepts. Share your code with me! 🚀`;
+            }
+        }
+        
+        // AIDA identity questions
+        if (lowerMessage.includes('aida là gì') || lowerMessage.includes('aida la gi') || lowerMessage.includes('what is aida') || lowerMessage.includes('bạn là ai') || lowerMessage.includes('you are')) {
+            if (isVietnamese) {
+                return `# 🤖 AIDA là gì?
 
-By the way, are you working on any interesting projects? I can help with:
-- Code review and optimization
-- Debugging and troubleshooting
-- Explaining concepts and patterns
-- Best practices guidance
+**AIDA (AI Development Assistant)** là một VS Code extension miễn phí, được phát triển bởi AIDA team.
 
-Share your code with me! ??`;
+**Tính năng chính:**
+- \`@review-file\` — Review code bằng AI
+- \`@review-changes\` — Phân tích git changes
+- \`@review-all-changes\` — Phân tích tất cả thay đổi
+- \`@review-pr\` — Review pull request (Azure DevOps, GitHub, GitLab)
+- \`@dependency\` / \`@dependency-pr\` — Phân tích dependency graph
+- **Chat thông minh** — Hỏi đáp, giải thích code, gợi ý refactor
+
+**Hỗ trợ:**
+- 20+ ngôn ngữ lập trình
+- Nhiều AI provider: GitHub Copilot, OpenAI, Anthropic, Google, Ollama...
+- $0 khi dùng GitHub Copilot (có sẵn với GitHub account)
+
+Bạn muốn thử tính năng nào? 🚀`;
+            } else {
+                return `# 🤖 What is AIDA?
+
+**AIDA (AI Development Assistant)** is a free VS Code extension built by the AIDA team.
+
+**Key Features:**
+- \`@review-file\` — AI-powered code review
+- \`@review-changes\` — Analyze git changes
+- \`@review-all-changes\` — Analyze all workspace changes
+- \`@review-pr\` — Review PRs (Azure DevOps, GitHub, GitLab)
+- \`@dependency\` / \`@dependency-pr\` — Dependency graph analysis
+- **Smart Chat** — Q&A, code explanation, refactoring suggestions
+
+**Supports:**
+- 20+ programming languages
+- Multiple AI providers: GitHub Copilot, OpenAI, Anthropic, Google, Ollama...
+- $0 cost with GitHub Copilot (included with GitHub account)
+
+Which feature would you like to try? 🚀`;
             }
         }
         
         // Default friendly response with context awareness
-        const hasHistory = history.length > 2; // More than system + current message
+        const hasHistory = history.length > 2;
         
         if (isVietnamese) {
-            const greeting = hasHistory ? 'Cï¿½n gï¿½ khï¿½c tï¿½i cï¿½ th? giï¿½p khï¿½ng?' : 'Chï¿½o b?n! Tï¿½i lï¿½ AIDA.';
+            const greeting = hasHistory ? 'Còn gì khác tôi có thể giúp không?' : 'Chào bạn! Tôi là AIDA, trợ lý AI chuyên về lập trình.';
             
-            return `# ?? AIDA Assistant
+            return `${greeting}
 
-${greeting}
+**Tôi có thể giúp bạn:**
+- Trả lời câu hỏi về coding
+- Review và phân tích code
+- Debug và troubleshooting
+- Giải thích concepts và patterns
 
-**Tï¿½i chuyï¿½n h? tr?:**
-- L?p trï¿½nh vï¿½ development
-- Code review vï¿½ t?i uu hï¿½a  
-- Debug vï¿½ troubleshooting
-- Gi?i thï¿½ch technical concepts
+**Lệnh đặc biệt:**
+- \`@review-file\` — Review file hiện tại
+- \`@review-changes\` — Phân tích git changes
+- \`@review-pr\` — Review pull request
+- \`@dependency\` / \`@dependency-pr\` — Impact Analysis (phân tích ảnh hưởng)
 
-**Commands d?c bi?t:**
-- \`@review-file\` - Review file hi?n t?i
-- \`@review-changes\` - Phï¿½n tï¿½ch git changes
-- \`@review-all-changes\` - Phï¿½n tï¿½ch T?T C? git changes
-- \`@review-pr\` - Review pull request
-
-B?n dang code gï¿½ thï¿½ v? v?y? ??`;
+Bạn đang làm gì thú vị vậy? 🚀`;
         } else {
-            const greeting = hasHistory ? 'What else can I help you with?' : 'Hello! I\'m AIDA.';
+            const greeting = hasHistory ? 'What else can I help you with?' : 'Hello! I\'m AIDA, your AI coding assistant.';
             
-            return `# ?? AIDA Assistant
+            return `${greeting}
 
-${greeting}
-
-**I specialize in:**
-- Programming and development
-- Code review and optimization
-- Debugging and troubleshooting  
-- Explaining technical concepts
+**I can help you with:**
+- Programming questions and concepts
+- Code review and analysis
+- Debugging and troubleshooting
+- Best practices and patterns
 
 **Special Commands:**
-- \`@review-file\` - Review current file
-- \`@review-changes\` - Analyze git changes
-- \`@review-all-changes\` - Analyze ALL git changes
-- \`@review-pr\` - Review pull request
+- \`@review-file\` — Review current file
+- \`@review-changes\` — Analyze git changes
+- \`@review-pr\` — Review pull request
+- \`@dependency\` / \`@dependency-pr\` — Impact Analysis (dependency graph + AI)
 
-What interesting project are you working on? ??`;
+What interesting project are you working on? 🚀`;
         }
     }
 
@@ -643,56 +678,48 @@ What interesting project are you working on? ??`;
         // If there are images, acknowledge them
         if (images && images.length > 0) {
             if (isVietnamese) {
-                return `# ?? AIDA Assistant
+                return `Tôi thấy bạn đã gửi ${images.length} hình ảnh, nhưng hiện tại tôi gặp vấn đề khi xử lý vision.
 
-Tï¿½i th?y b?n dï¿½ g?i ${images.length} hï¿½nh ?nh, nhung hi?n t?i tï¿½i g?p m?t chï¿½t v?n d? khi x? lï¿½ vision.
+**Để hỗ trợ tốt hơn, bạn có thể:**
+- Mô tả nội dung hình ảnh bằng text
+- Đặt câu hỏi cụ thể về code trong ảnh
+- Gửi lại ảnh kèm câu hỏi chi tiết
 
-**ï¿½? h? tr? t?t ho, b?n cï¿½ th?:**
-- Mï¿½ t? n?i dung hï¿½nh ?nh b?ng text
-- ï¿½?t cï¿½u h?i c? th? v? code trong ?nh
-- G?i l?i ?nh kï¿½m cï¿½u h?i chi ti?t
+**Hoặc cấu hình AI API:**
+- Vào Settings → AIDA → AI API Host
+- Thêm API Key (OpenAI, Anthropic, v.v.)
+- Chọn model hỗ trợ vision
 
-**Ho?c th? c?u hï¿½nh Claude API:**
-- Vï¿½o Settings ? AIDA ? AI API Host: \`https://api.anthropic.com\`
-- Thï¿½m Claude API Key
-- Ch?n model: \`claude-3-5-sonnet-20241022\`
-
-Xin l?i vï¿½ s? b?t ti?n! ??`;
+Xin lỗi vì sự bất tiện! 🙏`;
             } else {
-                return `# ?? AIDA Assistant
-
-I can see you've shared ${images.length} image(s), but I'm having trouble processing vision right now.
+                return `I can see you've shared ${images.length} image(s), but I'm having trouble processing vision right now.
 
 **For better assistance, you can:**
 - Describe the image content in text
 - Ask specific questions about code in the image
 - Resend with more detailed questions
 
-**Or try configuring Claude API:**
-- Go to Settings ? AIDA ? AI API Host: \`https://api.anthropic.com\`
-- Add your Claude API Key  
-- Select model: \`claude-3-5-sonnet-20241022\`
+**Or configure an AI API:**
+- Go to Settings → AIDA → AI API Host
+- Add your API Key (OpenAI, Anthropic, etc.)
+- Select a vision-capable model
 
-Sorry for the inconvenience! ??`;
+Sorry for the inconvenience! 🙏`;
             }
         }
         
         if (isVietnamese) {
-            return `# ?? AIDA Assistant
+            return `Xin lỗi, tôi gặp vấn đề khi xử lý câu hỏi của bạn.
 
-Xin l?i, tï¿½i g?p m?t chï¿½t v?n d? khi x? lï¿½ cï¿½u h?i c?a b?n. 
+**Tôi có thể giúp bạn với:**
+- Câu hỏi về lập trình
+- Review và phân tích code
+- Debug và troubleshooting
+- Giải thích concepts
 
-**Tï¿½i cï¿½ th? giï¿½p b?n v?i:**
-- Cï¿½u h?i v? l?p trï¿½nh
-- Review vï¿½ phï¿½n tï¿½ch code
-- Debug vï¿½ troubleshooting
-- Gi?i thï¿½ch concepts
-
-B?n th? h?i l?i v?i chi ti?t hon nhï¿½! ??`;
+Bạn thử hỏi lại với chi tiết hơn nhé! 🚀`;
         } else {
-            return `# ?? AIDA Assistant
-
-Sorry, I encountered an issue processing your question.
+            return `Sorry, I encountered an issue processing your question.
 
 **I can help you with:**
 - Programming questions
@@ -700,7 +727,7 @@ Sorry, I encountered an issue processing your question.
 - Debugging and troubleshooting
 - Technical explanations
 
-Please try asking again with more details! ??`;
+Please try asking again with more details! 🚀`;
         }
     }
 

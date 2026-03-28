@@ -550,6 +550,19 @@
             `;
         }
         
+        // Create VS Code API instance once
+        const vscode = (function() {
+            if (window.acquireVsCodeApi) {
+                try {
+                    return window.acquireVsCodeApi();
+                } catch (e) {
+                    console.error('Error acquiring VS Code API:', e);
+                    return null;
+                }
+            }
+            return null;
+        })();
+
         // Try to load Monaco with timeout
         const timeoutId = setTimeout(() => {
             console.warn('⚠️ Monaco loading timeout, showing fallback view');
@@ -616,6 +629,9 @@
                 });
             
             console.log('🎯 Diff editor created');
+
+            // Store diffEditor globally for in-place model updates from postMessage
+            window._diffEditor = diffEditor;
 
             // Set the model for diff editor
             const originalModel = monaco.editor.createModel(
@@ -867,7 +883,8 @@
         });
         
         // File sidebar click handlers
-        document.addEventListener('DOMContentLoaded', function() {
+        // NOTE: Script is at end of <body>, DOM is already ready - run immediately
+        (function initSidebarAndMessages() {
             // File item click handlers
             const fileItems = document.querySelectorAll('.file-item');
             const editorArea = document.querySelector('.editor-area');
@@ -891,9 +908,7 @@
                         
                         // Send message to VS Code extension to load new file
                         try {
-                            // Use VS Code webview message API to request file content
-                            if (window.acquireVsCodeApi) {
-                                const vscode = window.acquireVsCodeApi();
+                            if (vscode) {
                                 vscode.postMessage({
                                     type: 'openFileInMonaco',
                                     filePath: filePath
@@ -923,6 +938,67 @@
             if (window.acquireVsCodeApi) {
                 window.addEventListener('message', function(event) {
                     const message = event.data;
+                    
+                    // Handle in-place diff content update (no full page reload)
+                    if (message.type === 'updateDiffContent') {
+                        console.log('📦 Received diff content update:', message.filePath);
+                        
+                        // Remove any loading spinner
+                        const loadingSpinners = document.querySelectorAll('.editor-loading');
+                        loadingSpinners.forEach(function(spinner) {
+                            if (spinner.parentNode) spinner.parentNode.removeChild(spinner);
+                        });
+                        
+                        // Update Monaco models in-place
+                        if (window._diffEditor && typeof monaco !== 'undefined') {
+                            const oldModel = window._diffEditor.getModel();
+                            
+                            const newOriginalModel = monaco.editor.createModel(message.originalContent, message.language);
+                            const newModifiedModel = monaco.editor.createModel(message.modifiedContent, message.language);
+                            
+                            window._diffEditor.setModel({
+                                original: newOriginalModel,
+                                modified: newModifiedModel
+                            });
+                            
+                            // Dispose old models to free memory
+                            if (oldModel) {
+                                if (oldModel.original) oldModel.original.dispose();
+                                if (oldModel.modified) oldModel.modified.dispose();
+                            }
+                            
+                            // Refresh layout
+                            setTimeout(function() {
+                                window._diffEditor.layout();
+                            }, 50);
+                            
+                            console.log('✅ Monaco models updated in-place for:', message.filePath);
+                        } else {
+                            console.error('❌ diffEditor not available for in-place update');
+                        }
+                        
+                        // Update header
+                        const filePathEl = document.querySelector('.file-path');
+                        if (filePathEl) {
+                            filePathEl.innerHTML = '🚀 Monaco Diff View: ' + message.filePath;
+                        }
+                        
+                        // Update file stats
+                        if (message.fileStats) {
+                            const fileStatsEl = document.querySelector('.file-stats');
+                            if (fileStatsEl) {
+                                fileStatsEl.innerHTML =
+                                    '<span class="stats-badge badge-type">' + message.fileStats.changeType + '</span>' +
+                                    '<span class="stats-badge badge-add">+' + message.fileStats.additions + '</span>' +
+                                    '<span class="stats-badge badge-remove">-' + message.fileStats.deletions + '</span>' +
+                                    '<span style="margin-left: 10px; color: var(--vscode-descriptionForeground);">Language: ' + message.fileStats.language + '</span>';
+                            }
+                        }
+                        
+                        // Clear loading context
+                        window.currentLoadingContext = null;
+                        return;
+                    }
                     
                     if (message.type === 'fileLoaded') {
                         console.log('📦 Received file content from VS Code:', message.filePath);
@@ -1064,7 +1140,7 @@
                     document.removeEventListener('mouseup', stopResize);
                 }
             }
-        });
+        })();
         } catch (error) {
             clearTimeout(timeoutId);
             console.error('❌ Error loading Monaco Editor:', error);

@@ -355,8 +355,8 @@ Xin ch\u00e0o! T\u00f4i l\u00e0 AIDA, tr\u1ee3 l\u00fd AI chuy\u00ean v\u1ec1 l\
 - \`@review-changes\` - Ph\u00e2n t\u00edch git changes
 - \`@review-all-changes\` - Ph\u00e2n t\u00edch T\u1ea4T C\u1ea2 git changes trong workspace
 - \`@review-pr\` - Review pull request  
+- \`@dependency\` / \`@dependency-pr\` - Impact Analysis (ph\u00e2n t\u00edch \u1ea3nh h\u01b0\u1edfng)
 - \`@sync-review-templates\` - Sync templates
-- \`@dependency\` - Ph\u00e2n t\u00edch dependency graph
 
 B\u1ea1n \u0111ang l\u00e0m g\u00ec th\u00fa v\u1ecb v\u1eady? \u{1F680}`;
     } else {
@@ -373,9 +373,9 @@ Hello! I'm AIDA, your AI coding assistant.
 **Special Commands:**
 - \`@review-file\` - Review current file
 - \`@review-changes\` - Analyze git changes
-- \`@dependency\` - Analyze project dependencies
 - \`@review-all-changes\` - Analyze ALL git changes in workspace
 - \`@review-pr\` - Review pull request
+- \`@dependency\` / \`@dependency-pr\` - Impact Analysis (dependency graph + AI)
 - \`@sync-review-templates\` - Sync templates
 
 What interesting project are you working on? \u{1F680}`;

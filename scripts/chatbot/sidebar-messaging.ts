@@ -282,8 +282,9 @@ export async function processChatMessage(
                     });
                 }
 
-                // Determine participant and get response with enhanced message (AI gets full context)
-                const participant = determineParticipant(enhancedMessageForAI);
+                // Determine participant from ORIGINAL user message only (not enhanced message
+                // which includes file content that may contain @review-* strings)
+                const participant = determineParticipant(userMessage);
                 const response = await callParticipantFn(
                     participant, enhancedMessageForAI, images, null,
                     sidebar.context, sidebar.chatbotService, sidebar.webviewView

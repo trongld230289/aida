@@ -5,6 +5,12 @@ All notable changes to the "AIDA - AI Development Assistant" extension will be d
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.34/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.21] - 2026-03-25
+
+### Fixed
+- **🪟 Diff View: Instant file switching**: Fixed ~2s delay when switching files in Monaco Diff View — now updates models in-place instead of re-initializing the entire editor
+- **🪟 Diff View: Fixed idle breakage**: Fixed diff view breaking after ~30s-1min idle — `acquireVsCodeApi()` is now called once at init instead of on every click
+
 ## [1.1.20] - 2026-03-22
 
 ### Changed
