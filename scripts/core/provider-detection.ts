@@ -160,16 +160,19 @@ function normalizeApiParameters(model: string, apiHost: string, options: Record<
 }
 
 /**
- * Check if user wants to use API key instead of Copilot
+ * Check if user wants to use API key instead of Copilot.
+ * ALL four fields must be configured: useExternalAI=true, apiKey, apiHost, and ai.model.
  */
 function shouldUseApiKey() {
     const config = vscode.workspace.getConfiguration('aida');
     const useApiKey = config.get('useExternalAI', false);
-    const apiKey = config.get('ai.apiKey');
+    const apiKey = config.get<string>('ai.apiKey');
+    const apiHost = config.get<string>('ai.apiHost');
+    const model = config.get<string>('ai.model');
 
-    aidaLogging(`🔑 API Key mode check: useExternalAI=${useApiKey}, hasApiKey=${!!apiKey}`);
+    aidaLogging(`🔑 API Key mode check: useExternalAI=${useApiKey}, hasApiKey=${!!apiKey}, hasHost=${!!apiHost}, hasModel=${!!model}`);
 
-    return useApiKey && !!apiKey;
+    return !!(useApiKey && apiKey && apiHost && model);
 }
 
 /**

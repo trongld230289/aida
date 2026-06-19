@@ -47,13 +47,30 @@ async function getFallbackModel(currentModel: vscode.LanguageModelChat, stream: 
 
         let fallbackModel = null;
 
-        // Priority 1: Claude models (if available)
+        // Priority 1: Claude Sonnet 4.6 (preferred fallback)
         fallbackModel = availableModels.find(m =>
             m.family.toLowerCase().includes('claude') &&
-            (m.family.includes('4') || m.family.toLowerCase().includes('sonnet'))
+            m.family.toLowerCase().includes('sonnet') &&
+            (m.family.includes('4.6') || m.family.includes('4-6'))
         );
 
-        // Priority 2: GPT models (if no Claude available)
+        // Priority 2: Any Claude Sonnet 4.x
+        if (!fallbackModel) {
+            fallbackModel = availableModels.find(m =>
+                m.family.toLowerCase().includes('claude') &&
+                m.family.toLowerCase().includes('sonnet') &&
+                m.family.includes('4')
+            );
+        }
+
+        // Priority 3: Any Claude model
+        if (!fallbackModel) {
+            fallbackModel = availableModels.find(m =>
+                m.family.toLowerCase().includes('claude')
+            );
+        }
+
+        // Priority 4: GPT models (if no Claude available)
         if (!fallbackModel) {
             fallbackModel = availableModels.find(m =>
                 m.family.toLowerCase().includes('gpt') &&
@@ -61,7 +78,7 @@ async function getFallbackModel(currentModel: vscode.LanguageModelChat, stream: 
             );
         }
 
-        // Priority 3: First available model
+        // Priority 5: First available model
         if (!fallbackModel) {
             fallbackModel = availableModels[0]!;
         }
@@ -77,12 +94,14 @@ async function getFallbackModel(currentModel: vscode.LanguageModelChat, stream: 
         stream.markdown(`   ✅ **New:** ${fallbackModel.family} (selected as fallback)\n\n`);
 
         // Show fallback reasoning
-        if (fallbackModel.family.toLowerCase().includes('claude')) {
-            stream.markdown(`💡 **Fallback reason:** Switched to Claude model (Priority 1 fallback)\n\n`);
+        if (fallbackModel.family.toLowerCase().includes('claude') && fallbackModel.family.includes('sonnet')) {
+            stream.markdown(`💡 **Fallback reason:** Switched to Claude Sonnet (Priority 1 fallback)\n\n`);
+        } else if (fallbackModel.family.toLowerCase().includes('claude')) {
+            stream.markdown(`💡 **Fallback reason:** Switched to Claude model (Priority 3 fallback)\n\n`);
         } else if (fallbackModel.family.toLowerCase().includes('gpt')) {
-            stream.markdown(`💡 **Fallback reason:** Switched to GPT model (Priority 2 fallback)\n\n`);
+            stream.markdown(`💡 **Fallback reason:** Switched to GPT model (Priority 4 fallback)\n\n`);
         } else {
-            stream.markdown(`💡 **Fallback reason:** Using first available model (Priority 3 fallback)\n\n`);
+            stream.markdown(`💡 **Fallback reason:** Using first available model (Priority 5 fallback)\n\n`);
         }
 
         stream.markdown(`📋 **All available models:** ${availableList}\n\n`);

@@ -22,6 +22,9 @@ package-lock.json
 docs/
 phase6-refactor.md
 AIDA_SHARING_EN.html
+AIDA HTML SHARING/
+AIDA HTML SHARING.7z
+AIDA-SOURCE.zip
 
 # ── ALL TypeScript source (bundled into dist/extension.js by webpack) ─
 extension.ts
@@ -32,8 +35,13 @@ scripts/types/
 # ── Admin-only tools & build scripts ────────────────────────────
 scripts/tracking/generate-activation-key.js
 scripts/tracking/activation-keys.json
+scripts/tracking/activation-key-management/
 scripts/package-company.js
 scripts/readme-edition.js
+
+# ── Environment / secrets ────────────────────────────────────────
+**/.env
+**/.env.*
 
 # ── Test / mock files ────────────────────────────────────────────
 scripts/__tests__/**

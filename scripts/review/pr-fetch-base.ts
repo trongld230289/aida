@@ -197,6 +197,13 @@ export const GITLAB_ERROR_MESSAGES: Partial<Record<number, string>> = {
     404: 'HTTP 404 Not Found - MR, project, or resource not found. Check the URL.',
 };
 
+/** Standard error messages for Bitbucket Cloud. */
+export const BITBUCKET_ERROR_MESSAGES: Partial<Record<number, string>> = {
+    401: 'HTTP 401 Unauthorized - Credentials are expired or invalid. Use an App Password (format "username:app_password") or an Access Token.',
+    403: 'HTTP 403 Forbidden - Access denied. Check your App Password / Access Token permissions (need Pull requests: Read, Repositories: Read).',
+    404: 'HTTP 404 Not Found - PR, repository, or workspace not found. Check the URL.',
+};
+
 /** Azure DevOps auth: Basic `:token` (base64). */
 export function azureAuthHeader(token: string): Record<string, string> {
     return { Authorization: `Basic ${Buffer.from(':' + token).toString('base64')}` };
@@ -210,6 +217,18 @@ export function githubAuthHeader(token: string): Record<string, string> {
 /** GitLab auth: PRIVATE-TOKEN header. */
 export function gitlabAuthHeader(token: string): Record<string, string> {
     return { 'PRIVATE-TOKEN': token };
+}
+
+/**
+ * Bitbucket Cloud auth.
+ * - App Password (format `username:app_password`) → Basic base64(token).
+ * - Access Token (no colon) → Bearer token.
+ */
+export function bitbucketAuthHeader(token: string): Record<string, string> {
+    if (token.includes(':')) {
+        return { Authorization: `Basic ${Buffer.from(token).toString('base64')}` };
+    }
+    return { Authorization: `Bearer ${token}` };
 }
 
 // ─── CJS dual export for backward compatibility ──────────────────────

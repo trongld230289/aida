@@ -5,6 +5,33 @@ All notable changes to the "AIDA - AI Development Assistant" extension will be d
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.34/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.26] - 2026-05-06
+
+### Fixed
+- **🐛 Duplicate models in dropdown**: Deduplicated Copilot models by family name in `chatbot-view-provider.ts` — `vscode.lm.selectChatModels()` was returning the same family from multiple vendors
+- **🔑 Incomplete external API check**: `shouldUseApiKey()` and `getAvailableModels()` now require all four fields (`useExternalAI`, `apiKey`, `apiHost`, `ai.model`) before switching to external API mode — previously only `useExternalAI` + `apiKey` were checked, causing premature fallback
+- **🤖 Fallback model priority**: Updated fallback order to prefer Claude Sonnet 4.6 → Claude Sonnet 4.x → Any Claude → GPT-4/4o → first available
+
+## [1.1.25] - 2026-04-24
+
+### Changed
+- **📦 Reduced VSIX package size**: Excluded `AIDA HTML SHARING/`, `AIDA HTML SHARING.7z`, and `AIDA-SOURCE.zip` from package (~6.7 MB saved)
+
+## [1.1.24] - 2026-04-24
+
+### Changed
+- **🔑 Domain check temporarily bypassed**: `checkDomain()` now returns `true` unconditionally — original logic commented out for easy re-enable
+
+## [1.1.23] - 2026-04-11
+
+### Changed
+- **🔑 Campaign Key Support**: Activation keys with domain `CEP.CAMPAIGN` bypass machine domain check — allows distribution to any user regardless of Windows domain
+
+## [1.1.22] - 2026-03-30
+
+### Fixed
+- **🔑 Activation Key: domain/domains field mismatch** — Server was encrypting `domain` (string) but extension expected `domains` (array). Now server generates correct `domains: ["..."]` format, and extension also accepts legacy `domain` field for backward compatibility with already-distributed keys
+
 ## [1.1.21] - 2026-03-25
 
 ### Fixed

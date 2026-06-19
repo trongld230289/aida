@@ -126,6 +126,12 @@ export function decryptActivationKey(encryptedKey: string, secret: string): Acti
 
         const payload = JSON.parse(decrypted) as ActivationKeyPayload;
 
+        // Normalize: accept both 'domain' (string) and 'domains' (array) for backward compat
+        if (!payload.domains && (payload as any).domain) {
+            const d = (payload as any).domain;
+            payload.domains = Array.isArray(d) ? d : [d];
+        }
+
         // Basic shape validation
         if (!payload.company || !payload.project || !payload.domains || !payload.appInsights?.instrumentationKey) {
             throw new Error('Invalid activation key payload: missing required fields');
@@ -147,24 +153,33 @@ export function decryptActivationKey(encryptedKey: string, secret: string): Acti
  * @param allowedDomains - Array of allowed Windows domain names
  * @returns true if domain matches or if not on Windows (skip check)
  */
-export function checkDomain(allowedDomains: string[]): boolean {
-    if (process.platform !== 'win32') {
-        // Non-Windows: skip domain check (could add email domain check later)
-        console.log('[AIDA Activation] Non-Windows platform, domain check skipped');
-        return true;
-    }
+export function checkDomain(_allowedDomains: string[]): boolean {
+    // TODO: Temporarily bypassed domain check — uncomment below to re-enable
+    return true;
 
-    const currentDomain = (process.env.USERDOMAIN || '').toUpperCase();
-    if (!currentDomain) {
-        console.log('[AIDA Activation] No USERDOMAIN found');
-        return false;
-    }
+    // // Campaign bypass: if key contains CEP.CAMPAIGN domain, skip domain check entirely
+    // const CAMPAIGN_DOMAIN = 'CEP.CAMPAIGN';
+    // if (allowedDomains.some(d => d.toUpperCase() === CAMPAIGN_DOMAIN)) {
+    //     return true;
+    // }
 
-    const match = allowedDomains.some(d => d.toUpperCase() === currentDomain);
-    if (!match) {
-        console.log(`[AIDA Activation] Domain mismatch: "${currentDomain}" not in [${allowedDomains.join(', ')}]`);
-    }
-    return match;
+    // if (process.platform !== 'win32') {
+    //     // Non-Windows: skip domain check (could add email domain check later)
+    //     console.log('[AIDA Activation] Non-Windows platform, domain check skipped');
+    //     return true;
+    // }
+
+    // const currentDomain = (process.env.USERDOMAIN || '').toUpperCase();
+    // if (!currentDomain) {
+    //     console.log('[AIDA Activation] No USERDOMAIN found');
+    //     return false;
+    // }
+
+    // const match = allowedDomains.some(d => d.toUpperCase() === currentDomain);
+    // if (!match) {
+    //     console.log(`[AIDA Activation] Domain mismatch: "${currentDomain}" not in [${allowedDomains.join(', ')}]`);
+    // }
+    // return match;
 }
 
 /**

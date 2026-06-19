@@ -109,20 +109,25 @@ class AidaChatViewProvider {
 
     /**
      * Get available models list
-     * If External API mode: returns single model from settings
-     * If Copilot mode: returns all available models sorted by priority
+     * If External API mode (useExternalAI + apiKey + apiHost + ai.model all set): returns single model from settings
+     * If Copilot mode: returns all available models sorted by priority (deduplicated by family)
      */
     async getAvailableModels(): Promise<IModelInfo[]> {
         const config = vscode.workspace.getConfiguration('aida');
         const useExternalAI = config.get('useExternalAI', false);
+        const apiKey = config.get<string>('ai.apiKey');
+        const apiHost = config.get<string>('ai.apiHost');
+        const modelName = config.get<string>('ai.model');
 
-        if (useExternalAI) {
+        // All four fields must be configured to treat as external API mode
+        const isExternalAPIReady = !!(useExternalAI && apiKey && apiHost && modelName);
+
+        if (isExternalAPIReady) {
             // External API mode - single model from settings
-            const modelName = config.get('ai.model', 'GPT-4');
             return [{
                 id: 'external-api',
-                family: modelName,
-                name: modelName,
+                family: modelName!,
+                name: modelName!,
                 isExternal: true
             }];
         }
@@ -135,8 +140,29 @@ class AidaChatViewProvider {
                 return [];
             }
 
+            // Only show Claude Sonnet, Claude Opus, and Gemini models
+            const ALLOWED_FAMILIES = [
+                (f: string) => f.includes('claude') && f.includes('sonnet'),
+                (f: string) => f.includes('claude') && f.includes('opus'),
+                (f: string) => f.includes('gemini'),
+            ];
+
+            const filteredModels = models.filter(m => {
+                const family = (m.family || m.id).toLowerCase();
+                return ALLOWED_FAMILIES.some(check => check(family));
+            });
+
+            // Deduplicate by normalized family name (handles vendor duplicates like GPT-5 x3)
+            const seen = new Set<string>();
+            const uniqueModels = filteredModels.filter(m => {
+                const key = (m.family || m.id).toLowerCase().trim();
+                if (seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            });
+
             // Sort by priority (highest first)
-            const sortedModels = models.sort((a, b) => {
+            const sortedModels = uniqueModels.sort((a, b) => {
                 const priorityA = this.getModelPriority(a.family);
                 const priorityB = this.getModelPriority(b.family);
                 return priorityB - priorityA;
