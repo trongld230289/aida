@@ -11,6 +11,7 @@ import { TrackingEvent, AiProvider, ReviewMode, getReviewMode, getIdeAiProvider 
 import { analyzePullRequest } from './pr-fetch-azure';
 import { analyzeGitHubPullRequest } from './pr-fetch-github';
 import { analyzeGitLabMergeRequest } from './pr-fetch-gitlab';
+import { analyzeBitbucketPullRequest } from './pr-fetch-bitbucket';
 import { parsePRUrlInfo } from './pr-utils';
 
 // Direct import – no circular dependency through extension.js
@@ -335,6 +336,12 @@ async function processPrReview(_userMessage: string, repoType: string | null, pr
             stream.markdown(`📋 **MR**: !${prId}\n`);
             stream.markdown(`🌐 **Instance**: ${organization}\n`);
             stream.markdown('⏳ **Fetching from GitLab API...**\n\n');
+        } else if (repoType === 'bitbucket') {
+            stream.markdown('🪣 **Analyzing Bitbucket Pull Request...**\n\n');
+            stream.markdown(`🪣 **Repository**: ${owner}/${repo}\n`);
+            stream.markdown(`📋 **PR**: #${prId}\n`);
+            stream.markdown(`🏢 **Workspace**: ${organization}\n`);
+            stream.markdown('⏳ **Fetching from Bitbucket API...**\n\n');
         } else {
             stream.markdown('🔍 **Analyzing Azure DevOps** 📋 **PR ID**: ' + prId + '\n\n');
             if (organization && project && repository) {
@@ -353,6 +360,10 @@ async function processPrReview(_userMessage: string, repoType: string | null, pr
             aidaLogging(`🦊 DEBUG: Starting GitLab MR analysis for ${owner}/${repo}!${prId}`);
             prAnalysis = await analyzeGitLabMergeRequest(stream, organization!, owner!, repo!, prId!) as Record<string, any>;
             aidaLogging('🦊 DEBUG: GitLab MR analysis result:', JSON.stringify(prAnalysis, null, 2));
+        } else if (repoType === 'bitbucket') {
+            aidaLogging(`🪣 DEBUG: Starting Bitbucket PR analysis for ${owner}/${repo}#${prId}`);
+            prAnalysis = await analyzeBitbucketPullRequest(stream, organization!, repo!, prId!) as Record<string, any>;
+            aidaLogging('🪣 DEBUG: Bitbucket PR analysis result:', JSON.stringify(prAnalysis, null, 2));
         } else {
             aidaLogging(`🔵 DEBUG: Starting Azure DevOps PR analysis for PR #${prId}`);
             prAnalysis = await analyzePullRequest(stream, String(prId), organization, project, repository) as Record<string, any>;
@@ -371,6 +382,10 @@ async function processPrReview(_userMessage: string, repoType: string | null, pr
                 stream.markdown('• MR ID does not exist or repository is private\n');
                 stream.markdown('• GitLab instance not accessible\n');
                 stream.markdown('• Rate limit exceeded\n');
+            } else if (repoType === 'bitbucket') {
+                stream.markdown('• Bitbucket credentials not configured or insufficient permissions\n');
+                stream.markdown('• PR ID does not exist or repository is private\n');
+                stream.markdown('• Use App Password (`username:app_password`) or an Access Token\n');
             } else {
                 stream.markdown('• Insufficient Azure DevOps access permissions\n');
                 stream.markdown('• PR ID does not exist\n');
