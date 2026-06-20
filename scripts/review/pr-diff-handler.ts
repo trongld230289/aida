@@ -72,6 +72,72 @@ async function showGitHubDiffInWebview(prAnalysis: Record<string, any>, stream: 
 }
 
 /**
+ * FUNCTION D - Handle Bitbucket Cloud PR diffs and show in webview
+ * Dedicated function for Bitbucket diffs - clean separation from other providers
+ * @param {object} prAnalysis - Bitbucket PR analysis result
+ * @param {object} stream - VS Code stream for output
+ */
+async function showBitbucketDiffInWebview(prAnalysis: Record<string, any>, stream: vscode.ChatResponseStream) {
+    aidaLogging('🪣 Bitbucket Function D: Starting Bitbucket diff webview display');
+
+    if (!prAnalysis || !prAnalysis.data || !prAnalysis.data.fileChanges) {
+        stream.markdown('❌ **No Bitbucket diff data available**\n\n');
+        return;
+    }
+
+    const data = prAnalysis.data;
+
+    // Initialize global cache for Bitbucket diffs
+    if (!(global as any).prDiffCache) {
+        (global as any).prDiffCache = {};
+    }
+
+    // Clear existing cache entries for this Bitbucket PR to prevent file count discrepancy
+    clearPrDiffCache('bitbucket', data.id);
+
+    stream.markdown('🪣 **Bitbucket Diff Webview Display**\n\n');
+
+    // Cache all Bitbucket file changes for webview access (ALL files for Monaco diff view)
+    const allFileChanges = data.fileChanges || [];
+    allFileChanges.forEach((fileChange: any) => {
+        const diffId = `bitbucket_${data.id}_${fileChange.path.replace(/[^a-zA-Z0-9]/g, '_')}`;
+
+        (global as Record<string, any>).prDiffCache[diffId] = {
+            prId: data.id,
+            owner: data.owner,
+            repo: data.repository,
+            diff: fileChange.diffContent || fileChange.diff || '',
+            diffContent: fileChange.diffContent || fileChange.diff || ''
+        };
+
+        aidaLogging(`📝 Cached Bitbucket diff: ${diffId} for ${fileChange.path}`);
+    });
+
+    // Debug cache summary for Bitbucket (ALL files)
+    const bitbucketCacheKeys = Object.keys((global as any).prDiffCache).filter(k => k.startsWith(`bitbucket_${data.id}_`));
+    aidaLogging(`🪣 Bitbucket cache summary: ${bitbucketCacheKeys.length} files cached:`, bitbucketCacheKeys);
+
+    // Display file links with webview buttons (hover for details)
+    stream.markdown('📂 **Files in this Bitbucket PR:**\n\n');
+
+    // Only show first file with custom title (ALL files for Monaco)
+    if (allFileChanges.length > 0) {
+        const firstFile = allFileChanges[0];
+        const diffId = `bitbucket_${data.id}_${firstFile.path.replace(/[^a-zA-Z0-9]/g, '_')}`;
+
+        // Create single button with custom title
+        stream.button({
+            command: 'aida.viewPrDiff',
+            title: `🪟 Open Diff Viewer (${allFileChanges.length} files)`,
+            tooltip: `View changes in Monaco Diff Editor - ${allFileChanges.length} files total`,
+            arguments: [diffId]
+        });
+    }
+
+    stream.markdown('\n\n💡 **Click to explore changes in diff viewer**\n\n');
+}
+
+/**
  * FUNCTION C - Handle GitLab MR diffs and show in webview
  * Dedicated function for GitLab diffs - clean separation from other providers
  * @param {object} mrAnalysis - GitLab MR analysis result
@@ -250,11 +316,12 @@ async function displayPrReviewResults(stream: vscode.ChatResponseStream, prAnaly
     const data = prAnalysis.data;
 
     // Detect provider type based on PR data structure
-    const isGitHubPR = data.owner && data.repository && !data.gitlabHost; // GitHub has owner/repo but no gitlabHost
+    const isBitbucketPR = data.provider === 'bitbucket'; // Bitbucket carries an explicit marker
+    const isGitHubPR = data.owner && data.repository && !data.gitlabHost && !isBitbucketPR; // GitHub has owner/repo but no gitlabHost
     const isGitLabMR = data.owner && data.repository && data.gitlabHost; // GitLab has owner/repo and gitlabHost
     const isAzurePR = data.organization && data.project; // Azure has org/project
 
-    aidaLogging(`🔍 Provider detection: GitHub=${isGitHubPR}, GitLab=${isGitLabMR}, Azure=${isAzurePR}`);
+    aidaLogging(`🔍 Provider detection: GitHub=${isGitHubPR}, GitLab=${isGitLabMR}, Azure=${isAzurePR}, Bitbucket=${isBitbucketPR}`);
 
     // Display commits list (common for all providers)
     if (data.commitsList && data.commitsList.length > 0) {
@@ -277,7 +344,10 @@ async function displayPrReviewResults(stream: vscode.ChatResponseStream, prAnaly
     stream.markdown(`➖ **${totalDeletions} lines** deleted\n\n`);
 
     // PROVIDER ROUTING: Route to appropriate diff display function
-    if (isGitHubPR) {
+    if (isBitbucketPR) {
+        aidaLogging('🪣 Routing to Bitbucket Function D');
+        await showBitbucketDiffInWebview(prAnalysis, stream);
+    } else if (isGitHubPR) {
         aidaLogging('🐙 Routing to GitHub Function B');
         await showGitHubDiffInWebview(prAnalysis, stream);
     } else if (isGitLabMR) {

@@ -127,13 +127,18 @@ async function getBitbucketPR(workspace: string, repo: string, prId: string | nu
             const fileName = newPath || oldPath || 'unknown';
             const changeType = mapStatus(entry.status);
 
+            // For renamed files the unified-diff header is `a/<oldPath> b/<newPath>`,
+            // so extract using the distinct old/new paths rather than reusing fileName.
+            const aPath = oldPath || fileName;
+            const bPath = newPath || fileName;
+
             let diffContent = '';
             if (finalDiff) {
-                const escaped = fileName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                const filePattern = new RegExp(`diff --git a/${escaped} b/${escaped}([\\s\\S]*?)(?=diff --git|$)`, 'g');
+                const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const filePattern = new RegExp(`diff --git a/${escapeRe(aPath)} b/${escapeRe(bPath)}([\\s\\S]*?)(?=diff --git|$)`, 'g');
                 const match = filePattern.exec(finalDiff);
                 if (match) {
-                    diffContent = `diff --git a/${fileName} b/${fileName}${match[1]}`;
+                    diffContent = `diff --git a/${aPath} b/${bPath}${match[1]}`;
                 }
             }
 
@@ -185,6 +190,7 @@ async function getBitbucketPR(workspace: string, repo: string, prId: string | nu
             success: true,
             data: {
                 id: prId,
+                provider: 'bitbucket',
                 title: pr.title || `PR #${prId}`,
                 description: pr.description || 'No description provided',
                 author: pr.author?.display_name || 'Unknown',
