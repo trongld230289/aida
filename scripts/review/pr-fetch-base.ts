@@ -100,16 +100,19 @@ export async function makeHttpsRequest<T = unknown>(
             Object.assign(headers, opts.authHeaderFn(opts.token));
         }
 
-        const requestOptions: https.RequestOptions = {
-            hostname: urlObj.hostname,
-            port: 443,
-            path: urlObj.pathname + urlObj.search,
-            method,
-            rejectUnauthorized: false, // Corporate SSL environments
-            headers,
-        };
+        const MAX_REDIRECTS = 5;
 
-        const req = https.request(requestOptions, (res) => {
+        const doRequest = (targetUrl: URL, requestHeaders: Record<string, string>, redirectsLeft: number) => {
+            const requestOptions: https.RequestOptions = {
+                hostname: targetUrl.hostname,
+                port: 443,
+                path: targetUrl.pathname + targetUrl.search,
+                method,
+                rejectUnauthorized: false, // Corporate SSL environments
+                headers: requestHeaders,
+            };
+
+            const req = https.request(requestOptions, (res) => {
             let data = '';
 
             res.on('data', (chunk: Buffer) => {
@@ -119,6 +122,24 @@ export async function makeHttpsRequest<T = unknown>(
             res.on('end', () => {
                 try {
                     const statusCode = res.statusCode ?? 0;
+
+                    // Follow redirects (Bitbucket diff/diffstat return 302 to a signed URL).
+                    if (statusCode >= 300 && statusCode < 400 && res.headers.location) {
+                        if (redirectsLeft <= 0) {
+                            resolve({ success: false, error: `HTTP ${statusCode}: too many redirects` });
+                            return;
+                        }
+                        const nextUrl = new URL(res.headers.location, targetUrl);
+                        // Preserve auth on same-host redirects; strip it when the host changes.
+                        let nextHeaders = requestHeaders;
+                        if (nextUrl.hostname !== targetUrl.hostname) {
+                            nextHeaders = { ...requestHeaders };
+                            delete nextHeaders['Authorization'];
+                            delete nextHeaders['authorization'];
+                        }
+                        doRequest(nextUrl, nextHeaders, redirectsLeft - 1);
+                        return;
+                    }
 
                     if (statusCode >= 200 && statusCode < 300) {
                         // Text response path (diffs, plain-text downloads, etc.)
@@ -171,6 +192,9 @@ export async function makeHttpsRequest<T = unknown>(
         }
 
         req.end();
+        };
+
+        doRequest(urlObj, headers, MAX_REDIRECTS);
     });
 }
 

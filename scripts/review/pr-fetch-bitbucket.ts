@@ -104,14 +104,28 @@ async function getBitbucketPR(workspace: string, repo: string, prId: string | nu
         }
         const pr = prResponse.data!;
 
+        // Bitbucket's /pullrequests/{id}/diffstat and /diff endpoints respond with a 302
+        // redirect to an internal URL whose commit range is separated by an encoded CR (%0D).
+        // Some corporate web filters block that URL. The canonical commit-range endpoints
+        // (/diffstat/{src}..{dst} and /diff/{src}..{dst}) return 200 directly, so prefer them.
+        const sourceHash = pr.source?.commit?.hash as string | undefined;
+        const targetHash = pr.destination?.commit?.hash as string | undefined;
+        const repoBase = `${BITBUCKET_API}/repositories/${workspace}/${repo}`;
+        const hasRange = !!(sourceHash && targetHash);
+        const diffSpec = hasRange ? `${sourceHash}..${targetHash}` : '';
+
         // Diffstat (file metadata, paginated)
         aidaLogging('📁 Fetching Bitbucket diffstat...');
-        const diffstat = await fetchAllPages(`${base}/diffstat?pagelen=100`, token);
+        const diffstatUrl = hasRange
+            ? `${repoBase}/diffstat/${diffSpec}?pagelen=100`
+            : `${base}/diffstat?pagelen=100`;
+        const diffstat = await fetchAllPages(diffstatUrl, token);
         aidaLogging(`✅ Found ${diffstat.length} changed files`);
 
         // Raw unified diff
         aidaLogging('🔄 Fetching unified diff from Bitbucket...');
-        const diffResponse = await makeBitbucketRequest(`${base}/diff`, token, 'GET', { Accept: 'text/plain' });
+        const diffUrl = hasRange ? `${repoBase}/diff/${diffSpec}` : `${base}/diff`;
+        const diffResponse = await makeBitbucketRequest(diffUrl, token, 'GET', { Accept: 'text/plain' });
         let finalDiff = '';
         if (diffResponse.success && typeof diffResponse.data === 'string') {
             finalDiff = diffResponse.data;
