@@ -224,6 +224,10 @@
             "gitlab": {
               "organization": "your-gitlab-token-here",
               "anotherOrg": "your-personal-gitlab-token"
+            },
+            "bitbucket": {
+              "workspace": "your-bitbucket-app-password-or-token-here",
+              "anotherWorkspace": "username:app_password"
             }
           },
           "description": "Source control configurations with tokens for multiple organizations. Organization names come from URLs: Azure DevOps (dev.azure.com/{ORG}), GitHub (github.com/{ORG}), GitLab (gitlab.com/{GROUP}). Example: For 'https://dev.azure.com/BusinessWebUS/project' use 'BusinessWebUS' as organization name.",
@@ -255,6 +259,16 @@
                 ".*": {
                   "type": "string",
                   "description": "Personal access token for the organization"
+                }
+              }
+            },
+            "bitbucket": {
+              "type": "object",
+              "description": "Bitbucket Cloud workspaces and their credentials. Workspace name from URL: bitbucket.org/{WORKSPACE}/repo. Use an App Password in 'username:app_password' format, or a Repository/Workspace Access Token.",
+              "patternProperties": {
+                ".*": {
+                  "type": "string",
+                  "description": "App Password (username:app_password) or Access Token for the workspace"
                 }
               }
             }

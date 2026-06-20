@@ -161,7 +161,8 @@ function showTokenConfigurationHelp(provider: string, organization: string, stre
     const providerNames = {
         azureDevOps: 'Azure DevOps',
         github: 'GitHub',
-        gitlab: 'GitLab'
+        gitlab: 'GitLab',
+        bitbucket: 'Bitbucket'
     };
 
     const providerName = (providerNames as any)[provider] || provider;
@@ -182,6 +183,11 @@ function showTokenConfigurationHelp(provider: string, organization: string, stre
             name: 'GitLab',
             docs: 'https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html',
             permissions: 'api (Access to the authenticated user\'s API), read_repository'
+        },
+        bitbucket: {
+            name: 'Bitbucket',
+            docs: 'https://support.atlassian.com/bitbucket-cloud/docs/create-an-app-password/',
+            permissions: 'Pull requests: Read, Repositories: Read (App Password "username:app_password" or Access Token)'
         }
     };
 
