@@ -45,6 +45,10 @@ function parsePRUrlInfo(userMessage: string) {
     const gitlabUrlPattern = /https:\/\/([^\/]+)\/(.+?)\/-\/merge_requests\/(\d+)/i;
     const gitlabMatch = userMessage.match(gitlabUrlPattern);
 
+    // Bitbucket Cloud URL pattern: https://bitbucket.org/{workspace}/{repo}/pull-requests/{id}
+    const bitbucketUrlPattern = /https:\/\/bitbucket\.org\/([^\/]+)\/([^\/]+)\/pull-requests\/(\d+)/i;
+    const bitbucketMatch = userMessage.match(bitbucketUrlPattern);
+
     if (githubMatch) {
         repoType = 'github';
         owner = githubMatch[1];
@@ -73,6 +77,14 @@ function parsePRUrlInfo(userMessage: string) {
         
         // Store GitLab host for API calls
         organization = gitlabHost;
+    } else if (bitbucketMatch) {
+        repoType = 'bitbucket';
+        owner = bitbucketMatch[1];
+        organization = bitbucketMatch[1];
+        repo = bitbucketMatch[2];
+        repository = bitbucketMatch[2];
+        prId = bitbucketMatch[3];
+        originalUrl = bitbucketMatch[0];
     } else {
         // Fallback to simple PR ID pattern (Azure DevOps default)
         const prPattern = /(?:pullrequest(?:s)?\/(\d+)|pr[#\s]?(\d+)|id[:\s]?(\d+))/i;
