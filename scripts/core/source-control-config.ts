@@ -61,6 +61,19 @@ function parsePRUrl(prUrl: string) {
         }
     }
 
+    // Bitbucket Cloud: https://bitbucket.org/{workspace}/{repository}/pull-requests/{id}
+    if (url.includes('bitbucket.org')) {
+        const match = url.match(/bitbucket\.org\/([^\/]+)\/([^\/]+)\/pull-requests\/(\d+)/);
+        if (match) {
+            return {
+                provider: 'bitbucket',
+                organization: match[1]!,
+                repository: match[2]!,
+                prId: match[3]!
+            };
+        }
+    }
+
     throw new Error(`Unsupported PR/MR URL format: ${prUrl}`);
 }
 
