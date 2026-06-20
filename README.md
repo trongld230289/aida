@@ -14,7 +14,7 @@ AI generates code blazingly fast — but **Technical Debt** and **Regression Bug
 - 📊 **Dependency Scan** — analyze dependencies with zero AI tokens, 100% accuracy
 - 🏆 **Auto-scoring (6 criteria)** — Security, Null Safety, Error Handling, Resource Mgmt, Performance, Code Quality
 
-[![Version](https://img.shields.io/badge/version-1.1.26-blue.svg)](https://marketplace.visualstudio.com/items?itemName=trongld232.aida-dev)
+[![Version](https://img.shields.io/badge/version-1.1.27-blue.svg)](https://marketplace.visualstudio.com/items?itemName=trongld232.aida-dev)
 [![VS Code](https://img.shields.io/badge/VS%20Code-1.90+-green.svg)](https://code.visualstudio.com/)
 [![Cursor IDE](https://img.shields.io/badge/Cursor%20IDE-Compatible-brightgreen.svg)](https://cursor.sh/)
 [![License](https://img.shields.io/badge/license-MIT-orange.svg)](LICENSE)

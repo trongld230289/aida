@@ -5,6 +5,11 @@ All notable changes to the "AIDA - AI Development Assistant" extension will be d
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.34/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.27] - 2026-06-20
+
+### Changed
+- Version bump to 1.1.27
+
 ## [1.1.26] - 2026-05-06
 
 ### Fixed

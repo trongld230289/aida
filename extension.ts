@@ -220,7 +220,7 @@ function sendExtensionActivatedEvent(context: any): void {
  * @param {vscode.ExtensionContext} context
  */
 function activate(context: any) {
-    console.log('🤖 AIDA v1.1.26 - AI Development Assistant');
+    console.log('🤖 AIDA v1.1.27 - AI Development Assistant');
     console.log('🚀 AIDA extension is now active!');
 
     console.log(`[AIDA][DEBUG] ═══ ACTIVATION START ═══`);

@@ -2,7 +2,7 @@
   "name": "aida-dev",
   "displayName": "AIDA - AI Development Assistant",
   "description": "Advanced AI Development Assistant with intelligent code review, PR analysis, and AIDA Chatbot. Use your own AI API (OpenAI/Claude) or GitHub Copilot. Complete development workflows for TypeScript, JavaScript, Python, C#, and more. Now with Cursor IDE support!",
-  "version": "1.1.26",
+  "version": "1.1.27",
   "publisher": "trongld232",
   "icon": "icons/extension-icon.png",
   "author": {
@@ -226,8 +226,8 @@
               "anotherOrg": "your-personal-gitlab-token"
             },
             "bitbucket": {
-              "workspace": "your-bitbucket-app-password-or-token-here",
-              "anotherWorkspace": "username:app_password"
+              "workspace": "atlassian_email:api_token",
+              "anotherWorkspace": "workspace-access-token"
             }
           },
           "description": "Source control configurations with tokens for multiple organizations. Organization names come from URLs: Azure DevOps (dev.azure.com/{ORG}), GitHub (github.com/{ORG}), GitLab (gitlab.com/{GROUP}). Example: For 'https://dev.azure.com/BusinessWebUS/project' use 'BusinessWebUS' as organization name.",
@@ -264,11 +264,11 @@
             },
             "bitbucket": {
               "type": "object",
-              "description": "Bitbucket Cloud workspaces and their credentials. Workspace name from URL: bitbucket.org/{WORKSPACE}/repo. Use an App Password in 'username:app_password' format, or a Repository/Workspace Access Token.",
+              "description": "Bitbucket Cloud workspaces and their credentials. Workspace name from URL: bitbucket.org/{WORKSPACE}/repo. Use an API token in 'atlassian_email:api_token' format (recommended; App Passwords are deprecated), or a Repository/Workspace Access Token.",
               "patternProperties": {
                 ".*": {
                   "type": "string",
-                  "description": "App Password (username:app_password) or Access Token for the workspace"
+                  "description": "API token (atlassian_email:api_token) or Access Token for the workspace"
                 }
               }
             }

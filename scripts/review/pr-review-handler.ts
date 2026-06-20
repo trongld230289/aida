@@ -385,7 +385,7 @@ async function processPrReview(_userMessage: string, repoType: string | null, pr
             } else if (repoType === 'bitbucket') {
                 stream.markdown('• Bitbucket credentials not configured or insufficient permissions\n');
                 stream.markdown('• PR ID does not exist or repository is private\n');
-                stream.markdown('• Use App Password (`username:app_password`) or an Access Token\n');
+                stream.markdown('• Use API token (`atlassian_email:api_token`) or an Access Token\n');
             } else {
                 stream.markdown('• Insufficient Azure DevOps access permissions\n');
                 stream.markdown('• PR ID does not exist\n');

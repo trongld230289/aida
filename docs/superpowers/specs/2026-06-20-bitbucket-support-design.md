@@ -21,10 +21,11 @@ Bitbucket is **not** supported yet. Partial scaffolding already exists in `scrip
 ### Auth difference vs the other 3
 
 Unlike GitHub/GitLab/Azure (single-string PAT), **Bitbucket Cloud does not use a classic Personal Access Token**. It uses either:
-- **App Password** — format `username:app_password` → `Basic base64(token)`
-- **Access Token** (Repository/Project/Workspace) → `Bearer token`
+- **API token** (recommended) — format `atlassian_email:api_token` → `Basic base64(token)`. This is Bitbucket's replacement for App Passwords (App Passwords are being removed by Atlassian; brownouts from 2026-06-09, fully removed 2026-07-28).
+- **App Password** (deprecated) — format `username:app_password` → `Basic base64(token)`.
+- **Repository/Workspace Access Token** → `Bearer token`.
 
-Decision: **support both**, auto-detected by the presence of a `:` in the token string (already implemented in `bitbucketAuthHeader`). The colon → Basic (App Password); no colon → Bearer (Access Token).
+Decision: **support both Basic and Bearer**, auto-detected by the presence of a `:` in the token string (already implemented in `bitbucketAuthHeader`). The colon → Basic (API token / App Password); no colon → Bearer (Access Token). Because the new API token also uses the `email:token` colon form, no auth-logic change is required to support it — only documentation/help text references the API token instead of the deprecated App Password.
 
 ## Goals
 

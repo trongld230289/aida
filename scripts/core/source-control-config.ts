@@ -186,8 +186,8 @@ function showTokenConfigurationHelp(provider: string, organization: string, stre
         },
         bitbucket: {
             name: 'Bitbucket',
-            docs: 'https://support.atlassian.com/bitbucket-cloud/docs/create-an-app-password/',
-            permissions: 'Pull requests: Read, Repositories: Read (App Password "username:app_password" or Access Token)'
+            docs: 'https://support.atlassian.com/bitbucket-cloud/docs/using-api-tokens/',
+            permissions: 'Pull requests: Read, Repositories: Read (API token "atlassian_email:api_token", or Access Token)'
         }
     };
 

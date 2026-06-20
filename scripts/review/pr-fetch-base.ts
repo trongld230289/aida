@@ -199,8 +199,8 @@ export const GITLAB_ERROR_MESSAGES: Partial<Record<number, string>> = {
 
 /** Standard error messages for Bitbucket Cloud. */
 export const BITBUCKET_ERROR_MESSAGES: Partial<Record<number, string>> = {
-    401: 'HTTP 401 Unauthorized - Credentials are expired or invalid. Use an App Password (format "username:app_password") or an Access Token.',
-    403: 'HTTP 403 Forbidden - Access denied. Check your App Password / Access Token permissions (need Pull requests: Read, Repositories: Read).',
+    401: 'HTTP 401 Unauthorized - Credentials are expired or invalid. Use an API token (format "atlassian_email:api_token") or a Repository/Workspace Access Token. App Passwords are deprecated by Bitbucket.',
+    403: 'HTTP 403 Forbidden - Access denied. Check your API token / Access Token scopes (need Pull requests: Read, Repositories: Read).',
     404: 'HTTP 404 Not Found - PR, repository, or workspace not found. Check the URL.',
 };
 
@@ -221,8 +221,9 @@ export function gitlabAuthHeader(token: string): Record<string, string> {
 
 /**
  * Bitbucket Cloud auth.
- * - App Password (format `username:app_password`) → Basic base64(token).
- * - Access Token (no colon) → Bearer token.
+ * - API token (format `atlassian_email:api_token`) → Basic base64(token).
+ *   Also covers the now-deprecated App Password (`username:app_password`).
+ * - Repository/Workspace Access Token (no colon) → Bearer token.
  */
 export function bitbucketAuthHeader(token: string): Record<string, string> {
     if (token.includes(':')) {

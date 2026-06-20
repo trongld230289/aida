@@ -131,5 +131,5 @@ grep -r "1.0.27" . --include="*.json" --include="*.ts" --include="*.md"
 - **Do NOT update `templates/review-code/**/*.md` version** — these stay at their own version (currently v1.0.0) and are only updated when explicitly requested by the user
 
 ---
-**Last Updated**: May 6, 2026  
-**Current Version**: 1.1.26
+**Last Updated**: June 20, 2026  
+**Current Version**: 1.1.27
