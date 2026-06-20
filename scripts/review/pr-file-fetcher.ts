@@ -3,6 +3,7 @@ import { parsePRUrlInfo } from './pr-utils';
 import { getGitHubPR } from './pr-fetch-github';
 import { getAzureDevOpsPR } from './pr-fetch-azure';
 import { getGitLabMR } from './pr-fetch-gitlab';
+import { getBitbucketPR } from './pr-fetch-bitbucket';
 import { aidaLogging } from '../core/settings';
 
 import { IParsedPRInfo, INormalizedFileChange } from './interfaces/pr.interface';
@@ -33,7 +34,7 @@ class PRFileFetcher {
         const parsed = parsePRUrlInfo(prUrl) as IParsedPRInfo;
 
         if (!parsed.repoType) {
-            throw new Error('Unsupported PR URL format. Supported: GitHub, Azure DevOps, GitLab');
+            throw new Error('Unsupported PR URL format. Supported: GitHub, Azure DevOps, GitLab, Bitbucket');
         }
 
         return parsed;
@@ -60,6 +61,9 @@ class PRFileFetcher {
                 break;
             case 'gitlab':
                 result = await getGitLabMR(prInfo.organization as any, prInfo.owner as any, prInfo.repo as any, prInfo.prId as any, token);
+                break;
+            case 'bitbucket':
+                result = await getBitbucketPR(prInfo.organization as any, prInfo.repo as any, prInfo.prId as any, token);
                 break;
             default:
                 throw new Error(`Unsupported repo type: ${prInfo.repoType}`);
