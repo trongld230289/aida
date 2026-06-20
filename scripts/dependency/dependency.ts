@@ -147,6 +147,7 @@ function initializeDependencyGraph(context: vscode.ExtensionContext) {
                 stream.markdown('- `@dependency-pr https://dev.azure.com/org/project/_git/repo/pullrequest/123`\n');
                 stream.markdown('- `@dependency-pr https://github.com/user/repo/pull/456`\n');
                 stream.markdown('- `@dependency-pr https://gitlab.com/group/repo/-/merge_requests/78`\n');
+                stream.markdown('- `@dependency-pr https://bitbucket.org/workspace/repo/pull-requests/90`\n');
                 return;
             }
 
@@ -289,6 +290,7 @@ async function aiDependencyPrAnalysis(message: string, stream: vscode.ChatRespon
             stream.markdown('- `@dependency-pr https://dev.azure.com/org/project/_git/repo/pullrequest/123`\n');
             stream.markdown('- `@dependency-pr https://github.com/user/repo/pull/456`\n');
             stream.markdown('- `@dependency-pr https://gitlab.com/group/repo/-/merge_requests/78`\n');
+            stream.markdown('- `@dependency-pr https://bitbucket.org/workspace/repo/pull-requests/90`\n');
             return;
         }
 

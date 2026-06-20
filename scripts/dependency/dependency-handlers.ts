@@ -142,7 +142,8 @@ function isPRUrl(message: string) {
     const patterns = [
         /github\.com\/[^\/]+\/[^\/]+\/pull\/\d+/i,
         /dev\.azure\.com\/[^\/]+\/[^\/]+\/_git\/[^\/]+\/pullrequest\/\d+/i,
-        /gitlab\.com\/.+\/-\/merge_requests\/\d+/i
+        /gitlab\.com\/.+\/-\/merge_requests\/\d+/i,
+        /bitbucket\.org\/[^\/]+\/[^\/]+\/pull-requests\/\d+/i
     ];
     return patterns.some(pattern => pattern.test(message));
 }
