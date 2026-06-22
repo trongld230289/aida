@@ -103,14 +103,17 @@ async function showBitbucketDiffInWebview(prAnalysis: Record<string, any>, strea
         const diffId = `bitbucket_${data.id}_${fileChange.path.replace(/[^a-zA-Z0-9]/g, '_')}`;
 
         (global as Record<string, any>).prDiffCache[diffId] = {
+            ...fileChange,
+            provider: 'bitbucket',
             prId: data.id,
             owner: data.owner,
             repo: data.repository,
+            // Ensure diffContent is available for webview
             diff: fileChange.diffContent || fileChange.diff || '',
             diffContent: fileChange.diffContent || fileChange.diff || ''
         };
 
-        aidaLogging(`📝 Cached Bitbucket diff: ${diffId} for ${fileChange.path}`);
+        aidaLogging(`📝 Cached Bitbucket diff: ${diffId} for ${fileChange.path} (${fileChange.changeType})`);
     });
 
     // Debug cache summary for Bitbucket (ALL files)
@@ -334,12 +337,29 @@ async function displayPrReviewResults(stream: vscode.ChatResponseStream, prAnaly
     }
 
     // Summary of Changes section (common for all providers)
-    const totalFiles = data.fileChanges ? data.fileChanges.length : 0;
-    const totalAdditions = data.fileChanges ? data.fileChanges.reduce((sum: number, f: Record<string, number>) => sum + (f.additions ?? 0), 0) : 0;
-    const totalDeletions = data.fileChanges ? data.fileChanges.reduce((sum: number, f: Record<string, number>) => sum + (f.deletions ?? 0), 0) : 0;
+    const fileChanges: Record<string, any>[] = data.fileChanges || [];
+    const totalFiles = fileChanges.length;
+    const totalAdditions = fileChanges.reduce((sum: number, f: Record<string, number>) => sum + (f.additions ?? 0), 0);
+    const totalDeletions = fileChanges.reduce((sum: number, f: Record<string, number>) => sum + (f.deletions ?? 0), 0);
+
+    // Breakdown by change type (normalized across providers), matching the
+    // existing convention used in dependency-handlers.ts.
+    let added = 0, modified = 0, deleted = 0, renamed = 0;
+    for (const f of fileChanges) {
+        switch (String(f.changeType ?? '').toLowerCase()) {
+            case 'added': case 'add': added++; break;
+            case 'removed': case 'deleted': case 'delete': deleted++; break;
+            case 'renamed': case 'rename': case 'moved': renamed++; break;
+            default: modified++; break;
+        }
+    }
 
     stream.markdown('## 📊 Summary of Changes\n\n');
     stream.markdown(`📁 **${totalFiles} file(s)** changed\n`);
+    stream.markdown(`🟢 Added: ${added}\n`);
+    stream.markdown(`🟡 Modified: ${modified}\n`);
+    stream.markdown(`🔴 Deleted: ${deleted}\n`);
+    if (renamed > 0) { stream.markdown(`🔵 Renamed: ${renamed}\n`); }
     stream.markdown(`➕ **${totalAdditions} lines** added\n`);
     stream.markdown(`➖ **${totalDeletions} lines** deleted\n\n`);
 

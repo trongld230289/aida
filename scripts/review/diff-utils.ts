@@ -50,8 +50,19 @@ async function setupAzureDevOpsSettings() {
  * @param {string} filePath - Path to the file being diffed
  * @returns {object} - { originalLines: [], modifiedLines: [] }
  */
-async function parseFullDiffContentEnhanced(diff: string, filePath: string) {
+async function parseFullDiffContentEnhanced(diff: string, filePath: string, provider?: string) {
     console.log('?? parseFullDiffContentEnhanced - FULL FILE CONTENT mode for:', filePath);
+
+    // For non-Azure providers (github/gitlab/bitbucket), never take the Azure
+    // full-content path. The Azure branch relies on GLOBAL cache credentials
+    // (accessToken/sourceCommit/targetCommit) that can leak across providers and
+    // produce identical original/modified sides. Reconstruct straight from diff.
+    const normalizedProvider = (provider || '').toLowerCase();
+    const isAzureProvider = normalizedProvider === 'azure' || normalizedProvider === 'azure_devops' || normalizedProvider === 'azuredevops';
+    if (provider && !isAzureProvider) {
+        console.log('?? Non-Azure provider (' + provider + ') - reconstructing directly from diff');
+        return await reconstructFromDiffFallback(diff, filePath);
+    }
 
     // Check if we have Azure DevOps cache data for full file content retrieval
     const cache = global.prDiffCache;

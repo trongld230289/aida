@@ -262,8 +262,11 @@ function clearPrDiffCache(provider: string, prId: string | number) {
         return;
     }
 
+    const cache = (global as any).prDiffCache;
     const prefix = `${provider}_${prId}_`;
-    const keysToDelete = Object.keys((global as any).prDiffCache).filter(key => key.startsWith(prefix));
+    // Also clear parsed-content entries (keyed only by file path, not namespaced)
+    // so stale content from a previous review/PR is never reused.
+    const keysToDelete = Object.keys(cache).filter(key => key.startsWith(prefix) || key.startsWith('content_'));
     
     if (keysToDelete.length > 0) {
         aidaLogging(`Ã°Å¸Â§Â¹ Clearing ${keysToDelete.length} cached entries for ${provider} PR ${prId}:`);
@@ -274,6 +277,16 @@ function clearPrDiffCache(provider: string, prId: string | number) {
         aidaLogging(`Ã¢Å“â€¦ Cache cleared for ${provider} PR ${prId}`);
     } else {
         aidaLogging(`Ã°Å¸â€™Â¡ No cached entries found for ${provider} PR ${prId}`);
+    }
+
+    // Azure DevOps stores credentials/commit metadata as global cache properties to
+    // enable full-file-content fetching. These leak into other providers (e.g. Bitbucket
+    // files get routed through Azure's getFullFileContent path, returning wrong content).
+    // Clear them for any non-Azure review.
+    if (provider !== 'azure') {
+        for (const k of ['accessToken', 'organization', 'project', 'repository', 'sourceCommit', 'targetCommit', 'mergeBaseCommit']) {
+            delete cache[k];
+        }
     }
 }
 

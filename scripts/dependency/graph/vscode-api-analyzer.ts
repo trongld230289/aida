@@ -364,6 +364,31 @@ class VSCodeApiDependencyAnalyzer {
                 }
             }
 
+            // 🔥 Python bare module resolution: `from add import x` / `import add`
+            // Python bare imports don't start with '.', so the check above skips them.
+            // If the module name matches a .py file in the same directory, resolve it
+            // directly without LSP (Pylance may not be installed or may fail to resolve
+            // local modules in small/standalone repos).
+            const fileExt = path.extname(document.uri.fsPath).toLowerCase();
+            if (type === 'import' && fileExt === '.py' && match[1] && !match[1].startsWith('.')) {
+                const moduleName = (match[1].split('.')[0]) ?? match[1]; // handle dotted: pkg.sub → pkg
+                const dir = path.dirname(document.uri.fsPath);
+                const candidates = [
+                    path.join(dir, moduleName + '.py'),
+                    path.join(dir, moduleName, '__init__.py'),
+                ];
+                for (const candidate of candidates) {
+                    try {
+                        if (_fs.existsSync(candidate)) {
+                            const targetFile = this.getRelativePath(candidate);
+                            this.model.addDependency(sourceFile, targetFile);
+                            aidaLogging(`🔗 ${sourceFile} -> ${targetFile} (python-local)`);
+                            return; // Skip LSP
+                        }
+                    } catch (_e) { /* ignore */ }
+                }
+            }
+
             // Calculate position for LSP resolution
             // FIX: Point to the captured group (the path/symbol) instead of the start of the match
             // This ensures VS Code API receives the correct context

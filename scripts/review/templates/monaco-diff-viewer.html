@@ -523,11 +523,13 @@
     <script>
         console.log('🚀 Monaco script loading started');
         console.log('📁 Monaco URI:', '{{MONACO_URI}}');
-        
-        // Add error handler
+
+        // Global error handler — LOG ONLY. Monaco emits a non-fatal worker NetworkError
+        // that it self-recovers from; calling showFallbackView() here would wrongly
+        // replace the working diff editor. Genuine failures are handled by the load
+        // timeout and the require() error callback in startMonaco() below.
         window.addEventListener('error', function(e) {
-            console.error('❌ Script error:', e.error, e.filename, e.lineno);
-            showFallbackView();
+            console.error('❌ Script error (non-fatal, Monaco self-recovers):', e.message, e.filename, e.lineno);
         });
         
         // Fallback function to show simple diff view
@@ -562,6 +564,16 @@
             }
             return null;
         })();
+
+        // startMonaco: initialize Monaco editor, optionally with a pre-built worker blob
+        // URL for diff highlighting. Wrapping in a function lets us call it AFTER the
+        // async worker fetch completes, ensuring MonacoEnvironment is set before Monaco
+        // spawns the worker.
+        function startMonaco(workerBlobUrl) {
+            if (workerBlobUrl) {
+                self.MonacoEnvironment = { getWorkerUrl: function() { return workerBlobUrl; } };
+                console.log('✅ Monaco editor worker ready (diff highlighting enabled)');
+            }
 
         // Try to load Monaco with timeout
         const timeoutId = setTimeout(() => {
@@ -1146,6 +1158,22 @@
             console.error('❌ Error loading Monaco Editor:', error);
             showFallbackView();
         }
+        } // end startMonaco()
+
+        // Fetch the bundled workerMain.js via async fetch(), which goes through VS Code's
+        // webview service worker and correctly resolves vscode-resource URLs.
+        // Synchronous XHR bypasses the service worker → ERR_NAME_NOT_RESOLVED.
+        fetch('{{MONACO_URI}}/base/worker/workerMain.js')
+            .then(function(r) { return r.text(); })
+            .then(function(text) {
+                var src = "self.MonacoEnvironment={baseUrl:'{{MONACO_URI}}/'};\n" + text;
+                return URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
+            })
+            .then(function(blobUrl) { startMonaco(blobUrl); })
+            .catch(function(e) {
+                console.warn('⚠️ Monaco worker bootstrap failed, diff may not highlight:', e.message);
+                startMonaco(null);
+            });
     </script>
 </body>
 </html>

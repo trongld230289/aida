@@ -59,6 +59,8 @@ export function registerPrCommands(
                                     prPrefix = `github_${prId}_`;
                                 } else if (provider === 'gitlab') {
                                     prPrefix = `gitlab_${prId}_`;
+                                } else if (provider === 'bitbucket') {
+                                    prPrefix = `bitbucket_${prId}_`;
                                 } else {
                                     prPrefix = `azure_${prId}_`;
                                 }
@@ -86,7 +88,7 @@ export function registerPrCommands(
                                     originalContent = newDiffData.fullBaseContent || '';
                                     modifiedContent = newDiffData.fullSourceContent || '';
                                 } else {
-                                    const { originalLines, modifiedLines } = await parseFullDiffContentEnhanced(newDiffData.diff, filePath!);
+                                    const { originalLines, modifiedLines } = await parseFullDiffContentEnhanced(newDiffData.diff, filePath!, newDiffData.provider);
                                     originalContent = originalLines.map((l: any) => l.content).join('\n');
                                     modifiedContent = modifiedLines.map((l: any) => l.content).join('\n');
                                 }
@@ -107,6 +109,7 @@ export function registerPrCommands(
                                 const language = getMonacoLanguage(fileExtension);
 
                                 panel.title = `Diff: ${path.basename(filePath!)}`;
+
 
                                 // Send content to webview - Monaco models update in-place, no page reload
                                 panel.webview.postMessage({

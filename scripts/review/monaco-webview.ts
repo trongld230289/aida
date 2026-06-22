@@ -86,6 +86,8 @@ async function getMonacoWebviewContent(diffData: Record<string, any>, panel: vsc
             prPrefix = `github_${prId}_`;
         } else if (provider === 'gitlab') {
             prPrefix = `gitlab_${prId}_`;
+        } else if (provider === 'bitbucket') {
+            prPrefix = `bitbucket_${prId}_`;
         } else {
             // Azure DevOps
             prPrefix = `azure_${prId}_`;
@@ -138,7 +140,7 @@ async function getMonacoWebviewContent(diffData: Record<string, any>, panel: vsc
                             try {
                                 console.log('📋 Preloading:', file.path);
                                 const diffEntry = (cache)[file.cacheKey];
-                                const { originalLines, modifiedLines } = await parseFullDiffContentEnhanced(diffEntry.diff, file.path);
+                                const { originalLines, modifiedLines } = await parseFullDiffContentEnhanced(diffEntry.diff, file.path, diffData.provider);
 
                                 (cache)[contentCacheKey] = {
                                     originalContent: originalLines.map((line) => line.content).join('\n'),
@@ -224,20 +226,20 @@ async function getMonacoWebviewContent(diffData: Record<string, any>, panel: vsc
                     modifiedContent = sourceContent || '';
 
                 } else {
-                    const { originalLines, modifiedLines } = await parseFullDiffContentEnhanced(diff, filePath);
+                    const { originalLines, modifiedLines } = await parseFullDiffContentEnhanced(diff, filePath, diffData.provider);
                     originalContent = originalLines.map((line) => line.content).join('\n');
                     modifiedContent = modifiedLines.map((line) => line.content).join('\n');
                 }
             } catch (_error: unknown) {
                 // Fallback to diff parsing
-                const { originalLines, modifiedLines } = await parseFullDiffContentEnhanced(diff, filePath);
+                const { originalLines, modifiedLines } = await parseFullDiffContentEnhanced(diff, filePath, diffData.provider);
                 originalContent = originalLines.map((line) => line.content).join('\n');
                 modifiedContent = modifiedLines.map((line) => line.content).join('\n');
             }
         }
         // PRIORITY 3: Fallback to diff parsing
         else {
-            const { originalLines, modifiedLines } = await parseFullDiffContentEnhanced(diff, filePath);
+            const { originalLines, modifiedLines } = await parseFullDiffContentEnhanced(diff, filePath, diffData.provider);
 
             // Reconstruct full file content
             originalContent = originalLines.map((line) => line.content).join('\n');
