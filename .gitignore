@@ -11,3 +11,17 @@ dist/
 
 # Activation key management
 activation-key-management/
+
+# Local-only materials (not part of the extension source)
+AIDA HTML SHARING/
+AIDA HTML SHARING.7z
+aida_presentation*.html
+AIDA_PRESENTATION*.html
+scripts/daily/
+scripts/test-dependency.js
+scripts/tracking/activation-key-manager.html
+scripts/tracking/activation-keys.json
+scripts/tracking/generate-activation-key.js
+AIDA-SOURCE.zip
+externalKey.jpg
+AIDA_SHARING*.html
