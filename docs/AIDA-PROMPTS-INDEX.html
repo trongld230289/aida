@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AIDA — Chỉ mục prompt</title>
+<style>
+  :root {
+    --paper: #f5f3ec;
+    --card: #fffdf8;
+    --ink: #1c1e21;
+    --muted: #63676e;
+    --line: #dcd7ca;
+    --hit: #ffd96a;
+    --hit-ink: #1c1e21;
+    --focus: #1f5fbf;
+    --g-system: #b23a22;
+    --g-persona: #7246a8;
+    --g-builder: #2a6a99;
+    --g-template: #3a7444;
+    --g-transport: #5d6168;
+    --mono: ui-monospace, "Cascadia Code", "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
+    --sans: "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #17191c;
+      --card: #1f2226;
+      --ink: #e7e5df;
+      --muted: #9a9ea6;
+      --line: #33373d;
+      --hit: #8a6a12;
+      --hit-ink: #fff7dd;
+      --focus: #7fb0ff;
+      --g-system: #f08a70;
+      --g-persona: #c3a2f0;
+      --g-builder: #82bde8;
+      --g-template: #8fcf98;
+      --g-transport: #a7abb2;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font: 15px/1.5 var(--sans);
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 32px 20px 64px; }
+  header h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: -0.01em; }
+  header p { margin: 0 0 4px; color: var(--muted); max-width: 72ch; }
+  code, .mono { font-family: var(--mono); font-size: 0.92em; }
+
+  .flow {
+    margin: 20px 0 24px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 12px;
+  }
+  .flow div {
+    border: 1px solid var(--line);
+    background: var(--card);
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-size: 14px;
+  }
+  .flow b { display: block; margin-bottom: 2px; }
+
+  .search {
+    position: sticky; top: 0; z-index: 2;
+    background: var(--paper);
+    padding: 12px 0 10px;
+    border-bottom: 1px solid var(--line);
+  }
+  .search label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  .search input {
+    width: 100%;
+    font: 16px var(--mono);
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--card);
+    color: var(--ink);
+  }
+  .filters { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; align-items: center; }
+  .filters button {
+    font: 13px var(--sans);
+    border: 1px solid var(--line);
+    background: var(--card);
+    color: var(--ink);
+    border-radius: 999px;
+    padding: 3px 10px;
+    cursor: pointer;
+  }
+  .filters button[aria-pressed="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  .count { margin-left: auto; font-size: 13px; color: var(--muted); }
+
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+  section h2 {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin: 28px 0 8px;
+    display: flex; gap: 8px; align-items: baseline;
+  }
+  section h2 .dot { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+  section h2 small { text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--muted); font-size: 13px; }
+
+  .entry {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--gc);
+    border-radius: 6px;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px 16px;
+  }
+  .entry > * { min-width: 0; }
+  .phrase {
+    font: 14.5px/1.45 var(--mono);
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin: 0;
+  }
+  .phrase mark, .meta mark { background: var(--hit); color: var(--hit-ink); border-radius: 2px; padding: 0 1px; }
+  .meta { grid-column: 1 / 2; font-size: 14px; }
+  .meta .title { font-weight: 600; }
+  .meta .note { color: var(--muted); }
+  .tags { display: inline-flex; gap: 4px; margin-left: 6px; vertical-align: 1px; }
+  .tag {
+    font-size: 11px; border: 1px solid var(--line); border-radius: 3px;
+    padding: 0 5px; color: var(--muted); white-space: nowrap;
+  }
+  .loc { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .loc .path { font: 13px var(--mono); color: var(--muted); word-break: break-all; }
+  .actions { grid-row: 1 / 3; grid-column: 2; display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
+  .btn {
+    font: 12.5px var(--sans);
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--ink);
+    border-radius: 4px;
+    padding: 4px 9px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .btn:hover { border-color: var(--ink); }
+  .btn.done { background: var(--ink); color: var(--paper); }
+  .chip {
+    font: 12.5px var(--mono);
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--ink);
+    border-radius: 4px;
+    padding: 2px 7px;
+    cursor: pointer;
+  }
+  .chip:hover { border-color: var(--ink); }
+  .chip.done { background: var(--ink); color: var(--paper); }
+  .empty { padding: 32px 0; color: var(--muted); }
+  footer { margin-top: 40px; font-size: 13px; color: var(--muted); }
+
+  @media (max-width: 640px) {
+    .entry { grid-template-columns: minmax(0, 1fr); }
+    .actions { grid-row: auto; grid-column: 1; flex-direction: row; flex-wrap: wrap; }
+    .count { margin-left: 0; width: 100%; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Các prompt AIDA đang dùng</h1>
+    <p>Mỗi dòng hiển thị <b>vài chữ đầu của prompt, đúng y như trong code</b>. Copy đoạn đó rồi tìm bằng <code>Ctrl+Shift+F</code>, hoặc copy <code>path:line</code> rồi dán vào <code>Ctrl+P</code> để mở file đúng dòng.</p>
+    <p>Đường dẫn tính từ thư mục gốc của extension <code>aida/</code>.</p>
+  </header>
+
+  <div class="flow" aria-label="Cách prompt được gửi đi">
+    <div><b>Chế độ Copilot</b>Không có role <code>system</code>. Mọi prompt được gửi dưới dạng tin nhắn User.</div>
+    <div><b>Chế độ API key</b>Có role <code>system</code>. Review và dependency dùng chung một câu system prompt, còn chatbot dùng <code>system_prompt.md</code>.</div>
+    <div><b>Template review</b><code>review-*.md</code> + <code>review-base.md</code> (ghép vào chỗ <code>{{REVIEW_BASE}}</code>), sau đó nối thêm diff hoặc nội dung file.</div>
+  </div>
+
+  <div class="search">
+    <label for="q">Lọc (gõ <kbd>/</kbd> để focus, <kbd>Esc</kbd> để xoá)</label>
+    <input id="q" type="search" placeholder="vd: You are, STRICT MODE, review-pr, chatbot..." autocomplete="off" spellcheck="false">
+    <div class="filters" id="filters" role="group" aria-label="Lọc theo nhóm"></div>
+  </div>
+
+  <main id="list" aria-live="polite"></main>
+
+  <footer>Rà từ source ngày 27/11/2026. Nếu prompt bị đổi trong code, nhớ cập nhật mảng <code>DATA</code> trong file này.</footer>
+</div>
+
+<script>
+const GROUPS = {
+  system:    { label: 'System prompt (role system)', note: 'gửi đúng role system — chỉ ở chế độ API key', color: 'var(--g-system)' },
+  persona:   { label: 'Persona trong user prompt', note: '"You are..." nằm luôn trong nội dung user prompt', color: 'var(--g-persona)' },
+  builder:   { label: 'Phần ghép prompt review', note: 'đoạn code nối template + diff/file', color: 'var(--g-builder)' },
+  template:  { label: 'Template review (.md)', note: 'thân prompt review, chia theo ngôn ngữ', color: 'var(--g-template)' },
+  transport: { label: 'Chỗ gửi đi', note: 'nơi prompt được đóng gói thành message', color: 'var(--g-transport)' }
+};
+
+const LANGS = ['angular', 'csharp', 'go', 'javascript', 'nodejs', 'python', 'react', 'typescript', 'vue'];
+
+// lines: per-language overrides; "fallback" maps to templates/review-code/fallback/
+function tpl(file, defLine, overrides) {
+  const o = overrides || {};
+  return LANGS.map(l => ({ label: l, path: `templates/review-code/languages/${l}/${file}`, line: o[l] ?? defLine }))
+    .concat([{ label: 'fallback', path: `templates/review-code/fallback/${file}`, line: o.fallback ?? defLine }]);
+}
+
+const DATA = [
+  // system
+  { g: 'system', title: 'Chatbot sidebar (chính)', phrase: 'You are **AIDA (AI Development Assistant)**, a VS Code extension built by the AIDA team.',
+    file: 'scripts/chatbot/system_prompt.md', line: 1, tags: ['chatbot', 'API key'],
+    note: 'Load tại scripts/chatbot/chatbot-service.ts:57. Sửa prompt chatbot ở file này.' },
+  { g: 'system', title: 'Chatbot sidebar (dự phòng khi không đọc được .md)', phrase: 'You are AIDA (AI Development Assistant), a free VS Code extension built by the AIDA team.',
+    file: 'scripts/chatbot/chatbot-service.ts', line: 71, tags: ['chatbot', 'API key'],
+    note: 'Bản rút gọn của system_prompt.md, cần sửa đồng bộ với file đó.' },
+  { g: 'system', title: 'Chatbot sidebar (dự phòng cuối cùng)', phrase: "You are AIDA, a helpful coding assistant.",
+    file: 'scripts/chatbot/chatbot-service.ts', line: 243, tags: ['chatbot', 'API key'],
+    note: 'Chỉ dùng khi cả hai bản ở trên đều rỗng.' },
+  { g: 'system', title: 'Review + dependency (chế độ API key)', phrase: 'You are an expert code reviewer and software architect. Provide detailed, actionable code review feedback.',
+    file: 'scripts/core/ai-api-client.ts', line: 212, tags: ['review', 'dependency', 'API key'],
+    note: 'Dùng chung cho mọi lệnh @review-* và @dependency* khi chạy bằng API key.' },
+
+  // persona in user prompt
+  { g: 'persona', title: '@dependency-pr: phân tích ảnh hưởng PR', phrase: 'You are an expert code reviewer and architect.\nAnalyze the impact of this Pull Request',
+    file: 'scripts/core/prompts.ts', line: 262, tags: ['dependency', 'Copilot + API key'],
+    note: 'buildDependencyPRAnalysisPrompt, được gọi tại scripts/dependency/dependency-ai-analysis-service.ts:174.' },
+  { g: 'persona', title: '@dependency: phân tích ảnh hưởng 1 file', phrase: 'You are analyzing a code change impact. A developer wants to modify a file',
+    file: 'scripts/core/prompts.ts', line: 313, tags: ['dependency', 'Copilot + API key'],
+    note: 'buildDependencyNodeAnalysisPrompt, được gọi tại dependency-ai-analysis-service.ts:176.' },
+  { g: 'persona', title: 'Quy định output HTML (dùng chung cho 2 prompt dependency)', phrase: 'FORMAT OUTPUT AS HTML:',
+    file: 'scripts/core/prompts.ts', line: 247, tags: ['dependency'],
+    note: 'Hằng HTML_FORMAT_INSTRUCTION.' },
+  { g: 'persona', title: 'Agent phân tích code (chatbot)', phrase: 'You are an expert code reviewer. Analyze this ${analysis.framework',
+    file: 'scripts/chatbot/tools/agent-analysis.ts', line: 23, tags: ['chatbot agent'],
+    note: 'Gửi qua chatbotService.sendMessage, nên system_prompt.md vẫn được áp phía trên.' },
+  { g: 'persona', title: 'Agent refactor (Angular)', phrase: 'You are an expert Angular/TypeScript developer. Analyze this code and provide a COMPLETE refactored version',
+    file: 'scripts/chatbot/tools/agent-refactoring.ts', line: 21, tags: ['chatbot agent'],
+    note: 'Kết quả được ghi thẳng vào file qua tools.editFile.' },
+
+  // builders
+  { g: 'builder', title: 'Câu hướng dẫn nối cuối prompt review', phrase: '**Instructions:** Please analyze',
+    file: 'scripts/core/prompts.ts', line: 41, tags: ['review'],
+    note: 'Hằng INSTRUCTIONS: REVIEW_FILE / CHANGES / ALL_CHANGES / PR / PR_FILE.' },
+  { g: 'builder', title: 'Prompt dự phòng cho review-file (không có template)', phrase: 'Please review this TypeScript Angular component file:',
+    file: 'scripts/core/prompts.ts', line: 69, tags: ['review-file'] },
+  { g: 'builder', title: 'Câu template mặc định cho review-file', phrase: 'Please review the following ${fileExtension} file for code quality',
+    file: 'scripts/core/prompts.ts', line: 85, tags: ['review-file'] },
+  { g: 'builder', title: 'Chèn nội dung file (review-file)', phrase: '## FILE CONTENT TO REVIEW',
+    file: 'scripts/core/prompts.ts', line: 125, tags: ['review-file'] },
+  { g: 'builder', title: 'Chèn diff (review-changes)', phrase: '## GIT DIFF TO REVIEW',
+    file: 'scripts/core/prompts.ts', line: 141, tags: ['review-changes'] },
+  { g: 'builder', title: 'Chèn diff nhiều file (review-all-changes)', phrase: '## ALL GIT DIFFS TO REVIEW',
+    file: 'scripts/core/prompts.ts', line: 163, tags: ['review-all-changes'] },
+  { g: 'builder', title: 'Chèn diff PR (review-pr)', phrase: '## PULL REQUEST CHANGES TO REVIEW',
+    file: 'scripts/core/prompts.ts', line: 197, tags: ['review-pr'] },
+  { g: 'builder', title: 'Chèn diff từng file của PR', phrase: '## PULL REQUEST DIFF TO REVIEW',
+    file: 'scripts/core/prompts.ts', line: 233, tags: ['review-pr'] },
+  { g: 'builder', title: 'Ghép review-base.md vào template', phrase: '{{REVIEW_BASE}}',
+    file: 'scripts/core/template-engine.ts', line: 343, tags: ['review'],
+    note: 'processTemplateContent. Trong mỗi template, placeholder nằm khoảng dòng 29–31.' },
+
+  // templates
+  { g: 'template', title: 'review-base.md: luật dùng chung cho mọi lệnh review', phrase: 'Review Base Template',
+    files: tpl('review-base.md', 1, { fallback: 2 }), tags: ['review'],
+    note: 'Bấm tên ngôn ngữ để copy path:line.' },
+  { g: 'template', title: 'Chỗ thêm luật riêng của dự án', phrase: '## 🔥 MANDATORY PROJECT RULES - MUST CHECK FIRST:',
+    files: tpl('review-base.md', 4, { vue: 3, fallback: 5 }), tags: ['review'],
+    note: 'Nằm trong review-base.md. Hầu hết luật mẫu đang bị comment.' },
+  { g: 'template', title: 'review-file.md', phrase: 'File Review - STRICT MODE',
+    files: tpl('review-file.md', 5, { angular: 4 }), tags: ['@review-file'],
+    note: 'Bản fallback: "General File Review - STRICT MODE (Fallback)".' },
+  { g: 'template', title: 'review-changes.md (dùng cho cả @review-changes và @review-all-changes)', phrase: 'Git Changes Review - STRICT MODE',
+    files: tpl('review-changes.md', 4), tags: ['@review-changes', '@review-all-changes'] },
+  { g: 'template', title: 'review-pr.md', phrase: 'PR Review - STRICT MODE',
+    files: tpl('review-pr.md', 5, { angular: 4 }), tags: ['@review-pr'],
+    note: 'Riêng Go ghi là "Pull Request Review - STRICT MODE". Tìm "Review - STRICT MODE" sẽ ra tất cả.' },
+
+  // transport
+  { g: 'transport', title: 'API key: đặt system prompt vào role system', phrase: "role: 'system',",
+    file: 'scripts/core/ai-api-client.ts', line: 59, tags: ['API key'], note: 'Bên trong hàm callAI.' },
+  { g: 'transport', title: 'Copilot: review gửi dưới dạng tin nhắn User', phrase: 'vscode.LanguageModelChatMessage.User(userPrompt)',
+    file: 'scripts/core/ai-copilot-client.ts', line: 171, tags: ['Copilot'] },
+  { g: 'transport', title: 'Copilot: analysis call gửi dưới dạng tin nhắn User', phrase: 'vscode.LanguageModelChatMessage.User(prompt)',
+    file: 'scripts/core/ai-copilot-client.ts', line: 340, tags: ['Copilot'], note: 'Bản fallback model ở dòng 376.' }
+];
+
+const $q = document.getElementById('q');
+const $list = document.getElementById('list');
+const $filters = document.getElementById('filters');
+let active = 'all';
+
+function esc(s) {
+  return s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function hl(text, q) {
+  const safe = esc(text);
+  if (!q) return safe;
+  const re = new RegExp(esc(q).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+  return safe.replace(re, m => `<mark>${m}</mark>`);
+}
+function haystack(d) {
+  const paths = d.files ? d.files.map(f => f.path).join(' ') : d.file;
+  return [d.phrase, d.title, d.note || '', paths, (d.tags || []).join(' '), GROUPS[d.g].label].join(' ').toLowerCase();
+}
+
+async function copy(text, btn, doneLabel) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+  }
+  const old = btn.textContent;
+  btn.textContent = doneLabel || 'Đã copy';
+  btn.classList.add('done');
+  setTimeout(() => { btn.textContent = old; btn.classList.remove('done'); }, 1200);
+}
+
+function renderFilters() {
+  const opts = [['all', 'Tất cả']].concat(Object.entries(GROUPS).map(([k, v]) => [k, v.label]));
+  $filters.innerHTML = opts.map(([k, l]) =>
+    `<button type="button" data-g="${k}" aria-pressed="${k === active}">${esc(l)}</button>`).join('') +
+    '<span class="count" id="count"></span>';
+}
+
+function render() {
+  const q = $q.value.trim();
+  const ql = q.toLowerCase();
+  const rows = DATA.filter(d => (active === 'all' || d.g === active) && (!ql || haystack(d).includes(ql)));
+  document.getElementById('count').textContent = `${rows.length}/${DATA.length} mục`;
+
+  if (!rows.length) {
+    $list.innerHTML = `<p class="empty">Không có mục nào khớp “${esc(q)}”.</p>`;
+    return;
+  }
+
+  let html = '';
+  for (const [g, meta] of Object.entries(GROUPS)) {
+    const items = rows.filter(d => d.g === g);
+    if (!items.length) continue;
+    html += `<section><h2><span class="dot" style="background:${meta.color}"></span>${esc(meta.label)} <small>${esc(meta.note)}</small></h2>`;
+    for (const d of items) {
+      const idx = DATA.indexOf(d);
+      const tags = (d.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('');
+      const loc = d.files
+        ? d.files.map(f => `<button type="button" class="chip" data-copy="${esc(f.path + ':' + f.line)}" title="${esc(f.path + ':' + f.line)}">${esc(f.label)}:${f.line}</button>`).join('')
+        : `<span class="path">${hl(d.file + ':' + d.line, q)}</span>`;
+      const pathBtn = d.files ? '' :
+        `<button type="button" class="btn" data-copy="${esc(d.file + ':' + d.line)}" data-done="Đã copy path">Copy path:line</button>`;
+      html += `<article class="entry" style="--gc:${meta.color}">
+        <pre class="phrase">${hl(d.phrase, q)}</pre>
+        <div class="actions">
+          <button type="button" class="btn" data-phrase="${idx}" data-done="Đã copy text">Copy chữ để tìm</button>
+          ${pathBtn}
+        </div>
+        <div class="meta"><span class="title">${hl(d.title, q)}</span><span class="tags">${tags}</span>
+          ${d.note ? `<div class="note">${hl(d.note, q)}</div>` : ''}</div>
+        <div class="loc">${loc}</div>
+      </article>`;
+    }
+    html += '</section>';
+  }
+  $list.innerHTML = html;
+}
+
+$filters.addEventListener('click', e => {
+  const b = e.target.closest('button[data-g]');
+  if (!b) return;
+  active = b.dataset.g;
+  $filters.querySelectorAll('button[data-g]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  render();
+});
+
+$list.addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  if (b.dataset.phrase !== undefined) {
+    // copy only the first line so it matches a single line in Ctrl+Shift+F
+    copy(DATA[+b.dataset.phrase].phrase.split('\n')[0], b, b.dataset.done);
+  } else if (b.dataset.copy) {
+    copy(b.dataset.copy, b, b.dataset.done || 'Đã copy');
+  }
+});
+
+$q.addEventListener('input', render);
+document.addEventListener('keydown', e => {
+  if (e.key === '/' && document.activeElement !== $q) { e.preventDefault(); $q.focus(); }
+  else if (e.key === 'Escape' && document.activeElement === $q) { $q.value = ''; render(); }
+});
+
+renderFilters();
+render();
+</script>
+</body>
+</html>
